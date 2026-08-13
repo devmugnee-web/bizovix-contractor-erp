@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "apps/desktop/*"
+  - "packages/*"
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  electron-winstaller: true
+  esbuild: true
+  prisma: true
+  unrs-resolver: true

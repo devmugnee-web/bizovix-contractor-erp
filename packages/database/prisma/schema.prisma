@@ -1,0 +1,518 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum PurchaseType {
+  EGP
+  MANUAL
+}
+
+enum TenderStatus {
+  SUBMITTED
+  UNDER_PROCESS
+  NOA
+  AWARDED
+  ONGOING
+  COMPLETED
+  REJECTED
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReceiptStatus {
+  PENDING
+  RECEIVED
+}
+
+enum GuaranteeType {
+  PG
+  BG
+}
+
+enum InstrumentStatus {
+  ACTIVE
+  EXPIRED
+  RELEASED
+}
+
+enum AccountType {
+  BANK
+  CASH
+}
+
+enum SubscriptionPlan {
+  TRIAL
+  PREMIUM
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy / Identity
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  shortName String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              OrganizationUser[]
+  roles              Role[]
+  subscription       Subscription?
+  licenses           License[]
+  organizationMasters OrganizationMaster[]
+  bankAccounts       BankAccount[]
+  tenders            Tender[]
+  documentPurchases  DocumentPurchase[]
+  tenderSecurities   TenderSecurity[]
+  creditCommitments  CreditCommitment[]
+  performanceGuarantees PerformanceGuarantee[]
+  expenses           Expense[]
+  receipts           Receipt[]
+  reminders          Reminder[]
+  documents          Document[]
+  auditLogs          AuditLog[]
+  appSettings        AppSetting[]
+  monthlyTargets     MonthlyTarget[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organizations OrganizationUser[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model OrganizationUser {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  roleId         String
+  isDefault      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+
+  @@unique([organizationId, userId])
+  @@map("organization_users")
+}
+
+model Role {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  permissions     RolePermission[]
+  organizationUsers OrganizationUser[]
+
+  @@unique([organizationId, name])
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  group       String
+  description String?
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Licensing / Subscription
+// ---------------------------------------------------------------------------
+
+model License {
+  id             String   @id @default(cuid())
+  organizationId String
+  licenseKey     String   @unique
+  seats          Int      @default(1)
+  issuedAt       DateTime @default(now())
+  expiresAt      DateTime?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("licenses")
+}
+
+model Subscription {
+  id               String              @id @default(cuid())
+  organizationId   String              @unique
+  plan             SubscriptionPlan    @default(TRIAL)
+  status           SubscriptionStatus  @default(TRIALING)
+  trialEndsAt      DateTime?
+  currentPeriodEnd DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+// ---------------------------------------------------------------------------
+// Masters
+// ---------------------------------------------------------------------------
+
+model OrganizationMaster {
+  id             String   @id @default(cuid())
+  organizationId String
+  shortName      String
+  fullName       String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenders            Tender[]
+  documentPurchases  DocumentPurchase[]
+  tenderSecurities   TenderSecurity[]
+  creditCommitments  CreditCommitment[]
+  performanceGuarantees PerformanceGuarantee[]
+
+  @@unique([organizationId, shortName])
+  @@map("organization_masters")
+}
+
+model BankAccount {
+  id             String      @id @default(cuid())
+  organizationId String
+  accountName    String
+  accountType    AccountType
+  bankName       String?
+  accountNumber  String?
+  currentBalance Decimal     @default(0) @db.Decimal(18, 2)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documentPurchases  DocumentPurchase[]
+  tenderSecurities   TenderSecurity[]
+  performanceGuarantees PerformanceGuarantee[]
+
+  @@map("bank_accounts")
+}
+
+// ---------------------------------------------------------------------------
+// Tenders / Projects
+// ---------------------------------------------------------------------------
+
+model Tender {
+  id                   String       @id @default(cuid())
+  organizationId       String
+  organizationMasterId String
+  egpTenderId          String?
+  workName             String
+  category             String
+  contractValue        Decimal      @default(0) @db.Decimal(18, 2)
+  status               TenderStatus @default(SUBMITTED)
+  progressPercentage   Int          @default(0)
+  submittedAt          DateTime?
+  awardedAt            DateTime?
+  createdById          String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
+
+  tenderSecurities      TenderSecurity[]
+  creditCommitments     CreditCommitment[]
+  performanceGuarantees PerformanceGuarantee[]
+  receipts              Receipt[]
+
+  @@map("tenders")
+}
+
+model MonthlyTarget {
+  id             String   @id @default(cuid())
+  organizationId String
+  year           Int
+  month          Int
+  targetAmount   Decimal  @db.Decimal(18, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, year, month])
+  @@map("monthly_targets")
+}
+
+// ---------------------------------------------------------------------------
+// Bank Instruments
+// ---------------------------------------------------------------------------
+
+model DocumentPurchase {
+  id                   String       @id @default(cuid())
+  organizationId       String
+  purchaseType         PurchaseType
+  egpTenderId          String?
+  organizationMasterId String
+  paymentFromAccountId String
+  tenderWorkName       String
+  purchaseDate         DateTime
+  documentPrice        Decimal      @db.Decimal(18, 2)
+  createdById          String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
+  paymentFromAccount BankAccount        @relation(fields: [paymentFromAccountId], references: [id])
+
+  @@map("document_purchases")
+}
+
+model TenderSecurity {
+  id                   String            @id @default(cuid())
+  organizationId       String
+  tenderId             String?
+  organizationMasterId String?
+  bankAccountId        String?
+  instrumentNo         String?
+  amount               Decimal           @db.Decimal(18, 2)
+  issueDate            DateTime
+  expiryDate           DateTime
+  status               InstrumentStatus  @default(ACTIVE)
+  createdById          String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender             Tender?             @relation(fields: [tenderId], references: [id])
+  organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
+  bankAccount        BankAccount?        @relation(fields: [bankAccountId], references: [id])
+
+  @@map("tender_securities")
+}
+
+model CreditCommitment {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  tenderId             String?
+  organizationMasterId String?
+  amount               Decimal  @db.Decimal(18, 2)
+  chargeDate           DateTime
+  isCharged            Boolean  @default(false)
+  createdById          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender             Tender?             @relation(fields: [tenderId], references: [id])
+  organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
+
+  @@map("credit_commitments")
+}
+
+model PerformanceGuarantee {
+  id                   String           @id @default(cuid())
+  organizationId       String
+  tenderId             String?
+  organizationMasterId String?
+  bankAccountId        String?
+  type                 GuaranteeType
+  instrumentNo         String?
+  amount               Decimal          @db.Decimal(18, 2)
+  issueDate            DateTime
+  expiryDate           DateTime
+  status               InstrumentStatus @default(ACTIVE)
+  createdById          String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender             Tender?             @relation(fields: [tenderId], references: [id])
+  organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
+  bankAccount        BankAccount?        @relation(fields: [bankAccountId], references: [id])
+
+  @@map("performance_guarantees")
+}
+
+// ---------------------------------------------------------------------------
+// Finance
+// ---------------------------------------------------------------------------
+
+model Expense {
+  id             String        @id @default(cuid())
+  organizationId String
+  category       String?
+  description    String?
+  amount         Decimal       @db.Decimal(18, 2)
+  expenseDate    DateTime
+  dueDate        DateTime?
+  status         ExpenseStatus @default(PENDING)
+  approvedById   String?
+  createdById    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("expenses")
+}
+
+model Receipt {
+  id             String        @id @default(cuid())
+  organizationId String
+  tenderId       String?
+  referenceNo    String?
+  amount         Decimal       @db.Decimal(18, 2)
+  receiptDate    DateTime
+  dueDate        DateTime?
+  status         ReceiptStatus @default(PENDING)
+  createdById    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender       Tender?      @relation(fields: [tenderId], references: [id])
+
+  @@map("receipts")
+}
+
+// ---------------------------------------------------------------------------
+// Reminders / Documents
+// ---------------------------------------------------------------------------
+
+model Reminder {
+  id               String    @id @default(cuid())
+  organizationId   String
+  type             String
+  title            String
+  subtitle         String?
+  dueDate          DateTime
+  relatedEntityType String?
+  relatedEntityId  String?
+  isResolved       Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("reminders")
+}
+
+model Document {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  category       String?
+  fileUrl        String?
+  expiryDate     DateTime?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+// ---------------------------------------------------------------------------
+// System
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String?
+  oldValue       Json?
+  newValue       Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model AppSetting {
+  id             String   @id @default(cuid())
+  organizationId String?
+  key            String
+  value          Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@map("app_settings")
+}

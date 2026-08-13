@@ -1,0 +1,27 @@
+{
+  "name": "bizovix-contractor-erp",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Bizovix Contractor ERP - Desktop and SaaS ERP platform",
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "db:generate": "pnpm --filter @bizovix/database generate",
+    "db:migrate": "pnpm --filter @bizovix/database migrate",
+    "db:seed": "pnpm --filter @bizovix/database seed",
+    "db:studio": "pnpm --filter @bizovix/database studio"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.3.3",
+    "typescript": "^5.6.3"
+  }
+}

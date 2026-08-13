@@ -1,0 +1,22 @@
+appId: com.bizovix.contractor-erp
+productName: Bizovix Contractor ERP
+directories:
+  output: release
+files:
+  - dist/**
+  - "!**/*.map"
+extraResources:
+  - from: ../renderer/.next/standalone
+    to: renderer
+  - from: ../renderer/.next/static
+    to: renderer/.next/static
+  - from: ../renderer/public
+    to: renderer/public
+win:
+  target: nsis
+mac:
+  target: dmg
+  category: public.app-category.business
+linux:
+  target: AppImage
+  category: Office

@@ -1,0 +1,13 @@
+{
+  "name": "@bizovix/config",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "exports": {
+    "./typescript/base": "./typescript/base.json",
+    "./typescript/nestjs": "./typescript/nestjs.json",
+    "./typescript/nextjs": "./typescript/nextjs.json",
+    "./typescript/react-library": "./typescript/react-library.json",
+    "./tailwind/preset": "./tailwind/preset.js"
+  }
+}
