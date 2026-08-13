@@ -48,6 +48,22 @@ enum InstrumentStatus {
   RELEASED
 }
 
+enum SecurityType {
+  PAY_ORDER
+  BANK_GUARANTEE
+}
+
+enum FundingType {
+  LOAN
+  CASH
+}
+
+enum TenderSecurityDocumentStatus {
+  PENDING
+  CREATED
+  NOT_REQUIRED
+}
+
 enum AccountType {
   BANK
   CASH
@@ -258,7 +274,8 @@ model BankAccount {
 
   organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   documentPurchases  DocumentPurchase[]
-  tenderSecurities   TenderSecurity[]
+  tenderSecurities   TenderSecurity[]   @relation("TenderSecurityBankAccount")
+  tenderSecurityCharges TenderSecurity[] @relation("TenderSecurityChargeFrom")
   performanceGuarantees PerformanceGuarantee[]
 
   @@map("bank_accounts")
@@ -324,6 +341,7 @@ model DocumentPurchase {
   tenderWorkName       String
   purchaseDate         DateTime
   documentPrice        Decimal      @db.Decimal(18, 2)
+  tenderSecurityStatus TenderSecurityDocumentStatus @default(PENDING)
   createdById          String?
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
@@ -331,6 +349,7 @@ model DocumentPurchase {
   organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
   paymentFromAccount BankAccount        @relation(fields: [paymentFromAccountId], references: [id])
+  tenderSecurityItems TenderSecurityItem[]
 
   @@map("document_purchases")
 }
@@ -341,8 +360,16 @@ model TenderSecurity {
   tenderId             String?
   organizationMasterId String?
   bankAccountId        String?
+  chargeFromAccountId  String?
+  securityType         SecurityType      @default(PAY_ORDER)
+  fundingType          FundingType       @default(LOAN)
   instrumentNo         String?
-  amount               Decimal           @db.Decimal(18, 2)
+  amount               Decimal           @default(0) @db.Decimal(18, 2)
+  marginAmount         Decimal           @default(0) @db.Decimal(18, 2)
+  bankFinanceAmount    Decimal           @default(0) @db.Decimal(18, 2)
+  interestRate         Decimal           @default(0) @db.Decimal(8, 2)
+  validityMonths       Int               @default(1)
+  remarks              String?
   issueDate            DateTime
   expiryDate           DateTime
   status               InstrumentStatus  @default(ACTIVE)
@@ -353,9 +380,30 @@ model TenderSecurity {
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tender             Tender?             @relation(fields: [tenderId], references: [id])
   organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
-  bankAccount        BankAccount?        @relation(fields: [bankAccountId], references: [id])
+  bankAccount        BankAccount?        @relation("TenderSecurityBankAccount", fields: [bankAccountId], references: [id])
+  chargeFromAccount  BankAccount?        @relation("TenderSecurityChargeFrom", fields: [chargeFromAccountId], references: [id])
+  items              TenderSecurityItem[]
 
   @@map("tender_securities")
+}
+
+model TenderSecurityItem {
+  id                String   @id @default(cuid())
+  tenderSecurityId  String
+  documentPurchaseId String
+  securityAmount    Decimal  @db.Decimal(18, 2)
+  marginPercentage  Decimal  @db.Decimal(8, 2)
+  marginAmount      Decimal  @db.Decimal(18, 2)
+  bankFinanceAmount Decimal  @db.Decimal(18, 2)
+  referenceNo       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenderSecurity  TenderSecurity   @relation(fields: [tenderSecurityId], references: [id], onDelete: Cascade)
+  documentPurchase DocumentPurchase @relation(fields: [documentPurchaseId], references: [id])
+
+  @@unique([documentPurchaseId])
+  @@map("tender_security_items")
 }
 
 model CreditCommitment {

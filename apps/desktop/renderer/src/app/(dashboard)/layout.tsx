@@ -21,10 +21,6 @@ function ActionToolbar({ notificationCount }: { notificationCount: number }) {
   return (
     <div className="flex h-12 shrink-0 items-center justify-between border-b border-biz-border bg-gradient-to-r from-white via-white to-biz-bg px-3 shadow-sm">
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="hidden min-w-0 flex-col leading-tight md:flex">
-          <span className="text-[12px] font-bold text-biz-text">Tender Desk</span>
-          <span className="text-[10px] font-medium text-biz-muted">Quick tender and expense actions</span>
-        </div>
         {searchOpen ? (
           <TextInput
             ref={searchInputRef}
@@ -46,19 +42,15 @@ function ActionToolbar({ notificationCount }: { notificationCount: number }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <Link href="/cms">
-          <button className="inline-flex h-8 items-center gap-1.5 rounded-full bg-biz-orange px-3 text-[11px] font-bold text-white shadow-sm hover:brightness-95">
-            <FilePlus2 className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Add Tender</span>
-            <span className="sm:hidden">Tender</span>
-          </button>
+        <Link href="/cms" className="inline-flex h-8 items-center gap-1.5 rounded-full bg-biz-orange px-3 text-[11px] font-bold text-white shadow-sm hover:brightness-95">
+          <FilePlus2 className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Add Tender</span>
+          <span className="sm:hidden">Tender</span>
         </Link>
-        <Link href="/expenses">
-          <button className="inline-flex h-8 items-center gap-1.5 rounded-full bg-biz-blue px-3 text-[11px] font-bold text-white shadow-sm hover:bg-biz-blue-hover">
-            <Plus className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Add Expense</span>
-            <span className="sm:hidden">Expense</span>
-          </button>
+        <Link href="/expenses" className="inline-flex h-8 items-center gap-1.5 rounded-full bg-biz-blue px-3 text-[11px] font-bold text-white shadow-sm hover:bg-biz-blue-hover">
+          <Plus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Add Expense</span>
+          <span className="sm:hidden">Expense</span>
         </Link>
         <button
           type="button"

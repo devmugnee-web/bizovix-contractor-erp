@@ -12,6 +12,7 @@ import { AuditLogModule } from "./modules/audit-logs/audit-log.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { BankAccountsModule } from "./modules/bank-accounts/bank-accounts.module";
 import { DocumentPurchasesModule } from "./modules/document-purchases/document-purchases.module";
+import { TenderSecuritiesModule } from "./modules/tender-securities/tender-securities.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 
 @Module({
@@ -23,6 +24,7 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
     OrganizationsModule,
     BankAccountsModule,
     DocumentPurchasesModule,
+    TenderSecuritiesModule,
     DashboardModule,
   ],
   providers: [

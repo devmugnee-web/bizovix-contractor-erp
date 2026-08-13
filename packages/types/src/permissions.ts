@@ -10,6 +10,7 @@ export const PERMISSIONS = [
   "tender_security.create",
   "tender_security.read",
   "tender_security.update",
+  "tender_security.mark_not_required",
 
   "expense.create",
   "expense.read",

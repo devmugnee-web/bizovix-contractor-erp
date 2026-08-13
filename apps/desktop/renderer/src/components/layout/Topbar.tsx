@@ -12,6 +12,7 @@ export interface TopbarUser {
 
 export interface TopbarProps {
   breadcrumb?: BreadcrumbItem[];
+  user?: TopbarUser;
   notificationCount?: number;
   onToggleSidebar?: () => void;
 }
