@@ -27,6 +27,8 @@ export const PERMISSIONS = [
   "cms.work.create",
   "cms.work.update",
   "cms.work.archive",
+  "cms.work.export",
+  "cms.work.restore",
 
   "expense.create",
   "expense.read",

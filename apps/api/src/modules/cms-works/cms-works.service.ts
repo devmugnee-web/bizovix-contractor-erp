@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import type { Prisma } from "@bizovix/database";
+import type { CmsWorkStatus, Prisma } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -23,6 +23,10 @@ export class CmsWorksService {
       status: query.status ?? "ONGOING",
       ...(query.organizationMasterId ? { organizationMasterId: query.organizationMasterId } : {}),
       ...(query.workCategory ? { workCategory: query.workCategory } : {}),
+      ...(query.completionDateFrom || query.completionDateTo ? { completionDate: {
+        ...(query.completionDateFrom ? { gte: new Date(query.completionDateFrom) } : {}),
+        ...(query.completionDateTo ? { lte: new Date(`${query.completionDateTo}T23:59:59.999Z`) } : {}),
+      } } : {}),
       ...(query.search ? { OR: [
         { workName: { contains: query.search, mode: "insensitive" } },
         { organizationMaster: { shortName: { contains: query.search, mode: "insensitive" } } },
@@ -36,18 +40,28 @@ export class CmsWorksService {
     const limit = query.limit ?? 12;
     const where = this.where(organizationId, query);
     const [items, total] = await Promise.all([
-      this.prisma.cmsWork.findMany({ where, include: includeRelations, orderBy: { id: "asc" }, skip: (page - 1) * limit, take: limit }),
+      this.prisma.cmsWork.findMany({
+        where,
+        include: includeRelations,
+        orderBy: query.status === "ARCHIVED" ? [{ completionDate: "desc" }, { id: "asc" }] : { id: "asc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
       this.prisma.cmsWork.count({ where }),
     ]);
     return { items: items.map(toDto), meta: buildPaginationMeta(total, page, limit) };
   }
 
-  async stats(organizationId: string) {
-    const [ongoingWorks, aggregate] = await Promise.all([
-      this.prisma.cmsWork.count({ where: { organizationId, status: "ONGOING" } }),
-      this.prisma.cmsWork.aggregate({ where: { organizationId, status: "ONGOING" }, _sum: { contractValue: true } }),
+  async stats(organizationId: string, status: CmsWorkStatus = "ONGOING") {
+    const [workCount, aggregate] = await Promise.all([
+      this.prisma.cmsWork.count({ where: { organizationId, status } }),
+      this.prisma.cmsWork.aggregate({ where: { organizationId, status }, _sum: { contractValue: true } }),
     ]);
-    return { ongoingWorks, totalWorkValue: (aggregate._sum.contractValue ?? 0).toString() };
+    return {
+      ongoingWorks: status === "ONGOING" ? workCount : 0,
+      archivedWorks: status === "ARCHIVED" ? workCount : 0,
+      totalWorkValue: (aggregate._sum.contractValue ?? 0).toString(),
+    };
   }
 
   async findOne(organizationId: string, id: string) {
@@ -79,9 +93,38 @@ export class CmsWorksService {
 
   async archive(organizationId: string, userId: string, id: string) {
     await this.findOne(organizationId, id);
-    const work = await this.prisma.cmsWork.update({ where: { id }, data: { status: "ARCHIVED" }, include: includeRelations });
+    const work = await this.prisma.cmsWork.update({ where: { id }, data: { status: "ARCHIVED", completionDate: new Date() }, include: includeRelations });
     await this.auditLogService.record({ organizationId, userId, action: "update", entityType: "CmsWork", entityId: id, newValue: toDto(work) });
     return toDto(work);
+  }
+
+  async restore(organizationId: string, userId: string, id: string) {
+    const existing = await this.findOne(organizationId, id);
+    const work = await this.prisma.cmsWork.update({ where: { id }, data: { status: "ONGOING", completionDate: null }, include: includeRelations });
+    await this.auditLogService.record({ organizationId, userId, action: "update", entityType: "CmsWork", entityId: id, oldValue: existing, newValue: toDto(work) });
+    return toDto(work);
+  }
+
+  async exportCsv(organizationId: string, query: QueryCmsWorkDto) {
+    const where = this.where(organizationId, query);
+    const rows = await this.prisma.cmsWork.findMany({
+      where,
+      include: includeRelations,
+      orderBy: [{ completionDate: "desc" }, { id: "asc" }],
+    });
+    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const lines = [
+      ["SL", "Work / Project Name", "Organization", "Work Category", "Work Value (BDT)", "Completion Date"].map(escape).join(","),
+      ...rows.map((row, index) => [
+        String(index + 1),
+        row.workName,
+        row.organizationMaster.shortName,
+        row.workCategory,
+        row.contractValue.toFixed(2),
+        row.completionDate?.toISOString().slice(0, 10) ?? "",
+      ].map(escape).join(",")),
+    ];
+    return { filename: `archived-works-${new Date().toISOString().slice(0, 10)}.csv`, content: `\uFEFF${lines.join("\r\n")}` };
   }
 
   async categories(organizationId: string) {

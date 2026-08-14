@@ -17,6 +17,6 @@ export const queryKeys = {
   organizationContacts: (organizationMasterId?: string) => ["pg-bg", "contacts", organizationMasterId ?? ""] as const,
   cmsWorks: (params?: unknown) => ["cms-works", params ?? {}] as const,
   cmsWork: (id: string) => ["cms-works", id] as const,
-  cmsWorkStats: ["cms-works", "stats"] as const,
+  cmsWorkStats: (status = "ONGOING") => ["cms-works", "stats", status] as const,
   cmsWorkCategories: ["cms-works", "categories"] as const,
 };

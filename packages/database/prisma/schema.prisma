@@ -569,6 +569,7 @@ model CmsWork {
   status                 CmsWorkStatus @default(ONGOING)
   startDate              DateTime?
   expectedCompletionDate DateTime?
+  completionDate         DateTime?
   createdById            String?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
@@ -580,6 +581,7 @@ model CmsWork {
   organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
 
   @@index([organizationId, status])
+  @@index([organizationId, status, completionDate])
   @@index([organizationId, organizationMasterId])
   @@map("cms_works")
 }

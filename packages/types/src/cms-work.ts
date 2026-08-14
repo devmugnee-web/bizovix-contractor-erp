@@ -8,6 +8,7 @@ export interface CmsWork {
   status: CmsWorkStatus;
   startDate: string | null;
   expectedCompletionDate: string | null;
+  completionDate: string | null;
   organizationMaster: { id: string; shortName: string; fullName: string };
 }
 
@@ -18,11 +19,19 @@ export interface CmsWorkQuery {
   search?: string;
   organizationMasterId?: string;
   workCategory?: string;
+  completionDateFrom?: string;
+  completionDateTo?: string;
 }
 
 export interface CmsWorkStats {
   ongoingWorks: number;
+  archivedWorks: number;
   totalWorkValue: string;
+}
+
+export interface CmsWorkExport {
+  filename: string;
+  content: string;
 }
 
 export interface CreateCmsWorkInput {
