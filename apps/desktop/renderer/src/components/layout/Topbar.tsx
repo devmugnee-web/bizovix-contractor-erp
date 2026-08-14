@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { Bell, ChevronDown, CircleHelp, Menu, MessageCircle, Search } from "lucide-react";
-import { Breadcrumb, type BreadcrumbItem } from "@bizovix/ui";
+import { Breadcrumb, cn, type BreadcrumbItem } from "@bizovix/ui";
 
 export interface TopbarUser {
   name: string;
@@ -16,9 +16,10 @@ export interface TopbarProps {
   notificationCount?: number;
   onToggleSidebar: () => void;
   breadcrumb?: BreadcrumbItem[];
+  showWhatsApp?: boolean;
 }
 
-export function Topbar({ user, notificationCount = 0, onToggleSidebar, breadcrumb }: TopbarProps) {
+export function Topbar({ user, notificationCount = 0, onToggleSidebar, breadcrumb, showWhatsApp = true }: TopbarProps) {
   return (
     <header className="flex h-14 shrink-0 items-center border-b border-biz-border bg-white px-3 shadow-[0_1px_3px_rgba(13,27,62,0.04)] sm:px-4">
       <div className="flex w-[204px] shrink-0 items-center gap-4">
@@ -57,14 +58,14 @@ export function Topbar({ user, notificationCount = 0, onToggleSidebar, breadcrum
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
-        <div className="hidden items-center gap-2 xl:flex">
+        <div className={cn("hidden items-center gap-2 xl:flex", !showWhatsApp && "xl:hidden")}>
           <MessageCircle className="h-5 w-5 text-biz-success" />
           <div className="leading-tight">
             <p className="text-[10px] font-bold text-biz-navy">WhatsApp Support</p>
             <p className="text-[9px] font-semibold text-biz-muted">+880 1700 000000</p>
           </div>
         </div>
-        <span className="hidden h-7 w-px bg-biz-border xl:block" />
+        <span className={cn("hidden h-7 w-px bg-biz-border xl:block", !showWhatsApp && "xl:hidden")} />
         <button type="button" className="relative flex h-8 w-8 items-center justify-center rounded-sm text-biz-navy hover:bg-biz-bg" aria-label="Notifications" title="Notifications">
           <Bell className="h-4 w-4" />
           {notificationCount > 0 && (

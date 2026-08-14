@@ -1,4 +1,4 @@
-import { PrismaClient, PurchaseType, TenderStatus, GuaranteeType, InstrumentStatus, AccountType, ExpenseStatus, ReceiptStatus } from "@prisma/client";
+import { PrismaClient, PurchaseType, TenderStatus, GuaranteeType, InstrumentStatus, AccountType, ExpenseStatus, ReceiptStatus, CmsWorkStatus } from "@prisma/client";
 import { PERMISSIONS } from "@bizovix/types";
 import bcrypt from "bcryptjs";
 
@@ -96,6 +96,14 @@ async function main() {
     { shortName: "BRTC", fullName: "Bangladesh Road Transport Corporation" },
     { shortName: "RHD", fullName: "Roads and Highways Department" },
     { shortName: "Education Board", fullName: "Board of Intermediate and Secondary Education" },
+    { shortName: "BTV", fullName: "Bangladesh Television" },
+    { shortName: "SREDA", fullName: "Sustainable and Renewable Energy Development Authority" },
+    { shortName: "BKSP", fullName: "Bangladesh Krira Shikkha Protishtan" },
+    { shortName: "Mymensingh PS", fullName: "Mymensingh Police Super Office" },
+    { shortName: "Marine Academy", fullName: "Bangladesh Marine Academy" },
+    { shortName: "BUP", fullName: "Bangladesh University of Professionals" },
+    { shortName: "BFRI", fullName: "Bangladesh Fisheries Research Institute" },
+    { shortName: "Dewanganj TSC", fullName: "Dewanganj Technical School and College" },
   ];
   const masters: Record<string, { id: string }> = {};
   for (const m of masterDefs) {
@@ -261,6 +269,10 @@ async function main() {
     { type: PurchaseType.EGP, tenderId: "1024098", master: "RHD", work: "Highway Lighting Installation", price: 5500, estimatedAmount: 13_200_000, account: primeBank, daysAgo: 63 },
     { type: PurchaseType.MANUAL, tenderId: null, master: "WASA", work: "Pump Station Maintenance", price: 1700, estimatedAmount: 4_250_000, account: cash, daysAgo: 68 },
     { type: PurchaseType.EGP, tenderId: "1024051", master: "DPHE", work: "Rural Water Supply Scheme", price: 3900, estimatedAmount: 8_900_000, account: dbbl, daysAgo: 72 },
+    { type: PurchaseType.EGP, tenderId: "1024122", master: "LGED", work: "Electrical Work at Barisal Office", price: 3000, estimatedAmount: 7_500_000, account: dbbl, daysAgo: 76 },
+    { type: PurchaseType.EGP, tenderId: "1023988", master: "BTV", work: "ICT Equipment Supply at BTV", price: 2500, estimatedAmount: 6_800_000, account: primeBank, daysAgo: 80 },
+    { type: PurchaseType.EGP, tenderId: "1023781", master: "SREDA", work: "Solar System at Rajshahi", price: 4000, estimatedAmount: 9_600_000, account: dbbl, daysAgo: 84 },
+    { type: PurchaseType.EGP, tenderId: "1023675", master: "BKSP", work: "Supply of PA System at BKSP", price: 2800, estimatedAmount: 5_900_000, account: primeBank, daysAgo: 88 },
   ];
   for (const d of documentPurchaseDefs) {
     const referenceDates: Record<string, string> = {
@@ -327,6 +339,39 @@ async function main() {
         issueDate: daysAgo(p.issued),
         expiryDate: daysFromNow(p.expires),
         status: InstrumentStatus.ACTIVE,
+      },
+    });
+  }
+
+  // --- CMS Ongoing Works ---------------------------------------------------
+  const cmsWorkDefs = [
+    { id: "seed-cms-work-01", master: "DPHE", name: "Supply of LED Display at Patuakhali", category: "LED Display", value: 12_500_000 },
+    { id: "seed-cms-work-02", master: "LGED", name: "Electrical Work at Barisal Office", category: "Electrical", value: 8_750_000 },
+    { id: "seed-cms-work-03", master: "BTV", name: "ICT Equipment Supply at BTV", category: "ICT", value: 6_200_000 },
+    { id: "seed-cms-work-04", master: "SREDA", name: "Solar System at Rajshahi", category: "Solar System", value: 9_800_000 },
+    { id: "seed-cms-work-05", master: "BKSP", name: "Supply of PA System at BKSP", category: "PA System", value: 4_500_000 },
+    { id: "seed-cms-work-06", master: "Mymensingh PS", name: "LED Display for Mymensingh PS", category: "LED Display", value: 7_650_000 },
+    { id: "seed-cms-work-07", master: "BTV", name: "Digital Studio Setup at BTV", category: "ICT", value: 11_200_000 },
+    { id: "seed-cms-work-08", master: "Marine Academy", name: "Lighting Work at Marine Academy", category: "Electrical", value: 5_300_000 },
+    { id: "seed-cms-work-09", master: "BUP", name: "Infrastructure Work at BUP", category: "Civil Work", value: 9_750_000 },
+    { id: "seed-cms-work-10", master: "BFRI", name: "Equipment Supply at BFRI", category: "Equipment Supply", value: 6_900_000 },
+    { id: "seed-cms-work-11", master: "Dewanganj TSC", name: "LED Display at Dewanganj TSC", category: "LED Display", value: 5_450_000 },
+    { id: "seed-cms-work-12", master: "DPHE", name: "IT & Networking at DPHE HQ", category: "ICT", value: 9_000_000 },
+  ];
+  for (const work of cmsWorkDefs) {
+    await prisma.cmsWork.upsert({
+      where: { id: work.id },
+      update: {},
+      create: {
+        id: work.id,
+        organizationId: organization.id,
+        organizationMasterId: masters[work.master]!.id,
+        workName: work.name,
+        workCategory: work.category,
+        contractValue: work.value,
+        status: CmsWorkStatus.ONGOING,
+        startDate: new Date("2024-05-16"),
+        expectedCompletionDate: new Date("2025-05-15"),
       },
     });
   }

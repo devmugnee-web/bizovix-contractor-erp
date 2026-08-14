@@ -17,6 +17,17 @@ export const PERMISSIONS = [
   "credit_commitment.update",
   "credit_commitment.delete",
 
+  "pg_bg.read",
+  "pg_bg.create",
+  "pg_bg.update",
+  "pg_bg.accept_noa",
+  "pg_bg.save_draft",
+
+  "cms.work.read",
+  "cms.work.create",
+  "cms.work.update",
+  "cms.work.archive",
+
   "expense.create",
   "expense.read",
   "expense.approve",

@@ -23,19 +23,19 @@ export function Sidebar({ remindersCount = 0, collapsed = false, mobileOpen = fa
   const pathname = usePathname();
   const activeGroup = findActiveGroup(pathname);
 
-  const [openGroup, setOpenGroup] = React.useState<string | null>(activeGroup);
+  const [openGroups, setOpenGroups] = React.useState<Set<string>>(() => new Set(["CMS", ...(activeGroup ? [activeGroup] : [])]));
   const [trackedPathname, setTrackedPathname] = React.useState(pathname);
 
   if (pathname !== trackedPathname) {
     setTrackedPathname(pathname);
-    if (activeGroup) setOpenGroup(activeGroup);
+    if (activeGroup) setOpenGroups((groups) => new Set([...groups, activeGroup]));
   }
 
   function renderItem(item: NavItem) {
     const badge = item.badgeKey === "reminders" ? remindersCount : undefined;
 
     if (item.children) {
-      const expanded = openGroup === item.label;
+      const expanded = openGroups.has(item.label);
       return (
         <li key={item.label}>
           <SidebarItem
@@ -44,7 +44,11 @@ export function Sidebar({ remindersCount = 0, collapsed = false, mobileOpen = fa
             expandable
             expanded={expanded}
             active={expanded}
-            onToggle={() => setOpenGroup(expanded ? null : item.label)}
+            onToggle={() => setOpenGroups((groups) => {
+              const next = new Set(groups);
+              if (expanded) next.delete(item.label); else next.add(item.label);
+              return next;
+            })}
           />
           {expanded && <SidebarSubmenu items={item.children} activeHref={pathname} />}
         </li>

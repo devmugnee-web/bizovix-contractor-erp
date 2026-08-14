@@ -15,6 +15,8 @@ import { DocumentPurchasesModule } from "./modules/document-purchases/document-p
 import { TenderSecuritiesModule } from "./modules/tender-securities/tender-securities.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { CreditCommitmentsModule } from "./modules/credit-commitments/credit-commitments.module";
+import { PgBgModule } from "./modules/pg-bg/pg-bg.module";
+import { CmsWorksModule } from "./modules/cms-works/cms-works.module";
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { CreditCommitmentsModule } from "./modules/credit-commitments/credit-com
     DocumentPurchasesModule,
     TenderSecuritiesModule,
     CreditCommitmentsModule,
+    PgBgModule,
+    CmsWorksModule,
     DashboardModule,
   ],
   providers: [

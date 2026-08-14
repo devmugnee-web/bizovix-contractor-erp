@@ -4,7 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 export interface RecordAuditLogInput {
   organizationId: string;
   userId?: string | null;
-  action: "login" | "create" | "update" | "delete" | "approve" | "mark_not_required";
+  action: "login" | "create" | "update" | "delete" | "approve" | "mark_not_required" | "save_draft" | "accept_noa" | "reject_noa";
   entityType: string;
   entityId?: string | null;
   oldValue?: unknown;

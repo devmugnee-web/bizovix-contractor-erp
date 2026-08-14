@@ -11,4 +11,12 @@ export const queryKeys = {
   creditCommitmentPending: (params?: unknown) => ["credit-commitments", "pending", params ?? {}] as const,
   creditCommitments: (params?: unknown) => ["credit-commitments", params ?? {}] as const,
   creditCommitment: (id: string) => ["credit-commitments", id] as const,
+  pgBgEligible: (params?: unknown) => ["pg-bg", "eligible", params ?? {}] as const,
+  pgBgWorkflowByDocument: (id: string) => ["pg-bg", "workflow", "document", id] as const,
+  workCategories: ["pg-bg", "work-categories"] as const,
+  organizationContacts: (organizationMasterId?: string) => ["pg-bg", "contacts", organizationMasterId ?? ""] as const,
+  cmsWorks: (params?: unknown) => ["cms-works", params ?? {}] as const,
+  cmsWork: (id: string) => ["cms-works", id] as const,
+  cmsWorkStats: ["cms-works", "stats"] as const,
+  cmsWorkCategories: ["cms-works", "categories"] as const,
 };

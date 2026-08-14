@@ -6,4 +6,6 @@ export * from "./organization";
 export * from "./document-purchase";
 export * from "./tender-security";
 export * from "./credit-commitment";
+export * from "./pg-bg";
+export * from "./cms-work";
 export * from "./dashboard";

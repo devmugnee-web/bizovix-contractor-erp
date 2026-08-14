@@ -39,7 +39,10 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "PG / BG", href: "/bank-instruments/pg-bg" },
     ],
   },
-  { label: "CMS", subtitle: "Contract Management System", href: "/cms", icon: FileText },
+  { label: "CMS", subtitle: "Contract Management System", icon: FileText, children: [
+    { label: "Ongoing Works", href: "/cms/ongoing-works" },
+    { label: "Archived Works", href: "/cms/archived-works" },
+  ] },
   { label: "Expenses", href: "/expenses", icon: Wallet },
   { label: "Receipts", href: "/receipts", icon: Receipt },
   { label: "Accounts", href: "/bank-accounts", icon: Building2 },

@@ -64,6 +64,20 @@ enum TenderSecurityDocumentStatus {
   NOT_REQUIRED
 }
 
+enum PgBgWorkflowStatus {
+  DRAFT
+  NOA_ACCEPTED
+  NOA_REJECTED
+  FINALIZED
+}
+
+enum CmsWorkStatus {
+  ONGOING
+  COMPLETED
+  ARCHIVED
+  CANCELLED
+}
+
 enum AccountType {
   BANK
   CASH
@@ -103,6 +117,9 @@ model Organization {
   documentPurchases  DocumentPurchase[]
   tenderSecurities   TenderSecurity[]
   creditCommitments  CreditCommitment[]
+  pgBgWorkflows      PgBgWorkflow[]
+  organizationContacts OrganizationContact[]
+  cmsWorks           CmsWork[]
   performanceGuarantees PerformanceGuarantee[]
   expenses           Expense[]
   receipts           Receipt[]
@@ -255,6 +272,9 @@ model OrganizationMaster {
   documentPurchases  DocumentPurchase[]
   tenderSecurities   TenderSecurity[]
   creditCommitments  CreditCommitment[]
+  pgBgWorkflows      PgBgWorkflow[]
+  contacts           OrganizationContact[]
+  cmsWorks           CmsWork[]
   performanceGuarantees PerformanceGuarantee[]
 
   @@unique([organizationId, shortName])
@@ -310,6 +330,7 @@ model Tender {
   creditCommitments     CreditCommitment[]
   performanceGuarantees PerformanceGuarantee[]
   receipts              Receipt[]
+  cmsWorks              CmsWork[]
 
   @@map("tenders")
 }
@@ -354,6 +375,8 @@ model DocumentPurchase {
   paymentFromAccount BankAccount        @relation(fields: [paymentFromAccountId], references: [id])
   tenderSecurityItems TenderSecurityItem[]
   creditCommitmentItems CreditCommitmentItem[]
+  pgBgWorkflow       PgBgWorkflow?
+  cmsWork            CmsWork?
 
   @@map("document_purchases")
 }
@@ -470,13 +493,95 @@ model PerformanceGuarantee {
   createdById          String?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
+  pgBgWorkflowId       String?          @unique
 
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tender             Tender?             @relation(fields: [tenderId], references: [id])
   organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
   bankAccount        BankAccount?        @relation(fields: [bankAccountId], references: [id])
+  pgBgWorkflow       PgBgWorkflow?       @relation(fields: [pgBgWorkflowId], references: [id])
 
   @@map("performance_guarantees")
+}
+
+model OrganizationContact {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  organizationMasterId String
+  name                 String
+  designation          String
+  mobile               String
+  email                String?
+  address              String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
+  pgBgWorkflows      PgBgWorkflow[]
+
+  @@unique([organizationId, organizationMasterId, mobile])
+  @@index([organizationId, organizationMasterId])
+  @@map("organization_contacts")
+}
+
+model PgBgWorkflow {
+  id                   String             @id @default(cuid())
+  organizationId       String
+  documentPurchaseId   String             @unique
+  organizationMasterId String
+  contactId            String?
+  tenderSecurityAmount Decimal            @default(0) @db.Decimal(18, 2)
+  noaDate              DateTime?
+  noaAmount            Decimal?           @db.Decimal(18, 2)
+  workCategory         String?
+  acceptNoa            Boolean?
+  pgBgRequired         Boolean?
+  status               PgBgWorkflowStatus @default(DRAFT)
+  currentStep          Int                @default(1)
+  acceptedAt           DateTime?
+  acceptedById         String?
+  createdById          String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documentPurchase   DocumentPurchase   @relation(fields: [documentPurchaseId], references: [id])
+  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
+  contact            OrganizationContact? @relation(fields: [contactId], references: [id])
+  performanceGuarantee PerformanceGuarantee?
+  cmsWork             CmsWork?
+
+  @@index([organizationId, status])
+  @@map("pg_bg_workflows")
+}
+
+model CmsWork {
+  id                     String        @id @default(cuid())
+  organizationId         String
+  tenderId               String?
+  documentPurchaseId     String?       @unique
+  pgBgWorkflowId         String?       @unique
+  organizationMasterId   String
+  workName               String
+  workCategory           String
+  contractValue          Decimal       @db.Decimal(18, 2)
+  status                 CmsWorkStatus @default(ONGOING)
+  startDate              DateTime?
+  expectedCompletionDate DateTime?
+  createdById            String?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender             Tender?            @relation(fields: [tenderId], references: [id])
+  documentPurchase   DocumentPurchase?  @relation(fields: [documentPurchaseId], references: [id])
+  pgBgWorkflow       PgBgWorkflow?      @relation(fields: [pgBgWorkflowId], references: [id])
+  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([organizationId, organizationMasterId])
+  @@map("cms_works")
 }
 
 // ---------------------------------------------------------------------------
