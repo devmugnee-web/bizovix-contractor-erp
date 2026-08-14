@@ -17,6 +17,7 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { CreditCommitmentsModule } from "./modules/credit-commitments/credit-commitments.module";
 import { PgBgModule } from "./modules/pg-bg/pg-bg.module";
 import { CmsWorksModule } from "./modules/cms-works/cms-works.module";
+import { ProjectExpensesModule } from "./modules/project-expenses/project-expenses.module";
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { CmsWorksModule } from "./modules/cms-works/cms-works.module";
     CreditCommitmentsModule,
     PgBgModule,
     CmsWorksModule,
+    ProjectExpensesModule,
     DashboardModule,
   ],
   providers: [

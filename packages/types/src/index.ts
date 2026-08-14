@@ -8,4 +8,5 @@ export * from "./tender-security";
 export * from "./credit-commitment";
 export * from "./pg-bg";
 export * from "./cms-work";
+export * from "./project-expense";
 export * from "./dashboard";

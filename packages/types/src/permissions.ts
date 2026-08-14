@@ -34,6 +34,12 @@ export const PERMISSIONS = [
   "expense.read",
   "expense.approve",
 
+  "project_expense.read",
+  "project_expense.create",
+  "project_expense.update",
+  "project_expense.delete",
+  "project_expense.export",
+
   "receipt.create",
   "receipt.read",
 

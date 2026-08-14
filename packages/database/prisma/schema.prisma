@@ -122,6 +122,7 @@ model Organization {
   cmsWorks           CmsWork[]
   performanceGuarantees PerformanceGuarantee[]
   expenses           Expense[]
+  expenseHeads       ExpenseHead[]
   receipts           Receipt[]
   reminders          Reminder[]
   documents          Document[]
@@ -145,6 +146,7 @@ model User {
   organizations OrganizationUser[]
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
+  expensesThrough Expense[] @relation("ExpenseThrough")
 
   @@map("users")
 }
@@ -299,6 +301,7 @@ model BankAccount {
   creditCommitmentPayments CreditCommitment[] @relation("CreditCommitmentPaymentAccount")
   creditCommitmentItems CreditCommitmentItem[] @relation("CreditCommitmentItemBank")
   performanceGuarantees PerformanceGuarantee[]
+  projectExpenses      Expense[]
 
   @@map("bank_accounts")
 }
@@ -579,6 +582,7 @@ model CmsWork {
   documentPurchase   DocumentPurchase?  @relation(fields: [documentPurchaseId], references: [id])
   pgBgWorkflow       PgBgWorkflow?      @relation(fields: [pgBgWorkflowId], references: [id])
   organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
+  projectExpenses    Expense[]
 
   @@index([organizationId, status])
   @@index([organizationId, status, completionDate])
@@ -593,6 +597,10 @@ model CmsWork {
 model Expense {
   id             String        @id @default(cuid())
   organizationId String
+  workId         String?
+  expenseHeadId  String?
+  expenseById    String?
+  paidFromAccountId String?
   category       String?
   description    String?
   amount         Decimal       @db.Decimal(18, 2)
@@ -605,8 +613,29 @@ model Expense {
   updatedAt      DateTime      @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  work         CmsWork?     @relation(fields: [workId], references: [id])
+  expenseHead  ExpenseHead? @relation(fields: [expenseHeadId], references: [id])
+  expenseBy    User?        @relation("ExpenseThrough", fields: [expenseById], references: [id])
+  paidFromAccount BankAccount? @relation(fields: [paidFromAccountId], references: [id])
 
+  @@index([organizationId, workId, expenseDate])
+  @@index([organizationId, expenseHeadId])
   @@map("expenses")
+}
+
+model ExpenseHead {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  expenses     Expense[]
+
+  @@unique([organizationId, name])
+  @@map("expense_heads")
 }
 
 model Receipt {

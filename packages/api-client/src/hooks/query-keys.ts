@@ -19,4 +19,7 @@ export const queryKeys = {
   cmsWork: (id: string) => ["cms-works", id] as const,
   cmsWorkStats: (status = "ONGOING") => ["cms-works", "stats", status] as const,
   cmsWorkCategories: ["cms-works", "categories"] as const,
+  projectExpenses: (params?: unknown) => ["project-expenses", params ?? {}] as const,
+  projectExpenseHeads: ["project-expenses", "expense-heads"] as const,
+  projectExpensePeople: ["project-expenses", "people"] as const,
 };

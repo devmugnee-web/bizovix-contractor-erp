@@ -17,9 +17,10 @@ export interface TopbarProps {
   onToggleSidebar: () => void;
   breadcrumb?: BreadcrumbItem[];
   showWhatsApp?: boolean;
+  showHelp?: boolean;
 }
 
-export function Topbar({ user, notificationCount = 0, onToggleSidebar, breadcrumb, showWhatsApp = true }: TopbarProps) {
+export function Topbar({ user, notificationCount = 0, onToggleSidebar, breadcrumb, showWhatsApp = true, showHelp = true }: TopbarProps) {
   return (
     <header className="flex h-14 shrink-0 items-center border-b border-biz-border bg-white px-3 shadow-[0_1px_3px_rgba(13,27,62,0.04)] sm:px-4">
       <div className="flex w-[204px] shrink-0 items-center gap-4">
@@ -74,9 +75,7 @@ export function Topbar({ user, notificationCount = 0, onToggleSidebar, breadcrum
             </span>
           )}
         </button>
-        <button type="button" className="flex h-8 w-8 items-center justify-center rounded-sm text-biz-navy hover:bg-biz-bg" aria-label="Help" title="Help">
-          <CircleHelp className="h-4 w-4" />
-        </button>
+        {showHelp && <button type="button" className="flex h-8 w-8 items-center justify-center rounded-sm text-biz-navy hover:bg-biz-bg" aria-label="Help" title="Help"><CircleHelp className="h-4 w-4" /></button>}
         <span className="hidden h-7 w-px bg-biz-border sm:block" />
         <button type="button" className="flex items-center gap-2 rounded-sm px-1 py-1 text-left hover:bg-biz-bg" aria-label="Open profile menu">
           {user.avatarUrl ? (

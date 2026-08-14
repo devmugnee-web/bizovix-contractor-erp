@@ -83,7 +83,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           else setSidebarCollapsed((value) => !value);
         }}
         breadcrumb={breadcrumb ?? undefined}
-        showWhatsApp={!pathname.startsWith("/bank-instruments/pg-bg") && !pathname.startsWith("/cms")}
+        showWhatsApp={!pathname.startsWith("/bank-instruments/pg-bg") && !pathname.startsWith("/cms") && !pathname.startsWith("/expenses/project-expense")}
+        showHelp={!pathname.startsWith("/expenses/project-expense")}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar remindersCount={remindersCount} collapsed={sidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileClose={() => setMobileSidebarOpen(false)} />

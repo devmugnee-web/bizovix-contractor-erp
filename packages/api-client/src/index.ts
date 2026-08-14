@@ -12,3 +12,4 @@ export * from "./hooks/use-tender-securities";
 export * from "./hooks/use-credit-commitments";
 export * from "./hooks/use-pg-bg";
 export * from "./hooks/use-cms-works";
+export * from "./hooks/use-project-expenses";

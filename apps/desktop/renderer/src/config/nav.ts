@@ -43,7 +43,10 @@ export const NAV_ITEMS: NavItem[] = [
     { label: "Ongoing Works", href: "/cms/ongoing-works" },
     { label: "Archived Works", href: "/cms/archived-works" },
   ] },
-  { label: "Expenses", href: "/expenses", icon: Wallet },
+  { label: "Expenses", icon: Wallet, children: [
+    { label: "Project Expense", href: "/expenses/project-expense" },
+    { label: "General Expense", href: "/expenses/general-expense" },
+  ] },
   { label: "Receipts", href: "/receipts", icon: Receipt },
   { label: "Accounts", href: "/bank-accounts", icon: Building2 },
   { label: "Reports", href: "/reports", icon: BarChart3 },
