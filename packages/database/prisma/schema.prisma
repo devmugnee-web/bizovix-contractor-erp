@@ -276,6 +276,8 @@ model BankAccount {
   documentPurchases  DocumentPurchase[]
   tenderSecurities   TenderSecurity[]   @relation("TenderSecurityBankAccount")
   tenderSecurityCharges TenderSecurity[] @relation("TenderSecurityChargeFrom")
+  creditCommitmentPayments CreditCommitment[] @relation("CreditCommitmentPaymentAccount")
+  creditCommitmentItems CreditCommitmentItem[] @relation("CreditCommitmentItemBank")
   performanceGuarantees PerformanceGuarantee[]
 
   @@map("bank_accounts")
@@ -341,6 +343,7 @@ model DocumentPurchase {
   tenderWorkName       String
   purchaseDate         DateTime
   documentPrice        Decimal      @db.Decimal(18, 2)
+  estimatedTenderAmount Decimal     @default(0) @db.Decimal(18, 2)
   tenderSecurityStatus TenderSecurityDocumentStatus @default(PENDING)
   createdById          String?
   createdAt            DateTime     @default(now())
@@ -350,6 +353,7 @@ model DocumentPurchase {
   organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
   paymentFromAccount BankAccount        @relation(fields: [paymentFromAccountId], references: [id])
   tenderSecurityItems TenderSecurityItem[]
+  creditCommitmentItems CreditCommitmentItem[]
 
   @@map("document_purchases")
 }
@@ -414,6 +418,10 @@ model CreditCommitment {
   amount               Decimal  @db.Decimal(18, 2)
   chargeDate           DateTime
   isCharged            Boolean  @default(false)
+  paymentFromAccountId String?
+  paymentDate          DateTime?
+  remarks              String?
+  totalAmount          Decimal  @default(0) @db.Decimal(18, 2)
   createdById          String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -421,8 +429,30 @@ model CreditCommitment {
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tender             Tender?             @relation(fields: [tenderId], references: [id])
   organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
+  paymentFromAccount BankAccount?         @relation("CreditCommitmentPaymentAccount", fields: [paymentFromAccountId], references: [id])
+  items              CreditCommitmentItem[]
 
+  @@index([organizationId, paymentDate])
   @@map("credit_commitments")
+}
+
+model CreditCommitmentItem {
+  id                         String   @id @default(cuid())
+  creditCommitmentId         String
+  documentPurchaseId         String
+  bankAccountId              String
+  chargeAmount               Decimal  @db.Decimal(18, 2)
+  remarks                    String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  creditCommitment CreditCommitment @relation(fields: [creditCommitmentId], references: [id], onDelete: Cascade)
+  documentPurchase DocumentPurchase @relation(fields: [documentPurchaseId], references: [id])
+  bankAccount      BankAccount      @relation("CreditCommitmentItemBank", fields: [bankAccountId], references: [id])
+
+  @@unique([documentPurchaseId])
+  @@index([creditCommitmentId])
+  @@map("credit_commitment_items")
 }
 
 model PerformanceGuarantee {

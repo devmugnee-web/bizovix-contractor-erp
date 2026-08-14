@@ -1,0 +1,8 @@
+cd D:\bizovix-contractor-erp
+pnpm --filter @bizovix/api dev
+
+cd D:\bizovix-contractor-erp
+pnpm --filter @bizovix/renderer dev
+
+cd D:\bizovix-contractor-erp
+pnpm --filter @bizovix/electron dev

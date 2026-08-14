@@ -2,67 +2,40 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Bell, FilePlus2, Plus, Search } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { FilePlus2, Plus, Settings } from "lucide-react";
 import { tokenStorage, useDashboard, useMe } from "@bizovix/api-client";
-import { TextInput } from "@bizovix/ui";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { BreadcrumbProvider, useBreadcrumbContext } from "@/components/providers/BreadcrumbContext";
+import { getGreeting } from "@/lib/greeting";
 
-function ActionToolbar({ notificationCount }: { notificationCount: number }) {
-  const [searchOpen, setSearchOpen] = React.useState(false);
-  const searchInputRef = React.useRef<HTMLInputElement>(null);
-
-  React.useEffect(() => {
-    if (searchOpen) searchInputRef.current?.focus();
-  }, [searchOpen]);
-
+function ActionToolbar({ userName }: { userName: string }) {
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between border-b border-biz-border bg-gradient-to-r from-white via-white to-biz-bg px-3 shadow-sm">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        {searchOpen ? (
-          <TextInput
-            ref={searchInputRef}
-            icon={Search}
-            placeholder="Search anything..."
-            className="h-8 w-full max-w-[320px] rounded-full"
-            onBlur={() => setSearchOpen(false)}
-          />
-        ) : (
-          <button
-            type="button"
-            aria-label="Open search"
-            onClick={() => setSearchOpen(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-biz-blue text-white shadow-sm ring-4 ring-biz-blue-soft transition-colors hover:bg-biz-blue-hover"
-          >
-            <Search className="h-3.5 w-3.5" />
-          </button>
-        )}
+    <div className="flex min-h-[62px] shrink-0 items-center justify-between gap-3 border-b border-biz-border bg-white px-4 py-2 sm:px-5">
+      <div className="min-w-0">
+        <h1 className="truncate text-[14px] font-bold text-biz-navy">{getGreeting()}, {userName} <span aria-hidden="true">👋</span></h1>
+        <p className="mt-0.5 hidden text-[9px] text-biz-muted sm:block">Here&apos;s what&apos;s happening with your business today.</p>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <Link href="/cms" className="inline-flex h-8 items-center gap-1.5 rounded-full bg-biz-orange px-3 text-[11px] font-bold text-white shadow-sm hover:brightness-95">
+        <Link href="/cms" className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-biz-orange px-3 text-[10px] font-bold text-white shadow-sm hover:brightness-95">
           <FilePlus2 className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Add Tender</span>
           <span className="sm:hidden">Tender</span>
         </Link>
-        <Link href="/expenses" className="inline-flex h-8 items-center gap-1.5 rounded-full bg-biz-blue px-3 text-[11px] font-bold text-white shadow-sm hover:bg-biz-blue-hover">
+        <Link href="/expenses" className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-biz-blue px-3 text-[10px] font-bold text-white shadow-sm hover:bg-biz-blue-hover">
           <Plus className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Add Expense</span>
           <span className="sm:hidden">Expense</span>
         </Link>
         <button
           type="button"
-          className="relative flex h-8 w-8 items-center justify-center rounded-full border border-biz-border bg-biz-surface text-biz-muted shadow-sm hover:bg-biz-bg hover:text-biz-text"
-          aria-label="Notifications"
+          className="flex h-8 w-8 items-center justify-center rounded-sm border border-biz-border bg-white text-biz-navy shadow-sm hover:bg-biz-bg"
+          aria-label="Settings"
+          title="Settings"
         >
-          <Bell className="h-4 w-4" />
-          {notificationCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-biz-orange px-1 text-[9px] font-semibold text-white">
-              {notificationCount}
-            </span>
-          )}
+          <Settings className="h-4 w-4" />
         </button>
       </div>
     </div>
@@ -71,9 +44,12 @@ function ActionToolbar({ notificationCount }: { notificationCount: number }) {
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const me = useMe();
   const dashboard = useDashboard();
   const { breadcrumb } = useBreadcrumbContext();
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!tokenStorage.getAccessToken()) {
@@ -100,14 +76,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen flex-col">
       <Topbar
-        breadcrumb={breadcrumb ?? undefined}
+        user={me.data}
         notificationCount={remindersCount}
+        onToggleSidebar={() => {
+          if (window.matchMedia("(max-width: 767px)").matches) setMobileSidebarOpen((value) => !value);
+          else setSidebarCollapsed((value) => !value);
+        }}
+        breadcrumb={breadcrumb ?? undefined}
       />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar remindersCount={remindersCount} />
+        <Sidebar remindersCount={remindersCount} collapsed={sidebarCollapsed} mobileOpen={mobileSidebarOpen} onMobileClose={() => setMobileSidebarOpen(false)} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <ActionToolbar notificationCount={remindersCount} />
-          <main className="flex-1 overflow-y-auto bg-biz-bg p-6">{children}</main>
+          {pathname === "/dashboard" && <ActionToolbar userName={me.data.name} />}
+          <main className="flex-1 overflow-y-auto bg-biz-bg p-3 sm:p-6">{children}</main>
         </div>
       </div>
     </div>

@@ -14,6 +14,7 @@ import { BankAccountsModule } from "./modules/bank-accounts/bank-accounts.module
 import { DocumentPurchasesModule } from "./modules/document-purchases/document-purchases.module";
 import { TenderSecuritiesModule } from "./modules/tender-securities/tender-securities.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
+import { CreditCommitmentsModule } from "./modules/credit-commitments/credit-commitments.module";
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
     BankAccountsModule,
     DocumentPurchasesModule,
     TenderSecuritiesModule,
+    CreditCommitmentsModule,
     DashboardModule,
   ],
   providers: [

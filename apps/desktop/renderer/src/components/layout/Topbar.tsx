@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Building2, CircleHelp, Headphones, RefreshCw, ShieldCheck, Tag, Zap } from "lucide-react";
+import Image from "next/image";
+import { Bell, ChevronDown, CircleHelp, Menu, MessageCircle, Search } from "lucide-react";
 import { Breadcrumb, type BreadcrumbItem } from "@bizovix/ui";
 
 export interface TopbarUser {
@@ -11,66 +12,85 @@ export interface TopbarUser {
 }
 
 export interface TopbarProps {
-  breadcrumb?: BreadcrumbItem[];
-  user?: TopbarUser;
+  user: TopbarUser;
   notificationCount?: number;
-  onToggleSidebar?: () => void;
+  onToggleSidebar: () => void;
+  breadcrumb?: BreadcrumbItem[];
 }
 
-export function Topbar({ breadcrumb }: TopbarProps) {
+export function Topbar({ user, notificationCount = 0, onToggleSidebar, breadcrumb }: TopbarProps) {
   return (
-    <header className="flex h-[30px] shrink-0 items-center justify-between border-b border-biz-border bg-biz-surface px-3 shadow-[0_1px_0_rgba(13,27,62,0.03)]">
-      <div className="flex min-w-0 flex-1 items-center gap-5">
-        <div className="flex shrink-0 items-center gap-1">
-          <span className="flex h-5 w-5 items-center justify-center rounded-sm bg-biz-blue-soft text-[16px] font-extrabold leading-none text-biz-blue">
-            X
-          </span>
-          <span className="text-[11px] font-extrabold text-biz-navy">Bizovix</span>
-          <span className="hidden rounded-full bg-biz-bg px-2 py-0.5 text-[9px] font-semibold text-biz-muted sm:inline-flex">
-            Tender ERP
+    <header className="flex h-14 shrink-0 items-center border-b border-biz-border bg-white px-3 shadow-[0_1px_3px_rgba(13,27,62,0.04)] sm:px-4">
+      <div className="flex w-[204px] shrink-0 items-center gap-4">
+        <div className="flex items-center gap-2" aria-label="Bizovix Contractor ERP">
+          <span className="text-[26px] font-black leading-none text-biz-blue">X</span>
+          <span className="leading-none">
+            <span className="block text-[15px] font-extrabold text-biz-blue">BIZOVIX</span>
+            <span className="block text-center text-[7px] font-semibold text-biz-blue">Contractor ERP</span>
           </span>
         </div>
-
-        <nav className="hidden items-center gap-4 text-[10px] font-semibold text-biz-muted md:flex">
-          <span className="inline-flex items-center gap-1">
-            <Building2 className="h-3 w-3" />
-            Company
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <CircleHelp className="h-3 w-3" />
-            Help
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Tag className="h-3 w-3" />
-            Versions
-          </span>
-          <span className="inline-flex items-center gap-1 text-biz-success">
-            <ShieldCheck className="h-3 w-3" />
-            Secure Session
-          </span>
-          <RefreshCw className="h-3 w-3 text-biz-muted" />
-        </nav>
-
-        {breadcrumb && <Breadcrumb items={breadcrumb} className="min-w-0 flex-1 text-[12px]" />}
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className="flex h-8 w-8 items-center justify-center rounded-sm text-biz-navy hover:bg-biz-bg"
+          aria-label="Toggle sidebar"
+          title="Toggle sidebar"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
       </div>
 
-      <div className="flex shrink-0 items-center gap-4 pl-4 text-[10px] font-semibold text-biz-muted">
-        <div className="hidden items-center gap-1.5 sm:flex">
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-biz-success-soft text-biz-success">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-              <path d="M17.5 14.4c-.3-.1-1.6-.8-1.9-.9-.2-.1-.4-.1-.6.1-.2.2-.6.9-.8 1-.2.2-.3.2-.6.1-.9-.4-1.9-1-2.7-1.9-.7-.8-1.2-1.7-1.5-2.2-.1-.2 0-.4.1-.5.1-.1.5-.6.6-.8.1-.2.1-.4 0-.6-.1-.2-.6-1.4-.8-1.9-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.4-.2.3-.9 1-.9 2.3 0 1.3.9 2.6 1.1 2.8.2.2 1.7 2.6 4.1 3.6 2.4 1 2.4.7 2.8.6.4-.1 1.3-.5 1.5-1 .2-.5.2-.9.1-1z" />
-            </svg>
-          </span>
-          <span>WhatsApp Chat Support (+880) 1700 000000</span>
+      <div className="hidden min-w-0 flex-1 md:block">
+        {breadcrumb?.length ? (
+          <Breadcrumb items={breadcrumb} className="min-w-0 text-[11px]" />
+        ) : (
+        <label className="relative block max-w-[410px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" />
+          <input
+            type="search"
+            placeholder="Search anything..."
+            className="h-9 w-full rounded-sm border border-biz-border bg-biz-bg pl-9 pr-16 text-[11px] text-biz-text outline-none transition focus:border-biz-blue focus:bg-white"
+          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-semibold text-biz-muted">Ctrl + K</span>
+        </label>
+        )}
+      </div>
+
+      <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
+        <div className="hidden items-center gap-2 xl:flex">
+          <MessageCircle className="h-5 w-5 text-biz-success" />
+          <div className="leading-tight">
+            <p className="text-[10px] font-bold text-biz-navy">WhatsApp Support</p>
+            <p className="text-[9px] font-semibold text-biz-muted">+880 1700 000000</p>
+          </div>
         </div>
-        <span className="hidden items-center gap-1 sm:inline-flex">
-          <Headphones className="h-3 w-3 text-biz-blue" />
-          Tender Support
-        </span>
-        <span className="hidden items-center gap-1 lg:inline-flex">
-          <Zap className="h-3 w-3" />
-          Get Instant Online Support
-        </span>
+        <span className="hidden h-7 w-px bg-biz-border xl:block" />
+        <button type="button" className="relative flex h-8 w-8 items-center justify-center rounded-sm text-biz-navy hover:bg-biz-bg" aria-label="Notifications" title="Notifications">
+          <Bell className="h-4 w-4" />
+          {notificationCount > 0 && (
+            <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-biz-orange px-1 text-[8px] font-bold text-white">
+              {notificationCount}
+            </span>
+          )}
+        </button>
+        <button type="button" className="flex h-8 w-8 items-center justify-center rounded-sm text-biz-navy hover:bg-biz-bg" aria-label="Help" title="Help">
+          <CircleHelp className="h-4 w-4" />
+        </button>
+        <span className="hidden h-7 w-px bg-biz-border sm:block" />
+        <button type="button" className="flex items-center gap-2 rounded-sm px-1 py-1 text-left hover:bg-biz-bg" aria-label="Open profile menu">
+          {user.avatarUrl ? (
+            <Image src={user.avatarUrl} alt="" width={32} height={32} unoptimized className="h-8 w-8 rounded-full object-cover" />
+          ) : (
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-biz-navy text-[11px] font-bold text-white">
+              {user.name.charAt(0).toUpperCase()}
+            </span>
+          )}
+          <span className="hidden leading-tight sm:block">
+            <span className="block max-w-[120px] truncate text-[10px] font-bold text-biz-navy">{user.name}</span>
+            <span className="block text-[9px] text-biz-muted">{user.roleName}</span>
+          </span>
+          <ChevronDown className="hidden h-3.5 w-3.5 text-biz-navy sm:block" />
+        </button>
       </div>
     </header>
   );

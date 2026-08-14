@@ -121,7 +121,7 @@ async function main() {
       organizationId: organization.id,
       accountName: "Prime Bank A/C",
       accountType: AccountType.BANK,
-      bankName: "Prime Bank",
+      bankName: "Prime Bank PLC",
       accountNumber: "2091000078452",
       currentBalance: 600_000_000,
     },
@@ -239,23 +239,37 @@ async function main() {
     master: string;
     work: string;
     price: number;
+    estimatedAmount: number;
     account: (typeof bankAccounts)[number];
     daysAgo: number;
   }> = [
-    { type: PurchaseType.EGP, tenderId: "1024587", master: "DPHE", work: "Supply of LED Display at Patuakhali", price: 5000, account: dbbl, daysAgo: 3 },
-    { type: PurchaseType.EGP, tenderId: "1024523", master: "PWD", work: "Electrical Works at Cox's Bazar", price: 3000, account: primeBank, daysAgo: 5 },
-    { type: PurchaseType.MANUAL, tenderId: null, master: "WASA", work: "Pipeline Extension Work", price: 2000, account: cash, daysAgo: 8 },
-    { type: PurchaseType.EGP, tenderId: "1024480", master: "LGED", work: "Road Improvement Work", price: 5000, account: dbbl, daysAgo: 11 },
-    { type: PurchaseType.MANUAL, tenderId: null, master: "BRTC", work: "Office Building Construction", price: 1500, account: cash, daysAgo: 12 },
-    { type: PurchaseType.EGP, tenderId: "1024401", master: "RHD", work: "Rehabilitation of Road", price: 4000, account: primeBank, daysAgo: 15 },
-    { type: PurchaseType.MANUAL, tenderId: null, master: "Education Board", work: "Renovation of College Building", price: 1000, account: cash, daysAgo: 18 },
-    { type: PurchaseType.EGP, tenderId: "1024322", master: "DPHE", work: "Drilling of Deep Tube Well", price: 2000, account: dbbl, daysAgo: 24 },
-    { type: PurchaseType.EGP, tenderId: "1024290", master: "PWD", work: "Sound System Installation at Barisal", price: 3500, account: primeBank, daysAgo: 30 },
-    { type: PurchaseType.MANUAL, tenderId: null, master: "WASA", work: "Sewerage Line Upgrade", price: 1800, account: cash, daysAgo: 35 },
-    { type: PurchaseType.EGP, tenderId: "1024255", master: "LGED", work: "IT Solutions for Union Office", price: 4500, account: dbbl, daysAgo: 40 },
-    { type: PurchaseType.EGP, tenderId: "1024198", master: "RHD", work: "Bridge Approach Road Construction", price: 6000, account: primeBank, daysAgo: 45 },
+    { type: PurchaseType.EGP, tenderId: "1024587", master: "DPHE", work: "Supply of LED Display at Patuakhali", price: 5000, estimatedAmount: 8_500_000, account: dbbl, daysAgo: 3 },
+    { type: PurchaseType.EGP, tenderId: "1024523", master: "PWD", work: "Electrical Works at Cox's Bazar", price: 3000, estimatedAmount: 12_750_000, account: primeBank, daysAgo: 5 },
+    { type: PurchaseType.EGP, tenderId: "1024480", master: "LGED", work: "Road Improvement Work", price: 5000, estimatedAmount: 9_200_000, account: dbbl, daysAgo: 11 },
+    { type: PurchaseType.EGP, tenderId: "1024401", master: "RHD", work: "Rehabilitation of Road", price: 4000, estimatedAmount: 6_400_000, account: primeBank, daysAgo: 15 },
+    { type: PurchaseType.EGP, tenderId: "1024322", master: "DPHE", work: "Drilling of Deep Tube Well", price: 2000, estimatedAmount: 4_800_000, account: dbbl, daysAgo: 24 },
+    { type: PurchaseType.MANUAL, tenderId: null, master: "WASA", work: "Pipeline Extension Work", price: 2000, estimatedAmount: 7_250_000, account: cash, daysAgo: 8 },
+    { type: PurchaseType.MANUAL, tenderId: null, master: "BRTC", work: "Office Building Construction", price: 1500, estimatedAmount: 14_000_000, account: cash, daysAgo: 12 },
+    { type: PurchaseType.MANUAL, tenderId: null, master: "Education Board", work: "Renovation of College Building", price: 1000, estimatedAmount: 5_500_000, account: cash, daysAgo: 18 },
+    { type: PurchaseType.EGP, tenderId: "1024290", master: "PWD", work: "Sound System Installation at Barisal", price: 3500, estimatedAmount: 8_750_000, account: primeBank, daysAgo: 30 },
+    { type: PurchaseType.MANUAL, tenderId: null, master: "WASA", work: "Sewerage Line Upgrade", price: 1800, estimatedAmount: 6_900_000, account: cash, daysAgo: 35 },
+    { type: PurchaseType.EGP, tenderId: "1024255", master: "LGED", work: "IT Solutions for Union Office", price: 4500, estimatedAmount: 11_500_000, account: dbbl, daysAgo: 40 },
+    { type: PurchaseType.EGP, tenderId: "1024198", master: "RHD", work: "Bridge Approach Road Construction", price: 6000, estimatedAmount: 16_000_000, account: primeBank, daysAgo: 45 },
+    { type: PurchaseType.EGP, tenderId: "1024176", master: "DPHE", work: "Water Treatment Plant Equipment", price: 4200, estimatedAmount: 10_500_000, account: dbbl, daysAgo: 48 },
+    { type: PurchaseType.EGP, tenderId: "1024155", master: "PWD", work: "Government Office Renovation", price: 2800, estimatedAmount: 7_800_000, account: primeBank, daysAgo: 52 },
+    { type: PurchaseType.EGP, tenderId: "1024120", master: "LGED", work: "Rural Market Development", price: 3200, estimatedAmount: 9_750_000, account: dbbl, daysAgo: 57 },
+    { type: PurchaseType.EGP, tenderId: "1024098", master: "RHD", work: "Highway Lighting Installation", price: 5500, estimatedAmount: 13_200_000, account: primeBank, daysAgo: 63 },
+    { type: PurchaseType.MANUAL, tenderId: null, master: "WASA", work: "Pump Station Maintenance", price: 1700, estimatedAmount: 4_250_000, account: cash, daysAgo: 68 },
+    { type: PurchaseType.EGP, tenderId: "1024051", master: "DPHE", work: "Rural Water Supply Scheme", price: 3900, estimatedAmount: 8_900_000, account: dbbl, daysAgo: 72 },
   ];
   for (const d of documentPurchaseDefs) {
+    const referenceDates: Record<string, string> = {
+      "1024587": "2024-05-10T00:00:00.000Z",
+      "1024523": "2024-05-08T00:00:00.000Z",
+      "1024480": "2024-05-02T00:00:00.000Z",
+      "1024401": "2024-04-28T00:00:00.000Z",
+      "1024322": "2024-04-20T00:00:00.000Z",
+    };
     await prisma.documentPurchase.create({
       data: {
         organizationId: organization.id,
@@ -264,8 +278,9 @@ async function main() {
         organizationMasterId: masters[d.master]!.id,
         paymentFromAccountId: d.account.id,
         tenderWorkName: d.work,
-        purchaseDate: daysAgo(d.daysAgo),
+        purchaseDate: referenceDates[d.tenderId ?? ""] ? new Date(referenceDates[d.tenderId ?? ""]!) : daysAgo(d.daysAgo),
         documentPrice: d.price,
+        estimatedTenderAmount: d.estimatedAmount,
       },
     });
   }

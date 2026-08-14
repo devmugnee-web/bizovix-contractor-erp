@@ -42,6 +42,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "CMS", subtitle: "Contract Management System", href: "/cms", icon: FileText },
   { label: "Expenses", href: "/expenses", icon: Wallet },
   { label: "Receipts", href: "/receipts", icon: Receipt },
+  { label: "Accounts", href: "/bank-accounts", icon: Building2 },
   { label: "Reports", href: "/reports", icon: BarChart3 },
 ];
 
@@ -49,6 +50,5 @@ export const NAV_ITEMS_LOWER: NavItem[] = [
   { label: "Masters", href: "/masters", icon: Database },
   { label: "Reminders", href: "/reminders", icon: Bell, badgeKey: "reminders" },
   { label: "Documents", href: "/documents", icon: FolderOpen },
-  { label: "Bank & Accounts", href: "/bank-accounts", icon: Building2 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];

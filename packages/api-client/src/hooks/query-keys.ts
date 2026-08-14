@@ -8,4 +8,7 @@ export const queryKeys = {
   documentPurchase: (id: string) => ["document-purchases", id] as const,
   tenderSecurityPending: (params?: unknown) => ["tender-securities", "pending", params ?? {}] as const,
   tenderSecurities: ["tender-securities"] as const,
+  creditCommitmentPending: (params?: unknown) => ["credit-commitments", "pending", params ?? {}] as const,
+  creditCommitments: (params?: unknown) => ["credit-commitments", params ?? {}] as const,
+  creditCommitment: (id: string) => ["credit-commitments", id] as const,
 };

@@ -12,6 +12,11 @@ export const PERMISSIONS = [
   "tender_security.update",
   "tender_security.mark_not_required",
 
+  "credit_commitment.create",
+  "credit_commitment.read",
+  "credit_commitment.update",
+  "credit_commitment.delete",
+
   "expense.create",
   "expense.read",
   "expense.approve",
