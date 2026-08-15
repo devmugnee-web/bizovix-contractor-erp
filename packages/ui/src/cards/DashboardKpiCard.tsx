@@ -22,25 +22,25 @@ export function DashboardKpiCard({
   children,
 }: DashboardKpiCardProps) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-md border border-biz-border bg-biz-surface p-1.5 shadow-card sm:gap-1.5 sm:p-2 lg:gap-2 lg:p-3">
-      <div className="flex min-w-0 items-center gap-1 sm:gap-1.5 lg:gap-2">
+    <div className="flex min-w-0 flex-col gap-1 rounded-md border border-biz-border bg-biz-surface p-1.5 shadow-card sm:p-2 lg:gap-1.5 lg:p-2">
+      <div className="flex min-w-0 items-start gap-1 sm:gap-1.5">
         <span
           className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded sm:h-6 sm:w-6 lg:h-8 lg:w-8 lg:rounded-md",
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded sm:h-6 sm:w-6 lg:h-7 lg:w-7 lg:rounded-md",
             iconClassName,
           )}
         >
-          <Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5 lg:h-4 lg:w-4" />
+          <Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
         </span>
-        <span className="min-w-0 truncate text-[9px] font-medium leading-tight text-biz-muted sm:text-[10px] lg:text-[12px]">
+        <span className="min-w-0 whitespace-normal break-words text-[8px] font-medium leading-tight text-biz-muted sm:text-[9px] lg:text-[10px]">
           {index}. {title}
         </span>
       </div>
-      <div className={cn("truncate text-[11px] font-bold leading-tight text-biz-text sm:text-[13px] lg:text-kpi-value", valueClassName)}>
+      <div className={cn("whitespace-normal break-words text-[11px] font-bold leading-tight text-biz-text sm:text-[12px] lg:text-[15px]", valueClassName)}>
         {value}
       </div>
       {children && (
-        <div className="hidden truncate text-[10px] leading-tight text-biz-muted sm:block lg:text-[11px]">{children}</div>
+        <div className="hidden whitespace-normal break-words text-[8px] leading-tight text-biz-muted sm:block lg:text-[9px]">{children}</div>
       )}
     </div>
   );
