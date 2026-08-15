@@ -35,6 +35,7 @@ enum ExpenseStatus {
 enum ReceiptStatus {
   PENDING
   RECEIVED
+  CANCELLED
 }
 
 enum GuaranteeType {
@@ -107,28 +108,34 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users              OrganizationUser[]
-  roles              Role[]
-  subscription       Subscription?
-  licenses           License[]
-  organizationMasters OrganizationMaster[]
-  bankAccounts       BankAccount[]
-  tenders            Tender[]
-  documentPurchases  DocumentPurchase[]
-  tenderSecurities   TenderSecurity[]
-  creditCommitments  CreditCommitment[]
-  pgBgWorkflows      PgBgWorkflow[]
-  organizationContacts OrganizationContact[]
-  cmsWorks           CmsWork[]
+  users                 OrganizationUser[]
+  roles                 Role[]
+  subscription          Subscription?
+  licenses              License[]
+  organizationMasters   OrganizationMaster[]
+  bankAccounts          BankAccount[]
+  tenders               Tender[]
+  documentPurchases     DocumentPurchase[]
+  tenderSecurities      TenderSecurity[]
+  creditCommitments     CreditCommitment[]
+  pgBgWorkflows         PgBgWorkflow[]
+  organizationContacts  OrganizationContact[]
+  cmsWorks              CmsWork[]
   performanceGuarantees PerformanceGuarantee[]
-  expenses           Expense[]
-  expenseHeads       ExpenseHead[]
-  receipts           Receipt[]
-  reminders          Reminder[]
-  documents          Document[]
-  auditLogs          AuditLog[]
-  appSettings        AppSetting[]
-  monthlyTargets     MonthlyTarget[]
+  expenses              Expense[]
+  expenseAttachments    ExpenseAttachment[]
+  expenseHeads          ExpenseHead[]
+  receipts              Receipt[]
+  receiptSequences      ReceiptSequence[]
+  reminders             Reminder[]
+  documents             Document[]
+  auditLogs             AuditLog[]
+  appSettings           AppSetting[]
+  monthlyTargets        MonthlyTarget[]
+  financialTransactions FinancialTransaction[]
+  fundTransfers         FundTransfer[]
+  bankReconciliations   BankReconciliation[]
+  cheques               Cheque[]
 
   @@map("organizations")
 }
@@ -143,10 +150,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  organizations OrganizationUser[]
-  refreshTokens RefreshToken[]
-  auditLogs     AuditLog[]
-  expensesThrough Expense[] @relation("ExpenseThrough")
+  organizations   OrganizationUser[]
+  refreshTokens   RefreshToken[]
+  auditLogs       AuditLog[]
+  expensesThrough Expense[]          @relation("ExpenseThrough")
 
   @@map("users")
 }
@@ -176,8 +183,8 @@ model Role {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  permissions     RolePermission[]
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  permissions       RolePermission[]
   organizationUsers OrganizationUser[]
 
   @@unique([organizationId, name])
@@ -227,15 +234,15 @@ model RefreshToken {
 // ---------------------------------------------------------------------------
 
 model License {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
-  licenseKey     String   @unique
-  seats          Int      @default(1)
-  issuedAt       DateTime @default(now())
+  licenseKey     String    @unique
+  seats          Int       @default(1)
+  issuedAt       DateTime  @default(now())
   expiresAt      DateTime?
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -243,14 +250,14 @@ model License {
 }
 
 model Subscription {
-  id               String              @id @default(cuid())
-  organizationId   String              @unique
-  plan             SubscriptionPlan    @default(TRIAL)
-  status           SubscriptionStatus  @default(TRIALING)
+  id               String             @id @default(cuid())
+  organizationId   String             @unique
+  plan             SubscriptionPlan   @default(TRIAL)
+  status           SubscriptionStatus @default(TRIALING)
   trialEndsAt      DateTime?
   currentPeriodEnd DateTime?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -269,14 +276,14 @@ model OrganizationMaster {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tenders            Tender[]
-  documentPurchases  DocumentPurchase[]
-  tenderSecurities   TenderSecurity[]
-  creditCommitments  CreditCommitment[]
-  pgBgWorkflows      PgBgWorkflow[]
-  contacts           OrganizationContact[]
-  cmsWorks           CmsWork[]
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenders               Tender[]
+  documentPurchases     DocumentPurchase[]
+  tenderSecurities      TenderSecurity[]
+  creditCommitments     CreditCommitment[]
+  pgBgWorkflows         PgBgWorkflow[]
+  contacts              OrganizationContact[]
+  cmsWorks              CmsWork[]
   performanceGuarantees PerformanceGuarantee[]
 
   @@unique([organizationId, shortName])
@@ -290,18 +297,32 @@ model BankAccount {
   accountType    AccountType
   bankName       String?
   accountNumber  String?
+  branch         String?
+  routingNumber  String?
+  bankAccountType String?
+  openingBalance Decimal     @default(0) @db.Decimal(18, 2)
+  openingBalanceDate DateTime?
+  currency       String      @default("BDT")
+  remarks        String?
+  isActive       Boolean     @default(true)
   currentBalance Decimal     @default(0) @db.Decimal(18, 2)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  documentPurchases  DocumentPurchase[]
-  tenderSecurities   TenderSecurity[]   @relation("TenderSecurityBankAccount")
-  tenderSecurityCharges TenderSecurity[] @relation("TenderSecurityChargeFrom")
-  creditCommitmentPayments CreditCommitment[] @relation("CreditCommitmentPaymentAccount")
-  creditCommitmentItems CreditCommitmentItem[] @relation("CreditCommitmentItemBank")
-  performanceGuarantees PerformanceGuarantee[]
-  projectExpenses      Expense[]
+  organization             Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documentPurchases        DocumentPurchase[]
+  tenderSecurities         TenderSecurity[]       @relation("TenderSecurityBankAccount")
+  tenderSecurityCharges    TenderSecurity[]       @relation("TenderSecurityChargeFrom")
+  creditCommitmentPayments CreditCommitment[]     @relation("CreditCommitmentPaymentAccount")
+  creditCommitmentItems    CreditCommitmentItem[] @relation("CreditCommitmentItemBank")
+  performanceGuarantees    PerformanceGuarantee[]
+  projectExpenses          Expense[]
+  receipts                 Receipt[]
+  financialTransactions    FinancialTransaction[]
+  outgoingTransfers        FundTransfer[] @relation("TransferFrom")
+  incomingTransfers        FundTransfer[] @relation("TransferTo")
+  reconciliations          BankReconciliation[]
+  cheques                  Cheque[]
 
   @@map("bank_accounts")
 }
@@ -358,78 +379,78 @@ model MonthlyTarget {
 // ---------------------------------------------------------------------------
 
 model DocumentPurchase {
-  id                   String       @id @default(cuid())
-  organizationId       String
-  purchaseType         PurchaseType
-  egpTenderId          String?
-  organizationMasterId String
-  paymentFromAccountId String
-  tenderWorkName       String
-  purchaseDate         DateTime
-  documentPrice        Decimal      @db.Decimal(18, 2)
-  estimatedTenderAmount Decimal     @default(0) @db.Decimal(18, 2)
-  tenderSecurityStatus TenderSecurityDocumentStatus @default(PENDING)
-  createdById          String?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  id                    String                       @id @default(cuid())
+  organizationId        String
+  purchaseType          PurchaseType
+  egpTenderId           String?
+  organizationMasterId  String
+  paymentFromAccountId  String
+  tenderWorkName        String
+  purchaseDate          DateTime
+  documentPrice         Decimal                      @db.Decimal(18, 2)
+  estimatedTenderAmount Decimal                      @default(0) @db.Decimal(18, 2)
+  tenderSecurityStatus  TenderSecurityDocumentStatus @default(PENDING)
+  createdById           String?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
 
-  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
-  paymentFromAccount BankAccount        @relation(fields: [paymentFromAccountId], references: [id])
-  tenderSecurityItems TenderSecurityItem[]
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationMaster    OrganizationMaster     @relation(fields: [organizationMasterId], references: [id])
+  paymentFromAccount    BankAccount            @relation(fields: [paymentFromAccountId], references: [id])
+  tenderSecurityItems   TenderSecurityItem[]
   creditCommitmentItems CreditCommitmentItem[]
-  pgBgWorkflow       PgBgWorkflow?
-  cmsWork            CmsWork?
+  pgBgWorkflow          PgBgWorkflow?
+  cmsWork               CmsWork?
 
   @@map("document_purchases")
 }
 
 model TenderSecurity {
-  id                   String            @id @default(cuid())
+  id                   String           @id @default(cuid())
   organizationId       String
   tenderId             String?
   organizationMasterId String?
   bankAccountId        String?
   chargeFromAccountId  String?
-  securityType         SecurityType      @default(PAY_ORDER)
-  fundingType          FundingType       @default(LOAN)
+  securityType         SecurityType     @default(PAY_ORDER)
+  fundingType          FundingType      @default(LOAN)
   instrumentNo         String?
-  amount               Decimal           @default(0) @db.Decimal(18, 2)
-  marginAmount         Decimal           @default(0) @db.Decimal(18, 2)
-  bankFinanceAmount    Decimal           @default(0) @db.Decimal(18, 2)
-  interestRate         Decimal           @default(0) @db.Decimal(8, 2)
-  validityMonths       Int               @default(1)
+  amount               Decimal          @default(0) @db.Decimal(18, 2)
+  marginAmount         Decimal          @default(0) @db.Decimal(18, 2)
+  bankFinanceAmount    Decimal          @default(0) @db.Decimal(18, 2)
+  interestRate         Decimal          @default(0) @db.Decimal(8, 2)
+  validityMonths       Int              @default(1)
   remarks              String?
   issueDate            DateTime
   expiryDate           DateTime
-  status               InstrumentStatus  @default(ACTIVE)
+  status               InstrumentStatus @default(ACTIVE)
   createdById          String?
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tender             Tender?             @relation(fields: [tenderId], references: [id])
-  organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
-  bankAccount        BankAccount?        @relation("TenderSecurityBankAccount", fields: [bankAccountId], references: [id])
-  chargeFromAccount  BankAccount?        @relation("TenderSecurityChargeFrom", fields: [chargeFromAccountId], references: [id])
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender             Tender?              @relation(fields: [tenderId], references: [id])
+  organizationMaster OrganizationMaster?  @relation(fields: [organizationMasterId], references: [id])
+  bankAccount        BankAccount?         @relation("TenderSecurityBankAccount", fields: [bankAccountId], references: [id])
+  chargeFromAccount  BankAccount?         @relation("TenderSecurityChargeFrom", fields: [chargeFromAccountId], references: [id])
   items              TenderSecurityItem[]
 
   @@map("tender_securities")
 }
 
 model TenderSecurityItem {
-  id                String   @id @default(cuid())
-  tenderSecurityId  String
+  id                 String   @id @default(cuid())
+  tenderSecurityId   String
   documentPurchaseId String
-  securityAmount    Decimal  @db.Decimal(18, 2)
-  marginPercentage  Decimal  @db.Decimal(8, 2)
-  marginAmount      Decimal  @db.Decimal(18, 2)
-  bankFinanceAmount Decimal  @db.Decimal(18, 2)
-  referenceNo       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  securityAmount     Decimal  @db.Decimal(18, 2)
+  marginPercentage   Decimal  @db.Decimal(8, 2)
+  marginAmount       Decimal  @db.Decimal(18, 2)
+  bankFinanceAmount  Decimal  @db.Decimal(18, 2)
+  referenceNo        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  tenderSecurity  TenderSecurity   @relation(fields: [tenderSecurityId], references: [id], onDelete: Cascade)
+  tenderSecurity   TenderSecurity   @relation(fields: [tenderSecurityId], references: [id], onDelete: Cascade)
   documentPurchase DocumentPurchase @relation(fields: [documentPurchaseId], references: [id])
 
   @@unique([documentPurchaseId])
@@ -437,25 +458,25 @@ model TenderSecurityItem {
 }
 
 model CreditCommitment {
-  id                   String   @id @default(cuid())
+  id                   String    @id @default(cuid())
   organizationId       String
   tenderId             String?
   organizationMasterId String?
-  amount               Decimal  @db.Decimal(18, 2)
+  amount               Decimal   @db.Decimal(18, 2)
   chargeDate           DateTime
-  isCharged            Boolean  @default(false)
+  isCharged            Boolean   @default(false)
   paymentFromAccountId String?
   paymentDate          DateTime?
   remarks              String?
-  totalAmount          Decimal  @default(0) @db.Decimal(18, 2)
+  totalAmount          Decimal   @default(0) @db.Decimal(18, 2)
   createdById          String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tender             Tender?             @relation(fields: [tenderId], references: [id])
-  organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
-  paymentFromAccount BankAccount?         @relation("CreditCommitmentPaymentAccount", fields: [paymentFromAccountId], references: [id])
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender             Tender?                @relation(fields: [tenderId], references: [id])
+  organizationMaster OrganizationMaster?    @relation(fields: [organizationMasterId], references: [id])
+  paymentFromAccount BankAccount?           @relation("CreditCommitmentPaymentAccount", fields: [paymentFromAccountId], references: [id])
   items              CreditCommitmentItem[]
 
   @@index([organizationId, paymentDate])
@@ -463,14 +484,14 @@ model CreditCommitment {
 }
 
 model CreditCommitmentItem {
-  id                         String   @id @default(cuid())
-  creditCommitmentId         String
-  documentPurchaseId         String
-  bankAccountId              String
-  chargeAmount               Decimal  @db.Decimal(18, 2)
-  remarks                    String?
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  creditCommitmentId String
+  documentPurchaseId String
+  bankAccountId      String
+  chargeAmount       Decimal  @db.Decimal(18, 2)
+  remarks            String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   creditCommitment CreditCommitment @relation(fields: [creditCommitmentId], references: [id], onDelete: Cascade)
   documentPurchase DocumentPurchase @relation(fields: [documentPurchaseId], references: [id])
@@ -548,12 +569,12 @@ model PgBgWorkflow {
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
-  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  documentPurchase   DocumentPurchase   @relation(fields: [documentPurchaseId], references: [id])
-  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
-  contact            OrganizationContact? @relation(fields: [contactId], references: [id])
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documentPurchase     DocumentPurchase      @relation(fields: [documentPurchaseId], references: [id])
+  organizationMaster   OrganizationMaster    @relation(fields: [organizationMasterId], references: [id])
+  contact              OrganizationContact?  @relation(fields: [contactId], references: [id])
   performanceGuarantee PerformanceGuarantee?
-  cmsWork             CmsWork?
+  cmsWork              CmsWork?
 
   @@index([organizationId, status])
   @@map("pg_bg_workflows")
@@ -583,6 +604,7 @@ model CmsWork {
   pgBgWorkflow       PgBgWorkflow?      @relation(fields: [pgBgWorkflowId], references: [id])
   organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
   projectExpenses    Expense[]
+  receipts           Receipt[]
 
   @@index([organizationId, status])
   @@index([organizationId, status, completionDate])
@@ -595,32 +617,50 @@ model CmsWork {
 // ---------------------------------------------------------------------------
 
 model Expense {
-  id             String        @id @default(cuid())
-  organizationId String
-  workId         String?
-  expenseHeadId  String?
-  expenseById    String?
+  id                String        @id @default(cuid())
+  organizationId    String
+  workId            String?
+  expenseHeadId     String?
+  expenseById       String?
   paidFromAccountId String?
-  category       String?
-  description    String?
-  amount         Decimal       @db.Decimal(18, 2)
-  expenseDate    DateTime
-  dueDate        DateTime?
-  status         ExpenseStatus @default(PENDING)
-  approvedById   String?
-  createdById    String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  category          String?
+  description       String?
+  amount            Decimal       @db.Decimal(18, 2)
+  expenseDate       DateTime
+  dueDate           DateTime?
+  status            ExpenseStatus @default(PENDING)
+  approvedById      String?
+  createdById       String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  work         CmsWork?     @relation(fields: [workId], references: [id])
-  expenseHead  ExpenseHead? @relation(fields: [expenseHeadId], references: [id])
-  expenseBy    User?        @relation("ExpenseThrough", fields: [expenseById], references: [id])
-  paidFromAccount BankAccount? @relation(fields: [paidFromAccountId], references: [id])
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  work            CmsWork?            @relation(fields: [workId], references: [id])
+  expenseHead     ExpenseHead?        @relation(fields: [expenseHeadId], references: [id])
+  expenseBy       User?               @relation("ExpenseThrough", fields: [expenseById], references: [id])
+  paidFromAccount BankAccount?        @relation(fields: [paidFromAccountId], references: [id])
+  attachments     ExpenseAttachment[]
 
   @@index([organizationId, workId, expenseDate])
   @@index([organizationId, expenseHeadId])
   @@map("expenses")
+}
+
+model ExpenseAttachment {
+  id             String   @id @default(cuid())
+  organizationId String
+  expenseId      String
+  fileName       String
+  mimeType       String
+  fileSize       Int
+  data           Bytes
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  expense      Expense      @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, expenseId])
+  @@map("expense_attachments")
 }
 
 model ExpenseHead {
@@ -642,7 +682,15 @@ model Receipt {
   id             String        @id @default(cuid())
   organizationId String
   tenderId       String?
+  workId         String?
+  receiptNo      String?
+  receiptCategory String       @default("GENERAL")
+  receiptType    String        @default("GENERAL_RECEIPT")
+  receivedFrom   String        @default("Unknown")
+  receivedInAccountId String?
+  paymentMethod  String        @default("CASH")
   referenceNo    String?
+  description    String?
   amount         Decimal       @db.Decimal(18, 2)
   receiptDate    DateTime
   dueDate        DateTime?
@@ -653,8 +701,126 @@ model Receipt {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tender       Tender?      @relation(fields: [tenderId], references: [id])
+  work         CmsWork?     @relation(fields: [workId], references: [id])
+  receivedInAccount BankAccount? @relation(fields: [receivedInAccountId], references: [id])
 
+  @@unique([organizationId, receiptNo])
+  @@index([organizationId, receiptDate])
+  @@index([organizationId, workId])
   @@map("receipts")
+}
+
+model ReceiptSequence {
+  id             String @id @default(cuid())
+  organizationId String
+  year           Int
+  value          Int    @default(0)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, year])
+  @@map("receipt_sequences")
+}
+
+model FinancialTransaction {
+  id             String   @id @default(cuid())
+  organizationId String
+  transactionNo  String
+  accountId      String
+  direction      String
+  amount         Decimal  @db.Decimal(18, 2)
+  balanceAfter   Decimal  @db.Decimal(18, 2)
+  sourceModule   String
+  sourceType     String
+  sourceId       String
+  referenceNo    String?
+  description    String
+  transactionDate DateTime
+  status         String   @default("POSTED")
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account      BankAccount @relation(fields: [accountId], references: [id])
+
+  @@unique([organizationId, transactionNo])
+  @@unique([organizationId, sourceModule, sourceType, sourceId, accountId, direction])
+  @@index([organizationId, transactionDate])
+  @@index([organizationId, accountId, transactionDate])
+  @@map("financial_transactions")
+}
+
+model FundTransfer {
+  id             String   @id @default(cuid())
+  organizationId String
+  transferNo     String
+  fromAccountId  String
+  toAccountId    String
+  amount         Decimal  @db.Decimal(18, 2)
+  bankCharge     Decimal  @default(0) @db.Decimal(18, 2)
+  referenceNo    String?
+  description    String?
+  transferDate   DateTime
+  status         String   @default("COMPLETED")
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fromAccount  BankAccount @relation("TransferFrom", fields: [fromAccountId], references: [id])
+  toAccount    BankAccount @relation("TransferTo", fields: [toAccountId], references: [id])
+
+  @@unique([organizationId, transferNo])
+  @@index([organizationId, transferDate])
+  @@map("fund_transfers")
+}
+
+model BankReconciliation {
+  id               String   @id @default(cuid())
+  organizationId   String
+  accountId         String
+  statementFrom    DateTime
+  statementTo      DateTime
+  erpBalance        Decimal  @db.Decimal(18, 2)
+  statementBalance  Decimal  @db.Decimal(18, 2)
+  difference        Decimal  @db.Decimal(18, 2)
+  status             String   @default("IN_PROGRESS")
+  reconciledById     String?
+  reconciledAt       DateTime?
+  createdAt          DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account      BankAccount @relation(fields: [accountId], references: [id])
+
+  @@index([organizationId, accountId, statementTo])
+  @@map("bank_reconciliations")
+}
+
+model Cheque {
+  id             String   @id @default(cuid())
+  organizationId String
+  chequeNo       String
+  type           String
+  accountId      String?
+  bankName       String
+  branch         String?
+  party          String
+  amount         Decimal  @db.Decimal(18, 2)
+  chequeDate     DateTime
+  actionDate     DateTime?
+  referenceNo    String?
+  status         String   @default("PENDING")
+  remarks        String?
+  postedAt       DateTime?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account      BankAccount? @relation(fields: [accountId], references: [id])
+
+  @@unique([organizationId, chequeNo, type])
+  @@index([organizationId, status, chequeDate])
+  @@map("cheques")
 }
 
 // ---------------------------------------------------------------------------
@@ -662,17 +828,17 @@ model Receipt {
 // ---------------------------------------------------------------------------
 
 model Reminder {
-  id               String    @id @default(cuid())
-  organizationId   String
-  type             String
-  title            String
-  subtitle         String?
-  dueDate          DateTime
+  id                String   @id @default(cuid())
+  organizationId    String
+  type              String
+  title             String
+  subtitle          String?
+  dueDate           DateTime
   relatedEntityType String?
-  relatedEntityId  String?
-  isResolved       Boolean   @default(false)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  relatedEntityId   String?
+  isResolved        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -704,16 +870,26 @@ model AuditLog {
   organizationId String
   userId         String?
   action         String
+  module         String   @default("System")
+  description    String   @default("System activity")
+  referenceNo    String?
+  status         String   @default("SUCCESS")
   entityType     String
   entityId       String?
   oldValue       Json?
   newValue       Json?
   ipAddress      String?
+  userAgent      String?
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id])
 
+  @@index([organizationId, createdAt])
+  @@index([organizationId, userId])
+  @@index([organizationId, module])
+  @@index([organizationId, action])
+  @@index([organizationId, status])
   @@map("audit_logs")
 }
 

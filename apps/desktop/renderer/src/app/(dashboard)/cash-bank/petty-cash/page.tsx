@@ -1,5 +1,2 @@
-import { ComingSoonPage } from "@/components/layout/ComingSoonPage";
-
-export default function PettyCashPage() {
-  return <ComingSoonPage title="Petty Cash" breadcrumb={[{ label: "Cash & Bank" }, { label: "Petty Cash" }]} />;
-}
+import { CashBankWorkspace } from "@/components/cash-bank/CashBankWorkspace";
+export default function Page(){return <CashBankWorkspace view="petty-cash"/>}

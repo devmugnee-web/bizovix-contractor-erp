@@ -43,6 +43,21 @@ export const PERMISSIONS = [
   "receipt.create",
   "receipt.read",
 
+  "cash_bank.read",
+  "cash_bank.create",
+  "bank_account.read",
+  "bank_account.create",
+  "bank_account.update",
+  "bank_transfer.read",
+  "bank_transfer.create",
+  "financial_transaction.read",
+  "financial_transaction.export",
+  "bank_reconciliation.read",
+  "bank_reconciliation.manage",
+  "cheque.read",
+  "cheque.create",
+  "cheque.update",
+
   "report.view",
   "report.export",
 

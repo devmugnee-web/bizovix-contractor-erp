@@ -30,6 +30,10 @@ export interface NavItem {
   children?: NavLeaf[];
 }
 
+export function isNavRouteActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "CMS", subtitle: "Contract Management System", icon: FileText, children: [
@@ -51,12 +55,15 @@ export const NAV_ITEMS: NavItem[] = [
     { label: "General Expense", href: "/expenses/general-expense" },
   ] },
   { label: "Receipts", href: "/receipts", icon: Receipt },
-  { label: "Accounts", href: "/bank-accounts", icon: Building2 },
-  { label: "Cash & Bank", icon: Banknote, children: [
+  { label: "Accounts", href: "/accounts", icon: Building2 },
+  { label: "Cash & Bank", href: "/cash-bank", icon: Banknote, children: [
     { label: "Main Cash", href: "/cash-bank/main-cash" },
     { label: "Petty Cash", href: "/cash-bank/petty-cash" },
-    { label: "Bank Accounts", href: "/bank-accounts" },
-    { label: "Bank Transfer", href: "/cash-bank/bank-transfer" },
+    { label: "Bank Accounts", href: "/cash-bank/bank-accounts" },
+    { label: "Bank Transfer", href: "/cash-bank/transfers" },
+    { label: "Transactions", href: "/cash-bank/transactions" },
+    { label: "Bank Reconciliation", href: "/cash-bank/reconciliation" },
+    { label: "Cheque Management", href: "/cash-bank/cheques" },
   ] },
   { label: "Reports", href: "/reports", icon: BarChart3 },
 ];

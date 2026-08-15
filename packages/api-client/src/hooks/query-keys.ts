@@ -22,4 +22,9 @@ export const queryKeys = {
   projectExpenses: (params?: unknown) => ["project-expenses", params ?? {}] as const,
   projectExpenseHeads: ["project-expenses", "expense-heads"] as const,
   projectExpensePeople: ["project-expenses", "people"] as const,
+  generalExpenses: (params?: unknown) => ["general-expenses", params ?? {}] as const,
+  receipts: (params?: unknown) => ["receipts", params ?? {}] as const,
+  receiptSummary: ["receipts", "summary"] as const,
+  activityLogs: (params?:unknown) => ["activity-logs",params??{}] as const,
+  activityLogStats: ["activity-logs","stats"] as const,
 };

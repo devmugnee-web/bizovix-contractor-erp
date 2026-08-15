@@ -18,6 +18,9 @@ import { CreditCommitmentsModule } from "./modules/credit-commitments/credit-com
 import { PgBgModule } from "./modules/pg-bg/pg-bg.module";
 import { CmsWorksModule } from "./modules/cms-works/cms-works.module";
 import { ProjectExpensesModule } from "./modules/project-expenses/project-expenses.module";
+import { GeneralExpensesModule } from "./modules/general-expenses/general-expenses.module";
+import { ReceiptsModule } from "./modules/receipts/receipts.module";
+import { CashBankModule } from "./modules/cash-bank/cash-bank.module";
 
 @Module({
   imports: [
@@ -33,6 +36,9 @@ import { ProjectExpensesModule } from "./modules/project-expenses/project-expens
     PgBgModule,
     CmsWorksModule,
     ProjectExpensesModule,
+    GeneralExpensesModule,
+    ReceiptsModule,
+    CashBankModule,
     DashboardModule,
   ],
   providers: [

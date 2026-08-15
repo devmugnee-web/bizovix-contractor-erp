@@ -9,4 +9,8 @@ export * from "./credit-commitment";
 export * from "./pg-bg";
 export * from "./cms-work";
 export * from "./project-expense";
+export * from "./general-expense";
 export * from "./dashboard";
+export * from "./receipt";
+export * from "./activity-log";
+export * from "./cash-bank";

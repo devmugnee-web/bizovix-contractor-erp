@@ -1,5 +1,2 @@
-import { ComingSoonPage } from "@/components/layout/ComingSoonPage";
-
-export default function MainCashPage() {
-  return <ComingSoonPage title="Main Cash" breadcrumb={[{ label: "Cash & Bank" }, { label: "Main Cash" }]} />;
-}
+import { CashBankWorkspace } from "@/components/cash-bank/CashBankWorkspace";
+export default function Page(){return <CashBankWorkspace view="main-cash"/>}

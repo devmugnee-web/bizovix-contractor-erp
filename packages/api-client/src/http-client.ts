@@ -26,13 +26,14 @@ function buildUrl(path: string, params?: RequestOptions["params"]): string {
 
 async function rawRequest(path: string, options: RequestOptions): Promise<Response> {
   const accessToken = tokenStorage.getAccessToken();
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   return fetch(buildUrl(path, options.params), {
     method: options.method ?? "GET",
     headers: {
-      "Content-Type": "application/json",
+      ...(!isFormData ? { "Content-Type": "application/json" } : {}),
       ...(accessToken && !options.skipAuth ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body: options.body !== undefined ? (isFormData ? options.body as FormData : JSON.stringify(options.body)) : undefined,
   });
 }
 

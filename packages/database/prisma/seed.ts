@@ -468,6 +468,44 @@ async function main() {
     });
   }
 
+  const generalExpenseHeadNames = ["Office Supplies", "Internet & Telephone", "Transport", "Refreshment", "Printing & Photocopy"] as const;
+  const generalExpenseHeads: Record<string, string> = {};
+  for (const name of generalExpenseHeadNames) {
+    const head = await prisma.expenseHead.upsert({
+      where: { organizationId_name: { organizationId: organization.id, name } },
+      update: { isActive: true },
+      create: { organizationId: organization.id, name },
+    });
+    generalExpenseHeads[name] = head.id;
+  }
+
+  const generalExpenseDefs = [
+    ["seed-general-expense-01", "2026-08-15", "Office Supplies", 5_500, "seed-user-shajib", "seed-bank-islami-01", "Stationery and office supplies"],
+    ["seed-general-expense-02", "2026-08-14", "Internet & Telephone", 2_000, "seed-user-galib", "seed-bank-islami-01", "Internet bill for office"],
+    ["seed-general-expense-03", "2026-08-13", "Transport", 1_500, "seed-user-rokon", "seed-bank-islami-01", "Office meeting transport"],
+    ["seed-general-expense-04", "2026-08-12", "Refreshment", 850, "seed-user-shajib", "seed-bank-islami-01", "Meeting refreshment"],
+    ["seed-general-expense-05", "2026-08-11", "Printing & Photocopy", 650, "seed-user-galib", "seed-bank-islami-01", "Photocopy and printing"],
+  ] as const;
+  for (const [id, expenseDate, headName, amount, expenseById, paidFromAccountId, description] of generalExpenseDefs) {
+    await prisma.expense.upsert({
+      where: { id },
+      update: {},
+      create: {
+        id,
+        organizationId: organization.id,
+        expenseHeadId: generalExpenseHeads[headName],
+        expenseById,
+        paidFromAccountId,
+        category: headName,
+        description,
+        amount,
+        expenseDate: new Date(`${expenseDate}T00:00:00.000Z`),
+        status: ExpenseStatus.APPROVED,
+        createdById: adminUser.id,
+      },
+    });
+  }
+
   const receiptDefs = [
     { amount: 1_250_000, status: ReceiptStatus.RECEIVED, days: 3, ref: "REC-2024-0098" },
     { amount: 4_800_000, status: ReceiptStatus.RECEIVED, days: 18, ref: "REC-2024-0091" },
@@ -486,6 +524,18 @@ async function main() {
       },
     });
   }
+
+  const receiptReferenceDefs = [
+    ["seed-receipt-ref-24", "RC-2026-00024", "2026-08-15", "PROJECT", "PROGRESS_PAYMENT", "seed-cms-work-01", "DPHE", 500_000, "seed-bank-islami-01", "BANK_TRANSFER"],
+    ["seed-receipt-ref-23", "RC-2026-00023", "2026-08-14", "PROJECT", "RUNNING_BILL_PAYMENT", "seed-cms-work-02", "LGED", 375_000, primeBank.id, "CHEQUE"],
+    ["seed-receipt-ref-22", "RC-2026-00022", "2026-08-13", "PROJECT", "ADVANCE_PAYMENT", "seed-cms-work-03", "BTV", 200_000, cash.id, "CASH"],
+    ["seed-receipt-ref-21", "RC-2026-00021", "2026-08-12", "GENERAL", "GENERAL_RECEIPT", null, "ABC Traders Ltd.", 50_000, "seed-bank-islami-01", "BANK_TRANSFER"],
+    ["seed-receipt-ref-20", "RC-2026-00020", "2026-08-11", "PROJECT", "RETENTION_RECEIVED", "seed-cms-work-04", "PWD", 125_000, primeBank.id, "CHEQUE"],
+  ] as const;
+  for (const [id, receiptNo, receiptDate, receiptCategory, receiptType, workId, receivedFrom, amount, receivedInAccountId, paymentMethod] of receiptReferenceDefs) {
+    await prisma.receipt.upsert({ where: { id }, update: {}, create: { id, organizationId: organization.id, receiptNo, receiptDate: new Date(`${receiptDate}T00:00:00.000Z`), receiptCategory, receiptType, workId, receivedFrom, amount, receivedInAccountId, paymentMethod, status: ReceiptStatus.RECEIVED, createdById: adminUser.id } });
+  }
+  await prisma.receiptSequence.upsert({ where: { organizationId_year: { organizationId: organization.id, year: 2026 } }, update: { value: { set: 24 } }, create: { organizationId: organization.id, year: 2026, value: 24 } });
 
   // --- Documents --------------------------------------------------------------
   const documentDefs = [

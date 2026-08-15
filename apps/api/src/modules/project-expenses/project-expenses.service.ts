@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
+import { CashBankService } from "../cash-bank/cash-bank.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { QueryProjectExpenseDto } from "./dto/query-project-expense.dto";
 import { SaveProjectExpenseDto } from "./dto/save-project-expense.dto";
@@ -31,7 +32,7 @@ function toDto(record: ExpenseRecord) {
 
 @Injectable()
 export class ProjectExpensesService {
-  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService) {}
+  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService, private readonly cashBank: CashBankService) {}
 
   private where(organizationId: string, query: QueryProjectExpenseDto): Prisma.ExpenseWhereInput {
     return {
@@ -102,8 +103,9 @@ export class ProjectExpensesService {
 
   async create(organizationId: string, userId: string, dto: SaveProjectExpenseDto) {
     const { head } = await this.assertReferences(organizationId, dto);
-    const record = await this.prisma.expense.create({
-      data: {
+    const record = await this.prisma.$transaction(async (tx) => {
+      const expense = await tx.expense.create({
+        data: {
         organizationId,
         workId: dto.workId,
         expenseHeadId: dto.expenseHeadId,
@@ -115,8 +117,11 @@ export class ProjectExpensesService {
         expenseDate: new Date(dto.expenseDate),
         status: "APPROVED",
         createdById: userId,
-      },
-      include: includeRelations,
+        },
+        include: includeRelations,
+      });
+      await this.cashBank.post(tx, { organizationId, accountId: dto.paidFromAccountId, direction: "OUT", amount: dto.amount, sourceModule: "PROJECT_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, referenceNo: expense.id, description: dto.description?.trim() || head.name, transactionDate: expense.expenseDate, createdById: userId });
+      return expense;
     });
     await this.auditLogService.record({ organizationId, userId, action: "create", entityType: "ProjectExpense", entityId: record.id, newValue: toDto(record) });
     return toDto(record);

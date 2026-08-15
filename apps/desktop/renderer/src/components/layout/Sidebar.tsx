@@ -3,12 +3,12 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { TrialCard } from "@bizovix/ui";
-import { NAV_ITEMS, NAV_ITEMS_LOWER, type NavItem } from "@/config/nav";
+import { isNavRouteActive, NAV_ITEMS, NAV_ITEMS_LOWER, type NavItem } from "@/config/nav";
 import { SidebarItem } from "./SidebarItem";
 import { SidebarSubmenu } from "./SidebarSubmenu";
 
 function findActiveGroup(pathname: string): string | null {
-  const group = NAV_ITEMS.find((item) => item.children?.some((child) => pathname.startsWith(child.href)));
+  const group = NAV_ITEMS.find((item) => item.children?.some((child) => isNavRouteActive(pathname, child.href)));
   return group?.label ?? null;
 }
 
@@ -23,19 +23,17 @@ export function Sidebar({ remindersCount = 0, collapsed = false, mobileOpen = fa
   const pathname = usePathname();
   const activeGroup = findActiveGroup(pathname);
 
-  const [openGroups, setOpenGroups] = React.useState<Set<string>>(() => new Set(["CMS", ...(activeGroup ? [activeGroup] : [])]));
-  const [trackedPathname, setTrackedPathname] = React.useState(pathname);
+  const [openGroup, setOpenGroup] = React.useState<string | null>(activeGroup);
 
-  if (pathname !== trackedPathname) {
-    setTrackedPathname(pathname);
-    if (activeGroup) setOpenGroups((groups) => new Set([...groups, activeGroup]));
-  }
+  React.useEffect(() => {
+    setOpenGroup(activeGroup);
+  }, [activeGroup, pathname]);
 
   function renderItem(item: NavItem) {
     const badge = item.badgeKey === "reminders" ? remindersCount : undefined;
 
     if (item.children) {
-      const expanded = openGroups.has(item.label);
+      const expanded = openGroup === item.label;
       return (
         <li key={item.label}>
           <SidebarItem
@@ -43,12 +41,8 @@ export function Sidebar({ remindersCount = 0, collapsed = false, mobileOpen = fa
             label={item.label}
             expandable
             expanded={expanded}
-            active={expanded}
-            onToggle={() => setOpenGroups((groups) => {
-              const next = new Set(groups);
-              if (expanded) next.delete(item.label); else next.add(item.label);
-              return next;
-            })}
+            active={activeGroup === item.label}
+            onToggle={() => setOpenGroup(expanded ? null : item.label)}
           />
           {expanded && <SidebarSubmenu items={item.children} activeHref={pathname} />}
         </li>
@@ -62,7 +56,7 @@ export function Sidebar({ remindersCount = 0, collapsed = false, mobileOpen = fa
           label={item.label}
           subtitle={item.subtitle}
           href={item.href}
-          active={item.href ? pathname.startsWith(item.href) : false}
+          active={item.href ? isNavRouteActive(pathname, item.href) : false}
           badge={badge}
         />
       </li>
