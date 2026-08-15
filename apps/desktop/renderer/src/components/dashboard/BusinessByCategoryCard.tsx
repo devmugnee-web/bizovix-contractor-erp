@@ -13,29 +13,32 @@ export function BusinessByCategoryCard({ data }: { data: BusinessByCategory }) {
     <SectionCard
       title="Business by Category (This Year)"
       index={3}
-      headerRight={<span className="text-[12px] text-biz-muted">This Year</span>}
+      headerRight={<span className="text-[11px] text-biz-muted">This Year</span>}
       footer={{ label: "View report" }}
+      bodyClassName="p-3"
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex flex-1 flex-col gap-2.5">
+      <div className="grid items-center gap-2 xl:grid-cols-[minmax(0,1fr)_144px]">
+        <div className="flex min-w-0 flex-col gap-1.5">
           {data.items.map((item) => (
-            <div key={item.category} className="flex items-center justify-between gap-2 text-[13px]">
-              <span className="flex min-w-0 items-center gap-2 truncate text-biz-text">
+            <div key={item.category} className="grid min-w-0 grid-cols-[minmax(0,1fr)_72px_40px] items-center gap-1.5 text-[10px]">
+              <span className="flex min-w-0 items-center gap-2 text-biz-text">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-                <span className="truncate">{item.category}</span>
+                <span className="min-w-0 break-words leading-tight">{item.category}</span>
               </span>
-              <span className="shrink-0 text-biz-muted">{formatBDTCompact(item.amount)}</span>
-              <span className="w-10 shrink-0 text-right font-medium text-biz-text">{item.percentage}%</span>
+              <span className="whitespace-nowrap text-right text-biz-muted">{formatBDTCompact(item.amount)}</span>
+              <span className="whitespace-nowrap text-right font-semibold text-biz-text">{item.percentage}%</span>
             </div>
           ))}
           {data.items.length === 0 && <p className="text-[13px] text-biz-muted">No category data yet.</p>}
         </div>
-        <DonutChart
-          data={chartData}
-          centerLabel="Total Business"
-          centerValue={formatBDTCompact(data.totalBusiness)}
-          size={140}
-        />
+        <div className="justify-self-end">
+          <DonutChart
+            data={chartData}
+            centerLabel="Total Business"
+            centerValue={formatBDTCompact(data.totalBusiness)}
+            size={136}
+          />
+        </div>
       </div>
     </SectionCard>
   );

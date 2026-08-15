@@ -21,7 +21,7 @@ export default function DashboardPage() {
         <>
           <DashboardKpiRow kpis={dashboard.data.kpis} />
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[0.9fr_0.9fr_1.25fr]">
             <TargetVsAchievementCard data={dashboard.data.targetVsAchievement} />
             <TenderPerformanceCard data={dashboard.data.tenderPerformance} />
             <BusinessByCategoryCard data={dashboard.data.businessByCategory} />

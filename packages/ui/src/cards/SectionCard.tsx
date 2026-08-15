@@ -23,16 +23,16 @@ export function SectionCard({
 }: SectionCardProps) {
   return (
     <div className={cn("flex flex-col rounded-lg border border-biz-border bg-biz-surface shadow-card", className)}>
-      <div className="flex items-center justify-between gap-3 border-b border-biz-border px-4 py-3">
-        <h3 className="text-[15px] font-semibold text-biz-text">
+      <div className="flex items-start justify-between gap-3 border-b border-biz-border px-4 py-2.5">
+        <h3 className="min-w-0 text-[13px] font-semibold leading-tight text-biz-text sm:text-[14px] lg:text-[15px]">
           {index !== undefined && <span className="text-biz-muted">{index}. </span>}
           {title}
         </h3>
-        {headerRight}
+        {headerRight && <div className="shrink-0">{headerRight}</div>}
       </div>
       <div className={cn("flex-1 p-4", bodyClassName)}>{children}</div>
       {footer && (
-        <div className="border-t border-biz-border px-4 py-2.5">
+        <div className="border-t border-biz-border px-4 py-2">
           <button
             type="button"
             onClick={footer.onClick}

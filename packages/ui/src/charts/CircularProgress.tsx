@@ -36,9 +36,9 @@ export function CircularProgress({
         <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
         <RadialBar dataKey="value" cornerRadius={10} fill={color} background={{ fill: trackColor }} />
       </RadialBarChart>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[22px] font-bold text-biz-text">{label}</span>
-        {sublabel && <span className="text-[12px] text-biz-muted">{sublabel}</span>}
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
+        <span className="text-[18px] font-bold leading-tight text-biz-text">{label}</span>
+        {sublabel && <span className="mt-0.5 text-[10px] leading-tight text-biz-muted">{sublabel}</span>}
       </div>
     </div>
   );

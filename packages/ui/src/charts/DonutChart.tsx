@@ -14,6 +14,8 @@ export interface DonutChartProps {
 }
 
 export function DonutChart({ data, size = 160, centerLabel, centerValue }: DonutChartProps) {
+  const valueParts = centerValue?.match(/^(.+)\s+(\S+)$/);
+
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <PieChart width={size} height={size}>
@@ -21,7 +23,7 @@ export function DonutChart({ data, size = 160, centerLabel, centerValue }: Donut
           data={data}
           dataKey="value"
           nameKey="label"
-          innerRadius="62%"
+          innerRadius="72%"
           outerRadius="100%"
           paddingAngle={2}
           cx="50%"
@@ -34,9 +36,20 @@ export function DonutChart({ data, size = 160, centerLabel, centerValue }: Donut
         </Pie>
       </PieChart>
       {(centerLabel || centerValue) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {centerLabel && <span className="text-[11px] text-biz-muted">{centerLabel}</span>}
-          {centerValue && <span className="text-[16px] font-bold text-biz-text">{centerValue}</span>}
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
+          {centerLabel && <span className="text-[8px] leading-tight text-biz-muted">{centerLabel}</span>}
+          {centerValue && (
+            <span className="mt-0.5 flex max-w-[66px] flex-col items-center text-[10px] font-bold leading-tight text-biz-text">
+              {valueParts ? (
+                <>
+                  <span className="whitespace-nowrap">{valueParts[1]}</span>
+                  <span>{valueParts[2]}</span>
+                </>
+              ) : (
+                centerValue
+              )}
+            </span>
+          )}
         </div>
       )}
     </div>

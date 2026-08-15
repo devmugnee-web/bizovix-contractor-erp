@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
-import { Bell, ChevronDown, CircleHelp, Menu, MessageCircle, Search } from "lucide-react";
+import Link from "next/link";
+import { Bell, Menu, MessageCircle, Plus, Search } from "lucide-react";
 import { Breadcrumb, cn, type BreadcrumbItem } from "@bizovix/ui";
 
 export interface TopbarUser {
@@ -17,12 +17,19 @@ export interface TopbarProps {
   onToggleSidebar: () => void;
   breadcrumb?: BreadcrumbItem[];
   showWhatsApp?: boolean;
-  showHelp?: boolean;
 }
 
-export function Topbar({ user, notificationCount = 0, onToggleSidebar, breadcrumb, showWhatsApp = true, showHelp = true }: TopbarProps) {
+export function Topbar({ notificationCount = 0, onToggleSidebar, breadcrumb, showWhatsApp = true }: TopbarProps) {
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchValue, setSearchValue] = React.useState("");
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
+
   return (
-    <header className="flex h-14 shrink-0 items-center border-b border-biz-border bg-white px-3 shadow-[0_1px_3px_rgba(13,27,62,0.04)] sm:px-4">
+    <header className="relative flex h-14 shrink-0 items-center border-b border-biz-border bg-white px-3 shadow-[0_1px_3px_rgba(13,27,62,0.04)] sm:px-4">
       <div className="flex w-[204px] shrink-0 items-center gap-4">
         <div className="flex items-center gap-2" aria-label="Bizovix Contractor ERP">
           <span className="text-[26px] font-black leading-none text-biz-blue">X</span>
@@ -42,29 +49,73 @@ export function Topbar({ user, notificationCount = 0, onToggleSidebar, breadcrum
         </button>
       </div>
 
-      <div className="hidden min-w-0 flex-1 md:block">
+      <div className="hidden min-w-0 flex-1 items-center md:flex">
         {breadcrumb?.length ? (
           <Breadcrumb items={breadcrumb} className="min-w-0 text-[11px]" />
         ) : (
-        <label className="relative block max-w-[410px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" />
-          <input
-            type="search"
-            placeholder="Search anything..."
-            className="h-9 w-full rounded-sm border border-biz-border bg-biz-bg pl-9 pr-16 text-[11px] text-biz-text outline-none transition focus:border-biz-blue focus:bg-white"
-          />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-semibold text-biz-muted">Ctrl + K</span>
-        </label>
+          <div
+            className={cn(
+              "relative flex h-9 shrink-0 items-center transition-all duration-300 ease-out",
+              searchOpen ? "w-[290px]" : "w-10",
+            )}
+          >
+            {!searchOpen && (
+              <span className="pointer-events-none absolute inset-0 rounded-full bg-biz-blue/15 shadow-[0_0_0_0_rgba(0,79,255,0.28)] animate-ping" />
+            )}
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className={cn(
+                "absolute left-0 top-0 z-10 flex h-9 w-10 items-center justify-center rounded-full transition duration-300",
+                searchOpen
+                  ? "text-biz-blue"
+                  : "border border-biz-blue/15 bg-[#F3F7FF] text-biz-blue shadow-[0_6px_18px_rgba(0,79,255,0.12)] hover:bg-biz-blue hover:text-white",
+              )}
+              aria-label="Open search"
+              title="Search"
+            >
+              <Search className={cn("h-4 w-4 transition-transform duration-300", !searchOpen && "animate-pulse")} />
+            </button>
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+              onBlur={() => {
+                if (!searchValue) setSearchOpen(false);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setSearchValue("");
+                  setSearchOpen(false);
+                }
+              }}
+              placeholder="Search anything..."
+              className={cn(
+                "h-9 rounded-full border bg-white pl-10 pr-4 text-[11px] font-medium text-biz-text outline-none shadow-[0_8px_22px_rgba(13,27,62,0.08)] transition-all duration-300 placeholder:text-biz-muted focus:border-biz-blue",
+                searchOpen ? "w-full border-biz-blue/30 opacity-100" : "w-10 cursor-pointer border-transparent opacity-0",
+              )}
+            />
+          </div>
         )}
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
-        <div className={cn("hidden items-center gap-2 xl:flex", !showWhatsApp && "xl:hidden")}>
-          <MessageCircle className="h-5 w-5 text-biz-success" />
-          <div className="leading-tight">
-            <p className="text-[10px] font-bold text-biz-navy">WhatsApp Support</p>
-            <p className="text-[9px] font-semibold text-biz-muted">+880 1700 000000</p>
-          </div>
+        <div className={cn("hidden items-center gap-2 md:flex", !showWhatsApp && "md:hidden")}>
+          <Link
+            href="/cms"
+            className="flex h-8 items-center gap-1.5 rounded-md bg-biz-orange px-3 text-[10px] font-bold text-white shadow-card hover:bg-biz-orange/90"
+          >
+            <Plus className="h-3 w-3" />
+            Add Tender
+          </Link>
+          <Link
+            href="/expenses"
+            className="flex h-8 items-center gap-1.5 rounded-md bg-biz-blue px-3 text-[10px] font-bold text-white shadow-card hover:bg-biz-blue-dark"
+          >
+            <Plus className="h-3 w-3" />
+            Add Expense
+          </Link>
         </div>
         <span className={cn("hidden h-7 w-px bg-biz-border xl:block", !showWhatsApp && "xl:hidden")} />
         <button type="button" className="relative flex h-8 w-8 items-center justify-center rounded-sm text-biz-navy hover:bg-biz-bg" aria-label="Notifications" title="Notifications">
@@ -75,22 +126,15 @@ export function Topbar({ user, notificationCount = 0, onToggleSidebar, breadcrum
             </span>
           )}
         </button>
-        {showHelp && <button type="button" className="flex h-8 w-8 items-center justify-center rounded-sm text-biz-navy hover:bg-biz-bg" aria-label="Help" title="Help"><CircleHelp className="h-4 w-4" /></button>}
-        <span className="hidden h-7 w-px bg-biz-border sm:block" />
-        <button type="button" className="flex items-center gap-2 rounded-sm px-1 py-1 text-left hover:bg-biz-bg" aria-label="Open profile menu">
-          {user.avatarUrl ? (
-            <Image src={user.avatarUrl} alt="" width={32} height={32} unoptimized className="h-8 w-8 rounded-full object-cover" />
-          ) : (
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-biz-navy text-[11px] font-bold text-white">
-              {user.name.charAt(0).toUpperCase()}
-            </span>
-          )}
-          <span className="hidden leading-tight sm:block">
-            <span className="block max-w-[120px] truncate text-[10px] font-bold text-biz-navy">{user.name}</span>
-            <span className="block text-[9px] text-biz-muted">{user.roleName}</span>
+        <div className={cn("hidden items-center gap-2 rounded-full border border-biz-success/15 bg-biz-success-soft/60 px-3 py-1.5 lg:flex", !showWhatsApp && "lg:hidden")}>
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-biz-success shadow-card">
+            <MessageCircle className="h-4 w-4" />
           </span>
-          <ChevronDown className="hidden h-3.5 w-3.5 text-biz-navy sm:block" />
-        </button>
+          <span className="leading-tight">
+            <span className="block text-[10px] font-bold text-biz-navy">WhatsApp Support</span>
+            <span className="block text-[9px] font-semibold text-biz-success">+880 1700 000000</span>
+          </span>
+        </div>
       </div>
     </header>
   );
