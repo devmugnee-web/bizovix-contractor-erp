@@ -4,12 +4,13 @@ import { Prisma } from "@bizovix/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import type { CreateBankAccountDto, CreateCashTransactionDto, CreateChequeDto, CreatePettyExpenseDto, CreateReconciliationDto, CreateTransferDto, QueryLedgerDto, UpdateChequeStatusDto } from "./dto/cash-bank.dto";
+import { AccountingService } from "../accounting/accounting.service";
 
 type Tx = Prisma.TransactionClient;
 
 @Injectable()
 export class CashBankService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService, private readonly accounting: AccountingService) {}
 
   private no(prefix: string) { return `${prefix}-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`; }
   private async account(tx: Tx | PrismaService, organizationId: string, id: string) {
@@ -89,6 +90,7 @@ export class CashBankService {
       await this.post(tx, { organizationId, accountId: dto.fromAccountId, direction: "OUT", amount: dto.amount, sourceModule: replenishment ? "PETTY_CASH" : "BANK_TRANSFER", sourceType: "TRANSFER_OUT", sourceId: transfer.id, referenceNo: transfer.transferNo, description: dto.description || "Fund transfer", transactionDate: transfer.transferDate, createdById: userId });
       await this.post(tx, { organizationId, accountId: dto.toAccountId, direction: "IN", amount: dto.amount, sourceModule: replenishment ? "PETTY_CASH" : "BANK_TRANSFER", sourceType: "TRANSFER_IN", sourceId: transfer.id, referenceNo: transfer.transferNo, description: dto.description || "Fund transfer", transactionDate: transfer.transferDate, createdById: userId });
       if (charge.gt(0)) await this.post(tx, { organizationId, accountId: dto.fromAccountId, direction: "OUT", amount: charge, sourceModule: "BANK_TRANSFER", sourceType: "BANK_CHARGE", sourceId: transfer.id, referenceNo: transfer.transferNo, description: "Bank transfer charge", transactionDate: transfer.transferDate, createdById: userId });
+      await this.accounting.post(tx, { organizationId, userId, journalDate: transfer.transferDate, referenceNo: transfer.transferNo, description: dto.description || "Fund transfer", sourceModule: replenishment ? "PETTY_CASH" : "BANK_TRANSFER", sourceType: "TRANSFER", sourceId: transfer.id, lines: [{ bankAccountId: dto.toAccountId, debit: dto.amount, credit: 0 }, ...(charge.gt(0) ? [{ systemKey: "BANK_CHARGES", debit: charge, credit: 0 }] : []), { bankAccountId: dto.fromAccountId, debit: 0, credit: new Prisma.Decimal(dto.amount).add(charge) }] });
       return transfer;
     });
     await this.log(organizationId, userId, replenishment ? "PETTY_CASH_REPLENISHED" : "BANK_TRANSFER_CREATED", "FundTransfer", row.id, row.transferNo, row.amount); return row;

@@ -7,6 +7,7 @@ import { RESPONSE_MESSAGE_KEY } from "../decorators/response-message.decorator";
 interface PaginatedShape {
   items: unknown[];
   meta: { page: number; limit: number; total: number; totalPages: number };
+  summary?: unknown;
 }
 
 function isPaginatedShape(value: unknown): value is PaginatedShape {
@@ -31,7 +32,7 @@ export class ResponseInterceptor implements NestInterceptor {
     return next.handle().pipe(
       map((result) => {
         if (isPaginatedShape(result)) {
-          return { success: true, data: result.items, meta: result.meta };
+          return { success: true, data: result.items, meta: result.meta, ...(result.summary !== undefined ? { summary: result.summary } : {}) };
         }
         return {
           success: true,

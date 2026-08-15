@@ -3,6 +3,7 @@ import type { Prisma } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { CashBankService } from "../cash-bank/cash-bank.service";
+import { AccountingService } from "../accounting/accounting.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { QueryProjectExpenseDto } from "./dto/query-project-expense.dto";
 import { SaveProjectExpenseDto } from "./dto/save-project-expense.dto";
@@ -32,7 +33,7 @@ function toDto(record: ExpenseRecord) {
 
 @Injectable()
 export class ProjectExpensesService {
-  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService, private readonly cashBank: CashBankService) {}
+  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService, private readonly cashBank: CashBankService, private readonly accounting: AccountingService) {}
 
   private where(organizationId: string, query: QueryProjectExpenseDto): Prisma.ExpenseWhereInput {
     return {
@@ -121,6 +122,7 @@ export class ProjectExpensesService {
         include: includeRelations,
       });
       await this.cashBank.post(tx, { organizationId, accountId: dto.paidFromAccountId, direction: "OUT", amount: dto.amount, sourceModule: "PROJECT_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, referenceNo: expense.id, description: dto.description?.trim() || head.name, transactionDate: expense.expenseDate, createdById: userId });
+      await this.accounting.post(tx, { organizationId, userId, journalDate: expense.expenseDate, referenceNo: expense.id, description: dto.description?.trim() || head.name, sourceModule: "PROJECT_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, lines: [{ systemKey: "PROJECT_EXPENSE", projectId: dto.workId, debit: dto.amount, credit: 0 }, { bankAccountId: dto.paidFromAccountId, projectId: dto.workId, debit: 0, credit: dto.amount }] });
       return expense;
     });
     await this.auditLogService.record({ organizationId, userId, action: "create", entityType: "ProjectExpense", entityId: record.id, newValue: toDto(record) });

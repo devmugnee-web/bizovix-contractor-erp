@@ -21,6 +21,8 @@ import { ProjectExpensesModule } from "./modules/project-expenses/project-expens
 import { GeneralExpensesModule } from "./modules/general-expenses/general-expenses.module";
 import { ReceiptsModule } from "./modules/receipts/receipts.module";
 import { CashBankModule } from "./modules/cash-bank/cash-bank.module";
+import { ReportsModule } from "./modules/reports/reports.module";
+import { AccountingModule } from "./modules/accounting/accounting.module";
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { CashBankModule } from "./modules/cash-bank/cash-bank.module";
     GeneralExpensesModule,
     ReceiptsModule,
     CashBankModule,
+    ReportsModule,
+    AccountingModule,
     DashboardModule,
   ],
   providers: [

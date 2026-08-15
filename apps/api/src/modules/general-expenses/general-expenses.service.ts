@@ -7,6 +7,7 @@ import { QueryGeneralExpenseDto } from "./dto/query-general-expense.dto";
 import { SaveGeneralExpenseDto } from "./dto/save-general-expense.dto";
 import { UpdateGeneralExpenseDto } from "./dto/update-general-expense.dto";
 import { CashBankService } from "../cash-bank/cash-bank.service";
+import { AccountingService } from "../accounting/accounting.service";
 
 const includeRelations = {
   expenseHead: { select: { id: true, name: true } },
@@ -34,7 +35,7 @@ function toDto(record: ExpenseRecord) {
 
 @Injectable()
 export class GeneralExpensesService {
-  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService, private readonly cashBank: CashBankService) {}
+  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService, private readonly cashBank: CashBankService, private readonly accounting: AccountingService) {}
 
   private where(organizationId: string, query: QueryGeneralExpenseDto): Prisma.ExpenseWhereInput {
     return {
@@ -95,6 +96,7 @@ export class GeneralExpensesService {
         amount: dto.amount, expenseDate: new Date(dto.expenseDate), status: "APPROVED", createdById: userId,
       }, include: includeRelations });
       await this.cashBank.post(tx, { organizationId, accountId: dto.paidFromAccountId, direction: "OUT", amount: dto.amount, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, referenceNo: expense.id, description: dto.description?.trim() || head.name, transactionDate: expense.expenseDate, createdById: userId });
+      await this.accounting.post(tx, { organizationId, userId, journalDate: expense.expenseDate, referenceNo: expense.id, description: dto.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, lines: [{ systemKey: "GENERAL_EXPENSE", debit: dto.amount, credit: 0 }, { bankAccountId: dto.paidFromAccountId, debit: 0, credit: dto.amount }] });
       return expense;
     });
     await this.auditLogService.record({ organizationId, userId, action: "create", entityType: "GeneralExpense", entityId: record.id, newValue: toDto(record) });

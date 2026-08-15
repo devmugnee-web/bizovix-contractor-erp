@@ -132,6 +132,9 @@ model Organization {
   auditLogs             AuditLog[]
   appSettings           AppSetting[]
   monthlyTargets        MonthlyTarget[]
+  ledgerAccounts        LedgerAccount[]
+  journalEntries        JournalEntry[]
+  payables              Payable[]
   financialTransactions FinancialTransaction[]
   fundTransfers         FundTransfer[]
   bankReconciliations   BankReconciliation[]
@@ -323,6 +326,7 @@ model BankAccount {
   incomingTransfers        FundTransfer[] @relation("TransferTo")
   reconciliations          BankReconciliation[]
   cheques                  Cheque[]
+  ledgerAccounts           LedgerAccount[]
 
   @@map("bank_accounts")
 }
@@ -605,6 +609,8 @@ model CmsWork {
   organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
   projectExpenses    Expense[]
   receipts           Receipt[]
+  journalLines       JournalLine[]
+  payables           Payable[]
 
   @@index([organizationId, status])
   @@index([organizationId, status, completionDate])
@@ -821,6 +827,113 @@ model Cheque {
   @@unique([organizationId, chequeNo, type])
   @@index([organizationId, status, chequeDate])
   @@map("cheques")
+}
+
+model LedgerAccount {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  code                String
+  name                String
+  parentId            String?
+  accountType         String
+  normalBalance       String
+  description         String?
+  isActive            Boolean  @default(true)
+  isSystem            Boolean  @default(false)
+  systemKey           String?
+  linkedBankAccountId String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       LedgerAccount? @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children     LedgerAccount[] @relation("AccountHierarchy")
+  bankAccount  BankAccount? @relation(fields: [linkedBankAccountId], references: [id])
+  journalLines JournalLine[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, systemKey])
+  @@unique([organizationId, linkedBankAccountId])
+  @@index([organizationId, accountType, isActive])
+  @@map("ledger_accounts")
+}
+
+model JournalEntry {
+  id             String   @id @default(cuid())
+  organizationId String
+  journalNo      String
+  journalDate    DateTime
+  referenceNo    String?
+  description    String
+  sourceModule   String
+  sourceType     String
+  sourceId       String
+  status         String   @default("DRAFT")
+  reversalOfId   String?
+  createdById    String?
+  postedById     String?
+  postedAt       DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lines        JournalLine[]
+  reversalOf   JournalEntry? @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversals    JournalEntry[] @relation("JournalReversal")
+
+  @@unique([organizationId, journalNo])
+  @@unique([organizationId, sourceModule, sourceType, sourceId])
+  @@index([organizationId, journalDate, status])
+  @@index([organizationId, sourceModule, sourceId])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id             String   @id @default(cuid())
+  journalEntryId String
+  accountId      String
+  projectId      String?
+  partyName      String?
+  partyType      String?
+  debit          Decimal  @default(0) @db.Decimal(18, 2)
+  credit         Decimal  @default(0) @db.Decimal(18, 2)
+  description    String?
+  createdAt      DateTime @default(now())
+
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      LedgerAccount @relation(fields: [accountId], references: [id])
+  project      CmsWork? @relation(fields: [projectId], references: [id])
+
+  @@index([accountId, journalEntryId])
+  @@index([projectId, journalEntryId])
+  @@index([partyName, journalEntryId])
+  @@map("journal_lines")
+}
+
+model Payable {
+  id             String   @id @default(cuid())
+  organizationId String
+  partyName      String
+  partyType      String   @default("VENDOR")
+  projectId      String?
+  billNo         String
+  billDate       DateTime
+  amount         Decimal  @db.Decimal(18, 2)
+  paidAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  dueDate        DateTime?
+  description    String?
+  status         String   @default("UNPAID")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      CmsWork? @relation(fields: [projectId], references: [id])
+
+  @@unique([organizationId, billNo])
+  @@index([organizationId, status, dueDate])
+  @@index([organizationId, partyName])
+  @@map("payables")
 }
 
 // ---------------------------------------------------------------------------

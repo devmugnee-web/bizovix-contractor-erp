@@ -4,5 +4,6 @@ import { PrismaModule } from "../prisma/prisma.module";
 import { ReceiptsController } from "./receipts.controller";
 import { ReceiptsService } from "./receipts.service";
 import { CashBankModule } from "../cash-bank/cash-bank.module";
-@Module({ imports: [PrismaModule, AuditLogModule, CashBankModule], controllers: [ReceiptsController], providers: [ReceiptsService] })
+import { AccountingModule } from "../accounting/accounting.module";
+@Module({ imports: [PrismaModule, AuditLogModule, CashBankModule, AccountingModule], controllers: [ReceiptsController], providers: [ReceiptsService] })
 export class ReceiptsModule {}

@@ -98,3 +98,8 @@ export async function apiRequestPaginated<T>(
   const envelope = (await requestEnvelope(path, options)) as unknown as PaginatedResponse<T>;
   return { items: envelope.data, meta: envelope.meta };
 }
+
+export async function apiRequestPaginatedWithSummary<T, S>(path: string, options: RequestOptions = {}): Promise<{ items: T[]; meta: PaginationMeta; summary: S }> {
+  const envelope = (await requestEnvelope(path, options)) as unknown as PaginatedResponse<T> & { summary: S };
+  return { items: envelope.data, meta: envelope.meta, summary: envelope.summary };
+}

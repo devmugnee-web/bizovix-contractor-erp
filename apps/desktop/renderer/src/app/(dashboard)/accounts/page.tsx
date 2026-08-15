@@ -1,5 +1,2 @@
-import { ComingSoonPage } from "@/components/layout/ComingSoonPage";
-
-export default function AccountsPage() {
-  return <ComingSoonPage title="Accounts" breadcrumb={[{ label: "Accounts" }]} />;
-}
+import { AccountsWorkspace } from "@/components/accounts/AccountsWorkspace";
+export default function Page(){return <AccountsWorkspace view="overview"/>}

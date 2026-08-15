@@ -55,7 +55,17 @@ export const NAV_ITEMS: NavItem[] = [
     { label: "General Expense", href: "/expenses/general-expense" },
   ] },
   { label: "Receipts", href: "/receipts", icon: Receipt },
-  { label: "Accounts", href: "/accounts", icon: Building2 },
+  { label: "Accounts", href: "/accounts", icon: Building2, children: [
+    { label: "Overview", href: "/accounts" },
+    { label: "Chart of Accounts", href: "/accounts/chart-of-accounts" },
+    { label: "Journal Entries", href: "/accounts/journals" },
+    { label: "General Ledger", href: "/accounts/general-ledger" },
+    { label: "Receivables", href: "/accounts/receivables" },
+    { label: "Payables", href: "/accounts/payables" },
+    { label: "Project Accounts", href: "/accounts/project-accounts" },
+    { label: "Party Ledger", href: "/accounts/party-ledger" },
+    { label: "Opening Balances", href: "/accounts/opening-balances" },
+  ] },
   { label: "Cash & Bank", href: "/cash-bank", icon: Banknote, children: [
     { label: "Main Cash", href: "/cash-bank/main-cash" },
     { label: "Petty Cash", href: "/cash-bank/petty-cash" },
@@ -65,7 +75,15 @@ export const NAV_ITEMS: NavItem[] = [
     { label: "Bank Reconciliation", href: "/cash-bank/reconciliation" },
     { label: "Cheque Management", href: "/cash-bank/cheques" },
   ] },
-  { label: "Reports", href: "/reports", icon: BarChart3 },
+  { label: "Reports", href: "/reports", icon: BarChart3, children: [
+    { label: "Tender Reports", href: "/reports/tenders" },
+    { label: "Project Reports", href: "/reports/projects" },
+    { label: "Expense Reports", href: "/reports/expenses" },
+    { label: "Receipt Reports", href: "/reports/receipts" },
+    { label: "Cash & Bank Reports", href: "/reports/cash-bank" },
+    { label: "Financial Reports", href: "/reports/financial" },
+    { label: "Expiry & Due Reports", href: "/reports/expiry-due" },
+  ] },
 ];
 
 export const NAV_ITEMS_LOWER: NavItem[] = [
