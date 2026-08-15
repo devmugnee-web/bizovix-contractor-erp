@@ -4,7 +4,7 @@ import type { TenderPerformance } from "@bizovix/types";
 function Tile({ label, value, colorClassName }: { label: string; value: string | number; colorClassName: string }) {
   return (
     <div>
-      <p className="text-[11px] text-biz-muted">{label}</p>
+      <p className="text-[11px] font-medium text-biz-muted">{label}</p>
       <p className={cn("text-[15px] font-bold leading-tight", colorClassName)}>{value}</p>
     </div>
   );

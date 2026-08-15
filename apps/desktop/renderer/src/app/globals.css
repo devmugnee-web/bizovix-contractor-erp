@@ -11,3 +11,12 @@ body {
 * {
   box-sizing: border-box;
 }
+/* Keep compact scroll areas usable without showing native scrollbar chrome. */
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}

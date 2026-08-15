@@ -14,20 +14,20 @@ const DEFAULT_ICON: { icon: LucideIcon; className: string } = { icon: Bell, clas
 
 export function UpcomingRemindersCard({ items }: { items: UpcomingReminder[] }) {
   return (
-    <SectionCard title="Upcoming Reminders" index={4} footer={{ label: "View all" }}>
-      <ul className="flex flex-col gap-3">
+    <SectionCard title="Upcoming Reminders" index={4} footer={{ label: "View all", href: "/reminders" }} className="lg:h-full lg:min-h-0" bodyClassName="scrollbar-hidden p-3 lg:overflow-y-auto">
+      <ul className="flex flex-col gap-2">
         {items.map((item) => {
           const { icon: Icon, className } = REMINDER_ICONS[item.type] ?? DEFAULT_ICON;
           return (
-            <li key={item.id} className="flex items-start gap-3 border-b border-biz-border pb-3 last:border-0 last:pb-0">
-              <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-md", className)}>
-                <Icon className="h-4 w-4" />
+            <li key={item.id} className="flex items-start gap-2.5 border-b border-biz-border pb-2 last:border-0 last:pb-0">
+              <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md", className)}>
+                <Icon className="h-3.5 w-3.5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-biz-text">{item.title}</p>
-                <p className="truncate text-[12px] text-biz-muted">{item.subtitle}</p>
+                <p className="text-[13px] font-semibold leading-tight text-biz-text">{item.title}</p>
+                <p className="truncate text-[11px] font-medium leading-tight text-biz-muted">{item.subtitle}</p>
               </div>
-              <span className="shrink-0 text-[12px] font-medium text-biz-danger">{formatDate(item.dueDate)}</span>
+              <span className="shrink-0 text-[11px] font-semibold text-biz-danger">{formatDate(item.dueDate)}</span>
             </li>
           );
         })}

@@ -32,15 +32,15 @@ export function DashboardKpiCard({
         >
           <Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
         </span>
-        <span className="min-w-0 whitespace-normal break-words text-[8px] font-medium leading-tight text-biz-muted sm:text-[9px] lg:text-[10px]">
+        <span className="min-w-0 whitespace-normal break-words text-[9px] font-semibold leading-tight text-biz-muted sm:text-[10px] lg:text-[11px]">
           {index}. {title}
         </span>
       </div>
-      <div className={cn("whitespace-normal break-words text-[11px] font-bold leading-tight text-biz-text sm:text-[12px] lg:text-[15px]", valueClassName)}>
+      <div className={cn("whitespace-normal break-words text-[12px] font-bold leading-tight text-biz-text sm:text-[13px] lg:text-[16px]", valueClassName)}>
         {value}
       </div>
       {children && (
-        <div className="hidden whitespace-normal break-words text-[8px] leading-tight text-biz-muted sm:block lg:text-[9px]">{children}</div>
+        <div className="hidden whitespace-normal break-words text-[9px] font-medium leading-tight text-biz-muted sm:block lg:text-[10px]">{children}</div>
       )}
     </div>
   );

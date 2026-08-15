@@ -6,7 +6,7 @@ export interface SectionCardProps {
   title: string;
   index?: number;
   headerRight?: React.ReactNode;
-  footer?: { label: string; onClick?: () => void };
+  footer?: { label: string; href?: string; onClick?: () => void };
   className?: string;
   bodyClassName?: string;
   children: React.ReactNode;
@@ -30,17 +30,27 @@ export function SectionCard({
         </h3>
         {headerRight && <div className="shrink-0">{headerRight}</div>}
       </div>
-      <div className={cn("flex-1 p-4", bodyClassName)}>{children}</div>
+      <div className={cn("min-h-0 flex-1 p-4", bodyClassName)}>{children}</div>
       {footer && (
         <div className="border-t border-biz-border px-4 py-2">
-          <button
-            type="button"
-            onClick={footer.onClick}
-            className="flex w-full items-center justify-between text-[13px] font-medium text-biz-blue hover:text-biz-blue-hover"
-          >
-            {footer.label}
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          {footer.href ? (
+            <a
+              href={footer.href}
+              className="flex w-full items-center justify-between text-[13px] font-medium text-biz-blue hover:text-biz-blue-hover"
+            >
+              {footer.label}
+              <ChevronRight className="h-4 w-4" />
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={footer.onClick}
+              className="flex w-full items-center justify-between text-[13px] font-medium text-biz-blue hover:text-biz-blue-hover"
+            >
+              {footer.label}
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
         </div>
       )}
     </div>

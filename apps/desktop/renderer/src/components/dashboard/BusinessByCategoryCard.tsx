@@ -20,12 +20,12 @@ export function BusinessByCategoryCard({ data }: { data: BusinessByCategory }) {
       <div className="grid items-center gap-2 xl:grid-cols-[minmax(0,1fr)_144px]">
         <div className="flex min-w-0 flex-col gap-1.5">
           {data.items.map((item) => (
-            <div key={item.category} className="grid min-w-0 grid-cols-[minmax(0,1fr)_72px_40px] items-center gap-1.5 text-[10px]">
+            <div key={item.category} className="grid min-w-0 grid-cols-[minmax(0,1fr)_76px_42px] items-center gap-1.5 text-[11px]">
               <span className="flex min-w-0 items-center gap-2 text-biz-text">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
                 <span className="min-w-0 break-words leading-tight">{item.category}</span>
               </span>
-              <span className="whitespace-nowrap text-right text-biz-muted">{formatBDTCompact(item.amount)}</span>
+              <span className="whitespace-nowrap text-right font-medium text-biz-muted">{formatBDTCompact(item.amount)}</span>
               <span className="whitespace-nowrap text-right font-semibold text-biz-text">{item.percentage}%</span>
             </div>
           ))}

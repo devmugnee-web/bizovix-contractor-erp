@@ -50,13 +50,13 @@ function displayDate(value?: string) {
 }
 
 function Field({ label, error, children }: { label: React.ReactNode; error?: string; children: React.ReactNode }) {
-  return <label className="block min-w-0"><span className="mb-1 block text-[10px] font-semibold text-biz-navy">{label}</span>{children}{error && <span className="mt-1 block text-[9px] text-biz-danger">{error}</span>}</label>;
+  return <label className="block min-w-0"><span className="mb-1 block text-[12px] font-semibold leading-4 text-biz-navy">{label}</span>{children}{error && <span className="mt-1 block text-[11px] font-medium text-biz-danger">{error}</span>}</label>;
 }
 
-const inputClass = "h-9 w-full rounded-md border border-biz-border bg-white px-2.5 text-[11px] text-biz-navy outline-none focus:border-biz-blue";
+const inputClass = "h-9 w-full rounded-md border border-biz-border bg-white px-2.5 text-[12px] font-medium text-biz-navy outline-none placeholder:font-normal placeholder:text-biz-muted focus:border-biz-blue";
 
 function ChoiceCard({ selected, label, onClick }: { selected: boolean; label: string; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={cn("flex h-9 items-center gap-2 rounded-md border px-3 text-left text-[10px] font-semibold", selected ? "border-biz-blue bg-biz-blue-soft text-biz-blue" : "border-biz-border bg-white text-biz-navy")}><span className={cn("flex h-3.5 w-3.5 items-center justify-center rounded-full border", selected ? "border-biz-blue" : "border-[#B8C3D6]")}>{selected && <span className="h-1.5 w-1.5 rounded-full bg-biz-blue" />}</span>{label}</button>;
+  return <button type="button" onClick={onClick} className={cn("flex min-h-9 items-center gap-2 rounded-md border px-3 py-1.5 text-left text-[11px] font-semibold leading-4", selected ? "border-biz-blue bg-biz-blue-soft text-biz-blue" : "border-biz-border bg-white text-biz-navy")}><span className={cn("flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border", selected ? "border-biz-blue" : "border-[#B8C3D6]")}>{selected && <span className="h-1.5 w-1.5 rounded-full bg-biz-blue" />}</span>{label}</button>;
 }
 
 export default function PgBgPage() {
@@ -164,7 +164,17 @@ export default function PgBgPage() {
   const pageItems = eligible.data?.items ?? [];
   const timelineStep = Math.max(1, Math.min(currentStep, 5));
 
-  return <div className="flex flex-col gap-3 text-biz-text">
+  return <div id="pg-bg-page" className="flex flex-col gap-3 text-biz-text antialiased">
+    <style jsx global>{`
+      #pg-bg-page { text-rendering: optimizeLegibility; }
+      #pg-bg-page .text-\\[8px\\] { font-size: 10px; line-height: 14px; }
+      #pg-bg-page .text-\\[9px\\] { font-size: 11px; line-height: 16px; }
+      #pg-bg-page .text-\\[10px\\] { font-size: 11px; line-height: 16px; }
+      #pg-bg-page .text-\\[11px\\] { font-size: 12px; line-height: 17px; }
+      #pg-bg-page .text-\\[12px\\] { font-size: 13px; line-height: 18px; }
+      #pg-bg-page .text-biz-muted { font-weight: 500; }
+      #pg-bg-page input, #pg-bg-page select, #pg-bg-page button { letter-spacing: 0; }
+    `}</style>
     <div><h1 className="text-[23px] font-bold leading-7 text-biz-navy">Accept NOA &amp; Create PG/BG</h1><p className="text-[12px] text-biz-muted">Select an existing tender, accept NOA and setup PG/BG details.</p></div>
     {message && <div className={cn("rounded-md border px-3 py-2 text-[11px] font-medium", message.type === "success" ? "border-biz-success/20 bg-biz-success-soft text-biz-success" : "border-biz-danger/20 bg-biz-danger-soft text-biz-danger")}>{message.text}</div>}
 
