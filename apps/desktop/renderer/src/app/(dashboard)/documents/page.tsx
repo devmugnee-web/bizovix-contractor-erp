@@ -1,5 +1,4 @@
-import { ComingSoonPage } from "@/components/layout/ComingSoonPage";
-
+import { DocumentWorkspace } from "@/components/documents/DocumentWorkspace";
 export default function DocumentsPage() {
-  return <ComingSoonPage title="Documents" breadcrumb={[{ label: "Documents" }]} />;
+  return <DocumentWorkspace />;
 }

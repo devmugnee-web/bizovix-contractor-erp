@@ -11,6 +11,69 @@ body {
 * {
   box-sizing: border-box;
 }
+
+@page {
+  size: A4 portrait;
+  margin: 15mm 18mm;
+}
+
+@media print {
+  html:has(body.print-document-only),
+  body.print-document-only {
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body.print-document-only * {
+    visibility: hidden !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  body.print-document-only .printable-document,
+  body.print-document-only .printable-document * {
+    visibility: visible !important;
+  }
+
+  body.print-document-only .printable-document {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    overflow: visible !important;
+    color: #0f172a !important;
+    background: #fff !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.print-document-only .document-letterhead,
+  body.print-document-only .document-signature {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.print-document-only .document-body {
+    orphans: 3;
+    widows: 3;
+  }
+
+  body.print-document-only ::-webkit-scrollbar {
+    display: none !important;
+  }
+}
 /* Keep compact scroll areas usable without showing native scrollbar chrome. */
 .scrollbar-hidden {
   -ms-overflow-style: none;

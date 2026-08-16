@@ -1,6 +1,14 @@
 "use client";
 import * as React from "react";
-import { ArrowLeft, Download, Filter, Printer, RotateCcw, Search } from "lucide-react";
+import {
+  ArrowLeft,
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  Printer,
+  RotateCcw,
+  Search,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useExportReport, useReport, useReportOptions } from "@bizovix/api-client";
 import type { ReportQuery } from "@bizovix/types";
@@ -81,11 +89,23 @@ export function ReportWorkspace({ category, report }: { category: string; report
             <Printer className="h-4 w-4" />
             Print
           </SecondaryButton>
+          <SecondaryButton onClick={() => window.print()}>
+            <FileText className="h-4 w-4" />
+            Export PDF
+          </SecondaryButton>
           <PrimaryButton onClick={exportCsv} disabled={exporter.isPending}>
-            <Download className="h-4 w-4" />
-            Export CSV
+            <FileSpreadsheet className="h-4 w-4" />
+            Export Excel
           </PrimaryButton>
         </div>
+      </div>
+      <div className="mb-5 hidden border-b-2 border-slate-800 pb-3 print:block">
+        <p className="text-lg font-bold">BIZOVIX Contractor ERP</p>
+        <p className="font-semibold">{result?.title ?? def?.title ?? "Report"}</p>
+        <p className="text-xs">
+          Date range: {filters.dateFrom || "Beginning"} to {filters.dateTo || "Today"}
+        </p>
+        <p className="text-xs">Generated: {new Date().toLocaleString("en-GB")}</p>
       </div>
       <section className="rounded-lg border border-biz-border bg-white p-4 shadow-card print:hidden">
         <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-7">
@@ -120,16 +140,23 @@ export function ReportWorkspace({ category, report }: { category: string; report
               }))}
             />
           </label>
-          <label className="text-[10px] font-semibold">
-            Project
-            <SelectInput
-              className="mt-1"
-              placeholder="All Projects"
-              value={draft.workId}
-              onChange={(e) => setDraft((v) => ({ ...v, workId: e.target.value }))}
-              options={(options.data?.works ?? []).map((x) => ({ value: x.id, label: x.workName }))}
-            />
-          </label>
+          {category !== "expenses" || report !== "general" ? (
+            <label className="text-[10px] font-semibold">
+              Project
+              <SelectInput
+                className="mt-1"
+                placeholder="All Projects"
+                value={draft.workId}
+                onChange={(e) => setDraft((v) => ({ ...v, workId: e.target.value }))}
+                options={(options.data?.works ?? []).map((x) => ({
+                  value: x.id,
+                  label: x.workName,
+                }))}
+              />
+            </label>
+          ) : (
+            <div />
+          )}
           <label className="text-[10px] font-semibold">
             Account
             <SelectInput

@@ -1,9 +1,103 @@
 "use client";
 import Link from "next/link";
-import { ArrowRight,FileChartColumn,ReceiptText,WalletCards,HandCoins } from "lucide-react";
+import { ArrowRight, FileChartColumn, ReceiptText, WalletCards, HandCoins } from "lucide-react";
 import { useReportSummary } from "@bizovix/api-client";
 import { cn } from "@bizovix/ui";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { REPORT_CATEGORIES } from "@/config/reports";
-const money=(v:unknown)=>`BDT ${Number(v??0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-export function ReportCenter({category}:{category?:string}){useSetBreadcrumb([{label:"Reports",href:"/reports"},...(category?[{label:REPORT_CATEGORIES.find(c=>c.slug===category)?.shortTitle??category}]:[])]);const summary=useReportSummary();const groups=category?REPORT_CATEGORIES.filter(c=>c.slug===category):REPORT_CATEGORIES;const kpis=[[FileChartColumn,"Total Reports",summary.data?.totalReports??42,"text-blue-600"],[WalletCards,"This Month Expenses",money(summary.data?.thisMonthExpenses),"text-red-600"],[ReceiptText,"This Month Receipts",money(summary.data?.thisMonthReceipts),"text-green-700"],[HandCoins,"Outstanding Receivables",money(summary.data?.outstandingReceivables),"text-orange-600"]] as const;return <div className="flex flex-col gap-5"><div><h1 className="text-page-title text-biz-text">{category?(groups[0]?.shortTitle??"Reports"):"Reports"}</h1><p className="mt-1 text-[13px] text-biz-muted">Generate, analyze and export business, tender and financial reports.</p></div>{!category&&<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{kpis.map(([Icon,label,value,tone])=><div key={label} className="flex min-h-24 items-center gap-3 rounded-lg border border-biz-border bg-white p-4 shadow-card"><span className={cn("flex h-11 w-11 items-center justify-center rounded-md bg-slate-50",tone)}><Icon className="h-5 w-5"/></span><div><p className="text-[11px] font-semibold text-biz-muted">{label}</p><p className={cn("mt-1 text-[18px] font-bold",tone)}>{summary.isLoading?"...":value}</p></div></div>)}</div>}{summary.isError&&<div className="rounded border border-red-200 bg-red-50 p-3 text-[12px] text-red-600">Could not load report summary. <button onClick={()=>summary.refetch()} className="font-semibold underline">Retry</button></div>}{groups.map(group=><section key={group.slug}><div className="mb-3 flex items-center gap-2"><group.icon className="h-5 w-5 text-biz-blue"/><h2 className="text-[16px] font-bold text-biz-text">{group.title}</h2></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{group.reports.map(report=><Link key={report.slug} href={`/reports/${group.slug}/${report.slug}`} className="group flex min-h-28 flex-col rounded-lg border border-biz-border bg-white p-4 shadow-card transition hover:border-blue-300 hover:shadow-md"><div className="flex items-start justify-between"><span className="flex h-9 w-9 items-center justify-center rounded-md bg-blue-50 text-biz-blue"><group.icon className="h-4 w-4"/></span><ArrowRight className="h-4 w-4 text-biz-muted transition group-hover:translate-x-1 group-hover:text-biz-blue"/></div><h3 className="mt-3 text-[13px] font-bold text-biz-text">{report.title}</h3><p className="mt-1 text-[11px] leading-4 text-biz-muted">{report.description}</p></Link>)}</div></section>)}</div>}
+const money = (v: unknown) =>
+  `BDT ${Number(v ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export function ReportCenter({ category }: { category?: string }) {
+  useSetBreadcrumb([
+    { label: "Reports", href: "/reports" },
+    ...(category
+      ? [{ label: REPORT_CATEGORIES.find((c) => c.slug === category)?.shortTitle ?? category }]
+      : []),
+  ]);
+  const summary = useReportSummary();
+  const groups = category
+    ? REPORT_CATEGORIES.filter((c) => c.slug === category)
+    : REPORT_CATEGORIES;
+  const kpis = [
+    [FileChartColumn, "Total Reports", summary.data?.totalReports ?? 42, "text-blue-600"],
+    [WalletCards, "This Month Expenses", money(summary.data?.thisMonthExpenses), "text-red-600"],
+    [ReceiptText, "This Month Receipts", money(summary.data?.thisMonthReceipts), "text-green-700"],
+    [
+      HandCoins,
+      "Outstanding Receivables",
+      money(summary.data?.outstandingReceivables),
+      "text-orange-600",
+    ],
+  ] as const;
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <h1 className="text-page-title text-biz-text">
+          {category ? (groups[0]?.shortTitle ?? "Reports") : "Reports"}
+        </h1>
+        <p className="mt-1 text-[13px] text-biz-muted">
+          Generate, analyze and export business, tender and financial reports.
+        </p>
+      </div>
+      {!category && (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {kpis.map(([Icon, label, value, tone]) => (
+            <div
+              key={label}
+              className="flex min-h-24 items-center gap-3 rounded-lg border border-biz-border bg-white p-4 shadow-card"
+            >
+              <span
+                className={cn(
+                  "flex h-11 w-11 items-center justify-center rounded-md bg-slate-50",
+                  tone,
+                )}
+              >
+                <Icon className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-[11px] font-semibold text-biz-muted">{label}</p>
+                <p className={cn("mt-1 text-[18px] font-bold", tone)}>
+                  {summary.isLoading ? "..." : value}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {summary.isError && (
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-[12px] text-red-600">
+          Could not load report summary.{" "}
+          <button onClick={() => summary.refetch()} className="font-semibold underline">
+            Retry
+          </button>
+        </div>
+      )}
+      {groups.map((group) => (
+        <section key={group.slug}>
+          <div className="mb-3 flex items-center gap-2">
+            <group.icon className="h-5 w-5 text-biz-blue" />
+            <h2 className="text-[16px] font-bold text-biz-text">{group.title}</h2>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {group.reports.map((report) => (
+              <Link
+                key={report.slug}
+                href={`/reports/${group.slug}/${report.slug}`}
+                className="group flex min-h-28 flex-col rounded-lg border border-biz-border bg-white p-4 shadow-card transition hover:border-blue-300 hover:shadow-md"
+              >
+                <div className="flex items-start justify-between">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-md bg-blue-50 text-biz-blue">
+                    <group.icon className="h-4 w-4" />
+                  </span>
+                  <ArrowRight className="h-4 w-4 text-biz-muted transition group-hover:translate-x-1 group-hover:text-biz-blue" />
+                </div>
+                <h3 className="mt-3 text-[13px] font-bold text-biz-text">{report.title}</h3>
+                <p className="mt-1 text-[11px] leading-4 text-biz-muted">{report.description}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}

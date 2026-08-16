@@ -8,10 +8,13 @@ export interface SidebarSubmenuProps {
 }
 
 export function SidebarSubmenu({ items, activeHref }: SidebarSubmenuProps) {
+  const activeItemHref = items
+    .filter((item) => isNavRouteActive(activeHref, item.href))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
   return (
     <ul className="ml-[22px] mt-1 flex flex-col gap-1 border-l border-white/15 pl-4">
       {items.map((item) => {
-        const active = isNavRouteActive(activeHref, item.href);
+        const active = item.href === activeItemHref;
         return (
           <li key={item.href} className="relative">
             <span
