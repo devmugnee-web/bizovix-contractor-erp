@@ -1,5 +1,5 @@
-import { ComingSoonPage } from "@/components/layout/ComingSoonPage";
+import { redirect } from "next/navigation";
 
 export default function SettingsPage() {
-  return <ComingSoonPage title="Settings" breadcrumb={[{ label: "Settings" }]} />;
+  redirect("/settings/general");
 }

@@ -1,6 +1,6 @@
 import { PrismaClient, PurchaseType, TenderStatus, GuaranteeType, InstrumentStatus, AccountType, ExpenseStatus, ReceiptStatus, CmsWorkStatus } from "@prisma/client";
-import { PERMISSIONS } from "@bizovix/types";
 import bcrypt from "bcryptjs";
+import { syncPermissions } from "./lib/sync-permissions";
 
 const prisma = new PrismaClient();
 
@@ -38,15 +38,6 @@ async function main() {
     },
   });
 
-  for (const key of PERMISSIONS) {
-    await prisma.permission.upsert({
-      where: { key },
-      update: {},
-      create: { key, group: key.split(".")[0] ?? "general" },
-    });
-  }
-  const allPermissions = await prisma.permission.findMany();
-
   const adminRole = await prisma.role.upsert({
     where: { organizationId_name: { organizationId: organization.id, name: "Admin" } },
     update: {},
@@ -58,13 +49,7 @@ async function main() {
     },
   });
 
-  for (const permission of allPermissions) {
-    await prisma.rolePermission.upsert({
-      where: { roleId_permissionId: { roleId: adminRole.id, permissionId: permission.id } },
-      update: {},
-      create: { roleId: adminRole.id, permissionId: permission.id },
-    });
-  }
+  await syncPermissions(prisma);
 
   const passwordHash = await bcrypt.hash("Admin@123", 10);
   const adminUser = await prisma.user.upsert({

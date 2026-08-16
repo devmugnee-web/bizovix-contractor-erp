@@ -4,6 +4,7 @@ import { Prisma } from "@bizovix/database";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { CashBankService } from "../cash-bank/cash-bank.service";
+import { FinanceSettingsService } from "../settings-finance/finance-settings.service";
 import type {
   CreateAccountDto,
   CreateJournalDto,
@@ -54,6 +55,7 @@ export class AccountingService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     @Inject(forwardRef(() => CashBankService)) private readonly cashBank: CashBankService,
+    private readonly financeSettings: FinanceSettingsService,
   ) {}
   private no(prefix = "JV") {
     return `${prefix}-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`;
@@ -182,6 +184,7 @@ export class AccountingService {
       },
     });
     if (found) return found;
+    await this.financeSettings.assertPostable(input.organizationId, input.journalDate);
     const resolved = [];
     for (const l of input.lines) {
       const account = l.accountId
@@ -303,6 +306,7 @@ export class AccountingService {
   async createJournal(org: string, userId: string, dto: CreateJournalDto) {
     await this.ensureChart(org);
     this.validate(dto.lines);
+    await this.financeSettings.assertPostable(org, new Date(dto.journalDate));
     const row = await this.prisma.$transaction(async (tx) => {
       for (const l of dto.lines)
         if (
@@ -347,6 +351,7 @@ export class AccountingService {
     if (!row) throw new NotFoundException("Journal not found");
     if (row.status !== "DRAFT") throw new BadRequestException("Only draft journals can be posted");
     this.validate(row.lines);
+    await this.financeSettings.assertPostable(org, row.journalDate);
     const posted = await this.prisma.journalEntry.update({
       where: { id },
       data: { status: "POSTED", postedById: userId, postedAt: new Date() },

@@ -8,6 +8,7 @@ import { SaveGeneralExpenseDto } from "./dto/save-general-expense.dto";
 import { UpdateGeneralExpenseDto } from "./dto/update-general-expense.dto";
 import { CashBankService } from "../cash-bank/cash-bank.service";
 import { AccountingService } from "../accounting/accounting.service";
+import { NumberingService } from "../settings-numbering/numbering.service";
 
 const includeRelations = {
   expenseHead: { select: { id: true, name: true } },
@@ -22,6 +23,7 @@ type UploadedExpenseFile = { originalname: string; mimetype: string; size: numbe
 function toDto(record: ExpenseRecord) {
   return {
     id: record.id,
+    referenceNo: record.referenceNo,
     expenseDate: record.expenseDate,
     amount: record.amount.toFixed(2),
     description: record.description,
@@ -35,7 +37,7 @@ function toDto(record: ExpenseRecord) {
 
 @Injectable()
 export class GeneralExpensesService {
-  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService, private readonly cashBank: CashBankService, private readonly accounting: AccountingService) {}
+  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService, private readonly cashBank: CashBankService, private readonly accounting: AccountingService, private readonly numbering: NumberingService) {}
 
   private where(organizationId: string, query: QueryGeneralExpenseDto): Prisma.ExpenseWhereInput {
     return {
@@ -90,13 +92,14 @@ export class GeneralExpensesService {
   async create(organizationId: string, userId: string, dto: SaveGeneralExpenseDto) {
     const { head } = await this.assertReferences(organizationId, dto);
     const record = await this.prisma.$transaction(async (tx) => {
+      const referenceNo = await this.numbering.next(organizationId, "EXPENSE", tx);
       const expense = await tx.expense.create({ data: {
         organizationId, workId: null, expenseHeadId: dto.expenseHeadId, expenseById: dto.expenseById,
         paidFromAccountId: dto.paidFromAccountId, category: head.name, description: dto.description?.trim() || null,
-        amount: dto.amount, expenseDate: new Date(dto.expenseDate), status: "APPROVED", createdById: userId,
+        amount: dto.amount, expenseDate: new Date(dto.expenseDate), status: "APPROVED", referenceNo, createdById: userId,
       }, include: includeRelations });
-      await this.cashBank.post(tx, { organizationId, accountId: dto.paidFromAccountId, direction: "OUT", amount: dto.amount, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, referenceNo: expense.id, description: dto.description?.trim() || head.name, transactionDate: expense.expenseDate, createdById: userId });
-      await this.accounting.post(tx, { organizationId, userId, journalDate: expense.expenseDate, referenceNo: expense.id, description: dto.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, lines: [{ systemKey: "GENERAL_EXPENSE", debit: dto.amount, credit: 0 }, { bankAccountId: dto.paidFromAccountId, debit: 0, credit: dto.amount }] });
+      await this.cashBank.post(tx, { organizationId, accountId: dto.paidFromAccountId, direction: "OUT", amount: dto.amount, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, referenceNo, description: dto.description?.trim() || head.name, transactionDate: expense.expenseDate, createdById: userId });
+      await this.accounting.post(tx, { organizationId, userId, journalDate: expense.expenseDate, referenceNo, description: dto.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, lines: [{ systemKey: "GENERAL_EXPENSE", debit: dto.amount, credit: 0 }, { bankAccountId: dto.paidFromAccountId, debit: 0, credit: dto.amount }] });
       return expense;
     });
     await this.auditLogService.record({ organizationId, userId, action: "create", entityType: "GeneralExpense", entityId: record.id, newValue: toDto(record) });

@@ -8,6 +8,7 @@ import { SaveReceiptDto } from "./dto/save-receipt.dto";
 import { UpdateReceiptDto } from "./dto/update-receipt.dto";
 import { CashBankService } from "../cash-bank/cash-bank.service";
 import { AccountingService } from "../accounting/accounting.service";
+import { NumberingService } from "../settings-numbering/numbering.service";
 
 const includeRelations = {
   work: { select: { id: true, workName: true, organizationMaster: { select: { shortName: true } } } },
@@ -21,7 +22,7 @@ function toDto(row: ReceiptRow) {
 
 @Injectable()
 export class ReceiptsService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService, private readonly cashBank: CashBankService, private readonly accounting: AccountingService) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService, private readonly cashBank: CashBankService, private readonly accounting: AccountingService, private readonly numbering: NumberingService) {}
 
   private where(organizationId: string, query: QueryReceiptDto): Prisma.ReceiptWhereInput {
     return { organizationId,
@@ -79,7 +80,9 @@ export class ReceiptsService {
     const year = new Date(dto.receiptDate).getUTCFullYear();
     const row = await this.prisma.$transaction(async (tx) => {
       const sequence = await tx.receiptSequence.upsert({ where: { organizationId_year: { organizationId, year } }, update: { value: { increment: 1 } }, create: { organizationId, year, value: 1 } });
-      const receipt = await tx.receipt.create({ data: { organizationId, receiptNo: `RC-${year}-${String(sequence.value).padStart(5, "0")}`, receiptDate: new Date(dto.receiptDate), receiptCategory: dto.receiptCategory, receiptType: dto.receiptType, workId: dto.receiptCategory === "PROJECT" ? dto.workId : null, receivedFrom: dto.receivedFrom.trim(), amount: dto.amount, receivedInAccountId: dto.receivedInAccountId, paymentMethod: dto.paymentMethod, referenceNo: dto.referenceNo?.trim() || null, description: dto.description?.trim() || null, status: dto.status ?? "RECEIVED", createdById: userId }, include: includeRelations });
+      const config = await this.numbering.getConfig(organizationId, "RECEIPT");
+      const receiptNo = this.numbering.format(config, year, sequence.value);
+      const receipt = await tx.receipt.create({ data: { organizationId, receiptNo, receiptDate: new Date(dto.receiptDate), receiptCategory: dto.receiptCategory, receiptType: dto.receiptType, workId: dto.receiptCategory === "PROJECT" ? dto.workId : null, receivedFrom: dto.receivedFrom.trim(), amount: dto.amount, receivedInAccountId: dto.receivedInAccountId, paymentMethod: dto.paymentMethod, referenceNo: dto.referenceNo?.trim() || null, description: dto.description?.trim() || null, status: dto.status ?? "RECEIVED", createdById: userId }, include: includeRelations });
       if (receipt.status === "RECEIVED") await this.cashBank.post(tx, { organizationId, accountId: dto.receivedInAccountId, direction: "IN", amount: dto.amount, sourceModule: "RECEIPT", sourceType: dto.receiptType, sourceId: receipt.id, referenceNo: receipt.receiptNo, description: dto.description?.trim() || `Receipt from ${dto.receivedFrom.trim()}`, transactionDate: receipt.receiptDate, createdById: userId });
       if (receipt.status === "RECEIVED") await this.accounting.post(tx, { organizationId, userId, journalDate: receipt.receiptDate, referenceNo: receipt.receiptNo, description: dto.description?.trim() || `Receipt from ${dto.receivedFrom.trim()}`, sourceModule: "RECEIPT", sourceType: dto.receiptType, sourceId: receipt.id, lines: [{ bankAccountId: dto.receivedInAccountId, projectId: receipt.workId, partyName: dto.receivedFrom.trim(), partyType: receipt.workId ? "CUSTOMER" : "OTHER", debit: dto.amount, credit: 0 }, { systemKey: receipt.workId ? "ACCOUNTS_RECEIVABLE" : "OTHER_INCOME", projectId: receipt.workId, partyName: dto.receivedFrom.trim(), partyType: receipt.workId ? "CUSTOMER" : "OTHER", debit: 0, credit: dto.amount }] });
       return receipt;

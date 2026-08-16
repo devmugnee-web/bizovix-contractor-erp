@@ -22,6 +22,7 @@ import {
   useBankAccounts,
   useCreateCreditCommitmentCharge,
   usePendingCreditCommitmentTenders,
+  useTenderBankSettings,
 } from "@bizovix/api-client";
 import type { CreditCommitmentPendingQuery, PendingCreditCommitmentTender } from "@bizovix/types";
 import {
@@ -84,7 +85,11 @@ export default function CreditCommitmentPage() {
   const [query, setQuery] = React.useState<CreditCommitmentPendingQuery>(DEFAULT_QUERY);
   const pendingQuery = usePendingCreditCommitmentTenders(query);
   const bankAccounts = useBankAccounts();
+  const tenderBankSettings = useTenderBankSettings();
   const createCharge = useCreateCreditCommitmentCharge();
+  const defaultCharge = tenderBankSettings.data
+    ? Number(tenderBankSettings.data.creditCommitmentDefaultCharge).toFixed(2)
+    : "100.00";
   const [selectedState, setSelectedState] = React.useState<Set<string> | null>(null);
   const [chargeRowsState, setChargeRowsState] = React.useState<ChargeRow[] | null>(null);
   const [message, setMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -95,10 +100,10 @@ export default function CreditCommitmentPage() {
   const defaultBank = primeBank ?? bankAccounts.data?.find((account) => account.accountType === "BANK") ?? bankAccounts.data?.[0];
   const initialRows = pendingItems.slice(0, 3);
   const selectedIds = selectedState ?? new Set(initialRows.map((row) => row.id));
-  const chargeRows = chargeRowsState ?? initialRows.map((row, index) => ({
+  const chargeRows = chargeRowsState ?? initialRows.map((row) => ({
     ...row,
     bankAccountId: defaultBank?.id ?? "",
-    chargeAmount: index === 1 ? "200.00" : "100.00",
+    chargeAmount: defaultCharge,
     remarks: "",
   }));
 
@@ -142,7 +147,7 @@ export default function CreditCommitmentPage() {
         ...additions.filter((row) => !existingIds.has(row.id)).map((row) => ({
           ...row,
           bankAccountId: defaultBank?.id ?? "",
-          chargeAmount: "100.00",
+          chargeAmount: defaultCharge,
           remarks: "",
         })),
       ];

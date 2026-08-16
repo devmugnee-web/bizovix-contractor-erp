@@ -19,6 +19,7 @@ import {
   useCreateTenderSecurity,
   useMarkTenderSecurityNotRequired,
   usePendingTenderSecurities,
+  useTenderBankSettings,
 } from "@bizovix/api-client";
 import type { FundingType, PendingTenderSecurity, SecurityType, TenderSecurityPendingQuery } from "@bizovix/types";
 import { Button, DateInput, IconButton, SelectInput, TextInput, cn } from "@bizovix/ui";
@@ -108,11 +109,15 @@ function makeReference(tenderId: string | null, securityType: SecurityType) {
   return `${securityType === "BANK_GUARANTEE" ? "BG" : "PO"}-${suffix}/24-25`;
 }
 
-function toSelectedTender(row: PendingTenderSecurity, securityType: SecurityType): SelectedTender {
+function toSelectedTender(
+  row: PendingTenderSecurity,
+  securityType: SecurityType,
+  defaultMarginPct = "10.00",
+): SelectedTender {
   return {
     ...row,
     securityAmount: Number(row.securityAmount).toFixed(2),
-    marginPercentage: "10.00",
+    marginPercentage: defaultMarginPct,
     referenceNo: makeReference(row.tenderId, securityType),
   };
 }
@@ -173,7 +178,11 @@ export default function TenderSecurityPage() {
   const [query, setQuery] = React.useState<TenderSecurityPendingQuery>(DEFAULT_QUERY);
   const pendingQuery = usePendingTenderSecurities(query);
   const bankAccounts = useBankAccounts();
+  const tenderBankSettings = useTenderBankSettings();
   const createTenderSecurity = useCreateTenderSecurity();
+  const defaultMarginPct = tenderBankSettings.data
+    ? Number(tenderBankSettings.data.tsDefaultMarginPct).toFixed(2)
+    : "10.00";
   const markNotRequired = useMarkTenderSecurityNotRequired();
 
   const [securityType, setSecurityType] = React.useState<SecurityType>("PAY_ORDER");
@@ -191,6 +200,14 @@ export default function TenderSecurityPage() {
   const [interestRate, setInterestRate] = React.useState("15.00");
   const [remarks, setRemarks] = React.useState("PO will be issued for selected tenders");
   const [message, setMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
+  const appliedDefaultValidity = React.useRef(false);
+
+  React.useEffect(() => {
+    if (tenderBankSettings.data && !appliedDefaultValidity.current) {
+      appliedDefaultValidity.current = true;
+      setValidityMonths(String(tenderBankSettings.data.tsDefaultValidityMonths));
+    }
+  }, [tenderBankSettings.data]);
 
   const pendingItems = pendingQuery.data?.items?.length ? pendingQuery.data.items : fallbackPending;
   const meta = pendingQuery.data?.meta ?? { page: 1, limit: 5, total: 12, totalPages: 3 };
@@ -208,7 +225,7 @@ export default function TenderSecurityPage() {
     });
     setSelectedRows((rows) => {
       if (rows.some((item) => item.id === row.id)) return rows.filter((item) => item.id !== row.id);
-      return [...rows, toSelectedTender(row, securityType)];
+      return [...rows, toSelectedTender(row, securityType, defaultMarginPct)];
     });
   }
 
@@ -219,7 +236,7 @@ export default function TenderSecurityPage() {
       setSelectedRows([]);
     } else {
       setSelectedIds(new Set(pendingItems.map((item) => item.id)));
-      setSelectedRows(pendingItems.map((item) => toSelectedTender(item, securityType)));
+      setSelectedRows(pendingItems.map((item) => toSelectedTender(item, securityType, defaultMarginPct)));
     }
   }
 

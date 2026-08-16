@@ -79,9 +79,22 @@ export const PERMISSIONS = [
   "report.view",
   "report.export",
 
+  "reminders.read",
+  "reminders.create",
+  "reminders.update",
+  "reminders.complete",
+  "reminders.cancel",
+
+  "notifications.read",
+
   "user.manage",
   "role.manage",
+  "settings.read",
   "settings.manage",
+
+  "billing.view",
+  "billing.manage",
+  "billing.invoice.view",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

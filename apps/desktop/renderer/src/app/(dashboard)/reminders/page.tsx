@@ -1,5 +1,9 @@
-import { ComingSoonPage } from "@/components/layout/ComingSoonPage";
-
+import { Suspense } from "react";
+import { RemindersWorkspace } from "@/components/reminders/RemindersWorkspace";
 export default function RemindersPage() {
-  return <ComingSoonPage title="Reminders" breadcrumb={[{ label: "Reminders" }]} />;
+  return (
+    <Suspense fallback={null}>
+      <RemindersWorkspace />
+    </Suspense>
+  );
 }

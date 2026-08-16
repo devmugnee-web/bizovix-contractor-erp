@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { tokenStorage, useDashboard, useMe } from "@bizovix/api-client";
+import { tokenStorage, useMe, useReminderStats, useSubscription } from "@bizovix/api-client";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { BreadcrumbProvider, useBreadcrumbContext } from "@/components/providers/BreadcrumbContext";
@@ -11,7 +11,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const me = useMe();
-  const dashboard = useDashboard();
+  const reminderStats = useReminderStats();
+  const subscription = useSubscription();
   const { breadcrumb } = useBreadcrumbContext();
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
@@ -36,13 +37,22 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const remindersCount = dashboard.data?.remindersCount ?? 0;
+  const activeRemindersCount = reminderStats.data
+    ? reminderStats.data.dueToday + reminderStats.data.upcoming + reminderStats.data.overdue
+    : 0;
+
+  const trial =
+    subscription.data && (subscription.data.status === "TRIALING" || subscription.data.status === "EXPIRED")
+      ? {
+          daysLeft: Math.max(0, subscription.data.trialDaysRemaining ?? 0),
+          totalDays: subscription.data.trialDaysTotal ?? 30,
+        }
+      : null;
 
   return (
     <div className="flex h-screen flex-col">
       <Topbar
         user={me.data}
-        notificationCount={remindersCount}
         onToggleSidebar={() => {
           if (window.matchMedia("(max-width: 767px)").matches) setMobileSidebarOpen((value) => !value);
           else setSidebarCollapsed((value) => !value);
@@ -56,7 +66,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
-          remindersCount={remindersCount}
+          remindersCount={activeRemindersCount}
+          trial={trial}
+          onUpgradeClick={() => router.push("/plan-billing")}
           collapsed={sidebarCollapsed}
           mobileOpen={mobileSidebarOpen}
           onMobileClose={() => setMobileSidebarOpen(false)}

@@ -245,7 +245,7 @@ export class DashboardService {
         id: e.id,
         type: "EXPENSE",
         title: "Expense Added",
-        reference: `EXP-${e.id.slice(-6).toUpperCase()}`,
+        reference: e.referenceNo ?? `EXP-${e.id.slice(-6).toUpperCase()}`,
         amount: e.amount.toString(),
         status: e.status.charAt(0) + e.status.slice(1).toLowerCase(),
         occurredAt: e.expenseDate,

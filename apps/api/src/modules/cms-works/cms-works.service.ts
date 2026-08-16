@@ -3,6 +3,7 @@ import type { CmsWorkStatus, Prisma } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { PlanLimitsService } from "../billing/plan-limits.service";
 import { CreateCmsWorkDto } from "./dto/create-cms-work.dto";
 import { QueryCmsWorkDto } from "./dto/query-cms-work.dto";
 
@@ -15,7 +16,7 @@ function toDto(record: WorkRecord) {
 
 @Injectable()
 export class CmsWorksService {
-  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService) {}
+  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService, private readonly planLimits: PlanLimitsService) {}
 
   private where(organizationId: string, query: QueryCmsWorkDto): Prisma.CmsWorkWhereInput {
     return {
@@ -71,6 +72,7 @@ export class CmsWorksService {
   }
 
   async create(organizationId: string, userId: string, dto: CreateCmsWorkDto) {
+    await this.planLimits.assertCanCreateProject(organizationId);
     const master = await this.prisma.organizationMaster.findFirst({ where: { id: dto.organizationMasterId, organizationId } });
     if (!master) throw new NotFoundException("Organization not found");
     const work = await this.prisma.cmsWork.create({

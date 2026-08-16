@@ -145,5 +145,7 @@ export const NAV_ITEMS_LOWER: NavItem[] = [
   },
   { label: "Activity Log", href: "/activity-log", icon: History },
   { label: "Settings", href: "/settings", icon: Settings },
+  // Settings has its own internal left-nav (see SettingsNav) so its 11 sections
+  // are not also duplicated as a sidebar submenu — keeps the sidebar uncluttered.
   { label: "Plan & Billing", href: "/plan-billing", icon: CreditCard },
 ];

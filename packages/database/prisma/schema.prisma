@@ -93,8 +93,10 @@ enum SubscriptionPlan {
 enum SubscriptionStatus {
   TRIALING
   ACTIVE
+  PAST_DUE
   EXPIRED
   CANCELED
+  SUSPENDED
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +130,7 @@ model Organization {
   receipts              Receipt[]
   receiptSequences      ReceiptSequence[]
   reminders             Reminder[]
+  notifications         Notification[]
   documents             Document[]
   auditLogs             AuditLog[]
   appSettings           AppSetting[]
@@ -139,6 +142,19 @@ model Organization {
   fundTransfers         FundTransfer[]
   bankReconciliations   BankReconciliation[]
   cheques               Cheque[]
+  generalSetting        GeneralSetting?
+  companyProfile        CompanyProfile?
+  tenderBankSetting     TenderBankSetting?
+  financeSetting        FinanceSetting?
+  accountingPeriods     AccountingPeriod[]
+  numberSequences       NumberSequence[]
+  reminderRuleSettings  ReminderRuleSetting[]
+  documentSetting       DocumentSetting?
+  approvalRules         ApprovalRule[]
+  securitySetting       SecuritySetting?
+  systemSetting         SystemSetting?
+  billingProfile        BillingProfile?
+  invoices              Invoice[]
 
   @@map("organizations")
 }
@@ -148,6 +164,7 @@ model User {
   email        String   @unique
   passwordHash String
   name         String
+  phone        String?
   avatarUrl    String?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -157,6 +174,7 @@ model User {
   refreshTokens   RefreshToken[]
   auditLogs       AuditLog[]
   expensesThrough Expense[]          @relation("ExpenseThrough")
+  notifications   Notification[]
 
   @@map("users")
 }
@@ -253,16 +271,26 @@ model License {
 }
 
 model Subscription {
-  id               String             @id @default(cuid())
-  organizationId   String             @unique
-  plan             SubscriptionPlan   @default(TRIAL)
-  status           SubscriptionStatus @default(TRIALING)
-  trialEndsAt      DateTime?
-  currentPeriodEnd DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                 String             @id @default(cuid())
+  organizationId     String             @unique
+  /// Legacy coarse plan tag, superseded by `planId` — kept unmodified to avoid an enum rename.
+  plan               SubscriptionPlan   @default(TRIAL)
+  planId             String?
+  status             SubscriptionStatus @default(TRIALING)
+  billingCycle       String             @default("MONTHLY")
+  trialStartedAt     DateTime?
+  trialEndsAt        DateTime?
+  startedAt          DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  cancelRequestedAt  DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planRef      Plan?        @relation(fields: [planId], references: [id])
+  invoices     Invoice[]
 
   @@map("subscriptions")
 }
@@ -635,6 +663,7 @@ model Expense {
   expenseDate       DateTime
   dueDate           DateTime?
   status            ExpenseStatus @default(PENDING)
+  referenceNo       String?
   approvedById      String?
   createdById       String?
   createdAt         DateTime      @default(now())
@@ -647,6 +676,7 @@ model Expense {
   paidFromAccount BankAccount?        @relation(fields: [paidFromAccountId], references: [id])
   attachments     ExpenseAttachment[]
 
+  @@unique([organizationId, referenceNo])
   @@index([organizationId, workId, expenseDate])
   @@index([organizationId, expenseHeadId])
   @@map("expenses")
@@ -941,21 +971,74 @@ model Payable {
 // ---------------------------------------------------------------------------
 
 model Reminder {
-  id                String   @id @default(cuid())
-  organizationId    String
-  type              String
-  title             String
-  subtitle          String?
-  dueDate           DateTime
-  relatedEntityType String?
-  relatedEntityId   String?
-  isResolved        Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  organizationId       String
+  type                 String
+  title                String
+  description          String?
+  subtitle             String?
+  priority             String   @default("MEDIUM")
+  status               String   @default("UPCOMING")
+  dueDate              DateTime
+  dueTime              String?
+  assignedToUserId     String?
+  assignedToName       String?
+  sourceModule         String   @default("MANUAL")
+  sourceType           String?
+  sourceId             String?
+  relatedEntityType    String?
+  relatedEntityId      String?
+  relatedEntityName    String?
+  referenceNo          String?
+  organizationMasterId String?
+  organizationName     String?
+  notificationBefore   Int      @default(0)
+  repeatType           String   @default("NONE")
+  repeatConfig         Json?
+  remarks              String?
+  snoozedUntil         DateTime?
+  createdById          String?
+  createdByName        String?
+  completedById        String?
+  completedByName      String?
+  completedAt          DateTime?
+  cancelledAt          DateTime?
+  isResolved           Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@unique([organizationId, sourceModule, sourceId, type, dueDate])
+  @@index([organizationId, status, dueDate])
+  @@index([organizationId, assignedToUserId, dueDate])
+  @@map("reminders")
+}
+
+model Notification {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  type           String
+  title          String
+  message        String
+  reminderId     String?
+  sourceModule   String?
+  sourceType     String?
+  sourceId       String?
+  priority       String    @default("MEDIUM")
+  isRead         Boolean   @default(false)
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminder     Reminder?    @relation(fields: [reminderId], references: [id], onDelete: SetNull)
 
-  @@map("reminders")
+  @@unique([organizationId, userId, reminderId, type])
+  @@index([organizationId, userId, isRead, createdAt])
+  @@map("notifications")
 }
 
 model Document {
@@ -1018,4 +1101,356 @@ model AppSetting {
 
   @@unique([organizationId, key])
   @@map("app_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+model GeneralSetting {
+  id                      String   @id @default(cuid())
+  organizationId          String   @unique
+  companyDisplayName      String?
+  defaultCurrency         String   @default("BDT")
+  timezone                String   @default("Asia/Dhaka")
+  dateFormat              String   @default("DD/MM/YYYY")
+  numberFormat            String   @default("STANDARD")
+  financialYearStartMonth Int      @default(7)
+  defaultLanguage         String   @default("en")
+  country                 String   @default("Bangladesh")
+  defaultPageSize         Int      @default(10)
+  updatedById             String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("general_settings")
+}
+
+model CompanyProfile {
+  id                   String   @id @default(cuid())
+  organizationId       String   @unique
+  legalName            String?
+  displayName          String?
+  address              String?
+  phone                String?
+  email                String?
+  website              String?
+  tradeLicenseNo       String?
+  tinNumber            String?
+  binNumber            String?
+  registrationNumber   String?
+  signatoryName        String?
+  signatoryDesignation String?
+  logoMimeType         String?
+  logoData             Bytes?
+  signatureMimeType    String?
+  signatureData        Bytes?
+  sealMimeType         String?
+  sealData             Bytes?
+  updatedById          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("company_profiles")
+}
+
+model TenderBankSetting {
+  id                            String   @id @default(cuid())
+  organizationId                String   @unique
+  tenderValidityDays            Int      @default(90)
+  tenderOpeningReminderDays     Int      @default(7)
+  tenderExpiryReminderDays      Int      @default(7)
+  tsDefaultSecurityPct          Decimal  @default(2) @db.Decimal(8, 2)
+  tsDefaultMarginPct            Decimal  @default(10) @db.Decimal(8, 2)
+  tsDefaultValidityMonths       Int      @default(6)
+  tsExpiryReminderDays          Int      @default(15)
+  pgBgDefaultMarginPct          Decimal  @default(10) @db.Decimal(8, 2)
+  pgBgDefaultValidityMonths     Int      @default(12)
+  pgBgDefaultInterestRate       Decimal  @default(0) @db.Decimal(8, 2)
+  pgBgExpiryReminderDays        Int      @default(30)
+  pgBgMaturityReminderDays      Int      @default(15)
+  creditCommitmentDefaultCharge Decimal  @default(100) @db.Decimal(18, 2)
+  sdDefaultPct                  Decimal  @default(10) @db.Decimal(8, 2)
+  sdDefaultValidityMonths       Int      @default(12)
+  updatedById                   String?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("tender_bank_settings")
+}
+
+model FinanceSetting {
+  id                                     String   @id @default(cuid())
+  organizationId                         String   @unique
+  defaultCashAccountId                   String?
+  defaultPettyCashAccountId              String?
+  defaultBankChargeAccountId             String?
+  defaultReceivableAccountId             String?
+  defaultPayableAccountId                String?
+  defaultProjectRevenueAccountId         String?
+  defaultGeneralExpenseAccountId         String?
+  defaultTenderDocumentExpenseAccountId  String?
+  defaultCreditCommitmentChargeAccountId String?
+  autoPostApproved                       Boolean  @default(false)
+  requireApprovalBeforePosting           Boolean  @default(true)
+  allowBackdatedTransactions             Boolean  @default(true)
+  allowFutureDatedTransactions           Boolean  @default(false)
+  updatedById                            String?
+  createdAt                              DateTime @default(now())
+  updatedAt                              DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("finance_settings")
+}
+
+model AccountingPeriod {
+  id             String    @id @default(cuid())
+  organizationId String
+  label          String
+  startDate      DateTime
+  endDate        DateTime
+  status         String    @default("OPEN")
+  lockedById     String?
+  lockedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, label])
+  @@index([organizationId, startDate, endDate])
+  @@map("accounting_periods")
+}
+
+model NumberSequence {
+  id             String   @id @default(cuid())
+  organizationId String
+  moduleKey      String
+  prefix         String
+  includeYear    Boolean  @default(true)
+  yearFormat     String   @default("YYYY")
+  separator      String   @default("-")
+  sequenceLength Int      @default(4)
+  nextNumber     Int      @default(1)
+  lastYearUsed   Int?
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, moduleKey])
+  @@map("number_sequences")
+}
+
+model ReminderRuleSetting {
+  id              String   @id @default(cuid())
+  organizationId  String
+  reminderType    String
+  isEnabled       Boolean  @default(true)
+  defaultPriority String   @default("MEDIUM")
+  offsetDays      Int[]    @default([7])
+  inAppEnabled    Boolean  @default(true)
+  emailEnabled    Boolean  @default(false)
+  updatedById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, reminderType])
+  @@map("reminder_rule_settings")
+}
+
+model DocumentSetting {
+  id                        String   @id @default(cuid())
+  organizationId            String   @unique
+  allowedFileTypes          String[] @default(["PDF", "DOC", "DOCX", "XLS", "XLSX", "JPG", "JPEG", "PNG"])
+  maxFileSizeMb             Int      @default(10)
+  defaultExpiryReminderDays Int      @default(30)
+  enableVersionControl      Boolean  @default(false)
+  enableExpiryTracking      Boolean  @default(true)
+  autoArchiveExpired        Boolean  @default(false)
+  updatedById               String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("document_settings")
+}
+
+model ApprovalRule {
+  id               String   @id @default(cuid())
+  organizationId   String
+  module           String
+  transactionType  String?
+  minAmount        Decimal? @db.Decimal(18, 2)
+  maxAmount        Decimal? @db.Decimal(18, 2)
+  approvalRequired Boolean  @default(true)
+  approverRole     String
+  approvalLevel    Int      @default(1)
+  isActive         Boolean  @default(true)
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, module, isActive])
+  @@map("approval_rules")
+}
+
+model SecuritySetting {
+  id                         String   @id @default(cuid())
+  organizationId             String   @unique
+  minPasswordLength          Int      @default(8)
+  requireUppercase           Boolean  @default(true)
+  requireLowercase           Boolean  @default(true)
+  requireNumber              Boolean  @default(true)
+  requireSpecialChar         Boolean  @default(false)
+  sessionTimeoutMinutes      Int      @default(60)
+  maxFailedLoginAttempts     Int      @default(5)
+  accountLockDurationMinutes Int      @default(15)
+  forcePasswordChangeDays    Int?
+  twoFactorEnabled           Boolean  @default(false)
+  updatedById                String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("security_settings")
+}
+
+model SystemSetting {
+  id              String   @id @default(cuid())
+  organizationId  String   @unique
+  maintenanceMode Boolean  @default(false)
+  featureToggles  Json?
+  updatedById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("system_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Plan & Billing
+// ---------------------------------------------------------------------------
+
+model Plan {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  name           String
+  description    String?
+  monthlyPrice   Decimal  @db.Decimal(12, 2)
+  yearlyPrice    Decimal  @db.Decimal(12, 2)
+  currency       String   @default("BDT")
+  userLimit      Int?
+  projectLimit   Int?
+  storageLimitMb Int?
+  companyLimit   Int?
+  features       Json
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscriptions Subscription[]
+  invoices      Invoice[]
+
+  @@map("plans")
+}
+
+model BillingProfile {
+  id                 String   @id @default(cuid())
+  organizationId     String   @unique
+  billingName        String?
+  billingEmail       String?
+  phone              String?
+  billingAddress     String?
+  tinNumber          String?
+  binNumber          String?
+  paymentMethodType  String   @default("MANUAL")
+  paymentMethodLabel String?
+  paymentVerified    Boolean  @default(false)
+  updatedById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("billing_profiles")
+}
+
+model Invoice {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  subscriptionId     String
+  planId             String?
+  invoiceNumber      String
+  planNameSnapshot   String
+  billingCycle       String
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+  subtotal           Decimal  @db.Decimal(12, 2)
+  discount           Decimal  @default(0) @db.Decimal(12, 2)
+  tax                Decimal  @default(0) @db.Decimal(12, 2)
+  total              Decimal  @db.Decimal(12, 2)
+  currency           String   @default("BDT")
+  status             String   @default("PENDING")
+  issuedAt           DateTime @default(now())
+  dueAt              DateTime?
+  paidAt             DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription Subscription    @relation(fields: [subscriptionId], references: [id])
+  plan         Plan?           @relation(fields: [planId], references: [id])
+  items        InvoiceItem[]
+  payments     PaymentRecord[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId, issuedAt])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  description String
+  amount      Decimal  @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}
+
+model PaymentRecord {
+  id           String    @id @default(cuid())
+  invoiceId    String
+  amount       Decimal   @db.Decimal(12, 2)
+  method       String
+  reference    String?
+  status       String    @default("PENDING")
+  paidAt       DateTime?
+  verifiedById String?
+  createdAt    DateTime  @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("payment_records")
 }

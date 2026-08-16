@@ -1,5 +1,5 @@
-import { ComingSoonPage } from "@/components/layout/ComingSoonPage";
+import { PlanBillingPanel } from "@/components/plan-billing/PlanBillingPanel";
 
 export default function PlanBillingPage() {
-  return <ComingSoonPage title="Plan & Billing" breadcrumb={[{ label: "Plan & Billing" }]} />;
+  return <PlanBillingPanel />;
 }

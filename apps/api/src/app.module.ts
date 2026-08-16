@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import configuration from "./config/configuration";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
@@ -23,10 +24,26 @@ import { ReceiptsModule } from "./modules/receipts/receipts.module";
 import { CashBankModule } from "./modules/cash-bank/cash-bank.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { AccountingModule } from "./modules/accounting/accounting.module";
+import { RemindersModule } from "./modules/reminders/reminders.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { NumberingModule } from "./modules/settings-numbering/numbering.module";
+import { GeneralSettingsModule } from "./modules/settings-general/general-settings.module";
+import { CompanyProfileModule } from "./modules/settings-company/company-profile.module";
+import { UsersModule } from "./modules/users/users.module";
+import { RolesModule } from "./modules/roles/roles.module";
+import { TenderBankSettingsModule } from "./modules/settings-tender-bank/tender-bank-settings.module";
+import { FinanceSettingsModule } from "./modules/settings-finance/finance-settings.module";
+import { ReminderRuleModule } from "./modules/settings-notifications/reminder-rule.module";
+import { DocumentSettingsModule } from "./modules/settings-documents/document-settings.module";
+import { ApprovalRuleModule } from "./modules/settings-approvals/approval-rule.module";
+import { SecuritySettingsModule } from "./modules/settings-security/security-settings.module";
+import { SystemSettingsModule } from "./modules/settings-system/system-settings.module";
+import { BillingModule } from "./modules/billing/billing.module";
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuditLogModule,
     AuthModule,
@@ -43,7 +60,22 @@ import { AccountingModule } from "./modules/accounting/accounting.module";
     CashBankModule,
     ReportsModule,
     AccountingModule,
+    NotificationsModule,
+    RemindersModule,
     DashboardModule,
+    NumberingModule,
+    GeneralSettingsModule,
+    CompanyProfileModule,
+    UsersModule,
+    RolesModule,
+    TenderBankSettingsModule,
+    FinanceSettingsModule,
+    ReminderRuleModule,
+    DocumentSettingsModule,
+    ApprovalRuleModule,
+    SecuritySettingsModule,
+    SystemSettingsModule,
+    BillingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

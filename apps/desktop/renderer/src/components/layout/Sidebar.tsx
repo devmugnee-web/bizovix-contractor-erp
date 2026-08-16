@@ -16,6 +16,8 @@ function findActiveGroup(pathname: string): string | null {
 
 interface SidebarProps {
   remindersCount?: number;
+  trial?: { daysLeft: number; totalDays: number } | null;
+  onUpgradeClick?: () => void;
   collapsed?: boolean;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
@@ -23,6 +25,8 @@ interface SidebarProps {
 
 export function Sidebar({
   remindersCount = 0,
+  trial = null,
+  onUpgradeClick,
   collapsed = false,
   mobileOpen = false,
   onMobileClose,
@@ -90,9 +94,11 @@ export function Sidebar({
           <div className="my-3 border-t border-white/10" />
           <ul className="flex flex-col gap-1">{NAV_ITEMS_LOWER.map(renderItem)}</ul>
         </nav>
-        <div className="mx-3 mb-3">
-          <TrialCard daysLeft={30} />
-        </div>
+        {trial && (
+          <div className="mx-3 mb-3">
+            <TrialCard daysLeft={trial.daysLeft} totalDays={trial.totalDays} onUpgradeClick={onUpgradeClick} />
+          </div>
+        )}
         <div className="border-t border-white/10 px-3 py-3 text-center text-[11px] text-white/50">
           © 2024 Bizovix Contractor ERP
           <br />
