@@ -51,8 +51,12 @@ enum GuaranteeType {
 
 enum InstrumentStatus {
   ACTIVE
+  RELEASE_REQUESTED
   EXPIRED
   RELEASED
+  RETURNED
+  ENCASHED
+  CANCELLED
 }
 
 enum SecurityType {
@@ -80,9 +84,56 @@ enum PgBgWorkflowStatus {
 
 enum CmsWorkStatus {
   ONGOING
+  COMPLETION_PENDING
+  DLP
+  CLOSEOUT_PENDING
   COMPLETED
   ARCHIVED
   CANCELLED
+}
+
+enum CompletionCertificateStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum DlpStatus {
+  NOT_STARTED
+  ACTIVE
+  EXPIRED
+  COMPLETED
+  EXTENDED
+}
+
+enum DefectStatus {
+  OPEN
+  IN_PROGRESS
+  RECTIFIED
+  VERIFIED
+  CLOSED
+}
+
+enum RetentionReleaseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  RELEASED
+  CANCELLED
+}
+
+enum HandoverStatus {
+  DRAFT
+  SUBMITTED
+  COMPLETED
+  CANCELLED
+}
+
+enum HandoverType {
+  PROVISIONAL
+  FINAL
 }
 
 enum AccountType {
@@ -118,60 +169,66 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users                 OrganizationUser[]
-  roles                 Role[]
-  subscription          Subscription?
-  licenses              License[]
-  organizationMasters   OrganizationMaster[]
-  bankAccounts          BankAccount[]
-  tenders               Tender[]
-  documentPurchases     DocumentPurchase[]
-  tenderSecurities      TenderSecurity[]
-  creditCommitments     CreditCommitment[]
-  pgBgWorkflows         PgBgWorkflow[]
-  organizationContacts  OrganizationContact[]
-  cmsWorks              CmsWork[]
-  performanceGuarantees PerformanceGuarantee[]
-  expenses              Expense[]
-  expenseAttachments    ExpenseAttachment[]
-  expenseHeads          ExpenseHead[]
-  receipts              Receipt[]
-  receiptSequences      ReceiptSequence[]
-  reminders             Reminder[]
-  notifications         Notification[]
-  documents             Document[]
-  auditLogs             AuditLog[]
-  appSettings           AppSetting[]
-  monthlyTargets        MonthlyTarget[]
-  ledgerAccounts        LedgerAccount[]
-  journalEntries        JournalEntry[]
-  payables              Payable[]
-  financialTransactions FinancialTransaction[]
-  fundTransfers         FundTransfer[]
-  bankReconciliations   BankReconciliation[]
-  cheques               Cheque[]
-  generalSetting        GeneralSetting?
-  companyProfile        CompanyProfile?
-  tenderBankSetting     TenderBankSetting?
-  financeSetting        FinanceSetting?
-  accountingPeriods     AccountingPeriod[]
-  numberSequences       NumberSequence[]
-  reminderRuleSettings  ReminderRuleSetting[]
-  documentSetting       DocumentSetting?
-  approvalRules         ApprovalRule[]
-  securitySetting       SecuritySetting?
-  systemSetting         SystemSetting?
-  billingProfile        BillingProfile?
-  invoices              Invoice[]
-  projectContracts      ProjectContract[]
-  projectBudgets        ProjectBudget[]
-  boqSections           BoqSection[]
-  boqItems              BoqItem[]
-  projectBills          ProjectBill[]
-  receivables           Receivable[]
-  variationOrders       VariationOrder[]
-  timeExtensions        TimeExtension[]
-  deductionConfigs      DeductionConfig[]
+  users                  OrganizationUser[]
+  roles                  Role[]
+  subscription           Subscription?
+  licenses               License[]
+  organizationMasters    OrganizationMaster[]
+  bankAccounts           BankAccount[]
+  tenders                Tender[]
+  documentPurchases      DocumentPurchase[]
+  tenderSecurities       TenderSecurity[]
+  creditCommitments      CreditCommitment[]
+  pgBgWorkflows          PgBgWorkflow[]
+  organizationContacts   OrganizationContact[]
+  cmsWorks               CmsWork[]
+  performanceGuarantees  PerformanceGuarantee[]
+  expenses               Expense[]
+  expenseAttachments     ExpenseAttachment[]
+  expenseHeads           ExpenseHead[]
+  receipts               Receipt[]
+  receiptSequences       ReceiptSequence[]
+  reminders              Reminder[]
+  notifications          Notification[]
+  documents              Document[]
+  auditLogs              AuditLog[]
+  appSettings            AppSetting[]
+  monthlyTargets         MonthlyTarget[]
+  ledgerAccounts         LedgerAccount[]
+  journalEntries         JournalEntry[]
+  payables               Payable[]
+  financialTransactions  FinancialTransaction[]
+  fundTransfers          FundTransfer[]
+  bankReconciliations    BankReconciliation[]
+  cheques                Cheque[]
+  generalSetting         GeneralSetting?
+  companyProfile         CompanyProfile?
+  tenderBankSetting      TenderBankSetting?
+  financeSetting         FinanceSetting?
+  accountingPeriods      AccountingPeriod[]
+  numberSequences        NumberSequence[]
+  reminderRuleSettings   ReminderRuleSetting[]
+  documentSetting        DocumentSetting?
+  approvalRules          ApprovalRule[]
+  securitySetting        SecuritySetting?
+  systemSetting          SystemSetting?
+  billingProfile         BillingProfile?
+  invoices               Invoice[]
+  projectContracts       ProjectContract[]
+  projectBudgets         ProjectBudget[]
+  boqSections            BoqSection[]
+  boqItems               BoqItem[]
+  projectBills           ProjectBill[]
+  receivables            Receivable[]
+  variationOrders        VariationOrder[]
+  timeExtensions         TimeExtension[]
+  deductionConfigs       DeductionConfig[]
+  completionCertificates CompletionCertificate[]
+  defectLiabilityPeriods DefectLiabilityPeriod[]
+  defects                DlpDefect[]
+  retentionReleases      RetentionRelease[]
+  projectHandovers       ProjectHandover[]
+  projectClosureEvents   ProjectClosureEvent[]
 
   @@map("organizations")
 }
@@ -341,23 +398,23 @@ model OrganizationMaster {
 }
 
 model BankAccount {
-  id             String      @id @default(cuid())
-  organizationId String
-  accountName    String
-  accountType    AccountType
-  bankName       String?
-  accountNumber  String?
-  branch         String?
-  routingNumber  String?
-  bankAccountType String?
-  openingBalance Decimal     @default(0) @db.Decimal(18, 2)
+  id                 String      @id @default(cuid())
+  organizationId     String
+  accountName        String
+  accountType        AccountType
+  bankName           String?
+  accountNumber      String?
+  branch             String?
+  routingNumber      String?
+  bankAccountType    String?
+  openingBalance     Decimal     @default(0) @db.Decimal(18, 2)
   openingBalanceDate DateTime?
-  currency       String      @default("BDT")
-  remarks        String?
-  isActive       Boolean     @default(true)
-  currentBalance Decimal     @default(0) @db.Decimal(18, 2)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  currency           String      @default("BDT")
+  remarks            String?
+  isActive           Boolean     @default(true)
+  currentBalance     Decimal     @default(0) @db.Decimal(18, 2)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   organization             Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   documentPurchases        DocumentPurchase[]
@@ -369,8 +426,8 @@ model BankAccount {
   projectExpenses          Expense[]
   receipts                 Receipt[]
   financialTransactions    FinancialTransaction[]
-  outgoingTransfers        FundTransfer[] @relation("TransferFrom")
-  incomingTransfers        FundTransfer[] @relation("TransferTo")
+  outgoingTransfers        FundTransfer[]         @relation("TransferFrom")
+  incomingTransfers        FundTransfer[]         @relation("TransferTo")
   reconciliations          BankReconciliation[]
   cheques                  Cheque[]
   ledgerAccounts           LedgerAccount[]
@@ -485,28 +542,28 @@ model Tender {
   description                   String?
 
   // Submission (section 5.1)
-  submissionDate       DateTime?
-  submissionMethod     String?
-  quotedAmount         Decimal?  @db.Decimal(18, 2)
-  submittedById        String?
-  submittedByName      String?
-  submissionReference  String?
-  checklistStatus      String?
-  submissionRemarks    String?
-  submittedAt          DateTime?
+  submissionDate      DateTime?
+  submissionMethod    String?
+  quotedAmount        Decimal?  @db.Decimal(18, 2)
+  submittedById       String?
+  submittedByName     String?
+  submissionReference String?
+  checklistStatus     String?
+  submissionRemarks   String?
+  submittedAt         DateTime?
 
   // Opening / Result (section 5.2) — status transitions reuse the TenderStatus enum
   // (UNDER_PROCESS is surfaced to users as "Under Evaluation", REJECTED as "Unsuccessful")
   // rather than introducing a second, duplicate result-status field.
-  openingResult        String?
-  lowestBidAmount      Decimal?  @db.Decimal(18, 2)
-  lowestBidder         String?
-  resultRemarks        String?
-  awardedAt            DateTime?
+  openingResult   String?
+  lowestBidAmount Decimal?  @db.Decimal(18, 2)
+  lowestBidder    String?
+  resultRemarks   String?
+  awardedAt       DateTime?
 
-  createdById          String?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
@@ -691,6 +748,11 @@ model PerformanceGuarantee {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   pgBgWorkflowId       String?          @unique
+  releaseRequestDate   DateTime?
+  releaseDate          DateTime?
+  releaseReference     String?
+  bankConfirmation     String?
+  releaseRemarks       String?
 
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tender             Tender?             @relation(fields: [tenderId], references: [id])
@@ -773,24 +835,30 @@ model CmsWork {
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
-  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tender             Tender?            @relation(fields: [tenderId], references: [id])
-  documentPurchase   DocumentPurchase?  @relation(fields: [documentPurchaseId], references: [id])
-  pgBgWorkflow       PgBgWorkflow?      @relation(fields: [pgBgWorkflowId], references: [id])
-  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
-  projectExpenses    Expense[]
-  receipts           Receipt[]
-  journalLines       JournalLine[]
-  payables           Payable[]
-  documents          Document[]
-  contracts          ProjectContract[]
-  budgets            ProjectBudget[]
-  boqSections        BoqSection[]
-  boqItems           BoqItem[]
-  bills              ProjectBill[]
-  variationOrders    VariationOrder[]
-  timeExtensions     TimeExtension[]
-  receivables        Receivable[]
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender                 Tender?                 @relation(fields: [tenderId], references: [id])
+  documentPurchase       DocumentPurchase?       @relation(fields: [documentPurchaseId], references: [id])
+  pgBgWorkflow           PgBgWorkflow?           @relation(fields: [pgBgWorkflowId], references: [id])
+  organizationMaster     OrganizationMaster      @relation(fields: [organizationMasterId], references: [id])
+  projectExpenses        Expense[]
+  receipts               Receipt[]
+  journalLines           JournalLine[]
+  payables               Payable[]
+  documents              Document[]
+  contracts              ProjectContract[]
+  budgets                ProjectBudget[]
+  boqSections            BoqSection[]
+  boqItems               BoqItem[]
+  bills                  ProjectBill[]
+  variationOrders        VariationOrder[]
+  timeExtensions         TimeExtension[]
+  receivables            Receivable[]
+  completionCertificates CompletionCertificate[]
+  defectLiabilityPeriods DefectLiabilityPeriod[]
+  defects                DlpDefect[]
+  retentionReleases      RetentionRelease[]
+  handovers              ProjectHandover[]
+  closureEvents          ProjectClosureEvent[]
 
   @@index([organizationId, status])
   @@index([organizationId, status, completionDate])
@@ -803,21 +871,21 @@ model CmsWork {
 // ---------------------------------------------------------------------------
 
 model ProjectContract {
-  id                   String         @id @default(cuid())
+  id                   String  @id @default(cuid())
   organizationId       String
   tenderId             String?
   cmsWorkId            String
   pgBgWorkflowId       String?
   organizationMasterId String
 
-  contractNo     String
-  contractType   ContractType @default(WORK_ORDER)
-  issueDate      DateTime
-  contractDate   DateTime?
+  contractNo   String
+  contractType ContractType @default(WORK_ORDER)
+  issueDate    DateTime
+  contractDate DateTime?
 
-  originalContractValue Decimal  @db.Decimal(18, 2)
-  currentContractValue  Decimal  @db.Decimal(18, 2)
-  currency              String   @default("BDT")
+  originalContractValue Decimal @db.Decimal(18, 2)
+  currentContractValue  Decimal @db.Decimal(18, 2)
+  currency              String  @default("BDT")
 
   commencementDate       DateTime
   originalCompletionDate DateTime
@@ -838,16 +906,20 @@ model ProjectContract {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tender             Tender?            @relation(fields: [tenderId], references: [id])
-  cmsWork            CmsWork            @relation(fields: [cmsWorkId], references: [id])
-  pgBgWorkflow       PgBgWorkflow?      @relation(fields: [pgBgWorkflowId], references: [id])
-  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
-  documents          Document[]
-  bills              ProjectBill[]
-  variationOrders    VariationOrder[]
-  timeExtensions     TimeExtension[]
-  receivables        Receivable[]
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender                 Tender?                 @relation(fields: [tenderId], references: [id])
+  cmsWork                CmsWork                 @relation(fields: [cmsWorkId], references: [id])
+  pgBgWorkflow           PgBgWorkflow?           @relation(fields: [pgBgWorkflowId], references: [id])
+  organizationMaster     OrganizationMaster      @relation(fields: [organizationMasterId], references: [id])
+  documents              Document[]
+  bills                  ProjectBill[]
+  variationOrders        VariationOrder[]
+  timeExtensions         TimeExtension[]
+  receivables            Receivable[]
+  completionCertificates CompletionCertificate[]
+  defectLiabilityPeriods DefectLiabilityPeriod[]
+  retentionReleases      RetentionRelease[]
+  handovers              ProjectHandover[]
 
   @@unique([organizationId, contractNo])
   @@index([organizationId, status])
@@ -942,9 +1014,9 @@ model BoqItem {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  cmsWork      CmsWork      @relation(fields: [cmsWorkId], references: [id])
-  section      BoqSection?  @relation(fields: [sectionId], references: [id])
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork        CmsWork           @relation(fields: [cmsWorkId], references: [id])
+  section        BoqSection?       @relation(fields: [sectionId], references: [id])
   billItems      ProjectBillItem[]
   variationItems VariationItem[]
 
@@ -958,46 +1030,46 @@ model BoqItem {
 // ---------------------------------------------------------------------------
 
 model ProjectBill {
-  id             String     @id @default(cuid())
+  id             String @id @default(cuid())
   organizationId String
   cmsWorkId      String
   contractId     String
 
-  billNo      String
-  billType    BillType   @default(RUNNING)
-  billDate    DateTime
-  periodFrom  DateTime?
-  periodTo    DateTime?
+  billNo     String
+  billType   BillType  @default(RUNNING)
+  billDate   DateTime
+  periodFrom DateTime?
+  periodTo   DateTime?
 
-  submissionDate      DateTime?
-  certificationDate   DateTime?
+  submissionDate       DateTime?
+  certificationDate    DateTime?
   clientCertificateRef String?
   measurementBookRef   String?
   remarks              String?
 
   /// Sum of item currentValue (backend-calculated from BOQ qty x approved rate).
-  grossWorkValue       Decimal @default(0) @db.Decimal(18, 2)
+  grossWorkValue    Decimal @default(0) @db.Decimal(18, 2)
   /// Sum of BillAdjustment rows with direction=ADDITION.
-  approvedAdditions    Decimal @default(0) @db.Decimal(18, 2)
+  approvedAdditions Decimal @default(0) @db.Decimal(18, 2)
   /// grossWorkValue + approvedAdditions.
-  grossBillAmount      Decimal @default(0) @db.Decimal(18, 2)
+  grossBillAmount   Decimal @default(0) @db.Decimal(18, 2)
 
   /// Snapshotted at certification time — later DeductionConfig changes never retroactively
   /// change an already-certified bill.
-  retentionPct         Decimal? @db.Decimal(5, 2)
-  retentionAmount      Decimal  @default(0) @db.Decimal(18, 2)
-  retentionReleasedAmount Decimal @default(0) @db.Decimal(18, 2)
+  retentionPct            Decimal?  @db.Decimal(5, 2)
+  retentionAmount         Decimal   @default(0) @db.Decimal(18, 2)
+  retentionReleasedAmount Decimal   @default(0) @db.Decimal(18, 2)
   retentionReleaseDueDate DateTime?
-  vatRate              Decimal? @db.Decimal(8, 4)
-  vatAmount            Decimal  @default(0) @db.Decimal(18, 2)
-  aitRate              Decimal? @db.Decimal(8, 4)
-  aitAmount            Decimal  @default(0) @db.Decimal(18, 2)
+  vatRate                 Decimal?  @db.Decimal(8, 4)
+  vatAmount               Decimal   @default(0) @db.Decimal(18, 2)
+  aitRate                 Decimal?  @db.Decimal(8, 4)
+  aitAmount               Decimal   @default(0) @db.Decimal(18, 2)
   /// Sum of BillAdjustment rows with direction=DEDUCTION (advance recovery, other deductions).
-  otherDeductionAmount Decimal  @default(0) @db.Decimal(18, 2)
+  otherDeductionAmount    Decimal   @default(0) @db.Decimal(18, 2)
 
-  netCertifiedAmount   Decimal @default(0) @db.Decimal(18, 2)
+  netCertifiedAmount Decimal @default(0) @db.Decimal(18, 2)
   /// Denormalized cache kept in sync by Receipt allocation — authoritative value lives on Receivable.
-  receivedAmount       Decimal @default(0) @db.Decimal(18, 2)
+  receivedAmount     Decimal @default(0) @db.Decimal(18, 2)
 
   status        BillStatus @default(DRAFT)
   createdById   String?
@@ -1021,9 +1093,9 @@ model ProjectBill {
 }
 
 model ProjectBillItem {
-  id         String @id @default(cuid())
-  billId     String
-  boqItemId  String
+  id        String @id @default(cuid())
+  billId    String
+  boqItemId String
 
   /// Snapshots of the BOQ item at billing time — historical bills stay reproducible even if
   /// the BOQ item is later edited or revised by a Variation.
@@ -1048,7 +1120,7 @@ model ProjectBillItem {
 }
 
 model BillAdjustment {
-  id          String @id @default(cuid())
+  id          String              @id @default(cuid())
   billId      String
   /// Free string, not an enum — the exact set of adjustment kinds a company uses is
   /// configurable, not a fixed universal list. UI offers a suggested list.
@@ -1063,10 +1135,10 @@ model BillAdjustment {
   amount          Decimal           @db.Decimal(18, 2)
 
   ledgerAccountId String?
-  sortOrder       Int     @default(0)
+  sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
 
-  bill          ProjectBill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+  bill          ProjectBill    @relation(fields: [billId], references: [id], onDelete: Cascade)
   ledgerAccount LedgerAccount? @relation(fields: [ledgerAccountId], references: [id])
 
   @@index([billId])
@@ -1074,23 +1146,23 @@ model BillAdjustment {
 }
 
 model Receivable {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   organizationId String
   projectId      String
   contractId     String?
-  projectBillId  String?  @unique
+  projectBillId  String? @unique
 
   partyName      String
   billNo         String
   billDate       DateTime
-  amount         Decimal  @default(0) @db.Decimal(18, 2)
-  receivedAmount Decimal  @default(0) @db.Decimal(18, 2)
+  amount         Decimal   @default(0) @db.Decimal(18, 2)
+  receivedAmount Decimal   @default(0) @db.Decimal(18, 2)
   dueDate        DateTime?
   description    String?
-  status         String   @default("OUTSTANDING")
+  status         String    @default("OUTSTANDING")
   createdById    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      CmsWork          @relation(fields: [projectId], references: [id])
@@ -1105,7 +1177,7 @@ model Receivable {
 }
 
 model VariationOrder {
-  id             String        @id @default(cuid())
+  id             String @id @default(cuid())
   organizationId String
   cmsWorkId      String
   contractId     String
@@ -1121,11 +1193,11 @@ model VariationOrder {
   requestedAmount Decimal  @db.Decimal(18, 2)
   approvedAmount  Decimal? @db.Decimal(18, 2)
 
-  status      VariationStatus @default(DRAFT)
-  createdById String?
+  status       VariationStatus @default(DRAFT)
+  createdById  String?
   approvedById String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   cmsWork      CmsWork         @relation(fields: [cmsWorkId], references: [id])
@@ -1139,7 +1211,7 @@ model VariationOrder {
 }
 
 model VariationItem {
-  id               String   @id @default(cuid())
+  id               String  @id @default(cuid())
   variationOrderId String
   boqItemId        String?
   itemCode         String?
@@ -1194,6 +1266,190 @@ model TimeExtension {
   @@unique([organizationId, eotNo])
   @@index([organizationId, cmsWorkId, status])
   @@map("time_extensions")
+}
+
+model CompletionCertificate {
+  id                      String                      @id @default(cuid())
+  organizationId          String
+  workId                  String
+  contractId              String
+  certificateNo           String
+  completionType          String                      @default("FINAL")
+  applicationDate         DateTime
+  actualCompletionDate    DateTime
+  certifiedCompletionDate DateTime?
+  issuingAuthority        String?
+  certificateDate         DateTime?
+  remarks                 String?
+  status                  CompletionCertificateStatus @default(DRAFT)
+  createdById             String?
+  approvedById            String?
+  approvedAt              DateTime?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  work         CmsWork                @relation(fields: [workId], references: [id])
+  contract     ProjectContract        @relation(fields: [contractId], references: [id])
+  dlp          DefectLiabilityPeriod?
+  handovers    ProjectHandover[]
+  documents    Document[]
+
+  @@unique([organizationId, certificateNo])
+  @@index([organizationId, workId, status])
+  @@map("completion_certificates")
+}
+
+model DefectLiabilityPeriod {
+  id                      String    @id @default(cuid())
+  organizationId          String
+  workId                  String
+  contractId              String
+  completionCertificateId String    @unique
+  startDate               DateTime
+  endDate                 DateTime
+  durationDays            Int
+  status                  DlpStatus @default(NOT_STARTED)
+  remarks                 String?
+  createdById             String?
+  completedById           String?
+  completedAt             DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  work                  CmsWork               @relation(fields: [workId], references: [id])
+  contract              ProjectContract       @relation(fields: [contractId], references: [id])
+  completionCertificate CompletionCertificate @relation(fields: [completionCertificateId], references: [id])
+  extensions            DlpExtension[]
+  defects               DlpDefect[]
+  documents             Document[]
+
+  @@index([organizationId, status, endDate])
+  @@index([organizationId, workId])
+  @@map("defect_liability_periods")
+}
+
+model DlpExtension {
+  id              String                @id @default(cuid())
+  dlpId           String
+  previousEndDate DateTime
+  revisedEndDate  DateTime
+  extensionDays   Int
+  reason          String
+  approvedById    String
+  approvedAt      DateTime              @default(now())
+  createdAt       DateTime              @default(now())
+  dlp             DefectLiabilityPeriod @relation(fields: [dlpId], references: [id], onDelete: Cascade)
+
+  @@index([dlpId])
+  @@map("dlp_extensions")
+}
+
+model DlpDefect {
+  id                      String                @id @default(cuid())
+  organizationId          String
+  dlpId                   String
+  workId                  String
+  defectNo                String
+  description             String
+  reportedDate            DateTime
+  reportedBy              String?
+  responsiblePerson       String?
+  targetRectificationDate DateTime?
+  rectifiedDate           DateTime?
+  status                  DefectStatus          @default(OPEN)
+  mandatory               Boolean               @default(true)
+  remarks                 String?
+  createdById             String?
+  verifiedById            String?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  organization            Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dlp                     DefectLiabilityPeriod @relation(fields: [dlpId], references: [id])
+  work                    CmsWork               @relation(fields: [workId], references: [id])
+  documents               Document[]
+
+  @@unique([organizationId, defectNo])
+  @@index([organizationId, workId, status])
+  @@map("dlp_defects")
+}
+
+model RetentionRelease {
+  id             String                 @id @default(cuid())
+  organizationId String
+  workId         String
+  contractId     String
+  releaseNo      String
+  amount         Decimal                @db.Decimal(18, 2)
+  releaseDueDate DateTime?
+  releaseDate    DateTime?
+  reference      String?
+  remarks        String?
+  status         RetentionReleaseStatus @default(DRAFT)
+  createdById    String?
+  approvedById   String?
+  releasedById   String?
+  journalEntryId String?                @unique
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  work           CmsWork                @relation(fields: [workId], references: [id])
+  contract       ProjectContract        @relation(fields: [contractId], references: [id])
+  journalEntry   JournalEntry?          @relation(fields: [journalEntryId], references: [id])
+  documents      Document[]
+
+  @@unique([organizationId, releaseNo])
+  @@index([organizationId, workId, status])
+  @@map("retention_releases")
+}
+
+model ProjectHandover {
+  id                      String                 @id @default(cuid())
+  organizationId          String
+  workId                  String
+  contractId              String
+  completionCertificateId String?
+  handoverNo              String
+  handoverType            HandoverType           @default(FINAL)
+  handoverDate            DateTime
+  handedOverBy            String
+  receivedBy              String
+  authority               String
+  remarks                 String?
+  status                  HandoverStatus         @default(DRAFT)
+  createdById             String?
+  completedById           String?
+  completedAt             DateTime?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  work                    CmsWork                @relation(fields: [workId], references: [id])
+  contract                ProjectContract        @relation(fields: [contractId], references: [id])
+  completionCertificate   CompletionCertificate? @relation(fields: [completionCertificateId], references: [id])
+  documents               Document[]
+
+  @@unique([organizationId, handoverNo])
+  @@index([organizationId, workId, status])
+  @@map("project_handovers")
+}
+
+model ProjectClosureEvent {
+  id             String        @id @default(cuid())
+  organizationId String
+  workId         String
+  action         String
+  reason         String?
+  overrideReason String?
+  previousStatus CmsWorkStatus
+  newStatus      CmsWorkStatus
+  performedById  String
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  work           CmsWork       @relation(fields: [workId], references: [id])
+
+  @@index([organizationId, workId, createdAt])
+  @@map("project_closure_events")
 }
 
 model DeductionConfig {
@@ -1289,35 +1545,35 @@ model ExpenseHead {
 }
 
 model Receipt {
-  id             String        @id @default(cuid())
-  organizationId String
-  tenderId       String?
-  workId         String?
-  receiptNo      String?
-  receiptCategory String       @default("GENERAL")
-  receiptType    String        @default("GENERAL_RECEIPT")
-  receivedFrom   String        @default("Unknown")
+  id                  String        @id @default(cuid())
+  organizationId      String
+  tenderId            String?
+  workId              String?
+  receiptNo           String?
+  receiptCategory     String        @default("GENERAL")
+  receiptType         String        @default("GENERAL_RECEIPT")
+  receivedFrom        String        @default("Unknown")
   receivedInAccountId String?
-  paymentMethod  String        @default("CASH")
-  referenceNo    String?
-  description    String?
-  amount         Decimal       @db.Decimal(18, 2)
-  receiptDate    DateTime
-  dueDate        DateTime?
-  status         ReceiptStatus @default(PENDING)
+  paymentMethod       String        @default("CASH")
+  referenceNo         String?
+  description         String?
+  amount              Decimal       @db.Decimal(18, 2)
+  receiptDate         DateTime
+  dueDate             DateTime?
+  status              ReceiptStatus @default(PENDING)
   /// Optional link to a specific Receivable (usually from a certified ProjectBill) this
   /// receipt is allocated against — enables per-bill outstanding tracking and over-receipt
   /// prevention instead of only a loose project-level total.
-  receivableId   String?
-  createdById    String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  receivableId        String?
+  createdById         String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tender       Tender?      @relation(fields: [tenderId], references: [id])
-  work         CmsWork?     @relation(fields: [workId], references: [id])
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender            Tender?      @relation(fields: [tenderId], references: [id])
+  work              CmsWork?     @relation(fields: [workId], references: [id])
   receivedInAccount BankAccount? @relation(fields: [receivedInAccountId], references: [id])
-  receivable   Receivable?  @relation(fields: [receivableId], references: [id])
+  receivable        Receivable?  @relation(fields: [receivableId], references: [id])
 
   @@unique([organizationId, receiptNo])
   @@index([organizationId, receiptDate])
@@ -1339,25 +1595,25 @@ model ReceiptSequence {
 }
 
 model FinancialTransaction {
-  id             String   @id @default(cuid())
-  organizationId String
-  transactionNo  String
-  accountId      String
-  direction      String
-  amount         Decimal  @db.Decimal(18, 2)
-  balanceAfter   Decimal  @db.Decimal(18, 2)
-  sourceModule   String
-  sourceType     String
-  sourceId       String
-  referenceNo    String?
-  description    String
+  id              String   @id @default(cuid())
+  organizationId  String
+  transactionNo   String
+  accountId       String
+  direction       String
+  amount          Decimal  @db.Decimal(18, 2)
+  balanceAfter    Decimal  @db.Decimal(18, 2)
+  sourceModule    String
+  sourceType      String
+  sourceId        String
+  referenceNo     String?
+  description     String
   transactionDate DateTime
-  status         String   @default("POSTED")
-  createdById    String?
-  createdAt      DateTime @default(now())
+  status          String   @default("POSTED")
+  createdById     String?
+  createdAt       DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  account      BankAccount @relation(fields: [accountId], references: [id])
+  account      BankAccount  @relation(fields: [accountId], references: [id])
 
   @@unique([organizationId, transactionNo])
   @@unique([organizationId, sourceModule, sourceType, sourceId, accountId, direction])
@@ -1382,8 +1638,8 @@ model FundTransfer {
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  fromAccount  BankAccount @relation("TransferFrom", fields: [fromAccountId], references: [id])
-  toAccount    BankAccount @relation("TransferTo", fields: [toAccountId], references: [id])
+  fromAccount  BankAccount  @relation("TransferFrom", fields: [fromAccountId], references: [id])
+  toAccount    BankAccount  @relation("TransferTo", fields: [toAccountId], references: [id])
 
   @@unique([organizationId, transferNo])
   @@index([organizationId, transferDate])
@@ -1391,28 +1647,28 @@ model FundTransfer {
 }
 
 model BankReconciliation {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   organizationId   String
-  accountId         String
+  accountId        String
   statementFrom    DateTime
   statementTo      DateTime
-  erpBalance        Decimal  @db.Decimal(18, 2)
-  statementBalance  Decimal  @db.Decimal(18, 2)
-  difference        Decimal  @db.Decimal(18, 2)
-  status             String   @default("IN_PROGRESS")
-  reconciledById     String?
-  reconciledAt       DateTime?
-  createdAt          DateTime @default(now())
+  erpBalance       Decimal   @db.Decimal(18, 2)
+  statementBalance Decimal   @db.Decimal(18, 2)
+  difference       Decimal   @db.Decimal(18, 2)
+  status           String    @default("IN_PROGRESS")
+  reconciledById   String?
+  reconciledAt     DateTime?
+  createdAt        DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  account      BankAccount @relation(fields: [accountId], references: [id])
+  account      BankAccount  @relation(fields: [accountId], references: [id])
 
   @@index([organizationId, accountId, statementTo])
   @@map("bank_reconciliations")
 }
 
 model Cheque {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   chequeNo       String
   type           String
@@ -1420,16 +1676,16 @@ model Cheque {
   bankName       String
   branch         String?
   party          String
-  amount         Decimal  @db.Decimal(18, 2)
+  amount         Decimal   @db.Decimal(18, 2)
   chequeDate     DateTime
   actionDate     DateTime?
   referenceNo    String?
-  status         String   @default("PENDING")
+  status         String    @default("PENDING")
   remarks        String?
   postedAt       DateTime?
   createdById    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   account      BankAccount? @relation(fields: [accountId], references: [id])
@@ -1458,11 +1714,11 @@ model LedgerAccount {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parent       LedgerAccount? @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children     LedgerAccount[] @relation("AccountHierarchy")
-  bankAccount  BankAccount? @relation(fields: [linkedBankAccountId], references: [id])
-  journalLines JournalLine[]
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent          LedgerAccount?   @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children        LedgerAccount[]  @relation("AccountHierarchy")
+  bankAccount     BankAccount?     @relation(fields: [linkedBankAccountId], references: [id])
+  journalLines    JournalLine[]
   billAdjustments BillAdjustment[]
 
   @@unique([organizationId, code])
@@ -1473,7 +1729,7 @@ model LedgerAccount {
 }
 
 model JournalEntry {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   journalNo      String
   journalDate    DateTime
@@ -1482,18 +1738,19 @@ model JournalEntry {
   sourceModule   String
   sourceType     String
   sourceId       String
-  status         String   @default("DRAFT")
+  status         String    @default("DRAFT")
   reversalOfId   String?
   createdById    String?
   postedById     String?
   postedAt       DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lines        JournalLine[]
-  reversalOf   JournalEntry? @relation("JournalReversal", fields: [reversalOfId], references: [id])
-  reversals    JournalEntry[] @relation("JournalReversal")
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lines             JournalLine[]
+  reversalOf        JournalEntry?      @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversals         JournalEntry[]     @relation("JournalReversal")
+  retentionReleases RetentionRelease[]
 
   @@unique([organizationId, journalNo])
   @@unique([organizationId, sourceModule, sourceType, sourceId])
@@ -1514,9 +1771,9 @@ model JournalLine {
   description    String?
   createdAt      DateTime @default(now())
 
-  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  journalEntry JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
   account      LedgerAccount @relation(fields: [accountId], references: [id])
-  project      CmsWork? @relation(fields: [projectId], references: [id])
+  project      CmsWork?      @relation(fields: [projectId], references: [id])
 
   @@index([accountId, journalEntryId])
   @@index([projectId, journalEntryId])
@@ -1525,24 +1782,24 @@ model JournalLine {
 }
 
 model Payable {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   partyName      String
-  partyType      String   @default("VENDOR")
+  partyType      String    @default("VENDOR")
   projectId      String?
   billNo         String
   billDate       DateTime
-  amount         Decimal  @db.Decimal(18, 2)
-  paidAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  amount         Decimal   @db.Decimal(18, 2)
+  paidAmount     Decimal   @default(0) @db.Decimal(18, 2)
   dueDate        DateTime?
   description    String?
-  status         String   @default("UNPAID")
+  status         String    @default("UNPAID")
   createdById    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      CmsWork? @relation(fields: [projectId], references: [id])
+  project      CmsWork?     @relation(fields: [projectId], references: [id])
 
   @@unique([organizationId, billNo])
   @@index([organizationId, status, dueDate])
@@ -1555,19 +1812,19 @@ model Payable {
 // ---------------------------------------------------------------------------
 
 model Reminder {
-  id                   String   @id @default(cuid())
+  id                   String    @id @default(cuid())
   organizationId       String
   type                 String
   title                String
   description          String?
   subtitle             String?
-  priority             String   @default("MEDIUM")
-  status               String   @default("UPCOMING")
+  priority             String    @default("MEDIUM")
+  status               String    @default("UPCOMING")
   dueDate              DateTime
   dueTime              String?
   assignedToUserId     String?
   assignedToName       String?
-  sourceModule         String   @default("MANUAL")
+  sourceModule         String    @default("MANUAL")
   sourceType           String?
   sourceId             String?
   relatedEntityType    String?
@@ -1576,8 +1833,8 @@ model Reminder {
   referenceNo          String?
   organizationMasterId String?
   organizationName     String?
-  notificationBefore   Int      @default(0)
-  repeatType           String   @default("NONE")
+  notificationBefore   Int       @default(0)
+  repeatType           String    @default("NONE")
   repeatConfig         Json?
   remarks              String?
   snoozedUntil         DateTime?
@@ -1587,9 +1844,9 @@ model Reminder {
   completedByName      String?
   completedAt          DateTime?
   cancelledAt          DateTime?
-  isResolved           Boolean  @default(false)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  isResolved           Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   notifications Notification[]
@@ -1626,60 +1883,70 @@ model Notification {
 }
 
 model Document {
-  id                   String    @id @default(cuid())
-  organizationId       String
-  name                 String
-  category             String?
-  documentType         String?
-  relatedModule        String?
-  relatedEntityId      String?
-  relatedEntityName    String?
-  tenderId             String?
-  workId               String?
-  contractId           String?
-  projectBillId        String?
-  variationOrderId     String?
-  timeExtensionId      String?
-  organizationMasterId String?
-  referenceNumber      String?
-  certificateNumber    String?
-  issuingAuthority     String?
-  account              String?
-  amount               Decimal?  @db.Decimal(18, 2)
-  issueDate            DateTime?
-  expiryDate           DateTime?
-  reminderDays         Int?
-  responsiblePerson    String?
-  description          String?
-  tags                 String[] @default([])
+  id                      String    @id @default(cuid())
+  organizationId          String
+  name                    String
+  category                String?
+  documentType            String?
+  relatedModule           String?
+  relatedEntityId         String?
+  relatedEntityName       String?
+  tenderId                String?
+  workId                  String?
+  contractId              String?
+  projectBillId           String?
+  variationOrderId        String?
+  timeExtensionId         String?
+  completionCertificateId String?
+  dlpId                   String?
+  defectId                String?
+  retentionReleaseId      String?
+  projectHandoverId       String?
+  organizationMasterId    String?
+  referenceNumber         String?
+  certificateNumber       String?
+  issuingAuthority        String?
+  account                 String?
+  amount                  Decimal?  @db.Decimal(18, 2)
+  issueDate               DateTime?
+  expiryDate              DateTime?
+  reminderDays            Int?
+  responsiblePerson       String?
+  description             String?
+  tags                    String[]  @default([])
   /// ACTIVE | DRAFT | RENEWED | ARCHIVED
-  status               String    @default("ACTIVE")
-  fileUrl              String?
-  fileName             String?
-  fileType             String?
-  fileSize             Int?
+  status                  String    @default("ACTIVE")
+  fileUrl                 String?
+  fileName                String?
+  fileType                String?
+  fileSize                Int?
   /// Key/path in the DocumentStorageService adapter — never raw file bytes in Postgres.
-  storageKey           String?
-  currentVersion       Int       @default(1)
-  uploadedById         String?
-  uploadedByName       String?
-  archivedAt           DateTime?
-  archivedById         String?
-  archivedByName       String?
-  archiveReason        String?
-  createdById          String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  storageKey              String?
+  currentVersion          Int       @default(1)
+  uploadedById            String?
+  uploadedByName          String?
+  archivedAt              DateTime?
+  archivedById            String?
+  archivedByName          String?
+  archiveReason           String?
+  createdById             String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tender             Tender?             @relation(fields: [tenderId], references: [id])
-  work               CmsWork?            @relation(fields: [workId], references: [id])
-  contract           ProjectContract?    @relation(fields: [contractId], references: [id])
-  projectBill        ProjectBill?        @relation(fields: [projectBillId], references: [id])
-  variationOrder     VariationOrder?     @relation(fields: [variationOrderId], references: [id])
-  timeExtension      TimeExtension?      @relation(fields: [timeExtensionId], references: [id])
-  organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
-  versions           DocumentVersion[]
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender                Tender?                @relation(fields: [tenderId], references: [id])
+  work                  CmsWork?               @relation(fields: [workId], references: [id])
+  contract              ProjectContract?       @relation(fields: [contractId], references: [id])
+  projectBill           ProjectBill?           @relation(fields: [projectBillId], references: [id])
+  variationOrder        VariationOrder?        @relation(fields: [variationOrderId], references: [id])
+  timeExtension         TimeExtension?         @relation(fields: [timeExtensionId], references: [id])
+  completionCertificate CompletionCertificate? @relation(fields: [completionCertificateId], references: [id])
+  dlp                   DefectLiabilityPeriod? @relation(fields: [dlpId], references: [id])
+  defect                DlpDefect?             @relation(fields: [defectId], references: [id])
+  retentionRelease      RetentionRelease?      @relation(fields: [retentionReleaseId], references: [id])
+  projectHandover       ProjectHandover?       @relation(fields: [projectHandoverId], references: [id])
+  organizationMaster    OrganizationMaster?    @relation(fields: [organizationMasterId], references: [id])
+  versions              DocumentVersion[]
 
   @@index([organizationId, category])
   @@index([organizationId, status])
@@ -2043,7 +2310,7 @@ model BillingProfile {
 }
 
 model Invoice {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   organizationId     String
   subscriptionId     String
   planId             String?
@@ -2052,17 +2319,17 @@ model Invoice {
   billingCycle       String
   billingPeriodStart DateTime
   billingPeriodEnd   DateTime
-  subtotal           Decimal  @db.Decimal(12, 2)
-  discount           Decimal  @default(0) @db.Decimal(12, 2)
-  tax                Decimal  @default(0) @db.Decimal(12, 2)
-  total              Decimal  @db.Decimal(12, 2)
-  currency           String   @default("BDT")
-  status             String   @default("PENDING")
-  issuedAt           DateTime @default(now())
+  subtotal           Decimal   @db.Decimal(12, 2)
+  discount           Decimal   @default(0) @db.Decimal(12, 2)
+  tax                Decimal   @default(0) @db.Decimal(12, 2)
+  total              Decimal   @db.Decimal(12, 2)
+  currency           String    @default("BDT")
+  status             String    @default("PENDING")
+  issuedAt           DateTime  @default(now())
   dueAt              DateTime?
   paidAt             DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   subscription Subscription    @relation(fields: [subscriptionId], references: [id])

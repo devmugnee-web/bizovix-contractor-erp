@@ -235,6 +235,19 @@ export class ProjectBillsService {
     if (existing && !EDITABLE_STATUSES.has(existing.status)) {
       throw new BadRequestException("Only a Draft bill can be edited");
     }
+    if (dto.billType === "FINAL") {
+      const otherFinal = await this.prisma.projectBill.findFirst({
+        where: {
+          organizationId,
+          cmsWorkId: contract.cmsWorkId,
+          billType: "FINAL",
+          status: { notIn: ["CANCELLED", "REJECTED"] },
+          ...(existing ? { id: { not: existing.id } } : {}),
+        },
+        select: { id: true },
+      });
+      if (otherFinal) throw new BadRequestException("Only one active Final Bill is allowed for a project");
+    }
 
     const record = await this.prisma.$transaction(async (tx) => {
       const calculatedItems = await this.calculateItems(tx, organizationId, contract.cmsWorkId, dto.items, existing?.id ?? null);

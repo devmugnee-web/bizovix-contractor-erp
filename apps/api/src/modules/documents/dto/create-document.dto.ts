@@ -50,6 +50,12 @@ export class CreateDocumentDto {
   @IsString()
   timeExtensionId?: string;
 
+  @IsOptional() @IsString() completionCertificateId?: string;
+  @IsOptional() @IsString() dlpId?: string;
+  @IsOptional() @IsString() defectId?: string;
+  @IsOptional() @IsString() retentionReleaseId?: string;
+  @IsOptional() @IsString() projectHandoverId?: string;
+
   @IsOptional()
   @IsString()
   organizationMasterId?: string;

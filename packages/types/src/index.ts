@@ -14,6 +14,7 @@ export * from "./contract";
 export * from "./project-budget";
 export * from "./boq";
 export * from "./project-bill";
+export * from "./project-closing";
 export * from "./variation-order";
 export * from "./time-extension";
 export * from "./deduction-config";

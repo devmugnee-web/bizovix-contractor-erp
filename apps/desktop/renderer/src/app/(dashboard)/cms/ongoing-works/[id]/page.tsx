@@ -16,9 +16,15 @@ import { ProjectProgressPanel } from "@/components/projects/ProjectProgressPanel
 import { RunningBillsPanel } from "@/components/bills/RunningBillsPanel";
 import { VariationsPanel } from "@/components/variations/VariationsPanel";
 import { TimeExtensionsPanel } from "@/components/time-extensions/TimeExtensionsPanel";
+import { ProjectCloseoutPanel } from "@/components/projects/ProjectCloseoutPanel";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return <div className="flex flex-col gap-1 border-b border-biz-border py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"><span className="text-[13px] text-biz-muted">{label}</span><span className="text-[13px] font-medium text-biz-text sm:text-right">{value}</span></div>;
+  return (
+    <div className="flex flex-col gap-1 border-b border-biz-border py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+      <span className="text-[13px] text-biz-muted">{label}</span>
+      <span className="text-[13px] font-medium text-biz-text sm:text-right">{value}</span>
+    </div>
+  );
 }
 
 const TABS = [
@@ -31,6 +37,7 @@ const TABS = [
   "Budget vs Actual",
   "Variations",
   "Time Extensions",
+  "Completion & Closeout",
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -40,10 +47,19 @@ export default function OngoingWorkDetailsPage() {
   const work = useCmsWork(params.id);
   const archiveWork = useArchiveCmsWork();
   const [tab, setTab] = React.useState<Tab>("Overview");
-  useSetBreadcrumb([{ label: "CMS" }, { label: "Ongoing Works", href: "/cms/ongoing-works" }, { label: "View Details" }]);
+  useSetBreadcrumb([
+    { label: "CMS" },
+    { label: "Ongoing Works", href: "/cms/ongoing-works" },
+    { label: "View Details" },
+  ]);
 
   if (work.isLoading) return <p className="text-[13px] text-biz-muted">Loading work details...</p>;
-  if (work.isError || !work.data) return <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-[13px] text-biz-danger">Work details could not be loaded.</div>;
+  if (work.isError || !work.data)
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-[13px] text-biz-danger">
+        Work details could not be loaded.
+      </div>
+    );
   const record = work.data;
 
   function archive() {
@@ -53,7 +69,22 @@ export default function OngoingWorkDetailsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Work Details" subtitle={record.workName} actions={<><SecondaryButton onClick={() => router.push("/cms/ongoing-works")}>Back to List</SecondaryButton>{record.status === "ONGOING" && <SecondaryButton onClick={archive} disabled={archiveWork.isPending}><Archive className="h-4 w-4" /> Archive</SecondaryButton>}</>} />
+      <PageHeader
+        title="Work Details"
+        subtitle={record.workName}
+        actions={
+          <>
+            <SecondaryButton onClick={() => router.push("/cms/ongoing-works")}>
+              Back to List
+            </SecondaryButton>
+            {record.status === "ONGOING" && (
+              <SecondaryButton onClick={archive} disabled={archiveWork.isPending}>
+                <Archive className="h-4 w-4" /> Archive
+              </SecondaryButton>
+            )}
+          </>
+        }
+      />
 
       <div className="flex flex-wrap gap-1 border-b border-biz-border">
         {TABS.map((t) => (
@@ -74,13 +105,35 @@ export default function OngoingWorkDetailsPage() {
 
       {tab === "Overview" && (
         <div className="max-w-3xl rounded-lg border border-biz-border bg-biz-surface px-6 py-2 shadow-card">
-          <DetailRow label="Status" value={<StatusBadge label={record.status} tone={record.status === "ONGOING" ? "success" : "neutral"} />} />
+          <DetailRow
+            label="Status"
+            value={
+              <StatusBadge
+                label={record.status}
+                tone={record.status === "ONGOING" ? "success" : "neutral"}
+              />
+            }
+          />
           <DetailRow label="Work / Project Name" value={record.workName} />
-          <DetailRow label="Organization" value={`${record.organizationMaster.shortName} - ${record.organizationMaster.fullName}`} />
+          <DetailRow
+            label="Organization"
+            value={`${record.organizationMaster.shortName} - ${record.organizationMaster.fullName}`}
+          />
           <DetailRow label="Work Category" value={record.workCategory} />
-          <DetailRow label="Contract Value" value={`BDT ${Number(record.contractValue).toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
-          <DetailRow label="Start Date" value={record.startDate ? formatDate(record.startDate) : "Not set"} />
-          <DetailRow label="Expected Completion" value={record.expectedCompletionDate ? formatDate(record.expectedCompletionDate) : "Not set"} />
+          <DetailRow
+            label="Contract Value"
+            value={`BDT ${Number(record.contractValue).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          />
+          <DetailRow
+            label="Start Date"
+            value={record.startDate ? formatDate(record.startDate) : "Not set"}
+          />
+          <DetailRow
+            label="Expected Completion"
+            value={
+              record.expectedCompletionDate ? formatDate(record.expectedCompletionDate) : "Not set"
+            }
+          />
         </div>
       )}
 
@@ -92,6 +145,7 @@ export default function OngoingWorkDetailsPage() {
       {tab === "Budget vs Actual" && <BudgetVsActualPanel workId={record.id} />}
       {tab === "Variations" && <VariationsPanel workId={record.id} />}
       {tab === "Time Extensions" && <TimeExtensionsPanel workId={record.id} />}
+      {tab === "Completion & Closeout" && <ProjectCloseoutPanel workId={record.id} />}
     </div>
   );
 }
@@ -105,7 +159,9 @@ function ContractTab({ cmsWorkId }: { cmsWorkId: string }) {
   if (!contract) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-biz-border bg-biz-surface p-8 text-center">
-        <p className="text-[13px] text-biz-muted">No Contract / Work Order linked to this project yet.</p>
+        <p className="text-[13px] text-biz-muted">
+          No Contract / Work Order linked to this project yet.
+        </p>
         <Link href={`/cms/contracts/create?cmsWorkId=${cmsWorkId}`}>
           <PrimaryButton>
             <Plus className="h-4 w-4" />
@@ -133,13 +189,22 @@ function ContractTab({ cmsWorkId }: { cmsWorkId: string }) {
         </div>
       </div>
       <DetailRow label="Contract Type" value={CONTRACT_TYPE_META[contract.contractType]} />
-      <DetailRow label="Original Contract Value" value={formatBDT(contract.originalContractValue)} />
+      <DetailRow
+        label="Original Contract Value"
+        value={formatBDT(contract.originalContractValue)}
+      />
       <DetailRow label="Current Contract Value" value={formatBDT(contract.currentContractValue)} />
       <DetailRow label="Commencement Date" value={formatDate(contract.commencementDate)} />
       <DetailRow label="Completion Date" value={formatDate(contract.currentCompletionDate)} />
-      <DetailRow label="Duration" value={contract.durationDays ? `${contract.durationDays} days` : "—"} />
+      <DetailRow
+        label="Duration"
+        value={contract.durationDays ? `${contract.durationDays} days` : "—"}
+      />
       <div className="py-3">
-        <Link href={`/cms/contracts/${contract.id}`} className="text-[13px] font-medium text-biz-blue hover:underline">
+        <Link
+          href={`/cms/contracts/${contract.id}`}
+          className="text-[13px] font-medium text-biz-blue hover:underline"
+        >
           View Full Contract Details →
         </Link>
       </div>

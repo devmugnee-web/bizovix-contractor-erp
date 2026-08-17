@@ -49,6 +49,7 @@ import { ApprovalRuleModule } from "./modules/settings-approvals/approval-rule.m
 import { SecuritySettingsModule } from "./modules/settings-security/security-settings.module";
 import { SystemSettingsModule } from "./modules/settings-system/system-settings.module";
 import { BillingModule } from "./modules/billing/billing.module";
+import { ProjectClosingModule } from "./modules/project-closing/project-closing.module";
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { BillingModule } from "./modules/billing/billing.module";
     SecuritySettingsModule,
     SystemSettingsModule,
     BillingModule,
+    ProjectClosingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
