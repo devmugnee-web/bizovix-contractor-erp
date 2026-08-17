@@ -36,6 +36,41 @@ export const PERMISSIONS = [
   "cms.work.export",
   "cms.work.restore",
 
+  "contract.read",
+  "contract.create",
+  "contract.update",
+  "contract.activate",
+
+  "project_budget.read",
+  "project_budget.create",
+  "project_budget.approve",
+
+  "boq.read",
+  "boq.create",
+  "boq.update",
+
+  "project_bill.read",
+  "project_bill.create",
+  "project_bill.update",
+  "project_bill.submit",
+  "project_bill.certify",
+  "project_bill.cancel",
+
+  "retention.read",
+  "retention.release",
+
+  "variation.read",
+  "variation.create",
+  "variation.update",
+  "variation.submit",
+  "variation.approve",
+
+  "time_extension.read",
+  "time_extension.create",
+  "time_extension.update",
+  "time_extension.submit",
+  "time_extension.approve",
+
   "expense.create",
   "expense.read",
   "expense.approve",

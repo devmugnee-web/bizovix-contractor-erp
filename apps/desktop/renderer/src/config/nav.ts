@@ -42,6 +42,7 @@ export const NAV_ITEMS: NavItem[] = [
     subtitle: "Contract Management System",
     icon: FileText,
     children: [
+      { label: "Contracts / Work Orders", href: "/cms/contracts" },
       { label: "Ongoing Works", href: "/cms/ongoing-works" },
       { label: "Archived Works", href: "/cms/archived-works" },
     ],

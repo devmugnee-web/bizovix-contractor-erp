@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import type { Prisma } from "@bizovix/database";
+import { Prisma } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -67,27 +67,67 @@ export class ReceiptsService {
   }
 
   private async refs(organizationId: string, dto: SaveReceiptDto) {
-    const [work, account] = await Promise.all([
+    const [work, account, receivable] = await Promise.all([
       dto.workId ? this.prisma.cmsWork.findFirst({ where: { id: dto.workId, organizationId } }) : null,
       this.prisma.bankAccount.findFirst({ where: { id: dto.receivedInAccountId, organizationId } }),
+      dto.receivableId ? this.prisma.receivable.findFirst({ where: { id: dto.receivableId, organizationId } }) : null,
     ]);
     if (dto.receiptCategory === "PROJECT" && !work) throw new NotFoundException("Project not found");
     if (!account) throw new NotFoundException("Receiving account not found");
+    if (dto.receivableId) {
+      if (!receivable) throw new NotFoundException("Receivable not found");
+      const outstanding = receivable.amount.sub(receivable.receivedAmount);
+      if (new Prisma.Decimal(dto.amount).gt(outstanding)) {
+        throw new BadRequestException(
+          `Receipt amount exceeds the outstanding receivable of ${outstanding.toFixed(2)} for bill ${receivable.billNo}`,
+        );
+      }
+    }
+    return { receivable };
   }
 
   async create(organizationId: string, userId: string, dto: SaveReceiptDto) {
-    await this.refs(organizationId, dto);
+    const { receivable } = await this.refs(organizationId, dto);
     const year = new Date(dto.receiptDate).getUTCFullYear();
     const row = await this.prisma.$transaction(async (tx) => {
       const sequence = await tx.receiptSequence.upsert({ where: { organizationId_year: { organizationId, year } }, update: { value: { increment: 1 } }, create: { organizationId, year, value: 1 } });
       const config = await this.numbering.getConfig(organizationId, "RECEIPT");
       const receiptNo = this.numbering.format(config, year, sequence.value);
-      const receipt = await tx.receipt.create({ data: { organizationId, receiptNo, receiptDate: new Date(dto.receiptDate), receiptCategory: dto.receiptCategory, receiptType: dto.receiptType, workId: dto.receiptCategory === "PROJECT" ? dto.workId : null, receivedFrom: dto.receivedFrom.trim(), amount: dto.amount, receivedInAccountId: dto.receivedInAccountId, paymentMethod: dto.paymentMethod, referenceNo: dto.referenceNo?.trim() || null, description: dto.description?.trim() || null, status: dto.status ?? "RECEIVED", createdById: userId }, include: includeRelations });
+      const receipt = await tx.receipt.create({ data: { organizationId, receiptNo, receiptDate: new Date(dto.receiptDate), receiptCategory: dto.receiptCategory, receiptType: dto.receiptType, workId: dto.receiptCategory === "PROJECT" ? dto.workId : null, receivableId: dto.receivableId, receivedFrom: dto.receivedFrom.trim(), amount: dto.amount, receivedInAccountId: dto.receivedInAccountId, paymentMethod: dto.paymentMethod, referenceNo: dto.referenceNo?.trim() || null, description: dto.description?.trim() || null, status: dto.status ?? "RECEIVED", createdById: userId }, include: includeRelations });
       if (receipt.status === "RECEIVED") await this.cashBank.post(tx, { organizationId, accountId: dto.receivedInAccountId, direction: "IN", amount: dto.amount, sourceModule: "RECEIPT", sourceType: dto.receiptType, sourceId: receipt.id, referenceNo: receipt.receiptNo, description: dto.description?.trim() || `Receipt from ${dto.receivedFrom.trim()}`, transactionDate: receipt.receiptDate, createdById: userId });
-      if (receipt.status === "RECEIVED") await this.accounting.post(tx, { organizationId, userId, journalDate: receipt.receiptDate, referenceNo: receipt.receiptNo, description: dto.description?.trim() || `Receipt from ${dto.receivedFrom.trim()}`, sourceModule: "RECEIPT", sourceType: dto.receiptType, sourceId: receipt.id, lines: [{ bankAccountId: dto.receivedInAccountId, projectId: receipt.workId, partyName: dto.receivedFrom.trim(), partyType: receipt.workId ? "CUSTOMER" : "OTHER", debit: dto.amount, credit: 0 }, { systemKey: receipt.workId ? "ACCOUNTS_RECEIVABLE" : "OTHER_INCOME", projectId: receipt.workId, partyName: dto.receivedFrom.trim(), partyType: receipt.workId ? "CUSTOMER" : "OTHER", debit: 0, credit: dto.amount }] });
+      if (receipt.status === "RECEIVED") {
+        await this.accounting.post(tx, {
+          organizationId,
+          userId,
+          journalDate: receipt.receiptDate,
+          referenceNo: receipt.receiptNo,
+          description: dto.description?.trim() || `Receipt from ${dto.receivedFrom.trim()}`,
+          sourceModule: "RECEIPT",
+          sourceType: dto.receiptType,
+          sourceId: receipt.id,
+          lines: [
+            { bankAccountId: dto.receivedInAccountId, projectId: receipt.workId, partyName: dto.receivedFrom.trim(), partyType: receipt.workId ? "CUSTOMER" : "OTHER", debit: dto.amount, credit: 0 },
+            { systemKey: receipt.workId ? "ACCOUNTS_RECEIVABLE" : "OTHER_INCOME", projectId: receipt.workId, partyName: dto.receivedFrom.trim(), partyType: receipt.workId ? "CUSTOMER" : "OTHER", debit: 0, credit: dto.amount },
+          ],
+        });
+        if (receivable) {
+          const receivedAmount = receivable.receivedAmount.add(dto.amount);
+          const status = receivedAmount.gte(receivable.amount) ? "RECEIVED" : "PARTIALLY_RECEIVED";
+          await tx.receivable.update({ where: { id: receivable.id }, data: { receivedAmount, status } });
+          if (receivable.projectBillId) {
+            await tx.projectBill.update({
+              where: { id: receivable.projectBillId },
+              data: { receivedAmount, status },
+            });
+          }
+        }
+      }
       return receipt;
     });
     await this.audit.record({ organizationId, userId, action: "create", entityType: "Receipt", entityId: row.id, newValue: toDto(row) });
+    if (receivable) {
+      await this.audit.record({ organizationId, userId, action: "RECEIPT_ALLOCATED_TO_BILL", entityType: "Receivable", entityId: receivable.id, referenceNo: receivable.billNo, description: `Receipt ${row.receiptNo} allocated` });
+    }
     return toDto(row);
   }
 

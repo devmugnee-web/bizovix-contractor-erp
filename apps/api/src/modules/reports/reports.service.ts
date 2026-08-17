@@ -72,7 +72,7 @@ export class ReportsService {
       new Prisma.Decimal(0),
     );
     return {
-      totalReports: 73,
+      totalReports: 84,
       thisMonthExpenses: s(expenses._sum.amount),
       thisMonthReceipts: s(receipts._sum.amount),
       outstandingReceivables: s(outstanding),
@@ -428,6 +428,13 @@ export class ReportsService {
     );
   }
   private async projects(org: string, report: string, q: QueryReportDto) {
+    if (report === "contracts") return this.contractRegister(org, q);
+    if (report === "budget") return this.projectBudgetReport(org, q);
+    if (report === "budget-vs-actual") return this.portfolioBudgetVsActual(org, q);
+    if (report === "boq-summary") return this.boqSummaryReport(org, q);
+    if (report === "variations") return this.variationRegister(org, q);
+    if (report === "time-extensions") return this.timeExtensionRegister(org, q);
+    if (report === "progress") return this.projectProgressReport(org, q);
     // "ongoing"/"archived" filter to that specific status; every other card (summary, cost,
     // profit-loss, receivable, expense-summary, financial-summary, performance) is a
     // portfolio-wide view across all project statuses, not just ongoing ones.
@@ -528,6 +535,612 @@ export class ReportsService {
       q,
     );
   }
+
+  private async contractRegister(org: string, q: QueryReportDto) {
+    const rows = await this.prisma.projectContract.findMany({
+      where: {
+        organizationId: org,
+        organizationMasterId: q.organizationMasterId,
+        cmsWork: q.category ? { workCategory: q.category } : undefined,
+        OR: q.search
+          ? [
+              { contractNo: { contains: q.search, mode: "insensitive" } },
+              { cmsWork: { workName: { contains: q.search, mode: "insensitive" } } },
+            ]
+          : undefined,
+      },
+      include: { cmsWork: true, organizationMaster: true },
+      orderBy: { createdAt: "desc" },
+    });
+    const mapped = rows.map((r) => ({
+      contractNo: r.contractNo,
+      project: r.cmsWork.workName,
+      organization: r.organizationMaster.shortName,
+      contractType: r.contractType,
+      value: s(r.currentContractValue),
+      commencementDate: r.commencementDate.toISOString(),
+      completionDate: r.currentCompletionDate.toISOString(),
+      status: r.status,
+    }));
+    return this.finish(
+      {
+        title: "Contract Register",
+        subtitle: "Awarded contracts and work orders across all projects.",
+        kpis: [
+          { label: "Total Contracts", value: String(rows.length) },
+          {
+            label: "Contract Value",
+            value: s(rows.reduce((n, r) => n.add(r.currentContractValue), new Prisma.Decimal(0))),
+            kind: "money",
+          },
+        ],
+        columns: [
+          { key: "contractNo", label: "Contract / WO No." },
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          { key: "contractType", label: "Type" },
+          moneyCol("value", "Contract Value"),
+          { key: "commencementDate", label: "Commencement Date", type: "date" },
+          { key: "completionDate", label: "Completion Date", type: "date" },
+          { key: "status", label: "Status" },
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
+  private async projectBudgetReport(org: string, q: QueryReportDto) {
+    const budgets = await this.prisma.projectBudget.findMany({
+      where: {
+        organizationId: org,
+        status: { in: ["APPROVED", "REVISED"] },
+        cmsWork: { organizationMasterId: q.organizationMasterId, workCategory: q.category },
+      },
+      include: {
+        cmsWork: {
+          include: {
+            organizationMaster: true,
+            contracts: { where: { status: { not: "CANCELLED" } }, orderBy: { createdAt: "desc" }, take: 1 },
+          },
+        },
+      },
+    });
+    const mapped = budgets.map((b) => {
+      const contractValue = b.cmsWork.contracts[0]?.currentContractValue ?? b.cmsWork.contractValue;
+      const margin = contractValue.minus(b.totalBudget);
+      return {
+        project: b.cmsWork.workName,
+        organization: b.cmsWork.organizationMaster.shortName,
+        version: b.version,
+        contractValue: s(contractValue),
+        totalBudget: s(b.totalBudget),
+        margin: s(margin),
+        marginPct: contractValue.gt(0) ? `${margin.div(contractValue).mul(100).toFixed(2)}%` : "0.00%",
+        status: b.status,
+      };
+    });
+    return this.finish(
+      {
+        title: "Project Budget Report",
+        subtitle: "Approved project budgets, contract value and expected margin by project.",
+        kpis: [
+          { label: "Projects with Approved Budget", value: String(budgets.length) },
+          {
+            label: "Total Budget",
+            value: s(budgets.reduce((n, b) => n.add(b.totalBudget), new Prisma.Decimal(0))),
+            kind: "money",
+          },
+        ],
+        columns: [
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          { key: "version", label: "Version" },
+          moneyCol("contractValue", "Contract Value"),
+          moneyCol("totalBudget", "Total Budget"),
+          moneyCol("margin", "Expected Margin"),
+          { key: "marginPct", label: "Margin %" },
+          { key: "status", label: "Status" },
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
+  private async portfolioBudgetVsActual(org: string, q: QueryReportDto) {
+    const budgets = await this.prisma.projectBudget.findMany({
+      where: {
+        organizationId: org,
+        status: { in: ["APPROVED", "REVISED"] },
+        cmsWork: { organizationMasterId: q.organizationMasterId, workCategory: q.category },
+      },
+      include: { cmsWork: { include: { organizationMaster: true } } },
+    });
+    const expenseAgg = await this.prisma.expense.groupBy({
+      by: ["workId"],
+      where: {
+        organizationId: org,
+        workId: { in: budgets.map((b) => b.cmsWorkId) },
+        status: { not: "REJECTED" },
+        expenseHeadId: { not: null },
+      },
+      _sum: { amount: true },
+    });
+    const actualByWork = new Map(expenseAgg.map((e) => [e.workId!, e._sum.amount ?? new Prisma.Decimal(0)]));
+    const mapped = budgets.map((b) => {
+      const actual = actualByWork.get(b.cmsWorkId) ?? new Prisma.Decimal(0);
+      const variance = b.totalBudget.minus(actual);
+      const usedPct = b.totalBudget.gt(0) ? actual.div(b.totalBudget).mul(100) : new Prisma.Decimal(actual.gt(0) ? 999 : 0);
+      const status = usedPct.gt(100) ? "Over Budget" : usedPct.gte(80) ? "Near Limit" : "Within Budget";
+      return {
+        project: b.cmsWork.workName,
+        organization: b.cmsWork.organizationMaster.shortName,
+        budget: s(b.totalBudget),
+        actual: s(actual),
+        variance: s(variance),
+        variancePct: b.totalBudget.gt(0) ? `${variance.div(b.totalBudget).mul(100).toFixed(2)}%` : "0.00%",
+        status,
+      };
+    });
+    return this.finish(
+      {
+        title: "Budget vs Actual",
+        subtitle: "Approved budget vs real project expense across all projects.",
+        kpis: [
+          { label: "Total Budget", value: s(budgets.reduce((n, b) => n.add(b.totalBudget), new Prisma.Decimal(0))), kind: "money" },
+          {
+            label: "Total Actual",
+            value: s([...actualByWork.values()].reduce((n, a) => n.add(a), new Prisma.Decimal(0))),
+            kind: "money",
+          },
+        ],
+        columns: [
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          moneyCol("budget", "Budget"),
+          moneyCol("actual", "Actual"),
+          moneyCol("variance", "Variance"),
+          { key: "variancePct", label: "Variance %" },
+          { key: "status", label: "Status" },
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
+  private async boqSummaryReport(org: string, q: QueryReportDto) {
+    const items = await this.prisma.boqItem.findMany({
+      where: {
+        organizationId: org,
+        cmsWork: { organizationMasterId: q.organizationMasterId, workCategory: q.category },
+      },
+      include: { cmsWork: { include: { organizationMaster: true } } },
+    });
+    const byWork = new Map<string, { workName: string; organization: string; boqValue: Prisma.Decimal; executed: Prisma.Decimal; items: number }>();
+    for (const item of items) {
+      const entry = byWork.get(item.cmsWorkId) ?? {
+        workName: item.cmsWork.workName,
+        organization: item.cmsWork.organizationMaster.shortName,
+        boqValue: new Prisma.Decimal(0),
+        executed: new Prisma.Decimal(0),
+        items: 0,
+      };
+      entry.boqValue = entry.boqValue.add(item.contractAmount);
+      entry.executed = entry.executed.add(item.executedValue);
+      entry.items += 1;
+      byWork.set(item.cmsWorkId, entry);
+    }
+    const mapped = [...byWork.values()].map((e) => ({
+      project: e.workName,
+      organization: e.organization,
+      items: e.items,
+      boqValue: s(e.boqValue),
+      executedValue: s(e.executed),
+      remainingValue: s(e.boqValue.minus(e.executed)),
+      progressPct: e.boqValue.gt(0) ? `${e.executed.div(e.boqValue).mul(100).toFixed(2)}%` : "0.00%",
+    }));
+    return this.finish(
+      {
+        title: "BOQ Summary",
+        subtitle: "Bill of quantities value and execution progress across all projects.",
+        kpis: [
+          { label: "Projects with BOQ", value: String(byWork.size) },
+          {
+            label: "Total BOQ Value",
+            value: s([...byWork.values()].reduce((n, e) => n.add(e.boqValue), new Prisma.Decimal(0))),
+            kind: "money",
+          },
+        ],
+        columns: [
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          { key: "items", label: "Items" },
+          moneyCol("boqValue", "Total BOQ Value"),
+          moneyCol("executedValue", "Executed Value"),
+          moneyCol("remainingValue", "Remaining Value"),
+          { key: "progressPct", label: "Progress %" },
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
+  private async variationRegister(org: string, q: QueryReportDto) {
+    const rows = await this.prisma.variationOrder.findMany({
+      where: {
+        organizationId: org,
+        cmsWork: { organizationMasterId: q.organizationMasterId, workCategory: q.category },
+      },
+      include: { cmsWork: { include: { organizationMaster: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    const mapped = rows.map((r) => ({
+      variationNo: r.variationNo,
+      project: r.cmsWork.workName,
+      organization: r.cmsWork.organizationMaster.shortName,
+      type: r.variationType,
+      title: r.title,
+      requestDate: r.requestDate.toISOString(),
+      requestedAmount: s(r.requestedAmount),
+      approvedAmount: r.approvedAmount ? s(r.approvedAmount) : "0",
+      status: r.status,
+    }));
+    return this.finish(
+      {
+        title: "Variation Order Register",
+        subtitle: "Approved and pending variation orders across all projects.",
+        kpis: [
+          { label: "Total Variations", value: String(rows.length) },
+          {
+            label: "Approved Net Value",
+            value: s(rows.filter((r) => r.status === "APPROVED").reduce((n, r) => n.add(r.approvedAmount ?? 0), new Prisma.Decimal(0))),
+            kind: "money",
+          },
+        ],
+        columns: [
+          { key: "variationNo", label: "Variation No." },
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          { key: "type", label: "Type" },
+          { key: "title", label: "Title" },
+          { key: "requestDate", label: "Request Date", type: "date" },
+          moneyCol("requestedAmount", "Requested Amount"),
+          moneyCol("approvedAmount", "Approved Amount"),
+          { key: "status", label: "Status" },
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
+  private async timeExtensionRegister(org: string, q: QueryReportDto) {
+    const rows = await this.prisma.timeExtension.findMany({
+      where: {
+        organizationId: org,
+        cmsWork: { organizationMasterId: q.organizationMasterId, workCategory: q.category },
+      },
+      include: { cmsWork: { include: { organizationMaster: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    const mapped = rows.map((r) => ({
+      eotNo: r.eotNo,
+      project: r.cmsWork.workName,
+      organization: r.cmsWork.organizationMaster.shortName,
+      requestDate: r.requestDate.toISOString(),
+      requestedDays: r.requestedDays,
+      approvedDays: r.approvedDays ?? 0,
+      previousCompletionDate: r.previousCompletionDate.toISOString(),
+      revisedCompletionDate: r.revisedCompletionDate?.toISOString() ?? null,
+      status: r.status,
+    }));
+    return this.finish(
+      {
+        title: "Time Extension Register",
+        subtitle: "Approved and pending EOT requests across all projects.",
+        kpis: [
+          { label: "Total EOT Requests", value: String(rows.length) },
+          { label: "Approved Days (Total)", value: String(rows.reduce((n, r) => n + (r.approvedDays ?? 0), 0)) },
+        ],
+        columns: [
+          { key: "eotNo", label: "EOT No." },
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          { key: "requestDate", label: "Request Date", type: "date" },
+          { key: "requestedDays", label: "Requested Days" },
+          { key: "approvedDays", label: "Approved Days" },
+          { key: "previousCompletionDate", label: "Previous Completion", type: "date" },
+          { key: "revisedCompletionDate", label: "Revised Completion", type: "date" },
+          { key: "status", label: "Status" },
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
+  private async projectProgressReport(org: string, q: QueryReportDto) {
+    const [boqItems, bills, contracts] = await Promise.all([
+      this.prisma.boqItem.findMany({
+        where: { organizationId: org, cmsWork: { organizationMasterId: q.organizationMasterId, workCategory: q.category } },
+        include: { cmsWork: { include: { organizationMaster: true } } },
+      }),
+      this.prisma.projectBill.findMany({
+        where: { organizationId: org, status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] } },
+        select: { cmsWorkId: true, netCertifiedAmount: true, receivedAmount: true },
+      }),
+      this.prisma.projectContract.findMany({
+        where: { organizationId: org, status: { not: "CANCELLED" } },
+        select: { cmsWorkId: true, currentContractValue: true },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+    const contractByWork = new Map<string, Prisma.Decimal>();
+    for (const c of contracts) if (!contractByWork.has(c.cmsWorkId)) contractByWork.set(c.cmsWorkId, c.currentContractValue);
+    const billTotalsByWork = new Map<string, { net: Prisma.Decimal; received: Prisma.Decimal }>();
+    for (const b of bills) {
+      const entry = billTotalsByWork.get(b.cmsWorkId) ?? { net: new Prisma.Decimal(0), received: new Prisma.Decimal(0) };
+      entry.net = entry.net.add(b.netCertifiedAmount);
+      entry.received = entry.received.add(b.receivedAmount);
+      billTotalsByWork.set(b.cmsWorkId, entry);
+    }
+    const boqByWork = new Map<string, { workName: string; organization: string; contractValue: Prisma.Decimal; executed: Prisma.Decimal }>();
+    for (const item of boqItems) {
+      const entry = boqByWork.get(item.cmsWorkId) ?? {
+        workName: item.cmsWork.workName,
+        organization: item.cmsWork.organizationMaster.shortName,
+        contractValue: new Prisma.Decimal(0),
+        executed: new Prisma.Decimal(0),
+      };
+      entry.contractValue = entry.contractValue.add(item.contractAmount);
+      entry.executed = entry.executed.add(item.executedValue);
+      boqByWork.set(item.cmsWorkId, entry);
+    }
+    const mapped = [...boqByWork.entries()].map(([cmsWorkId, e]) => {
+      const bill = billTotalsByWork.get(cmsWorkId) ?? { net: new Prisma.Decimal(0), received: new Prisma.Decimal(0) };
+      const contractValue = contractByWork.get(cmsWorkId) ?? new Prisma.Decimal(0);
+      return {
+        project: e.workName,
+        organization: e.organization,
+        physicalProgressPct: e.contractValue.gt(0) ? `${e.executed.div(e.contractValue).mul(100).toFixed(2)}%` : "0.00%",
+        financialProgressPct: contractValue.gt(0) ? `${bill.net.div(contractValue).mul(100).toFixed(2)}%` : "0.00%",
+        collectionProgressPct: bill.net.gt(0) ? `${bill.received.div(bill.net).mul(100).toFixed(2)}%` : "0.00%",
+        netCertified: s(bill.net),
+        received: s(bill.received),
+      };
+    });
+    return this.finish(
+      {
+        title: "Project Progress Report",
+        subtitle: "Physical, financial and collection progress across all projects.",
+        kpis: [{ label: "Projects Tracked", value: String(mapped.length) }],
+        columns: [
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          { key: "physicalProgressPct", label: "Physical / BOQ Progress" },
+          { key: "financialProgressPct", label: "Financial Progress" },
+          { key: "collectionProgressPct", label: "Collection Progress" },
+          moneyCol("netCertified", "Net Certified"),
+          moneyCol("received", "Received"),
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
+  private async runningBillRegister(org: string, q: QueryReportDto) {
+    const rows = await this.prisma.projectBill.findMany({
+      where: {
+        organizationId: org,
+        cmsWork: { organizationMasterId: q.organizationMasterId, workCategory: q.category },
+        OR: q.search
+          ? [
+              { billNo: { contains: q.search, mode: "insensitive" } },
+              { cmsWork: { workName: { contains: q.search, mode: "insensitive" } } },
+            ]
+          : undefined,
+      },
+      include: { cmsWork: { include: { organizationMaster: true } } },
+      orderBy: { billDate: "desc" },
+    });
+    const mapped = rows.map((r) => ({
+      billNo: r.billNo,
+      project: r.cmsWork.workName,
+      organization: r.cmsWork.organizationMaster.shortName,
+      billType: r.billType,
+      billDate: r.billDate.toISOString(),
+      grossAmount: s(r.grossBillAmount),
+      retention: s(r.retentionAmount),
+      vat: s(r.vatAmount),
+      ait: s(r.aitAmount),
+      netCertified: s(r.netCertifiedAmount),
+      received: s(r.receivedAmount),
+      status: r.status,
+    }));
+    return this.finish(
+      {
+        title: "Running Bill Register",
+        subtitle: "All running bills / IPCs with certification and receipt status.",
+        kpis: [
+          { label: "Total Bills", value: String(rows.length) },
+          {
+            label: "Net Certified",
+            value: s(rows.filter((r) => r.status !== "DRAFT" && r.status !== "CANCELLED").reduce((n, r) => n.add(r.netCertifiedAmount), new Prisma.Decimal(0))),
+            kind: "money",
+          },
+        ],
+        columns: [
+          { key: "billNo", label: "Bill No." },
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          { key: "billType", label: "Bill Type" },
+          { key: "billDate", label: "Bill Date", type: "date" },
+          moneyCol("grossAmount", "Gross Amount"),
+          moneyCol("retention", "Retention"),
+          moneyCol("vat", "VAT"),
+          moneyCol("ait", "AIT"),
+          moneyCol("netCertified", "Net Certified"),
+          moneyCol("received", "Received"),
+          { key: "status", label: "Status" },
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
+  private async retentionRegister(org: string, q: QueryReportDto) {
+    const rows = await this.prisma.projectBill.findMany({
+      where: {
+        organizationId: org,
+        retentionAmount: { gt: 0 },
+        status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] },
+        cmsWork: { organizationMasterId: q.organizationMasterId, workCategory: q.category },
+      },
+      include: { cmsWork: { include: { organizationMaster: true } } },
+      orderBy: { certificationDate: "desc" },
+    });
+    const mapped = rows.map((r) => {
+      const outstanding = r.retentionAmount.sub(r.retentionReleasedAmount);
+      return {
+        billNo: r.billNo,
+        project: r.cmsWork.workName,
+        organization: r.cmsWork.organizationMaster.shortName,
+        certificationDate: r.certificationDate?.toISOString() ?? null,
+        retentionDeducted: s(r.retentionAmount),
+        retentionReleased: s(r.retentionReleasedAmount),
+        outstanding: s(outstanding),
+        expectedReleaseDate: r.retentionReleaseDueDate?.toISOString() ?? null,
+        status: outstanding.lte(0) ? "RELEASED" : r.retentionReleasedAmount.gt(0) ? "PARTIALLY_RELEASED" : "HELD",
+      };
+    });
+    return this.finish(
+      {
+        title: "Retention Register",
+        subtitle: "Retention deducted, released and outstanding by certified bill.",
+        kpis: [
+          { label: "Bills with Retention", value: String(rows.length) },
+          {
+            label: "Retention Held",
+            value: s(rows.reduce((n, r) => n.add(r.retentionAmount.sub(r.retentionReleasedAmount)), new Prisma.Decimal(0))),
+            kind: "money",
+          },
+        ],
+        columns: [
+          { key: "billNo", label: "Bill No." },
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          { key: "certificationDate", label: "Certification Date", type: "date" },
+          moneyCol("retentionDeducted", "Retention Deducted"),
+          moneyCol("retentionReleased", "Retention Released"),
+          moneyCol("outstanding", "Outstanding"),
+          { key: "expectedReleaseDate", label: "Expected Release Date", type: "date" },
+          { key: "status", label: "Status" },
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
+  private async billReceivableReport(org: string, q: QueryReportDto) {
+    const rows = await this.prisma.receivable.findMany({
+      where: {
+        organizationId: org,
+        project: { organizationMasterId: q.organizationMasterId, workCategory: q.category },
+      },
+      include: { project: { include: { organizationMaster: true } } },
+      orderBy: { billDate: "desc" },
+    });
+    const mapped = rows.map((r) => ({
+      billNo: r.billNo,
+      project: r.project.workName,
+      organization: r.project.organizationMaster.shortName,
+      billDate: r.billDate.toISOString(),
+      amount: s(r.amount),
+      received: s(r.receivedAmount),
+      outstanding: s(r.amount.sub(r.receivedAmount)),
+      status: r.status,
+    }));
+    return this.finish(
+      {
+        title: "Certified Bill Receivable Report",
+        subtitle: "Certified bill receivables and outstanding balances by project.",
+        kpis: [
+          { label: "Total Receivables", value: String(rows.length) },
+          {
+            label: "Outstanding",
+            value: s(rows.reduce((n, r) => n.add(r.amount.sub(r.receivedAmount)), new Prisma.Decimal(0))),
+            kind: "money",
+          },
+        ],
+        columns: [
+          { key: "billNo", label: "Bill No." },
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          { key: "billDate", label: "Bill Date", type: "date" },
+          moneyCol("amount", "Net Certified"),
+          moneyCol("received", "Received"),
+          moneyCol("outstanding", "Outstanding"),
+          { key: "status", label: "Status" },
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
+  private async vatAitReport(org: string, q: QueryReportDto) {
+    const rows = await this.prisma.projectBill.findMany({
+      where: {
+        organizationId: org,
+        status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] },
+        OR: [{ vatAmount: { gt: 0 } }, { aitAmount: { gt: 0 } }],
+        cmsWork: { organizationMasterId: q.organizationMasterId, workCategory: q.category },
+      },
+      include: { cmsWork: { include: { organizationMaster: true } } },
+      orderBy: { certificationDate: "desc" },
+    });
+    const mapped = rows.map((r) => ({
+      billNo: r.billNo,
+      project: r.cmsWork.workName,
+      organization: r.cmsWork.organizationMaster.shortName,
+      certificationDate: r.certificationDate?.toISOString() ?? null,
+      grossBillAmount: s(r.grossBillAmount),
+      vatRate: r.vatRate ? `${r.vatRate.toFixed(2)}%` : "0.00%",
+      vatAmount: s(r.vatAmount),
+      aitRate: r.aitRate ? `${r.aitRate.toFixed(2)}%` : "0.00%",
+      aitAmount: s(r.aitAmount),
+    }));
+    return this.finish(
+      {
+        title: "VAT/AIT Deduction Report",
+        subtitle: "VAT and AIT withheld on certified bills, using the configuration effective at certification.",
+        kpis: [
+          { label: "Total VAT Withheld", value: s(rows.reduce((n, r) => n.add(r.vatAmount), new Prisma.Decimal(0))), kind: "money" },
+          { label: "Total AIT Withheld", value: s(rows.reduce((n, r) => n.add(r.aitAmount), new Prisma.Decimal(0))), kind: "money" },
+        ],
+        columns: [
+          { key: "billNo", label: "Bill No." },
+          { key: "project", label: "Project" },
+          { key: "organization", label: "Organization" },
+          { key: "certificationDate", label: "Certification Date", type: "date" },
+          moneyCol("grossBillAmount", "Gross Bill Amount"),
+          { key: "vatRate", label: "VAT Rate" },
+          moneyCol("vatAmount", "VAT Amount"),
+          { key: "aitRate", label: "AIT Rate" },
+          moneyCol("aitAmount", "AIT Amount"),
+        ],
+        rows: mapped,
+      },
+      q,
+    );
+  }
+
   private async expenses(org: string, report: string, q: QueryReportDto) {
     // "project"/"general" filter to that specific expense type; the analytical breakdowns
     // (category/person/account/monthly) span both — restricting them to project-only would
@@ -1049,6 +1662,10 @@ export class ReportsService {
   private async financial(org: string, report: string, q: QueryReportDto) {
     if (report === "receivable-aging") return this.receipts(org, "outstanding", q);
     if (report === "payable-aging") return this.payableAging(org, q);
+    if (report === "running-bill-register") return this.runningBillRegister(org, q);
+    if (report === "retention-register") return this.retentionRegister(org, q);
+    if (report === "bill-receivable") return this.billReceivableReport(org, q);
+    if (report === "vat-ait") return this.vatAitReport(org, q);
     const lines = await this.prisma.journalLine.findMany({
       where: {
         accountId: q.accountId,

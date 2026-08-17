@@ -36,6 +36,22 @@ export class CreateDocumentDto {
 
   @IsOptional()
   @IsString()
+  contractId?: string;
+
+  @IsOptional()
+  @IsString()
+  projectBillId?: string;
+
+  @IsOptional()
+  @IsString()
+  variationOrderId?: string;
+
+  @IsOptional()
+  @IsString()
+  timeExtensionId?: string;
+
+  @IsOptional()
+  @IsString()
   organizationMasterId?: string;
 
   @IsOptional()

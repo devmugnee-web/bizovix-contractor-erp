@@ -20,6 +20,14 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { CreditCommitmentsModule } from "./modules/credit-commitments/credit-commitments.module";
 import { PgBgModule } from "./modules/pg-bg/pg-bg.module";
 import { CmsWorksModule } from "./modules/cms-works/cms-works.module";
+import { ContractsModule } from "./modules/contracts/contracts.module";
+import { ProjectBudgetsModule } from "./modules/project-budgets/project-budgets.module";
+import { BoqModule } from "./modules/boq/boq.module";
+import { DeductionConfigsModule } from "./modules/deduction-configs/deduction-configs.module";
+import { ProjectBillsModule } from "./modules/project-bills/project-bills.module";
+import { VariationOrdersModule } from "./modules/variation-orders/variation-orders.module";
+import { TimeExtensionsModule } from "./modules/time-extensions/time-extensions.module";
+import { ProjectProgressModule } from "./modules/project-progress/project-progress.module";
 import { ProjectExpensesModule } from "./modules/project-expenses/project-expenses.module";
 import { GeneralExpensesModule } from "./modules/general-expenses/general-expenses.module";
 import { ReceiptsModule } from "./modules/receipts/receipts.module";
@@ -58,6 +66,14 @@ import { BillingModule } from "./modules/billing/billing.module";
     CreditCommitmentsModule,
     PgBgModule,
     CmsWorksModule,
+    ContractsModule,
+    ProjectBudgetsModule,
+    BoqModule,
+    DeductionConfigsModule,
+    ProjectBillsModule,
+    VariationOrdersModule,
+    TimeExtensionsModule,
+    ProjectProgressModule,
     ProjectExpensesModule,
     GeneralExpensesModule,
     ReceiptsModule,

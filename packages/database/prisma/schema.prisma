@@ -163,6 +163,15 @@ model Organization {
   systemSetting         SystemSetting?
   billingProfile        BillingProfile?
   invoices              Invoice[]
+  projectContracts      ProjectContract[]
+  projectBudgets        ProjectBudget[]
+  boqSections           BoqSection[]
+  boqItems              BoqItem[]
+  projectBills          ProjectBill[]
+  receivables           Receivable[]
+  variationOrders       VariationOrder[]
+  timeExtensions        TimeExtension[]
+  deductionConfigs      DeductionConfig[]
 
   @@map("organizations")
 }
@@ -325,6 +334,7 @@ model OrganizationMaster {
   cmsWorks              CmsWork[]
   performanceGuarantees PerformanceGuarantee[]
   documents             Document[]
+  projectContracts      ProjectContract[]
 
   @@unique([organizationId, shortName])
   @@map("organization_masters")
@@ -371,6 +381,83 @@ model BankAccount {
 // ---------------------------------------------------------------------------
 // Tenders / Projects
 // ---------------------------------------------------------------------------
+
+enum ContractType {
+  WORK_ORDER
+  CONTRACT_AGREEMENT
+  PURCHASE_ORDER
+  SERVICE_CONTRACT
+  OTHER
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+  CLOSED
+}
+
+enum ProjectBudgetStatus {
+  DRAFT
+  APPROVED
+  REVISED
+  ARCHIVED
+}
+
+enum BillType {
+  ADVANCE
+  RUNNING
+  INTERIM
+  FINAL
+}
+
+enum BillStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  CERTIFIED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  REJECTED
+  CANCELLED
+}
+
+enum DeductionCalcType {
+  FIXED_AMOUNT
+  PERCENTAGE
+}
+
+enum AdjustmentDirection {
+  ADDITION
+  DEDUCTION
+}
+
+enum VariationType {
+  ADDITION
+  OMISSION
+  RATE_CHANGE
+  QUANTITY_CHANGE
+  NEW_ITEM
+  OTHER
+}
+
+enum VariationStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum TimeExtensionStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
 
 model Tender {
   id                   String       @id @default(cuid())
@@ -431,6 +518,7 @@ model Tender {
   receipts              Receipt[]
   cmsWorks              CmsWork[]
   documents             Document[]
+  contracts             ProjectContract[]
 
   @@index([organizationId, status])
   @@index([organizationId, submissionDeadline])
@@ -661,6 +749,7 @@ model PgBgWorkflow {
   contact              OrganizationContact?  @relation(fields: [contactId], references: [id])
   performanceGuarantee PerformanceGuarantee?
   cmsWork              CmsWork?
+  contracts            ProjectContract[]
 
   @@index([organizationId, status])
   @@map("pg_bg_workflows")
@@ -694,11 +783,439 @@ model CmsWork {
   journalLines       JournalLine[]
   payables           Payable[]
   documents          Document[]
+  contracts          ProjectContract[]
+  budgets            ProjectBudget[]
+  boqSections        BoqSection[]
+  boqItems           BoqItem[]
+  bills              ProjectBill[]
+  variationOrders    VariationOrder[]
+  timeExtensions     TimeExtension[]
+  receivables        Receivable[]
 
   @@index([organizationId, status])
   @@index([organizationId, status, completionDate])
   @@index([organizationId, organizationMasterId])
   @@map("cms_works")
+}
+
+// ---------------------------------------------------------------------------
+// Contract / Work Order + Project Budget + BOQ
+// ---------------------------------------------------------------------------
+
+model ProjectContract {
+  id                   String         @id @default(cuid())
+  organizationId       String
+  tenderId             String?
+  cmsWorkId            String
+  pgBgWorkflowId       String?
+  organizationMasterId String
+
+  contractNo     String
+  contractType   ContractType @default(WORK_ORDER)
+  issueDate      DateTime
+  contractDate   DateTime?
+
+  originalContractValue Decimal  @db.Decimal(18, 2)
+  currentContractValue  Decimal  @db.Decimal(18, 2)
+  currency              String   @default("BDT")
+
+  commencementDate       DateTime
+  originalCompletionDate DateTime
+  currentCompletionDate  DateTime
+  durationDays           Int?
+
+  dlpDays            Int?
+  retentionPct       Decimal? @db.Decimal(5, 2)
+  securityDepositPct Decimal? @db.Decimal(5, 2)
+
+  clientContactName String?
+  responsiblePerson String?
+  scopeOfWork       String?
+  remarks           String?
+
+  status      ContractStatus @default(DRAFT)
+  createdById String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender             Tender?            @relation(fields: [tenderId], references: [id])
+  cmsWork            CmsWork            @relation(fields: [cmsWorkId], references: [id])
+  pgBgWorkflow       PgBgWorkflow?      @relation(fields: [pgBgWorkflowId], references: [id])
+  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
+  documents          Document[]
+  bills              ProjectBill[]
+  variationOrders    VariationOrder[]
+  timeExtensions     TimeExtension[]
+  receivables        Receivable[]
+
+  @@unique([organizationId, contractNo])
+  @@index([organizationId, status])
+  @@index([organizationId, currentCompletionDate])
+  @@index([organizationId, cmsWorkId])
+  @@map("project_contracts")
+}
+
+model ProjectBudget {
+  id             String              @id @default(cuid())
+  organizationId String
+  cmsWorkId      String
+  version        Int
+  status         ProjectBudgetStatus @default(DRAFT)
+  totalBudget    Decimal             @default(0) @db.Decimal(18, 2)
+  revisionNote   String?
+  createdById    String?
+  approvedById   String?
+  approvedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork      CmsWork             @relation(fields: [cmsWorkId], references: [id])
+  lines        ProjectBudgetLine[]
+
+  @@unique([organizationId, cmsWorkId, version])
+  @@index([organizationId, cmsWorkId, status])
+  @@map("project_budgets")
+}
+
+model ProjectBudgetLine {
+  id            String   @id @default(cuid())
+  budgetId      String
+  expenseHeadId String
+  category      String
+  description   String?
+  amount        Decimal  @db.Decimal(18, 2)
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  budget      ProjectBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  expenseHead ExpenseHead   @relation(fields: [expenseHeadId], references: [id])
+
+  @@index([budgetId])
+  @@index([expenseHeadId])
+  @@map("project_budget_lines")
+}
+
+model BoqSection {
+  id             String   @id @default(cuid())
+  organizationId String
+  cmsWorkId      String
+  name           String
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork      CmsWork      @relation(fields: [cmsWorkId], references: [id])
+  items        BoqItem[]
+
+  @@unique([cmsWorkId, name])
+  @@map("boq_sections")
+}
+
+model BoqItem {
+  id             String   @id @default(cuid())
+  organizationId String
+  cmsWorkId      String
+  sectionId      String?
+  itemCode       String?
+  description    String
+  unit           String
+  /// Current approved quantity/rate/amount — the authoritative billing ceiling. Only ever
+  /// changed via direct BOQ edit (pre-execution) or an approved VariationOrder (post-execution).
+  contractQty    Decimal  @db.Decimal(18, 3)
+  unitRate       Decimal  @db.Decimal(18, 2)
+  contractAmount Decimal  @db.Decimal(18, 2)
+  /// Immutable snapshot of contractQty/unitRate/contractAmount at item creation — never
+  /// updated afterwards, so approved variations can be shown as a delta against the original.
+  originalQty    Decimal  @db.Decimal(18, 3)
+  originalRate   Decimal  @db.Decimal(18, 2)
+  originalAmount Decimal  @db.Decimal(18, 2)
+  executedQty    Decimal  @default(0) @db.Decimal(18, 3)
+  executedValue  Decimal  @default(0) @db.Decimal(18, 2)
+  specification  String?
+  remarks        String?
+  sortOrder      Int      @default(0)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork      CmsWork      @relation(fields: [cmsWorkId], references: [id])
+  section      BoqSection?  @relation(fields: [sectionId], references: [id])
+  billItems      ProjectBillItem[]
+  variationItems VariationItem[]
+
+  @@unique([cmsWorkId, itemCode])
+  @@index([organizationId, cmsWorkId])
+  @@map("boq_items")
+}
+
+// ---------------------------------------------------------------------------
+// Running Bill / IPC + Retention + Variation Order + Time Extension
+// ---------------------------------------------------------------------------
+
+model ProjectBill {
+  id             String     @id @default(cuid())
+  organizationId String
+  cmsWorkId      String
+  contractId     String
+
+  billNo      String
+  billType    BillType   @default(RUNNING)
+  billDate    DateTime
+  periodFrom  DateTime?
+  periodTo    DateTime?
+
+  submissionDate      DateTime?
+  certificationDate   DateTime?
+  clientCertificateRef String?
+  measurementBookRef   String?
+  remarks              String?
+
+  /// Sum of item currentValue (backend-calculated from BOQ qty x approved rate).
+  grossWorkValue       Decimal @default(0) @db.Decimal(18, 2)
+  /// Sum of BillAdjustment rows with direction=ADDITION.
+  approvedAdditions    Decimal @default(0) @db.Decimal(18, 2)
+  /// grossWorkValue + approvedAdditions.
+  grossBillAmount      Decimal @default(0) @db.Decimal(18, 2)
+
+  /// Snapshotted at certification time — later DeductionConfig changes never retroactively
+  /// change an already-certified bill.
+  retentionPct         Decimal? @db.Decimal(5, 2)
+  retentionAmount      Decimal  @default(0) @db.Decimal(18, 2)
+  retentionReleasedAmount Decimal @default(0) @db.Decimal(18, 2)
+  retentionReleaseDueDate DateTime?
+  vatRate              Decimal? @db.Decimal(8, 4)
+  vatAmount            Decimal  @default(0) @db.Decimal(18, 2)
+  aitRate              Decimal? @db.Decimal(8, 4)
+  aitAmount            Decimal  @default(0) @db.Decimal(18, 2)
+  /// Sum of BillAdjustment rows with direction=DEDUCTION (advance recovery, other deductions).
+  otherDeductionAmount Decimal  @default(0) @db.Decimal(18, 2)
+
+  netCertifiedAmount   Decimal @default(0) @db.Decimal(18, 2)
+  /// Denormalized cache kept in sync by Receipt allocation — authoritative value lives on Receivable.
+  receivedAmount       Decimal @default(0) @db.Decimal(18, 2)
+
+  status        BillStatus @default(DRAFT)
+  createdById   String?
+  submittedById String?
+  certifiedById String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork      CmsWork           @relation(fields: [cmsWorkId], references: [id])
+  contract     ProjectContract   @relation(fields: [contractId], references: [id])
+  items        ProjectBillItem[]
+  adjustments  BillAdjustment[]
+  receivable   Receivable?
+  documents    Document[]
+
+  @@unique([organizationId, billNo])
+  @@index([organizationId, cmsWorkId, status])
+  @@index([organizationId, status])
+  @@map("project_bills")
+}
+
+model ProjectBillItem {
+  id         String @id @default(cuid())
+  billId     String
+  boqItemId  String
+
+  /// Snapshots of the BOQ item at billing time — historical bills stay reproducible even if
+  /// the BOQ item is later edited or revised by a Variation.
+  description  String
+  unit         String
+  approvedRate Decimal @db.Decimal(18, 2)
+  contractQty  Decimal @db.Decimal(18, 3)
+
+  previousQty     Decimal @db.Decimal(18, 3)
+  currentQty      Decimal @db.Decimal(18, 3)
+  cumulativeQty   Decimal @db.Decimal(18, 3)
+  previousValue   Decimal @db.Decimal(18, 2)
+  currentValue    Decimal @db.Decimal(18, 2)
+  cumulativeValue Decimal @db.Decimal(18, 2)
+
+  bill    ProjectBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  boqItem BoqItem     @relation(fields: [boqItemId], references: [id])
+
+  @@unique([billId, boqItemId])
+  @@index([boqItemId])
+  @@map("project_bill_items")
+}
+
+model BillAdjustment {
+  id          String @id @default(cuid())
+  billId      String
+  /// Free string, not an enum — the exact set of adjustment kinds a company uses is
+  /// configurable, not a fixed universal list. UI offers a suggested list.
+  type        String
+  direction   AdjustmentDirection
+  description String?
+
+  calculationType DeductionCalcType @default(FIXED_AMOUNT)
+  rate            Decimal?          @db.Decimal(8, 4)
+  baseAmount      Decimal?          @db.Decimal(18, 2)
+  /// Backend-calculated authoritative amount — never trusted from the client as-is.
+  amount          Decimal           @db.Decimal(18, 2)
+
+  ledgerAccountId String?
+  sortOrder       Int     @default(0)
+  createdAt       DateTime @default(now())
+
+  bill          ProjectBill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+  ledgerAccount LedgerAccount? @relation(fields: [ledgerAccountId], references: [id])
+
+  @@index([billId])
+  @@map("bill_adjustments")
+}
+
+model Receivable {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String
+  contractId     String?
+  projectBillId  String?  @unique
+
+  partyName      String
+  billNo         String
+  billDate       DateTime
+  amount         Decimal  @default(0) @db.Decimal(18, 2)
+  receivedAmount Decimal  @default(0) @db.Decimal(18, 2)
+  dueDate        DateTime?
+  description    String?
+  status         String   @default("OUTSTANDING")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      CmsWork          @relation(fields: [projectId], references: [id])
+  contract     ProjectContract? @relation(fields: [contractId], references: [id])
+  projectBill  ProjectBill?     @relation(fields: [projectBillId], references: [id])
+  receipts     Receipt[]
+
+  @@unique([organizationId, billNo])
+  @@index([organizationId, status, dueDate])
+  @@index([organizationId, projectId])
+  @@map("receivables")
+}
+
+model VariationOrder {
+  id             String        @id @default(cuid())
+  organizationId String
+  cmsWorkId      String
+  contractId     String
+
+  variationNo   String
+  variationType VariationType @default(ADDITION)
+  title         String
+  reason        String
+  description   String?
+  requestDate   DateTime
+  approvalDate  DateTime?
+
+  requestedAmount Decimal  @db.Decimal(18, 2)
+  approvedAmount  Decimal? @db.Decimal(18, 2)
+
+  status      VariationStatus @default(DRAFT)
+  createdById String?
+  approvedById String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork      CmsWork         @relation(fields: [cmsWorkId], references: [id])
+  contract     ProjectContract @relation(fields: [contractId], references: [id])
+  items        VariationItem[]
+  documents    Document[]
+
+  @@unique([organizationId, variationNo])
+  @@index([organizationId, cmsWorkId, status])
+  @@map("variation_orders")
+}
+
+model VariationItem {
+  id               String   @id @default(cuid())
+  variationOrderId String
+  boqItemId        String?
+  itemCode         String?
+  description      String
+  unit             String?
+
+  /// Immutable snapshots of the BOQ item's state before this variation (null for a brand-new
+  /// NEW_ITEM entry that has no prior BOQ row).
+  originalQty  Decimal? @db.Decimal(18, 3)
+  originalRate Decimal? @db.Decimal(18, 2)
+  revisedQty   Decimal? @db.Decimal(18, 3)
+  revisedRate  Decimal? @db.Decimal(18, 2)
+  /// Backend-calculated net variation amount for this item.
+  amount       Decimal  @db.Decimal(18, 2)
+
+  variationOrder VariationOrder @relation(fields: [variationOrderId], references: [id], onDelete: Cascade)
+  boqItem        BoqItem?       @relation(fields: [boqItemId], references: [id])
+
+  @@map("variation_items")
+}
+
+model TimeExtension {
+  id             String @id @default(cuid())
+  organizationId String
+  cmsWorkId      String
+  contractId     String
+
+  eotNo         String
+  requestDate   DateTime
+  requestedDays Int
+  reason        String
+  description   String?
+  approvalDate  DateTime?
+  approvedDays  Int?
+
+  /// Immutable snapshots taken at request time — never overwritten by later EOTs.
+  originalCompletionDate DateTime
+  previousCompletionDate DateTime
+  revisedCompletionDate  DateTime?
+
+  status       TimeExtensionStatus @default(DRAFT)
+  createdById  String?
+  approvedById String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork      CmsWork         @relation(fields: [cmsWorkId], references: [id])
+  contract     ProjectContract @relation(fields: [contractId], references: [id])
+  documents    Document[]
+
+  @@unique([organizationId, eotNo])
+  @@index([organizationId, cmsWorkId, status])
+  @@map("time_extensions")
+}
+
+model DeductionConfig {
+  id             String    @id @default(cuid())
+  organizationId String
+  /// Free string ("VAT" | "AIT" | "OTHER" | company-specific) — never a fixed universal enum,
+  /// since applicable statutory deductions differ by company and jurisdiction.
+  type           String
+  name           String
+  code           String?
+  rate           Decimal   @db.Decimal(8, 4)
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  isActive       Boolean   @default(true)
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, type, isActive])
+  @@map("deduction_configs")
 }
 
 // ---------------------------------------------------------------------------
@@ -763,8 +1280,9 @@ model ExpenseHead {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   expenses     Expense[]
+  budgetLines  ProjectBudgetLine[]
 
   @@unique([organizationId, name])
   @@map("expense_heads")
@@ -787,6 +1305,10 @@ model Receipt {
   receiptDate    DateTime
   dueDate        DateTime?
   status         ReceiptStatus @default(PENDING)
+  /// Optional link to a specific Receivable (usually from a certified ProjectBill) this
+  /// receipt is allocated against — enables per-bill outstanding tracking and over-receipt
+  /// prevention instead of only a loose project-level total.
+  receivableId   String?
   createdById    String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -795,6 +1317,7 @@ model Receipt {
   tender       Tender?      @relation(fields: [tenderId], references: [id])
   work         CmsWork?     @relation(fields: [workId], references: [id])
   receivedInAccount BankAccount? @relation(fields: [receivedInAccountId], references: [id])
+  receivable   Receivable?  @relation(fields: [receivableId], references: [id])
 
   @@unique([organizationId, receiptNo])
   @@index([organizationId, receiptDate])
@@ -940,6 +1463,7 @@ model LedgerAccount {
   children     LedgerAccount[] @relation("AccountHierarchy")
   bankAccount  BankAccount? @relation(fields: [linkedBankAccountId], references: [id])
   journalLines JournalLine[]
+  billAdjustments BillAdjustment[]
 
   @@unique([organizationId, code])
   @@unique([organizationId, systemKey])
@@ -1112,6 +1636,10 @@ model Document {
   relatedEntityName    String?
   tenderId             String?
   workId               String?
+  contractId           String?
+  projectBillId        String?
+  variationOrderId     String?
+  timeExtensionId      String?
   organizationMasterId String?
   referenceNumber      String?
   certificateNumber    String?
@@ -1146,6 +1674,10 @@ model Document {
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tender             Tender?             @relation(fields: [tenderId], references: [id])
   work               CmsWork?            @relation(fields: [workId], references: [id])
+  contract           ProjectContract?    @relation(fields: [contractId], references: [id])
+  projectBill        ProjectBill?        @relation(fields: [projectBillId], references: [id])
+  variationOrder     VariationOrder?     @relation(fields: [variationOrderId], references: [id])
+  timeExtension      TimeExtension?      @relation(fields: [timeExtensionId], references: [id])
   organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
   versions           DocumentVersion[]
 

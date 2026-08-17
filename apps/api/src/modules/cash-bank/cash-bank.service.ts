@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@bizovix/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
@@ -10,7 +10,11 @@ type Tx = Prisma.TransactionClient;
 
 @Injectable()
 export class CashBankService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService, private readonly accounting: AccountingService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogService,
+    @Inject(forwardRef(() => AccountingService)) private readonly accounting: AccountingService,
+  ) {}
 
   private no(prefix: string) { return `${prefix}-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`; }
   private async account(tx: Tx | PrismaService, organizationId: string, id: string) {

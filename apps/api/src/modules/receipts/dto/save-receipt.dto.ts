@@ -6,6 +6,7 @@ export class SaveReceiptDto {
   @IsIn(["PROJECT", "GENERAL"]) receiptCategory!: "PROJECT" | "GENERAL";
   @IsString() @IsNotEmpty() receiptType!: string;
   @IsOptional() @IsString() workId?: string;
+  @IsOptional() @IsString() receivableId?: string;
   @IsString() @IsNotEmpty() receivedFrom!: string;
   @Type(() => Number) @IsNumber() @IsPositive() amount!: number;
   @IsString() @IsNotEmpty() receivedInAccountId!: string;

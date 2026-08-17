@@ -1,4 +1,4 @@
-import { PrismaClient, PurchaseType, TenderStatus, GuaranteeType, InstrumentStatus, AccountType, ExpenseStatus, ReceiptStatus, CmsWorkStatus } from "@prisma/client";
+import { PrismaClient, PurchaseType, TenderStatus, GuaranteeType, InstrumentStatus, AccountType, ExpenseStatus, ReceiptStatus, CmsWorkStatus, ContractType, ContractStatus, ProjectBudgetStatus, BillType, BillStatus, AdjustmentDirection, DeductionCalcType, VariationType, VariationStatus, TimeExtensionStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { syncPermissions } from "./lib/sync-permissions";
 
@@ -947,6 +947,406 @@ async function main() {
       key: "loansAndEmi",
       value: { amount: 165_000_000, nextEmiDate: daysFromNow(18).toISOString() },
     },
+  });
+
+  // --- Contract / Work Order + Project Budget + BOQ (flagship project) -------------------
+  const budgetCategoryNames = [
+    "Material",
+    "Labour",
+    "Transport",
+    "Subcontract",
+    "Equipment",
+    "Accommodation",
+    "Site Expense",
+    "Bank / Financial Charges",
+    "Overhead",
+    "Contingency",
+    "Other",
+  ] as const;
+  const budgetCategoryHeads: Record<string, string> = {};
+  for (const name of budgetCategoryNames) {
+    const head = await prisma.expenseHead.upsert({
+      where: { organizationId_name: { organizationId: organization.id, name } },
+      update: { isActive: true },
+      create: { organizationId: organization.id, name },
+    });
+    budgetCategoryHeads[name] = head.id;
+  }
+
+  const flagshipContract = await prisma.projectContract.upsert({
+    where: { organizationId_contractNo: { organizationId: organization.id, contractNo: "WO-2026-0012" } },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      tenderId: flagshipTender.id,
+      cmsWorkId: "seed-cms-work-01",
+      pgBgWorkflowId: flagshipPgBgWorkflow.id,
+      organizationMasterId: masters["DPHE"]!.id,
+      contractNo: "WO-2026-0012",
+      contractType: ContractType.WORK_ORDER,
+      issueDate: new Date("2024-05-18T00:00:00.000Z"),
+      contractDate: new Date("2024-05-18T00:00:00.000Z"),
+      originalContractValue: 12_500_000,
+      currentContractValue: 12_500_000,
+      currency: "BDT",
+      commencementDate: new Date("2024-05-16T00:00:00.000Z"),
+      originalCompletionDate: new Date("2025-05-15T00:00:00.000Z"),
+      currentCompletionDate: new Date("2025-05-15T00:00:00.000Z"),
+      durationDays: 364,
+      dlpDays: 365,
+      retentionPct: 5,
+      securityDepositPct: 10,
+      clientContactName: "Md. Mahbubur Rahman",
+      responsiblePerson: "Saiful Islam",
+      scopeOfWork:
+        "Supply, installation, testing and commissioning of the LED display system at Patuakhali as per approved specifications and NOA terms.",
+      status: ContractStatus.ACTIVE,
+      createdById: adminUser.id,
+    },
+  });
+
+  const flagshipBudget = await prisma.projectBudget.upsert({
+    where: { organizationId_cmsWorkId_version: { organizationId: organization.id, cmsWorkId: "seed-cms-work-01", version: 1 } },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      cmsWorkId: "seed-cms-work-01",
+      version: 1,
+      status: ProjectBudgetStatus.APPROVED,
+      totalBudget: 6_950_000,
+      revisionNote: "Initial approved budget at contract commencement.",
+      createdById: adminUser.id,
+      approvedById: adminUser.id,
+      approvedAt: new Date("2024-05-20T00:00:00.000Z"),
+    },
+  });
+  const budgetLineDefs = [
+    { category: "Material", amount: 4_200_000, description: "LED panels, controllers, power supplies and structure" },
+    { category: "Labour", amount: 1_800_000, description: "Installation and site labour" },
+    { category: "Transport", amount: 350_000, description: "Equipment and material transport" },
+    { category: "Accommodation", amount: 250_000, description: "Site team accommodation" },
+    { category: "Bank / Financial Charges", amount: 180_000, description: "PG/BG and tender security charges" },
+    { category: "Other", amount: 170_000, description: "Miscellaneous site expenses" },
+  ] as const;
+  await prisma.projectBudgetLine.deleteMany({ where: { budgetId: flagshipBudget.id } });
+  await prisma.projectBudgetLine.createMany({
+    data: budgetLineDefs.map((line) => ({
+      budgetId: flagshipBudget.id,
+      expenseHeadId: budgetCategoryHeads[line.category]!,
+      category: line.category,
+      description: line.description,
+      amount: line.amount,
+    })),
+  });
+
+  const boqSectionDefs = ["Supply Items", "Civil Works", "Installation", "Testing & Commissioning"] as const;
+  const boqSections: Record<string, string> = {};
+  for (const name of boqSectionDefs) {
+    const section = await prisma.boqSection.upsert({
+      where: { cmsWorkId_name: { cmsWorkId: "seed-cms-work-01", name } },
+      update: {},
+      create: { organizationId: organization.id, cmsWorkId: "seed-cms-work-01", name },
+    });
+    boqSections[name] = section.id;
+  }
+  const boqItemDefs = [
+    { code: "LED-01", section: "Supply Items", description: "LED Display Panel", unit: "Nos", qty: 50, rate: 200_000 },
+    { code: "LED-02", section: "Supply Items", description: "Controller", unit: "Nos", qty: 5, rate: 150_000 },
+    { code: "LED-03", section: "Supply Items", description: "Power Supply", unit: "Nos", qty: 10, rate: 45_000 },
+    { code: "LED-04", section: "Civil Works", description: "Structure", unit: "Lot", qty: 1, rate: 800_000 },
+    { code: "LED-05", section: "Installation", description: "Installation", unit: "Lot", qty: 1, rate: 350_000 },
+    { code: "LED-06", section: "Testing & Commissioning", description: "Testing & Commissioning", unit: "Lot", qty: 1, rate: 150_000 },
+  ] as const;
+  for (const item of boqItemDefs) {
+    await prisma.boqItem.upsert({
+      where: { cmsWorkId_itemCode: { cmsWorkId: "seed-cms-work-01", itemCode: item.code } },
+      update: {},
+      create: {
+        organizationId: organization.id,
+        cmsWorkId: "seed-cms-work-01",
+        sectionId: boqSections[item.section]!,
+        itemCode: item.code,
+        description: item.description,
+        unit: item.unit,
+        contractQty: item.qty,
+        unitRate: item.rate,
+        contractAmount: item.qty * item.rate,
+        originalQty: item.qty,
+        originalRate: item.rate,
+        originalAmount: item.qty * item.rate,
+        createdById: adminUser.id,
+      },
+    });
+  }
+
+  // Real Project Expenses against the same budget categories, so Budget vs Actual has
+  // genuine variance to show (Material/Accommodation under, Labour/Bank Charges over).
+  const flagshipExpenseDefs = [
+    { id: "seed-project-expense-flagship-01", category: "Material", amount: 3_000_000, days: 60, ref: "PE-2024-1001" },
+    { id: "seed-project-expense-flagship-02", category: "Labour", amount: 1_850_000, days: 45, ref: "PE-2024-1002" },
+    { id: "seed-project-expense-flagship-03", category: "Transport", amount: 300_000, days: 40, ref: "PE-2024-1003" },
+    { id: "seed-project-expense-flagship-04", category: "Bank / Financial Charges", amount: 190_000, days: 30, ref: "PE-2024-1004" },
+  ] as const;
+  for (const e of flagshipExpenseDefs) {
+    await prisma.expense.upsert({
+      where: { id: e.id },
+      update: {},
+      create: {
+        id: e.id,
+        organizationId: organization.id,
+        workId: "seed-cms-work-01",
+        expenseHeadId: budgetCategoryHeads[e.category]!,
+        expenseById: "seed-user-shajib",
+        paidFromAccountId: primeBank.id,
+        category: e.category,
+        description: `${e.category} expense for Supply of LED Display at Patuakhali`,
+        amount: e.amount,
+        expenseDate: daysAgo(e.days),
+        status: ExpenseStatus.APPROVED,
+        referenceNo: e.ref,
+        createdById: adminUser.id,
+      },
+    });
+  }
+
+  // --- Running Bill / IPC + Retention + VAT/AIT + Variation Order + Time Extension (flagship) ---
+  await prisma.deductionConfig.upsert({
+    where: { id: "seed-deduction-vat-01" },
+    update: {},
+    create: {
+      id: "seed-deduction-vat-01",
+      organizationId: organization.id,
+      type: "VAT",
+      name: "Standard VAT (VDS)",
+      code: "VAT-STD",
+      rate: 7.5,
+      effectiveFrom: new Date("2024-01-01T00:00:00.000Z"),
+      createdById: adminUser.id,
+    },
+  });
+  await prisma.deductionConfig.upsert({
+    where: { id: "seed-deduction-ait-01" },
+    update: {},
+    create: {
+      id: "seed-deduction-ait-01",
+      organizationId: organization.id,
+      type: "AIT",
+      name: "Standard AIT",
+      code: "AIT-STD",
+      rate: 6,
+      effectiveFrom: new Date("2024-01-01T00:00:00.000Z"),
+      createdById: adminUser.id,
+    },
+  });
+
+  const flagshipBoqItems = await prisma.boqItem.findMany({ where: { cmsWorkId: "seed-cms-work-01" } });
+  const boqByCode = Object.fromEntries(flagshipBoqItems.map((b) => [b.itemCode, b]));
+
+  const flagshipBill = await prisma.projectBill.upsert({
+    where: { id: "seed-project-bill-01" },
+    update: {},
+    create: {
+      id: "seed-project-bill-01",
+      organizationId: organization.id,
+      cmsWorkId: "seed-cms-work-01",
+      contractId: flagshipContract.id,
+      billNo: "RB-2026-0001",
+      billType: BillType.RUNNING,
+      billDate: new Date("2024-08-20T00:00:00.000Z"),
+      periodFrom: new Date("2024-07-01T00:00:00.000Z"),
+      periodTo: new Date("2024-08-20T00:00:00.000Z"),
+      submissionDate: new Date("2024-08-22T00:00:00.000Z"),
+      certificationDate: new Date("2024-08-25T00:00:00.000Z"),
+      clientCertificateRef: "DPHE/IPC/2024/01",
+      measurementBookRef: "MB-2024-014",
+      grossWorkValue: 7_250_000,
+      approvedAdditions: 500_000,
+      grossBillAmount: 7_750_000,
+      retentionPct: 5,
+      retentionAmount: 362_500,
+      retentionReleaseDueDate: new Date("2026-05-15T00:00:00.000Z"),
+      vatRate: 7.5,
+      vatAmount: 581_250,
+      aitRate: 6,
+      aitAmount: 465_000,
+      otherDeductionAmount: 100_000,
+      netCertifiedAmount: 6_241_250,
+      receivedAmount: 4_000_000,
+      status: BillStatus.PARTIALLY_RECEIVED,
+      createdById: adminUser.id,
+      certifiedById: adminUser.id,
+    },
+  });
+
+  const billItemDefs = [
+    { code: "LED-01", currentQty: 30 },
+    { code: "LED-02", currentQty: 3 },
+    { code: "LED-04", currentQty: 1 },
+  ] as const;
+  for (const def of billItemDefs) {
+    const boqItem = boqByCode[def.code]!;
+    const currentValue = def.currentQty * Number(boqItem.unitRate);
+    await prisma.projectBillItem.upsert({
+      where: { billId_boqItemId: { billId: flagshipBill.id, boqItemId: boqItem.id } },
+      update: {},
+      create: {
+        billId: flagshipBill.id,
+        boqItemId: boqItem.id,
+        description: boqItem.description,
+        unit: boqItem.unit,
+        approvedRate: boqItem.unitRate,
+        contractQty: boqItem.contractQty,
+        previousQty: 0,
+        currentQty: def.currentQty,
+        cumulativeQty: def.currentQty,
+        previousValue: 0,
+        currentValue,
+        cumulativeValue: currentValue,
+      },
+    });
+    // Certification-time effect: BOQ execution cache reflects the certified cumulative qty.
+    await prisma.boqItem.update({
+      where: { id: boqItem.id },
+      data: { executedQty: def.currentQty, executedValue: currentValue },
+    });
+  }
+
+  const billAdjustmentDefs = [
+    { id: "seed-bill-adjustment-01", type: "Mobilization Advance", direction: AdjustmentDirection.ADDITION, amount: 500_000 },
+    { id: "seed-bill-adjustment-02", type: "Advance Recovery", direction: AdjustmentDirection.DEDUCTION, amount: 100_000 },
+  ] as const;
+  for (const [index, def] of billAdjustmentDefs.entries()) {
+    await prisma.billAdjustment.upsert({
+      where: { id: def.id },
+      update: {},
+      create: {
+        id: def.id,
+        billId: flagshipBill.id,
+        type: def.type,
+        direction: def.direction,
+        calculationType: DeductionCalcType.FIXED_AMOUNT,
+        amount: def.amount,
+        sortOrder: index,
+      },
+    });
+  }
+
+  const flagshipReceivable = await prisma.receivable.upsert({
+    where: { projectBillId: flagshipBill.id },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      projectId: "seed-cms-work-01",
+      contractId: flagshipContract.id,
+      projectBillId: flagshipBill.id,
+      partyName: "DPHE",
+      billNo: flagshipBill.billNo,
+      billDate: flagshipBill.billDate,
+      amount: 6_241_250,
+      receivedAmount: 4_000_000,
+      status: "PARTIALLY_RECEIVED",
+      createdById: adminUser.id,
+    },
+  });
+
+  await prisma.receipt.upsert({
+    where: { id: "seed-receipt-flagship-bill-01" },
+    update: {},
+    create: {
+      id: "seed-receipt-flagship-bill-01",
+      organizationId: organization.id,
+      workId: "seed-cms-work-01",
+      receivableId: flagshipReceivable.id,
+      receiptNo: "RC-2026-00099",
+      receiptCategory: "PROJECT",
+      receiptType: "PROGRESS_PAYMENT",
+      receivedFrom: "DPHE",
+      receivedInAccountId: primeBank.id,
+      amount: 4_000_000,
+      receiptDate: new Date("2024-09-05T00:00:00.000Z"),
+      status: ReceiptStatus.RECEIVED,
+      description: "Partial payment against RB-2026-0001",
+      createdById: adminUser.id,
+    },
+  });
+
+  // Approved Variation Order — authorized quantity increase on LED-03 (Power Supply).
+  const led03 = boqByCode["LED-03"]!;
+  const variationOrder = await prisma.variationOrder.upsert({
+    where: { id: "seed-variation-order-01" },
+    update: {},
+    create: {
+      id: "seed-variation-order-01",
+      organizationId: organization.id,
+      cmsWorkId: "seed-cms-work-01",
+      contractId: flagshipContract.id,
+      variationNo: "VO-2026-0001",
+      variationType: VariationType.QUANTITY_CHANGE,
+      title: "Additional Power Supply Units",
+      reason: "Client requested 5 additional power supply units for redundancy.",
+      requestDate: new Date("2024-09-10T00:00:00.000Z"),
+      approvalDate: new Date("2024-09-18T00:00:00.000Z"),
+      requestedAmount: 225_000,
+      approvedAmount: 225_000,
+      status: VariationStatus.APPROVED,
+      createdById: adminUser.id,
+      approvedById: adminUser.id,
+    },
+  });
+  await prisma.variationItem.upsert({
+    where: { id: "seed-variation-item-01" },
+    update: {},
+    create: {
+      id: "seed-variation-item-01",
+      variationOrderId: variationOrder.id,
+      boqItemId: led03.id,
+      itemCode: led03.itemCode,
+      description: led03.description,
+      unit: led03.unit,
+      originalQty: 10,
+      originalRate: 45_000,
+      revisedQty: 15,
+      revisedRate: 45_000,
+      amount: 225_000,
+    },
+  });
+  // Approved-variation effect: BOQ ceiling and current contract value both move, while
+  // BoqItem.originalQty/originalRate/originalAmount (set at BOQ creation) stay untouched.
+  await prisma.boqItem.update({
+    where: { id: led03.id },
+    data: { contractQty: 15, contractAmount: 675_000 },
+  });
+  await prisma.projectContract.update({
+    where: { id: flagshipContract.id },
+    data: { currentContractValue: 12_725_000 },
+  });
+
+  // Approved Time Extension — 45 days.
+  await prisma.timeExtension.upsert({
+    where: { id: "seed-time-extension-01" },
+    update: {},
+    create: {
+      id: "seed-time-extension-01",
+      organizationId: organization.id,
+      cmsWorkId: "seed-cms-work-01",
+      contractId: flagshipContract.id,
+      eotNo: "EOT-2026-0001",
+      requestDate: new Date("2025-03-01T00:00:00.000Z"),
+      requestedDays: 45,
+      reason: "Monsoon-related site access delays.",
+      approvalDate: new Date("2025-03-10T00:00:00.000Z"),
+      approvedDays: 45,
+      originalCompletionDate: new Date("2025-05-15T00:00:00.000Z"),
+      previousCompletionDate: new Date("2025-05-15T00:00:00.000Z"),
+      revisedCompletionDate: new Date("2025-06-29T00:00:00.000Z"),
+      status: TimeExtensionStatus.APPROVED,
+      createdById: adminUser.id,
+      approvedById: adminUser.id,
+    },
+  });
+  await prisma.projectContract.update({
+    where: { id: flagshipContract.id },
+    data: { currentCompletionDate: new Date("2025-06-29T00:00:00.000Z") },
   });
 
   console.log("Seed complete.");

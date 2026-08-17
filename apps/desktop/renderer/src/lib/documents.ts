@@ -13,6 +13,10 @@ export type DocumentStatus =
 export type DocumentModule =
   | "Tender"
   | "Project / CMS"
+  | "Contract"
+  | "Running Bill"
+  | "Variation Order"
+  | "Time Extension"
   | "Expense"
   | "Receipt"
   | "Cash & Bank"
@@ -144,6 +148,10 @@ export const DOCUMENT_CATEGORIES: DocumentCategory[] = [
 export const DOCUMENT_MODULES: DocumentModule[] = [
   "Tender",
   "Project / CMS",
+  "Contract",
+  "Running Bill",
+  "Variation Order",
+  "Time Extension",
   "Expense",
   "Receipt",
   "Cash & Bank",

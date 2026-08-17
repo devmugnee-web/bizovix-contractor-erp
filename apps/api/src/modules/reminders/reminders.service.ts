@@ -19,6 +19,8 @@ const AUTO_SOURCE_MODULES = [
   "RECEIVABLE",
   "TENDER_SUBMISSION",
   "TENDER_OPENING",
+  "CONTRACT",
+  "PROJECT_BILL",
 ] as const;
 const TENDER_NOT_YET_SUBMITTED = ["DRAFT", "PUBLISHED", "DOCUMENT_PURCHASED", "PREPARING"] as const;
 
@@ -133,7 +135,7 @@ export class RemindersService {
     });
   }
   async syncSources(org: string) {
-    const [rules, security, guarantees, payables, cheques, documents, receivables, submittingTenders, openingTenders] =
+    const [rules, security, guarantees, payables, cheques, documents, receivables, submittingTenders, openingTenders, activeContracts, retentionBills] =
       await Promise.all([
         this.reminderRules.allRules(org),
         this.prisma.tenderSecurity.findMany({
@@ -162,6 +164,19 @@ export class RemindersService {
         this.prisma.tender.findMany({
           where: { organizationId: org, status: "SUBMITTED", openingDate: { not: null } },
           include: { organizationMaster: true },
+        }),
+        this.prisma.projectContract.findMany({
+          where: { organizationId: org, status: "ACTIVE" },
+          include: { cmsWork: true },
+        }),
+        this.prisma.projectBill.findMany({
+          where: {
+            organizationId: org,
+            status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] },
+            retentionAmount: { gt: 0 },
+            retentionReleaseDueDate: { not: null },
+          },
+          include: { cmsWork: true },
         }),
       ]);
     /** Settings-driven priority/notification-window per reminder type, falling back to a
@@ -312,6 +327,58 @@ export class RemindersService {
             notificationBefore: rule.window,
           }),
         ),
+      ...activeContracts
+        .map((x) => ({ x, rule: effective("CONTRACT_EXPIRY", "MEDIUM", 30) }))
+        .filter(({ rule }) => rule.enabled)
+        .flatMap(({ x, rule }) => {
+          const reminders = [
+            this.source(org, {
+              type: "Work Order / Contract Expiry",
+              title: `Contract completion approaching: ${x.contractNo}`,
+              dueDate: x.currentCompletionDate,
+              sourceModule: "CONTRACT",
+              sourceId: x.id,
+              referenceNo: x.contractNo,
+              relatedEntityName: x.cmsWork.workName,
+              priority: rule.priority,
+              notificationBefore: rule.window,
+            }),
+          ];
+          if (x.dlpDays) {
+            const dlpEndDate = new Date(x.currentCompletionDate.getTime() + x.dlpDays * 86_400_000);
+            reminders.push(
+              this.source(org, {
+                type: "DLP End Date",
+                title: `Defect Liability Period ending: ${x.contractNo}`,
+                dueDate: dlpEndDate,
+                sourceModule: "CONTRACT",
+                sourceId: x.id,
+                referenceNo: x.contractNo,
+                relatedEntityName: x.cmsWork.workName,
+                priority: rule.priority,
+                notificationBefore: rule.window,
+              }),
+            );
+          }
+          return reminders;
+        }),
+      ...retentionBills
+        .filter((b) => b.retentionAmount.gt(b.retentionReleasedAmount))
+        .map((x) => ({ x, rule: effective("CONTRACT_EXPIRY", "MEDIUM", 30) }))
+        .filter(({ rule }) => rule.enabled)
+        .map(({ x, rule }) =>
+          this.source(org, {
+            type: "Retention Release Due",
+            title: `Retention release due: ${x.billNo}`,
+            dueDate: x.retentionReleaseDueDate!,
+            sourceModule: "PROJECT_BILL",
+            sourceId: x.id,
+            referenceNo: x.billNo,
+            relatedEntityName: x.cmsWork.workName,
+            priority: rule.priority,
+            notificationBefore: rule.window,
+          }),
+        ),
     ]);
   }
 
@@ -319,7 +386,7 @@ export class RemindersService {
    * released, renewed, or its date changed), auto-complete the reminder that was
    * generated for its previous state, instead of leaving it dangling forever. */
   private async autoResolveStaleReminders(org: string) {
-    const [security, guarantees, payables, cheques, documents, receivables, submittingTenders, openingTenders] =
+    const [security, guarantees, payables, cheques, documents, receivables, submittingTenders, openingTenders, activeContracts, retentionBills] =
       await Promise.all([
         this.prisma.tenderSecurity.findMany({
           where: { organizationId: org, status: "ACTIVE" },
@@ -353,6 +420,19 @@ export class RemindersService {
           where: { organizationId: org, status: "SUBMITTED", openingDate: { not: null } },
           select: { id: true, openingDate: true },
         }),
+        this.prisma.projectContract.findMany({
+          where: { organizationId: org, status: "ACTIVE" },
+          select: { id: true, currentCompletionDate: true, dlpDays: true },
+        }),
+        this.prisma.projectBill.findMany({
+          where: {
+            organizationId: org,
+            status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] },
+            retentionAmount: { gt: 0 },
+            retentionReleaseDueDate: { not: null },
+          },
+          select: { id: true, retentionReleaseDueDate: true, retentionAmount: true, retentionReleasedAmount: true },
+        }),
       ]);
 
     const keyOf = (id: string, date: Date | null | undefined) => `${id}:${date ? date.getTime() : ""}`;
@@ -365,6 +445,15 @@ export class RemindersService {
       RECEIVABLE: new Set(receivables.map((x) => keyOf(x.id, x.dueDate))),
       TENDER_SUBMISSION: new Set(submittingTenders.map((x) => keyOf(x.id, x.submissionDeadline))),
       TENDER_OPENING: new Set(openingTenders.map((x) => keyOf(x.id, x.openingDate))),
+      CONTRACT: new Set(
+        activeContracts.flatMap((x) => [
+          keyOf(x.id, x.currentCompletionDate),
+          ...(x.dlpDays ? [keyOf(x.id, new Date(x.currentCompletionDate.getTime() + x.dlpDays * 86_400_000))] : []),
+        ]),
+      ),
+      PROJECT_BILL: new Set(
+        retentionBills.filter((b) => b.retentionAmount.gt(b.retentionReleasedAmount)).map((b) => keyOf(b.id, b.retentionReleaseDueDate)),
+      ),
     };
 
     for (const sourceModule of AUTO_SOURCE_MODULES) {

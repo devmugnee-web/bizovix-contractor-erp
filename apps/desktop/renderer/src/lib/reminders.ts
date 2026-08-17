@@ -17,6 +17,8 @@ export const REMINDER_TYPES = [
   "Tax Return Due",
   "Project Completion Date",
   "Work Order / Contract Expiry",
+  "DLP End Date",
+  "Retention Release Due",
   "Tender Follow-up",
   "Project Follow-up",
   "Payment Follow-up",
@@ -37,6 +39,8 @@ export const SOURCE_MODULES = [
   "CHEQUE",
   "LOAN",
   "DOCUMENT",
+  "CONTRACT",
+  "PROJECT_BILL",
 ];
 export const PRIORITIES: ReminderPriority[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 export const STATUSES: ReminderStatus[] = [
@@ -61,6 +65,8 @@ const SOURCE_MODULE_LABELS: Record<string, string> = {
   CHEQUE: "Cheque",
   LOAN: "Loan",
   DOCUMENT: "Document",
+  CONTRACT: "Contract",
+  PROJECT_BILL: "Running Bill",
 };
 export const sourceModuleLabel = (v: string) => SOURCE_MODULE_LABELS[v] ?? label(v);
 export function dateDelta(value: string) {

@@ -20,6 +20,22 @@ export class QueryDocumentDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsString()
+  contractId?: string;
+
+  @IsOptional()
+  @IsString()
+  projectBillId?: string;
+
+  @IsOptional()
+  @IsString()
+  variationOrderId?: string;
+
+  @IsOptional()
+  @IsString()
+  timeExtensionId?: string;
+
+  @IsOptional()
+  @IsString()
   status?: string;
 
   @IsOptional()

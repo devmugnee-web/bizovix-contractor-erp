@@ -18,6 +18,9 @@ export const NUMBERING_MODULE_KEYS = [
   "PROJECT",
   "CHEQUE",
   "INVOICE",
+  "PROJECT_BILL",
+  "VARIATION_ORDER",
+  "TIME_EXTENSION",
 ] as const;
 export type NumberingModuleKey = (typeof NUMBERING_MODULE_KEYS)[number];
 
@@ -35,6 +38,9 @@ const DEFAULT_PREFIX: Record<NumberingModuleKey, string> = {
   PROJECT: "PRJ",
   CHEQUE: "CHQ",
   INVOICE: "INV",
+  PROJECT_BILL: "RB",
+  VARIATION_ORDER: "VO",
+  TIME_EXTENSION: "EOT",
 };
 
 /** RECEIPT keeps its pre-existing 5-digit format (the live ReceiptSequence counter
