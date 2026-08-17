@@ -117,7 +117,7 @@ export default function CreditCommitmentPage() {
     resolver: zodResolver(createCreditCommitmentSchema),
     defaultValues: {
       paymentFromAccountId: "",
-      paymentDate: "2024-05-13",
+      paymentDate: new Date().toISOString().slice(0, 10),
       remarks: "Credit commitment charge for selected tenders.",
       items: [],
     },

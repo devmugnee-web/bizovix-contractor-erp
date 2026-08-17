@@ -103,3 +103,27 @@ export async function apiRequestPaginatedWithSummary<T, S>(path: string, options
   const envelope = (await requestEnvelope(path, options)) as unknown as PaginatedResponse<T> & { summary: S };
   return { items: envelope.data, meta: envelope.meta, summary: envelope.summary };
 }
+
+/** For binary downloads (file bytes, not a JSON envelope) — e.g. document/invoice downloads. */
+export async function apiRequestBlob(
+  path: string,
+  options: RequestOptions = {},
+): Promise<{ blob: Blob; fileName: string | null }> {
+  let response = await rawRequest(path, options);
+
+  if (response.status === 401 && !options.skipAuth && tokenStorage.getRefreshToken()) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) response = await rawRequest(path, options);
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) tokenStorage.clear();
+    throw new ApiError("Failed to download file", response.status);
+  }
+
+  const disposition = response.headers.get("Content-Disposition");
+  const match = disposition ? /filename="?([^"]+)"?/.exec(disposition) : null;
+  const fileName = match?.[1] ? decodeURIComponent(match[1]) : null;
+  const blob = await response.blob();
+  return { blob, fileName };
+}

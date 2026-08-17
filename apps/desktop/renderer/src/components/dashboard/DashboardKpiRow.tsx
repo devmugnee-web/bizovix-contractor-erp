@@ -52,9 +52,9 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="Security Deposit (SD)"
         icon={Lock}
         iconClassName="bg-biz-teal-soft text-biz-teal"
-        value={formatBDTCompact(kpis.securityDeposit.amount)}
+        value={kpis.securityDeposit.available ? formatBDTCompact(kpis.securityDeposit.amount) : "Not Available"}
       >
-        Projects: {kpis.securityDeposit.projects}
+        {kpis.securityDeposit.available ? `Projects: ${kpis.securityDeposit.projects}` : "No authoritative source yet"}
       </DashboardKpiCard>
 
       <DashboardKpiCard
@@ -92,14 +92,20 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="Loans & EMI"
         icon={CircleDollarSign}
         iconClassName="bg-biz-purple-soft text-biz-purple"
-        value={formatBDTCompact(kpis.loansAndEmi.amount)}
+        value={kpis.loansAndEmi.configured ? formatBDTCompact(kpis.loansAndEmi.amount) : "Not Configured"}
       >
-        Next EMI:
-        <br />
-        {kpis.loansAndEmi.nextEmiDate ? (
-          <span className="font-medium text-biz-danger">{formatDate(kpis.loansAndEmi.nextEmiDate)}</span>
+        {kpis.loansAndEmi.configured ? (
+          <>
+            Next EMI:
+            <br />
+            {kpis.loansAndEmi.nextEmiDate ? (
+              <span className="font-medium text-biz-danger">{formatDate(kpis.loansAndEmi.nextEmiDate)}</span>
+            ) : (
+              "—"
+            )}
+          </>
         ) : (
-          "—"
+          "No Loan/EMI module yet"
         )}
       </DashboardKpiCard>
     </div>

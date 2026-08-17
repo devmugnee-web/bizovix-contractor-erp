@@ -3,7 +3,6 @@ import * as React from "react";
 import {
   ArrowLeft,
   FileSpreadsheet,
-  FileText,
   Filter,
   Printer,
   RotateCcw,
@@ -87,15 +86,11 @@ export function ReportWorkspace({ category, report }: { category: string; report
           </SecondaryButton>
           <SecondaryButton onClick={() => window.print()}>
             <Printer className="h-4 w-4" />
-            Print
-          </SecondaryButton>
-          <SecondaryButton onClick={() => window.print()}>
-            <FileText className="h-4 w-4" />
-            Export PDF
+            Print / Save as PDF
           </SecondaryButton>
           <PrimaryButton onClick={exportCsv} disabled={exporter.isPending}>
             <FileSpreadsheet className="h-4 w-4" />
-            Export Excel
+            Export CSV
           </PrimaryButton>
         </div>
       </div>

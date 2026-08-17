@@ -117,18 +117,26 @@ export class DocumentPurchasesService {
     if (!account) throw new NotFoundException("Payment account not found");
   }
 
+  private async assertTenderBelongsToOrg(organizationId: string, linkedTenderId?: string | null) {
+    if (!linkedTenderId) return;
+    const tender = await this.prisma.tender.findFirst({ where: { id: linkedTenderId, organizationId } });
+    if (!tender) throw new NotFoundException("Tender not found");
+  }
+
   async create(
     organizationId: string,
     userId: string,
     dto: CreateDocumentPurchaseDto,
   ): Promise<DocumentPurchaseDto> {
     await this.assertBelongsToOrg(organizationId, dto.organizationMasterId, dto.paymentFromAccountId);
+    await this.assertTenderBelongsToOrg(organizationId, dto.linkedTenderId);
 
     const record = await this.prisma.documentPurchase.create({
       data: {
         organizationId,
         purchaseType: dto.purchaseType,
         egpTenderId: dto.purchaseType === "EGP" ? dto.tenderId : null,
+        linkedTenderId: dto.linkedTenderId ?? null,
         organizationMasterId: dto.organizationMasterId,
         tenderWorkName: dto.tenderWorkName,
         purchaseDate: new Date(dto.purchaseDate),
@@ -167,12 +175,17 @@ export class DocumentPurchasesService {
       );
     }
 
+    if (dto.linkedTenderId !== undefined) {
+      await this.assertTenderBelongsToOrg(organizationId, dto.linkedTenderId);
+    }
+
     const purchaseType = dto.purchaseType ?? existing.purchaseType;
     const record = await this.prisma.documentPurchase.update({
-      where: { id },
+      where: { id, organizationId },
       data: {
         ...(dto.purchaseType ? { purchaseType: dto.purchaseType } : {}),
         egpTenderId: purchaseType === "EGP" ? dto.tenderId ?? existing.tenderId : null,
+        ...(dto.linkedTenderId !== undefined ? { linkedTenderId: dto.linkedTenderId || null } : {}),
         ...(dto.organizationMasterId ? { organizationMasterId: dto.organizationMasterId } : {}),
         ...(dto.tenderWorkName ? { tenderWorkName: dto.tenderWorkName } : {}),
         ...(dto.purchaseDate ? { purchaseDate: new Date(dto.purchaseDate) } : {}),
@@ -197,7 +210,7 @@ export class DocumentPurchasesService {
 
   async remove(organizationId: string, userId: string, id: string): Promise<null> {
     const existing = await this.findOne(organizationId, id);
-    await this.prisma.documentPurchase.delete({ where: { id } });
+    await this.prisma.documentPurchase.delete({ where: { id, organizationId } });
 
     await this.auditLogService.record({
       organizationId,

@@ -146,7 +146,7 @@ export class ProjectExpensesService {
     };
     const { head } = await this.assertReferences(organizationId, merged);
     const record = await this.prisma.expense.update({
-      where: { id },
+      where: { id, organizationId },
       data: {
         workId: merged.workId,
         expenseDate: new Date(merged.expenseDate),
@@ -165,7 +165,7 @@ export class ProjectExpensesService {
 
   async remove(organizationId: string, userId: string, id: string) {
     const existing = await this.findOne(organizationId, id);
-    await this.prisma.expense.delete({ where: { id } });
+    await this.prisma.expense.delete({ where: { id, organizationId } });
     await this.auditLogService.record({ organizationId, userId, action: "delete", entityType: "ProjectExpense", entityId: id, oldValue: existing });
     return null;
   }

@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@bizovix/database";
-import { Prisma as PrismaNamespace } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { TenderBankSettingsService } from "../settings-tender-bank/tender-bank-settings.service";
 import { AcceptNoaDto, FinalizePgBgDto, SavePgBgWorkflowDto } from "./dto/save-pg-bg-workflow.dto";
 import { QueryPgBgDto } from "./dto/query-pg-bg.dto";
 
@@ -18,20 +18,31 @@ function workflowToDto(record: WorkflowRecord) {
   };
 }
 
-function securityAmount(tenderId: string | null, documentPrice: PrismaNamespace.Decimal) {
-  const samples: Record<string, number> = {
-    "1024587": 250000,
-    "1024122": 150000,
-    "1023988": 100000,
-    "1023781": 200000,
-    "1023675": 120000,
-  };
-  return new PrismaNamespace.Decimal(samples[tenderId ?? ""] ?? documentPrice.mul(50));
-}
-
 @Injectable()
 export class PgBgService {
-  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+    private readonly tenderBankSettings: TenderBankSettingsService,
+  ) {}
+
+  /**
+   * Real business rule: reuse the actual Tender Security amount already recorded for this
+   * document purchase (TenderSecurityItem.securityAmount) when one exists — that figure is
+   * authoritative since the tender security step runs before PG/BG. If no Tender Security
+   * was ever created for this purchase, fall back to the same configured
+   * percentage-of-estimate rule used on the Tender Security pending list — never a
+   * per-tender hardcoded amount.
+   */
+  private async securityAmountFor(
+    documentPurchaseId: string,
+    estimatedTenderAmount: Prisma.Decimal,
+    tsDefaultSecurityPct: Prisma.Decimal,
+  ) {
+    const item = await this.prisma.tenderSecurityItem.findUnique({ where: { documentPurchaseId } });
+    if (item) return item.securityAmount;
+    return estimatedTenderAmount.mul(tsDefaultSecurityPct).div(100);
+  }
 
   async eligibleTenders(organizationId: string, query: QueryPgBgDto) {
     const page = query.page ?? 1;
@@ -39,38 +50,40 @@ export class PgBgService {
     const where: Prisma.DocumentPurchaseWhereInput = {
       organizationId,
       purchaseType: "EGP",
-      ...(query.search ? { OR: [
-        { egpTenderId: { contains: query.search, mode: "insensitive" } },
-        { tenderWorkName: { contains: query.search, mode: "insensitive" } },
-      ] } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { egpTenderId: { contains: query.search, mode: "insensitive" } },
+              { tenderWorkName: { contains: query.search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
     };
-    const preferredIds = ["1024587", "1024122", "1023988", "1023781", "1023675"];
     const relation = { organizationMaster: { select: { id: true, shortName: true, fullName: true } } } as const;
-    let items;
-    if (!query.search && page === 1) {
-      const preferred = await this.prisma.documentPurchase.findMany({
-        where: { ...where, egpTenderId: { in: preferredIds } },
+    const [items, total, settings] = await Promise.all([
+      this.prisma.documentPurchase.findMany({
+        where,
         include: relation,
-        distinct: ["egpTenderId"],
-      });
-      preferred.sort((a, b) => preferredIds.indexOf(a.egpTenderId ?? "") - preferredIds.indexOf(b.egpTenderId ?? ""));
-      items = preferred.slice(0, limit);
-      if (items.length < limit) {
-        const extra = await this.prisma.documentPurchase.findMany({ where: { ...where, egpTenderId: { notIn: preferredIds } }, include: relation, orderBy: { purchaseDate: "desc" }, take: limit - items.length });
-        items.push(...extra);
-      }
-    } else {
-      items = await this.prisma.documentPurchase.findMany({ where: !query.search ? { ...where, egpTenderId: { notIn: preferredIds } } : where, include: relation, orderBy: { purchaseDate: "desc" }, skip: !query.search ? Math.max(0, page - 2) * limit : (page - 1) * limit, take: limit });
-    }
-    const total = await this.prisma.documentPurchase.count({ where });
-    return {
-      items: items.map((item) => ({
+        orderBy: { purchaseDate: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.documentPurchase.count({ where }),
+      this.tenderBankSettings.get(organizationId),
+    ]);
+    const withAmounts = await Promise.all(
+      items.map(async (item) => ({
         id: item.id,
         tenderId: item.egpTenderId,
         tenderWorkName: item.tenderWorkName,
         organizationMaster: item.organizationMaster,
-        tenderSecurityAmount: securityAmount(item.egpTenderId, item.documentPrice).toFixed(2),
+        tenderSecurityAmount: (
+          await this.securityAmountFor(item.id, item.estimatedTenderAmount, settings.tsDefaultSecurityPct)
+        ).toFixed(2),
       })),
+    );
+    return {
+      items: withAmounts,
       meta: buildPaginationMeta(total, page, limit),
     };
   }
@@ -91,6 +104,12 @@ export class PgBgService {
       where: { id: dto.documentPurchaseId, organizationId },
     });
     if (!purchase) throw new NotFoundException("Eligible tender not found");
+    const settings = await this.tenderBankSettings.get(organizationId);
+    const tenderSecurityAmount = await this.securityAmountFor(
+      purchase.id,
+      purchase.estimatedTenderAmount,
+      settings.tsDefaultSecurityPct,
+    );
 
     const record = await this.prisma.$transaction(async (tx) => {
       let contactId: string | undefined;
@@ -135,7 +154,7 @@ export class PgBgService {
           organizationId,
           documentPurchaseId: purchase.id,
           organizationMasterId: purchase.organizationMasterId,
-          tenderSecurityAmount: securityAmount(purchase.egpTenderId, purchase.documentPrice),
+          tenderSecurityAmount,
           noaDate: dto.noaDate ? new Date(dto.noaDate) : null,
           noaAmount: dto.noaAmount,
           workCategory: dto.workCategory,
@@ -162,7 +181,7 @@ export class PgBgService {
 
     const record = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.pgBgWorkflow.update({
-        where: { id },
+        where: { id, organizationId },
         data: {
           acceptNoa: dto.acceptNoa,
           pgBgRequired: dto.pgBgRequired,
@@ -174,22 +193,19 @@ export class PgBgService {
         include: workflowInclude,
       });
       const purchase = await tx.documentPurchase.findUnique({ where: { id: existing.documentPurchaseId } });
-      if (purchase?.egpTenderId) {
-        await tx.tender.updateMany({
-          where: { organizationId, egpTenderId: purchase.egpTenderId },
+      if (purchase?.linkedTenderId) {
+        await tx.tender.update({
+          where: { id: purchase.linkedTenderId },
           data: { status: dto.acceptNoa ? (dto.pgBgRequired ? "NOA" : "ONGOING") : "REJECTED", ...(dto.acceptNoa ? { awardedAt: new Date() } : {}) },
         });
       }
       if (dto.acceptNoa && !dto.pgBgRequired && purchase && existing.noaAmount && existing.workCategory) {
-        const linkedTender = purchase.egpTenderId
-          ? await tx.tender.findFirst({ where: { organizationId, egpTenderId: purchase.egpTenderId }, select: { id: true } })
-          : null;
         await tx.cmsWork.upsert({
           where: { documentPurchaseId: purchase.id },
           update: { status: "ONGOING", contractValue: existing.noaAmount, workCategory: existing.workCategory },
           create: {
             organizationId,
-            tenderId: linkedTender?.id,
+            tenderId: purchase.linkedTenderId,
             documentPurchaseId: purchase.id,
             pgBgWorkflowId: id,
             organizationMasterId: existing.organizationMasterId,
@@ -233,20 +249,17 @@ export class PgBgService {
         update: { type: dto.type, bankAccountId: dto.bankAccountId, instrumentNo: dto.instrumentNo, amount: dto.amount, issueDate: new Date(dto.issueDate), expiryDate: new Date(dto.expiryDate) },
         create: { organizationId, organizationMasterId: workflow.organizationMasterId, pgBgWorkflowId: id, type: dto.type, bankAccountId: dto.bankAccountId, instrumentNo: dto.instrumentNo, amount: dto.amount, issueDate: new Date(dto.issueDate), expiryDate: new Date(dto.expiryDate), createdById: userId },
       });
-      await tx.pgBgWorkflow.update({ where: { id }, data: { status: "FINALIZED", currentStep: 5 } });
-      if (workflow.documentPurchase.egpTenderId) {
-        await tx.tender.updateMany({ where: { organizationId, egpTenderId: workflow.documentPurchase.egpTenderId }, data: { status: "ONGOING", awardedAt: new Date() } });
+      await tx.pgBgWorkflow.update({ where: { id, organizationId }, data: { status: "FINALIZED", currentStep: 5 } });
+      if (workflow.documentPurchase.linkedTenderId) {
+        await tx.tender.update({ where: { id: workflow.documentPurchase.linkedTenderId }, data: { status: "ONGOING", awardedAt: new Date() } });
       }
       if (!workflow.noaAmount || !workflow.workCategory) throw new BadRequestException("NOA amount and work category are required");
-      const linkedTender = workflow.documentPurchase.egpTenderId
-        ? await tx.tender.findFirst({ where: { organizationId, egpTenderId: workflow.documentPurchase.egpTenderId }, select: { id: true } })
-        : null;
       await tx.cmsWork.upsert({
         where: { pgBgWorkflowId: id },
         update: { status: "ONGOING", contractValue: workflow.noaAmount, workCategory: workflow.workCategory },
         create: {
           organizationId,
-          tenderId: linkedTender?.id,
+          tenderId: workflow.documentPurchase.linkedTenderId,
           documentPurchaseId: workflow.documentPurchaseId,
           pgBgWorkflowId: id,
           organizationMasterId: workflow.organizationMasterId,

@@ -2,11 +2,14 @@ export interface DashboardKpis {
   ongoingWorks: { count: number; contractValue: string };
   tenderSecurity: { amount: string; instruments: number };
   pgBg: { amount: string; instruments: number };
-  securityDeposit: { amount: string; projects: number };
+  /** available=false: no authoritative Security Deposit source exists yet — do not show a figure. */
+  securityDeposit: { amount: string; projects: number; available: boolean };
   receivables: { amount: string; overdue: string };
-  payables: { amount: string; dueSoon: string };
+  /** Derived from the real Payable model (amount - paidAmount), not Expense.status. */
+  payables: { amount: string; dueSoon: string; overdue: string };
   bankAndCash: { amount: string };
-  loansAndEmi: { amount: string; nextEmiDate: string | null };
+  /** configured=false: no real Loan/EMI module exists yet — do not present a live balance. */
+  loansAndEmi: { amount: string; nextEmiDate: string | null; configured: boolean };
 }
 
 export interface TargetVsAchievement {

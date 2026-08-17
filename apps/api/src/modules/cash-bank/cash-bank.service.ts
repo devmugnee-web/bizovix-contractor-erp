@@ -28,7 +28,7 @@ export class CashBankService {
     const amount = new Prisma.Decimal(input.amount);
     if (amount.lte(0)) throw new BadRequestException("Amount must be greater than zero");
     await this.account(tx, input.organizationId, input.accountId);
-    const updated = await tx.bankAccount.update({ where: { id: input.accountId }, data: { currentBalance: input.direction === "IN" ? { increment: amount } : { decrement: amount } } });
+    const updated = await tx.bankAccount.update({ where: { id: input.accountId, organizationId: input.organizationId }, data: { currentBalance: input.direction === "IN" ? { increment: amount } : { decrement: amount } } });
     return tx.financialTransaction.create({ data: { ...input, amount, transactionNo: this.no("FT"), balanceAfter: updated.currentBalance, status: "POSTED" } });
   }
 
@@ -53,7 +53,10 @@ export class CashBankService {
   async createBankAccount(organizationId: string, userId: string, dto: CreateBankAccountDto) {
     const row = await this.prisma.$transaction(async (tx) => {
       const account = await tx.bankAccount.create({ data: { organizationId, accountType: "BANK", bankName: dto.bankName.trim(), accountName: dto.accountName.trim(), accountNumber: dto.accountNumber.trim(), branch: dto.branch.trim(), routingNumber: dto.routingNumber?.trim() || null, bankAccountType: dto.bankAccountType, openingBalance: dto.openingBalance, openingBalanceDate: new Date(dto.openingBalanceDate), currentBalance: 0, currency: dto.currency || "BDT", remarks: dto.remarks?.trim() || null, isActive: dto.status !== "Inactive" } });
-      if (dto.openingBalance > 0) await this.post(tx, { organizationId, accountId: account.id, direction: "IN", amount: dto.openingBalance, sourceModule: "BANK_ACCOUNT", sourceType: "OPENING_BALANCE", sourceId: account.id, description: "Opening balance", transactionDate: new Date(dto.openingBalanceDate), createdById: userId });
+      if (dto.openingBalance > 0) {
+        await this.post(tx, { organizationId, accountId: account.id, direction: "IN", amount: dto.openingBalance, sourceModule: "BANK_ACCOUNT", sourceType: "OPENING_BALANCE", sourceId: account.id, description: "Opening balance", transactionDate: new Date(dto.openingBalanceDate), createdById: userId });
+        await this.accounting.post(tx, { organizationId, userId, journalDate: new Date(dto.openingBalanceDate), referenceNo: account.accountName, description: `Opening balance — ${account.accountName}`, sourceModule: "BANK_ACCOUNT", sourceType: "OPENING_BALANCE", sourceId: account.id, lines: [{ bankAccountId: account.id, debit: dto.openingBalance, credit: 0 }, { systemKey: "OPENING_BALANCE_EQUITY", debit: 0, credit: dto.openingBalance }] });
+      }
       return tx.bankAccount.findUniqueOrThrow({ where: { id: account.id } });
     });
     await this.log(organizationId, userId, "BANK_ACCOUNT_CREATED", "BankAccount", row.id, row.accountName, row.currentBalance);
@@ -62,7 +65,7 @@ export class CashBankService {
 
   async updateBankAccount(organizationId: string, userId: string, id: string, dto: Partial<CreateBankAccountDto>) {
     await this.account(this.prisma, organizationId, id);
-    const row = await this.prisma.bankAccount.update({ where: { id }, data: { bankName: dto.bankName, accountName: dto.accountName, accountNumber: dto.accountNumber, branch: dto.branch, routingNumber: dto.routingNumber, bankAccountType: dto.bankAccountType, currency: dto.currency, remarks: dto.remarks, isActive: dto.status ? dto.status === "Active" : undefined } });
+    const row = await this.prisma.bankAccount.update({ where: { id, organizationId }, data: { bankName: dto.bankName, accountName: dto.accountName, accountNumber: dto.accountNumber, branch: dto.branch, routingNumber: dto.routingNumber, bankAccountType: dto.bankAccountType, currency: dto.currency, remarks: dto.remarks, isActive: dto.status ? dto.status === "Active" : undefined } });
     await this.log(organizationId, userId, "BANK_ACCOUNT_UPDATED", "BankAccount", id, row.accountName);
     return row;
   }
@@ -71,13 +74,45 @@ export class CashBankService {
   async createMainCash(organizationId: string, userId: string, dto: CreateCashTransactionDto) {
     const account = await this.namedCash(this.prisma, organizationId, "Main Cash");
     const sourceId = randomUUID();
-    const row = await this.prisma.$transaction((tx) => this.post(tx, { organizationId, accountId: account.id, direction: dto.direction, amount: dto.amount, sourceModule: "MAIN_CASH", sourceType: dto.category, sourceId, referenceNo: dto.referenceNo, description: `${dto.party}: ${dto.description || dto.category}`, transactionDate: new Date(dto.transactionDate), createdById: userId }));
+    const description = `${dto.party}: ${dto.description || dto.category}`;
+    const row = await this.prisma.$transaction(async (tx) => {
+      const posted = await this.post(tx, { organizationId, accountId: account.id, direction: dto.direction, amount: dto.amount, sourceModule: "MAIN_CASH", sourceType: dto.category, sourceId, referenceNo: dto.referenceNo, description, transactionDate: new Date(dto.transactionDate), createdById: userId });
+      await this.accounting.post(tx, {
+        organizationId,
+        userId,
+        journalDate: new Date(dto.transactionDate),
+        referenceNo: dto.referenceNo,
+        description,
+        sourceModule: "MAIN_CASH",
+        sourceType: dto.category,
+        sourceId,
+        lines: dto.direction === "IN"
+          ? [{ bankAccountId: account.id, debit: dto.amount, credit: 0 }, { systemKey: "OTHER_INCOME", partyName: dto.party, debit: 0, credit: dto.amount }]
+          : [{ systemKey: "GENERAL_EXPENSE", partyName: dto.party, debit: dto.amount, credit: 0 }, { bankAccountId: account.id, debit: 0, credit: dto.amount }],
+      });
+      return posted;
+    });
     await this.log(organizationId, userId, dto.direction === "IN" ? "CASH_IN_CREATED" : "CASH_OUT_CREATED", "FinancialTransaction", row.id, row.transactionNo, row.amount);
     return row;
   }
   async createPettyExpense(organizationId: string, userId: string, dto: CreatePettyExpenseDto) {
     const account = await this.namedCash(this.prisma, organizationId, "Petty Cash"); const sourceId = randomUUID();
-    const row = await this.prisma.$transaction((tx) => this.post(tx, { organizationId, accountId: account.id, direction: "OUT", amount: dto.amount, sourceModule: "PETTY_CASH", sourceType: dto.category, sourceId, referenceNo: dto.referenceNo, description: `${dto.party}: ${dto.description}`, transactionDate: new Date(dto.transactionDate), createdById: userId }));
+    const description = `${dto.party}: ${dto.description}`;
+    const row = await this.prisma.$transaction(async (tx) => {
+      const posted = await this.post(tx, { organizationId, accountId: account.id, direction: "OUT", amount: dto.amount, sourceModule: "PETTY_CASH", sourceType: dto.category, sourceId, referenceNo: dto.referenceNo, description, transactionDate: new Date(dto.transactionDate), createdById: userId });
+      await this.accounting.post(tx, {
+        organizationId,
+        userId,
+        journalDate: new Date(dto.transactionDate),
+        referenceNo: dto.referenceNo,
+        description,
+        sourceModule: "PETTY_CASH",
+        sourceType: dto.category,
+        sourceId,
+        lines: [{ systemKey: "GENERAL_EXPENSE", partyName: dto.party, debit: dto.amount, credit: 0 }, { bankAccountId: account.id, debit: 0, credit: dto.amount }],
+      });
+      return posted;
+    });
     await this.log(organizationId, userId, "PETTY_CASH_EXPENSE_CREATED", "FinancialTransaction", row.id, row.transactionNo, row.amount); return row;
   }
 
@@ -106,7 +141,36 @@ export class CashBankService {
 
   async cheques(organizationId: string) { return this.prisma.cheque.findMany({ where: { organizationId }, include: { account: true }, orderBy: { chequeDate: "desc" } }); }
   async createCheque(organizationId: string, userId: string, dto: CreateChequeDto) { if (dto.accountId) await this.account(this.prisma, organizationId, dto.accountId); const row = await this.prisma.cheque.create({ data: { ...dto, organizationId, amount: dto.amount, chequeDate: new Date(dto.chequeDate), actionDate: dto.actionDate ? new Date(dto.actionDate) : null, createdById: userId } }); await this.log(organizationId, userId, "CHEQUE_CREATED", "Cheque", row.id, row.chequeNo, row.amount); return row; }
-  async chequeStatus(organizationId: string, userId: string, id: string, dto: UpdateChequeStatusDto) { const cheque = await this.prisma.cheque.findFirst({ where: { id, organizationId } }); if (!cheque) throw new NotFoundException("Cheque not found"); const row = await this.prisma.$transaction(async (tx) => { const updated = await tx.cheque.update({ where: { id }, data: { status: dto.status, actionDate: dto.actionDate ? new Date(dto.actionDate) : undefined } }); if (dto.status === "CLEARED" && !cheque.postedAt) { if (!cheque.accountId) throw new BadRequestException("A bank account is required before clearing this cheque"); await this.post(tx, { organizationId, accountId: cheque.accountId, direction: cheque.type === "RECEIVED" ? "IN" : "OUT", amount: cheque.amount, sourceModule: "CHEQUE", sourceType: cheque.type, sourceId: cheque.id, referenceNo: cheque.chequeNo, description: `${cheque.type === "RECEIVED" ? "Received from" : "Issued to"} ${cheque.party}`, transactionDate: dto.actionDate ? new Date(dto.actionDate) : new Date(), createdById: userId }); return tx.cheque.update({ where: { id }, data: { postedAt: new Date() } }); } return updated; }); await this.log(organizationId, userId, `CHEQUE_${dto.status}`, "Cheque", id, cheque.chequeNo, cheque.amount); return row; }
+  async chequeStatus(organizationId: string, userId: string, id: string, dto: UpdateChequeStatusDto) {
+    const cheque = await this.prisma.cheque.findFirst({ where: { id, organizationId } });
+    if (!cheque) throw new NotFoundException("Cheque not found");
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.cheque.update({ where: { id, organizationId }, data: { status: dto.status, actionDate: dto.actionDate ? new Date(dto.actionDate) : undefined } });
+      if (dto.status === "CLEARED" && !cheque.postedAt) {
+        if (!cheque.accountId) throw new BadRequestException("A bank account is required before clearing this cheque");
+        const transactionDate = dto.actionDate ? new Date(dto.actionDate) : new Date();
+        const received = cheque.type === "RECEIVED";
+        await this.post(tx, { organizationId, accountId: cheque.accountId, direction: received ? "IN" : "OUT", amount: cheque.amount, sourceModule: "CHEQUE", sourceType: cheque.type, sourceId: cheque.id, referenceNo: cheque.chequeNo, description: `${received ? "Received from" : "Issued to"} ${cheque.party}`, transactionDate, createdById: userId });
+        await this.accounting.post(tx, {
+          organizationId,
+          userId,
+          journalDate: transactionDate,
+          referenceNo: cheque.chequeNo,
+          description: `Cheque ${received ? "received from" : "issued to"} ${cheque.party} cleared`,
+          sourceModule: "CHEQUE",
+          sourceType: cheque.type,
+          sourceId: cheque.id,
+          lines: received
+            ? [{ bankAccountId: cheque.accountId, debit: cheque.amount, credit: 0 }, { systemKey: "ACCOUNTS_RECEIVABLE", partyName: cheque.party, debit: 0, credit: cheque.amount }]
+            : [{ systemKey: "ACCOUNTS_PAYABLE", partyName: cheque.party, debit: cheque.amount, credit: 0 }, { bankAccountId: cheque.accountId, debit: 0, credit: cheque.amount }],
+        });
+        return tx.cheque.update({ where: { id, organizationId }, data: { postedAt: new Date() } });
+      }
+      return updated;
+    });
+    await this.log(organizationId, userId, `CHEQUE_${dto.status}`, "Cheque", id, cheque.chequeNo, cheque.amount);
+    return row;
+  }
 
   private log(organizationId: string, userId: string, action: string, entityType: string, entityId: string, referenceNo: string, amount?: unknown) { return this.audit.record({ organizationId, userId, action, module: "Cash & Bank", description: `${action.replaceAll("_", " ")}${amount == null ? "" : ` - BDT ${amount}`}`, referenceNo, entityType, entityId, newValue: amount == null ? undefined : { amount: String(amount) } }); }
 }

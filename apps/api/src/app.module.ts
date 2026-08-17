@@ -11,8 +11,10 @@ import { PrismaModule } from "./modules/prisma/prisma.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { AuditLogModule } from "./modules/audit-logs/audit-log.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
+import { TendersModule } from "./modules/tenders/tenders.module";
 import { BankAccountsModule } from "./modules/bank-accounts/bank-accounts.module";
 import { DocumentPurchasesModule } from "./modules/document-purchases/document-purchases.module";
+import { DocumentsModule } from "./modules/documents/documents.module";
 import { TenderSecuritiesModule } from "./modules/tender-securities/tender-securities.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { CreditCommitmentsModule } from "./modules/credit-commitments/credit-commitments.module";
@@ -48,8 +50,10 @@ import { BillingModule } from "./modules/billing/billing.module";
     AuditLogModule,
     AuthModule,
     OrganizationsModule,
+    TendersModule,
     BankAccountsModule,
     DocumentPurchasesModule,
+    DocumentsModule,
     TenderSecuritiesModule,
     CreditCommitmentsModule,
     PgBgModule,

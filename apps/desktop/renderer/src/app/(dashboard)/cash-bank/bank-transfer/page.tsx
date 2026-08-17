@@ -1,5 +1,7 @@
-import { ComingSoonPage } from "@/components/layout/ComingSoonPage";
+import { redirect } from "next/navigation";
 
+// Deprecated route — kept as a redirect (not deleted) in case of external bookmarks.
+// The canonical Bank Transfer feature lives at /cash-bank/transfers.
 export default function BankTransferPage() {
-  return <ComingSoonPage title="Bank Transfer" breadcrumb={[{ label: "Cash & Bank" }, { label: "Bank Transfer" }]} />;
+  redirect("/cash-bank/transfers");
 }

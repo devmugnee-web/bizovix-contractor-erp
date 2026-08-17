@@ -17,13 +17,19 @@ enum PurchaseType {
 }
 
 enum TenderStatus {
+  DRAFT
+  PUBLISHED
+  DOCUMENT_PURCHASED
+  PREPARING
   SUBMITTED
   UNDER_PROCESS
+  OPENED
   NOA
   AWARDED
   ONGOING
   COMPLETED
   REJECTED
+  CANCELLED
 }
 
 enum ExpenseStatus {
@@ -107,6 +113,8 @@ model Organization {
   id        String   @id @default(cuid())
   name      String
   shortName String?
+  /// ACTIVE | SUSPENDED | ARCHIVED — safe lifecycle in place of destructive delete.
+  status    String   @default("ACTIVE")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -316,6 +324,7 @@ model OrganizationMaster {
   contacts              OrganizationContact[]
   cmsWorks              CmsWork[]
   performanceGuarantees PerformanceGuarantee[]
+  documents             Document[]
 
   @@unique([organizationId, shortName])
   @@map("organization_masters")
@@ -370,11 +379,44 @@ model Tender {
   egpTenderId          String?
   workName             String
   category             String
+  tenderType           String?
+  procurementMethod    String?
+  tenderMethod         String?
   contractValue        Decimal      @default(0) @db.Decimal(18, 2)
-  status               TenderStatus @default(SUBMITTED)
+  status               TenderStatus @default(DRAFT)
   progressPercentage   Int          @default(0)
+
+  publishedDate                 DateTime?
+  documentPurchaseDeadline      DateTime?
+  preBidDate                    DateTime?
+  submissionDeadline            DateTime?
+  openingDate                   DateTime?
+  tenderSecurityRequired        Boolean   @default(false)
+  estimatedTenderSecurityAmount Decimal?  @db.Decimal(18, 2)
+  assignedToUserId              String?
+  assignedToName                String?
+  description                   String?
+
+  // Submission (section 5.1)
+  submissionDate       DateTime?
+  submissionMethod     String?
+  quotedAmount         Decimal?  @db.Decimal(18, 2)
+  submittedById        String?
+  submittedByName      String?
+  submissionReference  String?
+  checklistStatus      String?
+  submissionRemarks    String?
   submittedAt          DateTime?
+
+  // Opening / Result (section 5.2) — status transitions reuse the TenderStatus enum
+  // (UNDER_PROCESS is surfaced to users as "Under Evaluation", REJECTED as "Unsuccessful")
+  // rather than introducing a second, duplicate result-status field.
+  openingResult        String?
+  lowestBidAmount      Decimal?  @db.Decimal(18, 2)
+  lowestBidder         String?
+  resultRemarks        String?
   awardedAt            DateTime?
+
   createdById          String?
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
@@ -382,12 +424,16 @@ model Tender {
   organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
 
+  documentPurchases     DocumentPurchase[]
   tenderSecurities      TenderSecurity[]
   creditCommitments     CreditCommitment[]
   performanceGuarantees PerformanceGuarantee[]
   receipts              Receipt[]
   cmsWorks              CmsWork[]
+  documents             Document[]
 
+  @@index([organizationId, status])
+  @@index([organizationId, submissionDeadline])
   @@map("tenders")
 }
 
@@ -415,6 +461,10 @@ model DocumentPurchase {
   organizationId        String
   purchaseType          PurchaseType
   egpTenderId           String?
+  /// Real FK to the originating Tender record — the authoritative relational link.
+  /// egpTenderId remains as the business/reference identifier only; it is no longer
+  /// relied on as the sole means of tracing a tender through the workflow.
+  linkedTenderId        String?
   organizationMasterId  String
   paymentFromAccountId  String
   tenderWorkName        String
@@ -429,11 +479,13 @@ model DocumentPurchase {
   organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationMaster    OrganizationMaster     @relation(fields: [organizationMasterId], references: [id])
   paymentFromAccount    BankAccount            @relation(fields: [paymentFromAccountId], references: [id])
+  linkedTender          Tender?                @relation(fields: [linkedTenderId], references: [id])
   tenderSecurityItems   TenderSecurityItem[]
   creditCommitmentItems CreditCommitmentItem[]
   pgBgWorkflow          PgBgWorkflow?
   cmsWork               CmsWork?
 
+  @@index([organizationId, linkedTenderId])
   @@map("document_purchases")
 }
 
@@ -467,6 +519,7 @@ model TenderSecurity {
   chargeFromAccount  BankAccount?         @relation("TenderSecurityChargeFrom", fields: [chargeFromAccountId], references: [id])
   items              TenderSecurityItem[]
 
+  @@index([organizationId, status, expiryDate])
   @@map("tender_securities")
 }
 
@@ -557,6 +610,7 @@ model PerformanceGuarantee {
   bankAccount        BankAccount?        @relation(fields: [bankAccountId], references: [id])
   pgBgWorkflow       PgBgWorkflow?       @relation(fields: [pgBgWorkflowId], references: [id])
 
+  @@index([organizationId, status, expiryDate])
   @@map("performance_guarantees")
 }
 
@@ -639,6 +693,7 @@ model CmsWork {
   receipts           Receipt[]
   journalLines       JournalLine[]
   payables           Payable[]
+  documents          Document[]
 
   @@index([organizationId, status])
   @@index([organizationId, status, completionDate])
@@ -679,6 +734,7 @@ model Expense {
   @@unique([organizationId, referenceNo])
   @@index([organizationId, workId, expenseDate])
   @@index([organizationId, expenseHeadId])
+  @@index([organizationId, status])
   @@map("expenses")
 }
 
@@ -743,6 +799,7 @@ model Receipt {
   @@unique([organizationId, receiptNo])
   @@index([organizationId, receiptDate])
   @@index([organizationId, workId])
+  @@index([organizationId, status])
   @@map("receipts")
 }
 
@@ -870,6 +927,9 @@ model LedgerAccount {
   description         String?
   isActive            Boolean  @default(true)
   isSystem            Boolean  @default(false)
+  /// Control accounts (AR/AP/Cash/Bank/Opening-Equity) cannot be posted to directly by an
+  /// ordinary manual journal entry — see AccountingService.assertNotControlAccount().
+  isControlAccount    Boolean  @default(false)
   systemKey           String?
   linkedBankAccountId String?
   createdAt           DateTime @default(now())
@@ -1042,19 +1102,76 @@ model Notification {
 }
 
 model Document {
-  id             String    @id @default(cuid())
-  organizationId String
-  name           String
-  category       String?
-  fileUrl        String?
-  expiryDate     DateTime?
-  createdById    String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  organizationId       String
+  name                 String
+  category             String?
+  documentType         String?
+  relatedModule        String?
+  relatedEntityId      String?
+  relatedEntityName    String?
+  tenderId             String?
+  workId               String?
+  organizationMasterId String?
+  referenceNumber      String?
+  certificateNumber    String?
+  issuingAuthority     String?
+  account              String?
+  amount               Decimal?  @db.Decimal(18, 2)
+  issueDate            DateTime?
+  expiryDate           DateTime?
+  reminderDays         Int?
+  responsiblePerson    String?
+  description          String?
+  tags                 String[] @default([])
+  /// ACTIVE | DRAFT | RENEWED | ARCHIVED
+  status               String    @default("ACTIVE")
+  fileUrl              String?
+  fileName             String?
+  fileType             String?
+  fileSize             Int?
+  /// Key/path in the DocumentStorageService adapter — never raw file bytes in Postgres.
+  storageKey           String?
+  currentVersion       Int       @default(1)
+  uploadedById         String?
+  uploadedByName       String?
+  archivedAt           DateTime?
+  archivedById         String?
+  archivedByName       String?
+  archiveReason        String?
+  createdById          String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender             Tender?             @relation(fields: [tenderId], references: [id])
+  work               CmsWork?            @relation(fields: [workId], references: [id])
+  organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
+  versions           DocumentVersion[]
 
+  @@index([organizationId, category])
+  @@index([organizationId, status])
+  @@index([organizationId, expiryDate])
   @@map("documents")
+}
+
+model DocumentVersion {
+  id             String   @id @default(cuid())
+  documentId     String
+  version        Int
+  fileName       String
+  fileType       String
+  fileSize       Int
+  storageKey     String
+  uploadedById   String?
+  uploadedByName String?
+  changeNote     String?
+  createdAt      DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("document_versions")
 }
 
 // ---------------------------------------------------------------------------

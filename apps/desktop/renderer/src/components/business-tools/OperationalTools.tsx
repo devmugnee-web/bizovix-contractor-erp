@@ -33,9 +33,25 @@ const initialChecks = (): Check[] =>
     status: "Pending",
     remarks: "",
   }));
+// Checklists are scoped by Tender ID so one tender's checklist never overwrites another's.
+const checklistStorageKey = (tenderId: string) => `bizovix-tender-checklist-${tenderId.trim() || "unassigned"}`;
 export function TenderChecklist() {
   const [items, setItems] = React.useState(initialChecks),
     [meta, setMeta] = React.useState({ work: "", organization: "", tenderId: "", submission: "" });
+  const loadChecklistFor = (tenderId: string) => {
+    const raw = localStorage.getItem(checklistStorageKey(tenderId));
+    if (!raw) {
+      setItems(initialChecks());
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as { meta?: typeof meta; items?: Check[] };
+      if (parsed.meta) setMeta(parsed.meta);
+      setItems(parsed.items ?? initialChecks());
+    } catch {
+      setItems(initialChecks());
+    }
+  };
   const completed = items.filter((x) => x.status === "Ready" || x.status === "Not Required").length,
     missing = items.filter((x) => x.status === "Missing").length,
     progress = items.length ? Math.round((completed / items.length) * 100) : 0;
@@ -64,6 +80,7 @@ export function TenderChecklist() {
                 type={k === "submission" ? "date" : "text"}
                 value={v}
                 onChange={(e) => setMeta({ ...meta, [k]: e.target.value })}
+                onBlur={k === "tenderId" ? () => loadChecklistFor(v) : undefined}
               />
             </Field>
           ))}
@@ -180,7 +197,7 @@ export function TenderChecklist() {
           </SecondaryButton>
           <PrimaryButton
             onClick={() =>
-              localStorage.setItem("bizovix-tender-checklist", JSON.stringify({ meta, items }))
+              localStorage.setItem(checklistStorageKey(meta.tenderId), JSON.stringify({ meta, items }))
             }
           >
             <Save className="h-4 w-4" />

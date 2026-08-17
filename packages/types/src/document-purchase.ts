@@ -4,6 +4,8 @@ export interface DocumentPurchase {
   id: string;
   purchaseType: PurchaseType;
   tenderId: string | null;
+  /** Real FK to the Tenders module record this purchase originated from, if any. */
+  linkedTenderId: string | null;
   organizationMasterId: string;
   organizationMaster: { id: string; shortName: string; fullName: string };
   tenderWorkName: string;
@@ -18,6 +20,7 @@ export interface DocumentPurchase {
 export interface CreateDocumentPurchaseInput {
   purchaseType: PurchaseType;
   tenderId?: string | null;
+  linkedTenderId?: string | null;
   organizationMasterId: string;
   tenderWorkName: string;
   purchaseDate: string;

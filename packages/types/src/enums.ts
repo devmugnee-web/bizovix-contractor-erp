@@ -5,11 +5,19 @@ export const PurchaseType = {
 export type PurchaseType = (typeof PurchaseType)[keyof typeof PurchaseType];
 
 export const TenderStatus = {
+  DRAFT: "DRAFT",
+  PUBLISHED: "PUBLISHED",
+  DOCUMENT_PURCHASED: "DOCUMENT_PURCHASED",
+  PREPARING: "PREPARING",
   SUBMITTED: "SUBMITTED",
   UNDER_PROCESS: "UNDER_PROCESS",
-  AWARDED: "AWARDED",
+  OPENED: "OPENED",
   NOA: "NOA",
+  AWARDED: "AWARDED",
+  ONGOING: "ONGOING",
+  COMPLETED: "COMPLETED",
   REJECTED: "REJECTED",
+  CANCELLED: "CANCELLED",
 } as const;
 export type TenderStatus = (typeof TenderStatus)[keyof typeof TenderStatus];
 

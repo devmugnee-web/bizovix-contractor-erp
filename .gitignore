@@ -1,3 +1,6 @@
+# Uploaded document files (local dev storage adapter)
+apps/api/storage/
+
 # Logs
 logs
 *.log

@@ -428,11 +428,18 @@ export class ReportsService {
     );
   }
   private async projects(org: string, report: string, q: QueryReportDto) {
-    const status = report.includes("archived") ? "ARCHIVED" : "ONGOING";
+    // "ongoing"/"archived" filter to that specific status; every other card (summary, cost,
+    // profit-loss, receivable, expense-summary, financial-summary, performance) is a
+    // portfolio-wide view across all project statuses, not just ongoing ones.
+    const STATUS_FILTERED_REPORTS: Record<string, "ONGOING" | "ARCHIVED"> = {
+      ongoing: "ONGOING",
+      archived: "ARCHIVED",
+    };
+    const status = STATUS_FILTERED_REPORTS[report];
     const rows = await this.prisma.cmsWork.findMany({
       where: {
         organizationId: org,
-        status: report === "profitability" || report === "performance" ? undefined : status,
+        status,
         organizationMasterId: q.organizationMasterId,
         workCategory: q.category,
         OR: q.search ? [{ workName: { contains: q.search, mode: "insensitive" } }] : undefined,
@@ -469,13 +476,23 @@ export class ReportsService {
     return this.finish(
       {
         title:
-          report === "profitability"
-            ? "Project Profitability Report"
+          report === "ongoing"
+            ? "Ongoing Works Report"
             : report === "archived"
               ? "Archived Works Report"
-              : report === "performance"
-                ? "Project Performance Report"
-                : "Ongoing Works Report",
+              : report === "cost"
+                ? "Project Cost Report"
+                : report === "profit-loss" || report === "profitability"
+                  ? "Project-wise Profit & Loss"
+                  : report === "receivable"
+                    ? "Project Receivable Report"
+                    : report === "expense-summary"
+                      ? "Project Expense Summary"
+                      : report === "financial-summary"
+                        ? "Project Financial Summary"
+                        : report === "performance"
+                          ? "Project Performance Report"
+                          : "Project Summary Report",
         subtitle: "Project contract, collection, expense and profitability analysis.",
         kpis: [
           { label: "Total Projects", value: String(rows.length) },
@@ -512,11 +529,14 @@ export class ReportsService {
     );
   }
   private async expenses(org: string, report: string, q: QueryReportDto) {
-    const project = report !== "general";
+    // "project"/"general" filter to that specific expense type; the analytical breakdowns
+    // (category/person/account/monthly) span both — restricting them to project-only would
+    // silently exclude general expenses from what should be a company-wide breakdown.
+    const project = report === "project" ? true : report === "general" ? false : undefined;
     const rows = await this.prisma.expense.findMany({
       where: {
         organizationId: org,
-        workId: project ? { not: null } : null,
+        workId: project === true ? { not: null } : project === false ? null : undefined,
         expenseDate: this.dates(q),
         work: { organizationMasterId: q.organizationMasterId },
         expenseHeadId: q.category,
@@ -536,10 +556,37 @@ export class ReportsService {
       },
       orderBy: { expenseDate: "desc" },
     });
-    if (report === "category") {
+    const GROUPED_REPORTS: Record<string, { title: string; subtitle: string; columnLabel: string; keyOf: (r: (typeof rows)[number]) => string }> = {
+      category: {
+        title: "Expense by Category",
+        subtitle: "Category contribution and transaction volume.",
+        columnLabel: "Expense Category",
+        keyOf: (r) => r.expenseHead?.name ?? r.category ?? "Other",
+      },
+      person: {
+        title: "Expense by Person",
+        subtitle: "Accountability of expenses by the person who incurred them.",
+        columnLabel: "Expense By",
+        keyOf: (r) => r.expenseBy?.name ?? "Unassigned",
+      },
+      account: {
+        title: "Expense by Payment Account",
+        subtitle: "Expenses grouped by the account they were paid from.",
+        columnLabel: "Paid From Account",
+        keyOf: (r) => r.paidFromAccount?.accountName ?? "Unassigned",
+      },
+      monthly: {
+        title: "Monthly Expense",
+        subtitle: "Month-wise expense movement.",
+        columnLabel: "Month",
+        keyOf: (r) => r.expenseDate.toLocaleDateString("en-GB", { month: "short", year: "numeric" }),
+      },
+    };
+    const grouping = GROUPED_REPORTS[report];
+    if (grouping) {
       const groups = new Map<string, { amount: Prisma.Decimal; count: number }>();
       rows.forEach((r) => {
-        const k = r.expenseHead?.name ?? r.category ?? "Other",
+        const k = grouping.keyOf(r),
           g = groups.get(k) ?? { amount: new Prisma.Decimal(0), count: 0 };
         g.amount = g.amount.add(r.amount);
         g.count++;
@@ -548,14 +595,14 @@ export class ReportsService {
       const total = rows.reduce((n, r) => n.add(r.amount), new Prisma.Decimal(0));
       return this.finish(
         {
-          title: "Expense by Category",
-          subtitle: "Category contribution and transaction volume.",
+          title: grouping.title,
+          subtitle: grouping.subtitle,
           kpis: [
             { label: "Total Expense", value: s(total), kind: "money" },
-            { label: "Categories", value: String(groups.size) },
+            { label: "Groups", value: String(groups.size) },
           ],
           columns: [
-            { key: "category", label: "Expense Category" },
+            { key: "category", label: grouping.columnLabel },
             moneyCol("total", "Total"),
             { key: "percentage", label: "Percentage" },
             { key: "count", label: "Transaction Count" },
@@ -616,7 +663,7 @@ export class ReportsService {
     );
   }
   private async receipts(org: string, report: string, q: QueryReportDto) {
-    if (report === "outstanding" || report === "project-wise") {
+    if (report === "outstanding" || report === "project-wise" || report === "collection-performance") {
       const rows = await this.prisma.cmsWork.findMany({
         where: { organizationId: org, organizationMasterId: q.organizationMasterId },
         include: {
@@ -644,10 +691,21 @@ export class ReportsService {
           };
         })
         .filter((r) => report !== "outstanding" || new Prisma.Decimal(r.outstanding).gt(0));
+      const avgCollection = mapped.length
+        ? mapped.reduce((n, r) => n + Number.parseFloat(r.collection), 0) / mapped.length
+        : 0;
       return this.finish(
         {
-          title: report === "outstanding" ? "Outstanding Receivables" : "Project-wise Receipts",
-          subtitle: "Project collection and outstanding receivable position.",
+          title:
+            report === "outstanding"
+              ? "Outstanding Receivables"
+              : report === "collection-performance"
+                ? "Collection Performance Report"
+                : "Project-wise Receipts",
+          subtitle:
+            report === "collection-performance"
+              ? "Collection rate against contract value, project by project."
+              : "Project collection and outstanding receivable position.",
           kpis: [
             {
               label: "Total Receivable",
@@ -655,6 +713,9 @@ export class ReportsService {
               kind: "money",
             },
             { label: "Projects", value: String(mapped.length) },
+            ...(report === "collection-performance"
+              ? [{ label: "Average Collection Rate", value: `${avgCollection.toFixed(2)}%` }]
+              : []),
           ],
           columns: [
             { key: "project", label: "Project" },
@@ -687,6 +748,62 @@ export class ReportsService {
       include: { work: { include: { organizationMaster: true } }, receivedInAccount: true },
       orderBy: { receiptDate: "desc" },
     });
+    const RECEIPT_GROUPS: Record<string, { title: string; subtitle: string; columnLabel: string; keyOf: (r: (typeof rows)[number]) => string }> = {
+      organization: {
+        title: "Receipt by Organization",
+        subtitle: "Client organization collection summary.",
+        columnLabel: "Organization",
+        keyOf: (r) => r.work?.organizationMaster.shortName ?? "General",
+      },
+      account: {
+        title: "Receipt by Payment Account",
+        subtitle: "Collections grouped by the receiving account.",
+        columnLabel: "Received In",
+        keyOf: (r) => r.receivedInAccount?.accountName ?? "Unassigned",
+      },
+      monthly: {
+        title: "Monthly Receipt",
+        subtitle: "Month-wise receipt movement.",
+        columnLabel: "Month",
+        keyOf: (r) => r.receiptDate.toLocaleDateString("en-GB", { month: "short", year: "numeric" }),
+      },
+    };
+    const receiptGrouping = RECEIPT_GROUPS[report];
+    if (receiptGrouping) {
+      const received = rows.filter((r) => r.status === "RECEIVED");
+      const groups = new Map<string, { amount: Prisma.Decimal; count: number }>();
+      received.forEach((r) => {
+        const k = receiptGrouping.keyOf(r),
+          g = groups.get(k) ?? { amount: new Prisma.Decimal(0), count: 0 };
+        g.amount = g.amount.add(r.amount);
+        g.count++;
+        groups.set(k, g);
+      });
+      const groupTotal = received.reduce((n, r) => n.add(r.amount), new Prisma.Decimal(0));
+      return this.finish(
+        {
+          title: receiptGrouping.title,
+          subtitle: receiptGrouping.subtitle,
+          kpis: [
+            { label: "Total Received", value: s(groupTotal), kind: "money" },
+            { label: "Groups", value: String(groups.size) },
+          ],
+          columns: [
+            { key: "group", label: receiptGrouping.columnLabel },
+            moneyCol("total", "Total"),
+            { key: "percentage", label: "Percentage" },
+            { key: "count", label: "Transaction Count" },
+          ],
+          rows: [...groups].map(([group, g]) => ({
+            group,
+            total: s(g.amount),
+            percentage: `${groupTotal.gt(0) ? g.amount.div(groupTotal).mul(100).toFixed(2) : "0.00"}%`,
+            count: g.count,
+          })),
+        },
+        q,
+      );
+    }
     const total = rows
       .filter((r) => r.status === "RECEIVED")
       .reduce((n, r) => n.add(r.amount), new Prisma.Decimal(0));
@@ -814,12 +931,48 @@ export class ReportsService {
         q,
       );
     }
+    if (report === "reconciliation") {
+      const rows = await this.prisma.bankReconciliation.findMany({
+        where: { organizationId: org, accountId: q.accountId, statementTo: this.dates(q) },
+        include: { account: true },
+        orderBy: { statementTo: "desc" },
+      });
+      return this.finish(
+        {
+          title: "Bank Reconciliation Report",
+          subtitle: "ERP balance vs. bank statement balance, and any unmatched difference.",
+          kpis: [
+            { label: "Reconciliations", value: String(rows.length) },
+            { label: "Reconciled", value: String(rows.filter((r) => r.status === "RECONCILED").length) },
+            { label: "Needs Review", value: String(rows.filter((r) => r.status !== "RECONCILED").length) },
+          ],
+          columns: [
+            { key: "account", label: "Account" },
+            { key: "statementTo", label: "Statement Date", type: "date" },
+            moneyCol("erpBalance", "ERP Balance"),
+            moneyCol("statementBalance", "Statement Balance"),
+            moneyCol("difference", "Difference"),
+            { key: "status", label: "Status" },
+          ],
+          rows: rows.map((r) => ({
+            account: r.account.accountName,
+            statementTo: r.statementTo.toISOString(),
+            erpBalance: s(r.erpBalance),
+            statementBalance: s(r.statementBalance),
+            difference: s(r.difference),
+            status: r.status,
+          })),
+        },
+        q,
+      );
+    }
     const accountType = report === "cash-book" || report === "petty-cash" ? "CASH" : "BANK";
+    const namedCashAccount = report === "cash-book" ? "Main Cash" : report === "petty-cash" ? "Petty Cash" : undefined;
     const rows = await this.prisma.financialTransaction.findMany({
       where: {
         organizationId: org,
         accountId: q.accountId,
-        account: { accountType },
+        account: { accountType, accountName: namedCashAccount },
         transactionDate: this.dates(q),
         OR: q.search
           ? [
@@ -838,7 +991,13 @@ export class ReportsService {
             ? "Bank Book"
             : report === "petty-cash"
               ? "Petty Cash Report"
-              : "Cash Book",
+              : report === "cash-book"
+                ? "Main Cash Report"
+                : report === "transactions"
+                  ? "Bank Transaction Report"
+                  : report === "cash-flow"
+                    ? "Cash Flow Report"
+                    : "Cash & Bank Summary",
         subtitle:
           "Account movements including internal transfers without treating them as revenue.",
         kpis: [
@@ -1151,70 +1310,170 @@ export class ReportsService {
       q,
     );
   }
-  private async expiry(org: string, _report: string, q: QueryReportDto) {
+  private expiryTotals(rows: Array<{ status: string }>) {
+    return [
+      { label: "Total Due Items", value: String(rows.length) },
+      { label: "Expired", value: String(rows.filter((r) => r.status === "EXPIRED").length) },
+      { label: "Due Soon", value: String(rows.filter((r) => r.status === "DUE SOON").length) },
+    ];
+  }
+  private readonly expiryColumns = [
+    { key: "type", label: "Item Type" },
+    { key: "reference", label: "Reference" },
+    { key: "dueDate", label: "Expiry / Due Date", type: "date" },
+    moneyCol("amount", "Amount"),
+    { key: "status", label: "Status" },
+  ];
+  private async expiry(org: string, report: string, q: QueryReportDto) {
     const to = new Date(Date.now() + 60 * 864e5);
-    const [securities, guarantees, cheques, docs] = await Promise.all([
-      this.prisma.tenderSecurity.findMany({
+    const now = new Date();
+
+    if (report === "tender-security") {
+      const rows = await this.prisma.tenderSecurity.findMany({
         where: { organizationId: org, expiryDate: { lte: to }, status: "ACTIVE" },
-      }),
-      this.prisma.performanceGuarantee.findMany({
-        where: { organizationId: org, expiryDate: { lte: to }, status: "ACTIVE" },
-      }),
-      this.prisma.cheque.findMany({
-        where: { organizationId: org, status: { in: ["PENDING", "DEPOSITED"] } },
-      }),
-      this.prisma.document.findMany({ where: { organizationId: org, expiryDate: { lte: to } } }),
-    ]);
-    const rows = [
-      ...securities.map((r) => ({
+        orderBy: { expiryDate: "asc" },
+      });
+      const mapped = rows.map((r) => ({
         type: "Tender Security",
         reference: r.instrumentNo ?? r.id,
         dueDate: r.expiryDate.toISOString(),
-        status: r.expiryDate < new Date() ? "EXPIRED" : "DUE SOON",
+        status: r.expiryDate < now ? "EXPIRED" : "DUE SOON",
         amount: s(r.amount),
-      })),
-      ...guarantees.map((r) => ({
+      }));
+      return this.finish(
+        { title: "Tender Security Expiry", subtitle: "Tender security instruments approaching or past expiry.", kpis: this.expiryTotals(mapped), columns: this.expiryColumns, rows: mapped },
+        q,
+      );
+    }
+    if (report === "pg-bg") {
+      const rows = await this.prisma.performanceGuarantee.findMany({
+        where: { organizationId: org, expiryDate: { lte: to }, status: "ACTIVE" },
+        orderBy: { expiryDate: "asc" },
+      });
+      const mapped = rows.map((r) => ({
         type: r.type,
         reference: r.instrumentNo ?? r.id,
         dueDate: r.expiryDate.toISOString(),
-        status: r.expiryDate < new Date() ? "EXPIRED" : "DUE SOON",
+        status: r.expiryDate < now ? "EXPIRED" : "DUE SOON",
         amount: s(r.amount),
-      })),
-      ...cheques.map((r) => ({
+      }));
+      return this.finish(
+        { title: "PG/BG Expiry", subtitle: "Performance and bid guarantees approaching or past expiry.", kpis: this.expiryTotals(mapped), columns: this.expiryColumns, rows: mapped },
+        q,
+      );
+    }
+    if (report === "cheques") {
+      const rows = await this.prisma.cheque.findMany({
+        where: { organizationId: org, status: { in: ["PENDING", "DEPOSITED"] } },
+        orderBy: { chequeDate: "asc" },
+      });
+      const mapped = rows.map((r) => ({
         type: "Cheque",
         reference: r.chequeNo,
         dueDate: r.chequeDate.toISOString(),
-        status: r.status,
+        status: r.chequeDate < now ? "EXPIRED" : "DUE SOON",
         amount: s(r.amount),
-      })),
-      ...docs.map((r) => ({
+      }));
+      return this.finish(
+        { title: "Cheque Maturity", subtitle: "Pending and deposited cheques awaiting clearance by maturity date.", kpis: this.expiryTotals(mapped), columns: this.expiryColumns, rows: mapped },
+        q,
+      );
+    }
+    if (report === "documents") {
+      const rows = await this.prisma.document.findMany({
+        where: { organizationId: org, expiryDate: { lte: to }, status: { not: "ARCHIVED" } },
+        orderBy: { expiryDate: "asc" },
+      });
+      const mapped = rows.map((r) => ({
         type: "Document",
         reference: r.name,
         dueDate: r.expiryDate?.toISOString() ?? null,
-        status: "DUE SOON",
+        status: r.expiryDate && r.expiryDate < now ? "EXPIRED" : "DUE SOON",
         amount: "0",
-      })),
-    ];
-    return this.finish(
-      {
-        title: "Expiry & Due Report",
-        subtitle: "Upcoming instruments, cheques and document due dates.",
-        kpis: [
-          { label: "Total Due Items", value: String(rows.length) },
-          { label: "Expired", value: String(rows.filter((r) => r.status === "EXPIRED").length) },
-          { label: "Due Soon", value: String(rows.filter((r) => r.status === "DUE SOON").length) },
-        ],
-        columns: [
-          { key: "type", label: "Item Type" },
-          { key: "reference", label: "Reference" },
-          { key: "dueDate", label: "Expiry / Due Date", type: "date" },
-          moneyCol("amount", "Amount"),
-          { key: "status", label: "Status" },
-        ],
-        rows,
-      },
-      q,
-    );
+      }));
+      return this.finish(
+        { title: "Document Expiry", subtitle: "Business documents approaching or past their expiry date.", kpis: this.expiryTotals(mapped), columns: this.expiryColumns, rows: mapped },
+        q,
+      );
+    }
+    if (report === "payables" || report === "bill-maturity") {
+      const rows = await this.prisma.payable.findMany({
+        where: { organizationId: org, status: { not: "PAID" }, dueDate: { lte: to } },
+        orderBy: { dueDate: "asc" },
+      });
+      const mapped = rows.map((r) => ({
+        type: "Payable",
+        reference: r.billNo,
+        dueDate: r.dueDate?.toISOString() ?? null,
+        status: r.dueDate && r.dueDate < now ? "EXPIRED" : "DUE SOON",
+        amount: s(r.amount.sub(r.paidAmount)),
+      }));
+      if (report === "payables") {
+        return this.finish(
+          { title: "Payable Due", subtitle: "Outstanding vendor/party bills approaching or past their due date.", kpis: this.expiryTotals(mapped), columns: this.expiryColumns, rows: mapped },
+          q,
+        );
+      }
+      // bill-maturity: a broader "bills due" view spanning both payables and outstanding receivables.
+      const projects = await this.prisma.cmsWork.findMany({
+        where: { organizationId: org, expectedCompletionDate: { lte: to } },
+        include: { receipts: { where: { status: "RECEIVED" } } },
+      });
+      const receivableRows = projects
+        .map((r) => {
+          const received = r.receipts.reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0));
+          const outstanding = Prisma.Decimal.max(new Prisma.Decimal(0), r.contractValue.minus(received));
+          return {
+            type: "Receivable",
+            reference: r.workName,
+            dueDate: r.expectedCompletionDate?.toISOString() ?? null,
+            status: r.expectedCompletionDate && r.expectedCompletionDate < now ? "EXPIRED" : "DUE SOON",
+            amount: s(outstanding),
+          };
+        })
+        .filter((r) => new Prisma.Decimal(r.amount).gt(0));
+      const combined = [...mapped, ...receivableRows];
+      return this.finish(
+        { title: "Bill Maturity Report", subtitle: "Upcoming and overdue bills — both payable and receivable — by maturity bucket.", kpis: this.expiryTotals(combined), columns: this.expiryColumns, rows: combined },
+        q,
+      );
+    }
+    if (report === "receivables") {
+      const projects = await this.prisma.cmsWork.findMany({
+        where: { organizationId: org },
+        include: { receipts: { where: { status: "RECEIVED" } } },
+      });
+      const mapped = projects
+        .map((r) => {
+          const received = r.receipts.reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0));
+          const outstanding = Prisma.Decimal.max(new Prisma.Decimal(0), r.contractValue.minus(received));
+          return {
+            type: "Receivable",
+            reference: r.workName,
+            dueDate: r.expectedCompletionDate?.toISOString() ?? null,
+            status: r.expectedCompletionDate && r.expectedCompletionDate < now ? "EXPIRED" : "DUE SOON",
+            amount: s(outstanding),
+          };
+        })
+        .filter((r) => new Prisma.Decimal(r.amount).gt(0));
+      return this.finish(
+        { title: "Receivable Due", subtitle: "Outstanding project collections against expected completion date.", kpis: this.expiryTotals(mapped), columns: this.expiryColumns, rows: mapped },
+        q,
+      );
+    }
+    if (report === "security-deposit") {
+      return this.finish(
+        {
+          title: "Security Deposit Release Due",
+          subtitle: "No authoritative Security Deposit source exists yet. No estimated or duplicate balances are shown.",
+          kpis: [{ label: "Source Records", value: "0" }],
+          columns: [{ key: "status", label: "Integration Status" }],
+          rows: [],
+        },
+        q,
+      );
+    }
+    throw new NotFoundException("Expiry & Due report not found");
   }
   async export(org: string, userId: string, category: string, report: string, q: QueryReportDto) {
     const result = await this.run(org, category, report, { ...q, page: 1, limit: 100 });

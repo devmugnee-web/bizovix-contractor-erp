@@ -43,18 +43,17 @@ export class DashboardService {
   }
 
   private async getKpis(organizationId: string) {
+    const now = new Date();
+    const dueSoonCutoff = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
     const [
       ongoingAgg,
       tenderSecurityAgg,
       pgBgAgg,
-      receivedReceiptsAgg,
       pendingReceiptsAgg,
       overdueReceiptsAgg,
-      pendingExpensesAgg,
-      dueSoonExpensesAgg,
+      outstandingPayables,
       bankAccounts,
       ongoingProjectMasters,
-      loansSetting,
     ] = await Promise.all([
       this.prisma.tender.aggregate({
         where: { organizationId, status: "ONGOING" },
@@ -71,20 +70,16 @@ export class DashboardService {
         _count: true,
         _sum: { amount: true },
       }),
-      this.prisma.receipt.aggregate({ where: { organizationId, status: "RECEIVED" }, _sum: { amount: true } }),
       this.prisma.receipt.aggregate({ where: { organizationId, status: "PENDING" }, _sum: { amount: true } }),
       this.prisma.receipt.aggregate({
         where: { organizationId, status: "PENDING", dueDate: { lt: new Date() } },
         _sum: { amount: true },
       }),
-      this.prisma.expense.aggregate({ where: { organizationId, status: "PENDING" }, _sum: { amount: true } }),
-      this.prisma.expense.aggregate({
-        where: {
-          organizationId,
-          status: "PENDING",
-          dueDate: { lte: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) },
-        },
-        _sum: { amount: true },
+      // Real accounts-payable sub-ledger — Expense.status is never transitioned to PENDING by
+      // any create/update path in this app, so it cannot be used as a live payables signal.
+      this.prisma.payable.findMany({
+        where: { organizationId, status: { not: "PAID" } },
+        select: { amount: true, paidAmount: true, dueDate: true },
       }),
       this.prisma.bankAccount.findMany({ where: { organizationId }, select: { currentBalance: true } }),
       this.prisma.tender.findMany({
@@ -92,14 +87,19 @@ export class DashboardService {
         select: { organizationMasterId: true },
         distinct: ["organizationMasterId"],
       }),
-      this.prisma.appSetting.findUnique({
-        where: { organizationId_key: { organizationId, key: "loansAndEmi" } },
-      }),
     ]);
 
     const bankAndCashTotal = bankAccounts.reduce((sum, acc) => sum + Number(acc.currentBalance), 0);
-    const receivedAmount = Number(receivedReceiptsAgg._sum.amount ?? 0);
-    const loansValue = (loansSetting?.value ?? {}) as { amount?: number; nextEmiDate?: string };
+    const outstandingPayableTotal = outstandingPayables.reduce(
+      (sum, p) => sum + (Number(p.amount) - Number(p.paidAmount)),
+      0,
+    );
+    const dueSoonPayableTotal = outstandingPayables
+      .filter((p) => p.dueDate && p.dueDate >= now && p.dueDate <= dueSoonCutoff)
+      .reduce((sum, p) => sum + (Number(p.amount) - Number(p.paidAmount)), 0);
+    const overduePayableTotal = outstandingPayables
+      .filter((p) => p.dueDate && p.dueDate < now)
+      .reduce((sum, p) => sum + (Number(p.amount) - Number(p.paidAmount)), 0);
 
     return {
       ongoingWorks: {
@@ -114,22 +114,29 @@ export class DashboardService {
         amount: (pgBgAgg._sum.amount ?? 0).toString(),
         instruments: pgBgAgg._count,
       },
+      // No dedicated Security Deposit module/data source exists yet (see Reports > Tender >
+      // Security Deposit, which honestly reports the same gap). Never fabricate a figure here.
       securityDeposit: {
-        amount: (receivedAmount * 0.1).toFixed(2),
+        amount: "0.00",
         projects: ongoingProjectMasters.length,
+        available: false,
       },
       receivables: {
         amount: (pendingReceiptsAgg._sum.amount ?? 0).toString(),
         overdue: (overdueReceiptsAgg._sum.amount ?? 0).toString(),
       },
       payables: {
-        amount: (pendingExpensesAgg._sum.amount ?? 0).toString(),
-        dueSoon: (dueSoonExpensesAgg._sum.amount ?? 0).toString(),
+        amount: outstandingPayableTotal.toFixed(2),
+        dueSoon: dueSoonPayableTotal.toFixed(2),
+        overdue: overduePayableTotal.toFixed(2),
       },
       bankAndCash: { amount: bankAndCashTotal.toString() },
+      // No Loan/EMI module exists yet — do not present the one-time seeded AppSetting value
+      // as though it were a live, computed balance.
       loansAndEmi: {
-        amount: (loansValue.amount ?? 0).toString(),
-        nextEmiDate: loansValue.nextEmiDate ?? null,
+        amount: "0.00",
+        nextEmiDate: null,
+        configured: false,
       },
     };
   }

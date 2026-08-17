@@ -49,6 +49,16 @@ function displayDate(value?: string) {
   return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function isoDateInput(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function addMonths(date: Date, months: number) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}
+
 function Field({ label, error, children }: { label: React.ReactNode; error?: string; children: React.ReactNode }) {
   return <label className="block min-w-0"><span className="mb-1 block text-[12px] font-semibold leading-4 text-biz-navy">{label}</span>{children}{error && <span className="mt-1 block text-[11px] font-medium text-biz-danger">{error}</span>}</label>;
 }
@@ -82,16 +92,23 @@ export default function PgBgPage() {
   const [reviewOpen, setReviewOpen] = React.useState(false);
   const [workflowId, setWorkflowId] = React.useState("");
   const [message, setMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [guarantee, setGuarantee] = React.useState({ type: "PG" as "PG" | "BG", bankAccountId: "", instrumentNo: "", amount: "", issueDate: "2024-05-16", expiryDate: "2025-05-15" });
+  const [guarantee, setGuarantee] = React.useState({
+    type: "PG" as "PG" | "BG",
+    bankAccountId: "",
+    instrumentNo: "",
+    amount: "",
+    issueDate: isoDateInput(new Date()),
+    expiryDate: isoDateInput(addMonths(new Date(), 12)),
+  });
 
   const { control, register, handleSubmit, setValue, getValues, reset, formState: { errors } } = useForm<PgBgWorkflowFormValues>({
     resolver: zodResolver(pgBgWorkflowSchema),
     defaultValues: {
       documentPurchaseId: "",
-      noaDate: "2024-05-15",
-      noaAmount: 12500000,
-      workCategory: "LED Display",
-      contact: { name: "Md. Mahbubur Rahman", designation: "Executive Engineer", mobile: "01712-345678", email: "mahbub.dphe@gov.bd", address: "DPHE Office, Patuakhali, Patuakhali Sadar, Patuakhali - 8600, Bangladesh" },
+      noaDate: "",
+      noaAmount: 0,
+      workCategory: "",
+      contact: { name: "", designation: "", mobile: "", email: "", address: "" },
       acceptNoa: true,
       pgBgRequired: true,
       currentStep: 1,

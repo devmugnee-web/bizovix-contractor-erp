@@ -1,6 +1,12 @@
 export const PERMISSIONS = [
   "dashboard.view",
 
+  "tender.read",
+  "tender.create",
+  "tender.update",
+  "tender.submit",
+  "tender.result.manage",
+
   "document_purchase.create",
   "document_purchase.read",
   "document_purchase.update",
@@ -86,6 +92,12 @@ export const PERMISSIONS = [
   "reminders.cancel",
 
   "notifications.read",
+
+  "documents.read",
+  "documents.upload",
+  "documents.update",
+  "documents.archive",
+  "documents.download",
 
   "user.manage",
   "role.manage",

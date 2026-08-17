@@ -68,10 +68,9 @@ export class CreditCommitmentsService {
         organizationMaster: item.organizationMaster,
         tenderWorkName: item.tenderWorkName,
         purchaseDate: item.purchaseDate,
-        estimatedTenderAmount: (item.estimatedTenderAmount.isZero()
-          ? item.documentPrice.mul(100)
-          : item.estimatedTenderAmount
-        ).toFixed(2),
+        // Real value only — no fabricated multiplier. A zero here honestly reflects
+        // that no Estimated Tender Amount was recorded on the document purchase.
+        estimatedTenderAmount: item.estimatedTenderAmount.toFixed(2),
       })),
       meta: buildPaginationMeta(total, page, limit),
     };
@@ -138,11 +137,16 @@ export class CreditCommitmentsService {
       };
     });
     const paymentDate = new Date(dto.paymentDate);
+    // Header-level tenderId/organizationMasterId mirror the first selected item's tender —
+    // a real relational link (not a string-matched guess) for the common single-tender case.
+    const firstPurchase = purchases[0]!;
 
     const record = await this.prisma.$transaction((tx) =>
       tx.creditCommitment.create({
         data: {
           organizationId,
+          tenderId: firstPurchase.linkedTenderId,
+          organizationMasterId: firstPurchase.organizationMasterId,
           paymentFromAccountId: dto.paymentFromAccountId,
           paymentDate,
           remarks: dto.remarks,

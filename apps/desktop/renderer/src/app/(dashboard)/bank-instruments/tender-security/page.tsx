@@ -33,59 +33,6 @@ type SelectedTender = PendingTenderSecurity & {
 
 const DEFAULT_QUERY: TenderSecurityPendingQuery = { page: 1, limit: 5 };
 
-const fallbackPending: PendingTenderSecurity[] = [
-  {
-    id: "demo-1024587",
-    tenderId: "1024587",
-    organizationMasterId: "demo-dphe",
-    organizationMaster: { id: "demo-dphe", shortName: "DPHE", fullName: "Department of Public Health Engineering" },
-    tenderWorkName: "Supply of LED Display at Patuakhali",
-    purchaseDate: "2024-05-10T00:00:00.000Z",
-    securityAmount: "500000.00",
-    status: "Security Not Given",
-  },
-  {
-    id: "demo-1024523",
-    tenderId: "1024523",
-    organizationMasterId: "demo-pwd",
-    organizationMaster: { id: "demo-pwd", shortName: "PWD", fullName: "Public Works Department" },
-    tenderWorkName: "Electrical Works at Cox's Bazar",
-    purchaseDate: "2024-05-08T00:00:00.000Z",
-    securityAmount: "300000.00",
-    status: "Security Not Given",
-  },
-  {
-    id: "demo-1024480",
-    tenderId: "1024480",
-    organizationMasterId: "demo-lged",
-    organizationMaster: { id: "demo-lged", shortName: "LGED", fullName: "Local Government Engineering Department" },
-    tenderWorkName: "Road Improvement Work",
-    purchaseDate: "2024-05-02T00:00:00.000Z",
-    securityAmount: "750000.00",
-    status: "Security Not Given",
-  },
-  {
-    id: "demo-1024401",
-    tenderId: "1024401",
-    organizationMasterId: "demo-rhd",
-    organizationMaster: { id: "demo-rhd", shortName: "RHD", fullName: "Roads and Highways Department" },
-    tenderWorkName: "Rehabilitation of Road",
-    purchaseDate: "2024-04-28T00:00:00.000Z",
-    securityAmount: "400000.00",
-    status: "Security Not Given",
-  },
-  {
-    id: "demo-1024322",
-    tenderId: "1024322",
-    organizationMasterId: "demo-dphe",
-    organizationMaster: { id: "demo-dphe", shortName: "DPHE", fullName: "Department of Public Health Engineering" },
-    tenderWorkName: "Drilling of Deep Tube Well",
-    purchaseDate: "2024-04-20T00:00:00.000Z",
-    securityAmount: "250000.00",
-    status: "Security Not Given",
-  },
-];
-
 function money(value: number | string) {
   return Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -186,16 +133,12 @@ export default function TenderSecurityPage() {
   const markNotRequired = useMarkTenderSecurityNotRequired();
 
   const [securityType, setSecurityType] = React.useState<SecurityType>("PAY_ORDER");
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
-    () => new Set(fallbackPending.slice(0, 3).map((item) => item.id)),
-  );
-  const [selectedRows, setSelectedRows] = React.useState<SelectedTender[]>(() =>
-    fallbackPending.slice(0, 3).map((item) => toSelectedTender(item, "PAY_ORDER")),
-  );
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
+  const [selectedRows, setSelectedRows] = React.useState<SelectedTender[]>([]);
   const [fundingType, setFundingType] = React.useState<FundingType>("LOAN");
   const [bankId, setBankId] = React.useState("");
   const [chargeFromAccountId, setChargeFromAccountId] = React.useState("");
-  const [issueDate, setIssueDate] = React.useState("2024-05-13");
+  const [issueDate, setIssueDate] = React.useState(() => isoDateInput(new Date()));
   const [validityMonths, setValidityMonths] = React.useState("4");
   const [interestRate, setInterestRate] = React.useState("15.00");
   const [remarks, setRemarks] = React.useState("PO will be issued for selected tenders");
@@ -209,12 +152,13 @@ export default function TenderSecurityPage() {
     }
   }, [tenderBankSettings.data]);
 
-  const pendingItems = pendingQuery.data?.items?.length ? pendingQuery.data.items : fallbackPending;
-  const meta = pendingQuery.data?.meta ?? { page: 1, limit: 5, total: 12, totalPages: 3 };
+  const pendingItems = pendingQuery.data?.items ?? [];
+  const meta = pendingQuery.data?.meta ?? { page: 1, limit: 5, total: 0, totalPages: 1 };
   const expiryDate = addMonths(issueDate, Number(validityMonths || 0));
   const firstBank = bankAccounts.data?.find((account) => account.accountType === "BANK") ?? bankAccounts.data?.[0];
   const effectiveBankId = bankId || firstBank?.id || "";
   const effectiveChargeFromAccountId = chargeFromAccountId || firstBank?.id || "";
+  const section2Ref = React.useRef<HTMLDivElement>(null);
 
   function toggleRow(row: PendingTenderSecurity) {
     setSelectedIds((current) => {
@@ -327,7 +271,7 @@ export default function TenderSecurityPage() {
       <section className="overflow-hidden rounded-lg border border-biz-border bg-white shadow-card">
         <div className="flex items-center justify-between px-4 py-3">
           <h2 className="text-[15px] font-bold text-biz-navy">
-            1. Pending Tender Security <span className="ml-2 rounded-md bg-biz-blue-soft px-2 py-1 text-[12px] text-biz-blue">12</span>
+            1. Pending Tender Security <span className="ml-2 rounded-md bg-biz-blue-soft px-2 py-1 text-[12px] text-biz-blue">{meta.total}</span>
           </h2>
           <div className="flex items-center gap-2">
             <IconButton aria-label="Refresh" onClick={() => pendingQuery.refetch()}>
@@ -382,28 +326,50 @@ export default function TenderSecurityPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-biz-border px-4 py-3 text-[12px]">
-          <span className="text-biz-muted">Showing 1 to {pendingItems.length} of {meta.total} entries</span>
+          <span className="text-biz-muted">
+            {meta.total === 0
+              ? "No pending tender security records found."
+              : `Showing ${(meta.page - 1) * meta.limit + 1} to ${Math.min(meta.page * meta.limit, meta.total)} of ${meta.total} entries`}
+          </span>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-md bg-biz-blue-soft px-4 py-2 font-semibold text-biz-blue">{selectedRows.length} Selected</span>
             <Button variant="outline" size="sm" disabled={selectedRows.length === 0 || markNotRequired.isPending} onClick={markSelectedNotRequired}>
               <CircleX className="h-4 w-4" />
               Mark as Not Required
             </Button>
-            <Button size="sm" disabled={selectedRows.length === 0}>
+            <Button
+              size="sm"
+              disabled={selectedRows.length === 0}
+              onClick={() => section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
               <FileText className="h-4 w-4" />
               Create Tender Security
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            {["‹", "1", "2", "3", "›"].map((page) => (
-              <button key={page} className={cn("h-8 min-w-8 rounded-md border px-2 text-[12px] font-semibold", page === "1" ? "border-biz-blue bg-biz-blue text-white" : "border-biz-border bg-white text-biz-navy")}>{page}</button>
-            ))}
+            <button
+              type="button"
+              disabled={meta.page <= 1}
+              onClick={() => setQuery((q) => ({ ...q, page: Math.max(1, (q.page ?? 1) - 1) }))}
+              className="h-8 min-w-8 rounded-md border border-biz-border bg-white px-2 text-[12px] font-semibold text-biz-navy disabled:opacity-40"
+            >
+              ‹
+            </button>
+            <span className="px-2 text-[12px] font-semibold text-biz-navy">Page {meta.page} of {meta.totalPages}</span>
+            <button
+              type="button"
+              disabled={meta.page >= meta.totalPages}
+              onClick={() => setQuery((q) => ({ ...q, page: Math.min(meta.totalPages, (q.page ?? 1) + 1) }))}
+              className="h-8 min-w-8 rounded-md border border-biz-border bg-white px-2 text-[12px] font-semibold text-biz-navy disabled:opacity-40"
+            >
+              ›
+            </button>
           </div>
         </div>
       </section>
 
-      <section className="rounded-lg border border-biz-border bg-white p-4 shadow-card">
+      <section ref={section2Ref} className="rounded-lg border border-biz-border bg-white p-4 shadow-card">
         <h2 className="mb-3 text-[15px] font-bold text-biz-navy">2. Tender Security Information <span className="font-semibold">(For Selected Tenders)</span></h2>
 
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.5fr_1.2fr_1.4fr_1.2fr_1fr_1.2fr]">

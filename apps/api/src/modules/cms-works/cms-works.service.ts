@@ -95,14 +95,14 @@ export class CmsWorksService {
 
   async archive(organizationId: string, userId: string, id: string) {
     await this.findOne(organizationId, id);
-    const work = await this.prisma.cmsWork.update({ where: { id }, data: { status: "ARCHIVED", completionDate: new Date() }, include: includeRelations });
+    const work = await this.prisma.cmsWork.update({ where: { id, organizationId }, data: { status: "ARCHIVED", completionDate: new Date() }, include: includeRelations });
     await this.auditLogService.record({ organizationId, userId, action: "update", entityType: "CmsWork", entityId: id, newValue: toDto(work) });
     return toDto(work);
   }
 
   async restore(organizationId: string, userId: string, id: string) {
     const existing = await this.findOne(organizationId, id);
-    const work = await this.prisma.cmsWork.update({ where: { id }, data: { status: "ONGOING", completionDate: null }, include: includeRelations });
+    const work = await this.prisma.cmsWork.update({ where: { id, organizationId }, data: { status: "ONGOING", completionDate: null }, include: includeRelations });
     await this.auditLogService.record({ organizationId, userId, action: "update", entityType: "CmsWork", entityId: id, oldValue: existing, newValue: toDto(work) });
     return toDto(work);
   }

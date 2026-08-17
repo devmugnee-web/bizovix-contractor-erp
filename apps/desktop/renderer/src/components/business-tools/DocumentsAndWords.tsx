@@ -3,6 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowRight, Copy, FileText, Printer, RotateCcw, Save } from "lucide-react";
 import { PrimaryButton, SecondaryButton, TextInput } from "@bizovix/ui";
+import { useCompanyAssetUrl, useCompanyProfile } from "@bizovix/api-client";
 import {
   amountInWords,
   copyText,
@@ -111,6 +112,20 @@ export function DocumentEditor({ template }: { template: string }) {
     },
     [form, setForm] = React.useState(initial),
     [preview, setPreview] = React.useState(false);
+  const companyProfile = useCompanyProfile();
+  const logoUrl = useCompanyAssetUrl("logo", Boolean(companyProfile.data?.hasLogo));
+  const appliedCompanyDefaults = React.useRef(false);
+  React.useEffect(() => {
+    if (!companyProfile.data || appliedCompanyDefaults.current) return;
+    appliedCompanyDefaults.current = true;
+    const profile = companyProfile.data;
+    setForm((current) => ({
+      ...current,
+      organization: current.organization || profile.displayName || profile.legalName || "",
+      signatory: current.signatory || profile.signatoryName || "",
+      designation: current.designation || profile.signatoryDesignation || "",
+    }));
+  }, [companyProfile.data]);
   const printDocument = () => {
     document.body.classList.add("print-document-only");
     const cleanup = () => document.body.classList.remove("print-document-only");
@@ -175,6 +190,11 @@ export function DocumentEditor({ template }: { template: string }) {
             previewReady={preview}
             data={{
               companyName: form.organization || "Company Name",
+              companyLogoUrl: logoUrl ?? undefined,
+              companyAddress: companyProfile.data?.address ?? undefined,
+              companyPhone: companyProfile.data?.phone ?? undefined,
+              companyEmail: companyProfile.data?.email ?? undefined,
+              companyWebsite: companyProfile.data?.website ?? undefined,
               reference: form.reference,
               date: form.date,
               recipient: form.recipient,

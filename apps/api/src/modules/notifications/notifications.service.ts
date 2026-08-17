@@ -60,7 +60,7 @@ export class NotificationsService {
     if (!row) throw new NotFoundException("Notification not found");
     if (row.isRead) return row;
     return this.prisma.notification.update({
-      where: { id },
+      where: { id, organizationId: org, userId },
       data: { isRead: true, readAt: new Date() },
     });
   }

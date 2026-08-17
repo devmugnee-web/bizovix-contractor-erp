@@ -73,6 +73,26 @@ async function main() {
     },
   });
 
+  // Additional demo staff users referenced by fixed id further below (general expenses),
+  // so those foreign keys point at real rows rather than dangling id strings.
+  const staffDefs = [
+    { id: "seed-user-shajib", email: "shajib@bizovix.com", name: "Shajib Ahmed" },
+    { id: "seed-user-galib", email: "galib@bizovix.com", name: "Galib Hasan" },
+    { id: "seed-user-rokon", email: "rokon@bizovix.com", name: "Rokon Uddin" },
+  ];
+  for (const staff of staffDefs) {
+    const staffUser = await prisma.user.upsert({
+      where: { id: staff.id },
+      update: {},
+      create: { id: staff.id, email: staff.email, passwordHash, name: staff.name },
+    });
+    await prisma.organizationUser.upsert({
+      where: { organizationId_userId: { organizationId: organization.id, userId: staffUser.id } },
+      update: {},
+      create: { organizationId: organization.id, userId: staffUser.id, roleId: adminRole.id, isDefault: true },
+    });
+  }
+
   const masterDefs = [
     { shortName: "DPHE", fullName: "Department of Public Health Engineering" },
     { shortName: "PWD", fullName: "Public Works Department" },
@@ -127,7 +147,21 @@ async function main() {
       currentBalance: 13_000_000,
     },
   });
-  const bankAccounts = [dbbl, primeBank, cash];
+  // Fixed id: referenced by the general expense demo rows further below.
+  const islamiBank = await prisma.bankAccount.upsert({
+    where: { id: "seed-bank-islami-01" },
+    update: {},
+    create: {
+      id: "seed-bank-islami-01",
+      organizationId: organization.id,
+      accountName: "Islami Bank Current Account",
+      accountType: AccountType.BANK,
+      bankName: "Islami Bank Bangladesh PLC",
+      accountNumber: "2050100012345",
+      currentBalance: 45_000_000,
+    },
+  });
+  const bankAccounts = [dbbl, primeBank, cash, islamiBank];
 
   const now = new Date();
   await prisma.monthlyTarget.upsert({
@@ -225,6 +259,51 @@ async function main() {
     });
   }
 
+  // --- Flagship coherent workflow tender ------------------------------------
+  // Tender 1024587 (DPHE, BDT 12,500,000) traces the full workflow end-to-end:
+  // Tender -> Document Purchase -> Tender Security -> Credit Commitment -> PG/BG -> CMS Work
+  // -> Project Expense -> Receipt -> Documents -> Reminders, all via real relational FKs
+  // (never by re-matching egpTenderId strings).
+  const flagshipTender = await prisma.tender.upsert({
+    where: { id: "seed-tender-1024587" },
+    update: {},
+    create: {
+      id: "seed-tender-1024587",
+      organizationId: organization.id,
+      organizationMasterId: masters["DPHE"]!.id,
+      egpTenderId: "1024587",
+      workName: "Supply of LED Display at Patuakhali",
+      category: "LED Display",
+      tenderType: "Open Tender",
+      procurementMethod: "OTM",
+      tenderMethod: "Single Stage One Envelope",
+      contractValue: 12_500_000,
+      status: TenderStatus.ONGOING,
+      publishedDate: new Date("2024-04-15T00:00:00.000Z"),
+      documentPurchaseDeadline: new Date("2024-05-05T00:00:00.000Z"),
+      submissionDeadline: new Date("2024-05-12T00:00:00.000Z"),
+      openingDate: new Date("2024-05-13T00:00:00.000Z"),
+      tenderSecurityRequired: true,
+      estimatedTenderSecurityAmount: 500_000,
+      assignedToName: "Saiful Islam",
+      description:
+        "Flagship demo tender tracing the full Tender -> Document Purchase -> Tender Security -> Credit Commitment -> PG/BG -> Project workflow.",
+      submissionDate: new Date("2024-05-10T00:00:00.000Z"),
+      submissionMethod: "Online (e-GP)",
+      quotedAmount: 12_500_000,
+      submittedById: adminUser.id,
+      submittedByName: adminUser.name,
+      submissionReference: "EGP-SUB-1024587",
+      checklistStatus: "Completed",
+      submittedAt: new Date("2024-05-10T00:00:00.000Z"),
+      openingResult: "Lowest",
+      lowestBidAmount: 12_500_000,
+      lowestBidder: "Bizovix Construction Ltd",
+      awardedAt: new Date("2024-05-16T00:00:00.000Z"),
+      createdById: adminUser.id,
+    },
+  });
+
   // --- Document Purchases --------------------------------------------------
   const documentPurchaseDefs: Array<{
     type: PurchaseType;
@@ -259,6 +338,7 @@ async function main() {
     { type: PurchaseType.EGP, tenderId: "1023781", master: "SREDA", work: "Solar System at Rajshahi", price: 4000, estimatedAmount: 9_600_000, account: dbbl, daysAgo: 84 },
     { type: PurchaseType.EGP, tenderId: "1023675", master: "BKSP", work: "Supply of PA System at BKSP", price: 2800, estimatedAmount: 5_900_000, account: primeBank, daysAgo: 88 },
   ];
+  let flagshipDocumentPurchase: { id: string } | null = null;
   for (const d of documentPurchaseDefs) {
     const referenceDates: Record<string, string> = {
       "1024587": "2024-05-10T00:00:00.000Z",
@@ -267,24 +347,81 @@ async function main() {
       "1024401": "2024-04-28T00:00:00.000Z",
       "1024322": "2024-04-20T00:00:00.000Z",
     };
-    await prisma.documentPurchase.create({
-      data: {
-        organizationId: organization.id,
-        purchaseType: d.type,
-        egpTenderId: d.tenderId,
-        organizationMasterId: masters[d.master]!.id,
-        paymentFromAccountId: d.account.id,
-        tenderWorkName: d.work,
-        purchaseDate: referenceDates[d.tenderId ?? ""] ? new Date(referenceDates[d.tenderId ?? ""]!) : daysAgo(d.daysAgo),
-        documentPrice: d.price,
-        estimatedTenderAmount: d.estimatedAmount,
-      },
-    });
+    const data = {
+      organizationId: organization.id,
+      purchaseType: d.type,
+      egpTenderId: d.tenderId,
+      // Real FK linkage (not string matching) for the flagship coherent-workflow tender.
+      linkedTenderId: d.tenderId === "1024587" ? flagshipTender.id : null,
+      organizationMasterId: masters[d.master]!.id,
+      paymentFromAccountId: d.account.id,
+      tenderWorkName: d.work,
+      purchaseDate: referenceDates[d.tenderId ?? ""] ? new Date(referenceDates[d.tenderId ?? ""]!) : daysAgo(d.daysAgo),
+      documentPrice: d.price,
+      estimatedTenderAmount: d.estimatedAmount,
+    };
+    // The flagship purchase is upserted by a fixed id so the whole downstream chain
+    // (tender security, credit commitment, PG/BG) stays stable across repeated seed runs.
+    const created =
+      d.tenderId === "1024587"
+        ? await prisma.documentPurchase.upsert({
+            where: { id: "seed-document-purchase-1024587" },
+            update: data,
+            create: { id: "seed-document-purchase-1024587", ...data },
+          })
+        : await prisma.documentPurchase.create({ data });
+    if (d.tenderId === "1024587") flagshipDocumentPurchase = created;
   }
 
   // --- Tender Securities ----------------------------------------------------
+  // DPHE's tender security is created below, properly linked into the flagship chain
+  // (real tenderId + a real TenderSecurityItem against the 1024587 document purchase)
+  // instead of a flat, unlinked filler row.
+  const flagshipSecurityAmount = 500_000;
+  const flagshipMarginAmount = flagshipSecurityAmount * 0.1;
+  // TenderSecurityItem.documentPurchaseId is unique — guard so re-running the seed
+  // doesn't try to create a second item against the same (upserted, stable) purchase.
+  const existingFlagshipSecurityItem = await prisma.tenderSecurityItem.findUnique({
+    where: { documentPurchaseId: flagshipDocumentPurchase!.id },
+  });
+  if (!existingFlagshipSecurityItem) {
+    await prisma.tenderSecurity.create({
+      data: {
+        organizationId: organization.id,
+        tenderId: flagshipTender.id,
+        organizationMasterId: masters["DPHE"]!.id,
+        bankAccountId: dbbl.id,
+        chargeFromAccountId: dbbl.id,
+        instrumentNo: "TS-102587",
+        amount: flagshipSecurityAmount,
+        marginAmount: flagshipMarginAmount,
+        bankFinanceAmount: flagshipSecurityAmount - flagshipMarginAmount,
+        interestRate: 15,
+        validityMonths: 6,
+        issueDate: new Date("2024-05-13T00:00:00.000Z"),
+        expiryDate: new Date("2024-11-13T00:00:00.000Z"),
+        status: InstrumentStatus.ACTIVE,
+        items: {
+          create: [
+            {
+              documentPurchaseId: flagshipDocumentPurchase!.id,
+              securityAmount: flagshipSecurityAmount,
+              marginPercentage: 10,
+              marginAmount: flagshipMarginAmount,
+              bankFinanceAmount: flagshipSecurityAmount - flagshipMarginAmount,
+              referenceNo: "PO-IBBL-88912",
+            },
+          ],
+        },
+      },
+    });
+    await prisma.documentPurchase.update({
+      where: { id: flagshipDocumentPurchase!.id },
+      data: { tenderSecurityStatus: "CREATED" },
+    });
+  }
+
   const tenderSecurityDefs = [
-    { master: "DPHE", amount: 2_500_000, issued: 40, expires: 5, status: InstrumentStatus.ACTIVE },
     { master: "PWD", amount: 1_800_000, issued: 55, expires: 12, status: InstrumentStatus.ACTIVE },
     { master: "LGED", amount: 3_200_000, issued: 70, expires: 20, status: InstrumentStatus.ACTIVE },
     { master: "RHD", amount: 1_200_000, issued: 90, expires: -10, status: InstrumentStatus.EXPIRED },
@@ -305,9 +442,69 @@ async function main() {
     });
   }
 
-  // --- Performance Guarantees (PG/BG) ---------------------------------------
+  // --- PG/BG Workflow + Performance Guarantee -------------------------------
+  // DPHE's PG/BG is created below as a real, finalized workflow (matching the flow
+  // pg-bg.service.ts drives in production) instead of a flat, unlinked filler row.
+  const dpheContact = await prisma.organizationContact.upsert({
+    where: {
+      organizationId_organizationMasterId_mobile: {
+        organizationId: organization.id,
+        organizationMasterId: masters["DPHE"]!.id,
+        mobile: "01712-345678",
+      },
+    },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      organizationMasterId: masters["DPHE"]!.id,
+      name: "Md. Mahbubur Rahman",
+      designation: "Executive Engineer",
+      mobile: "01712-345678",
+      email: "mahbub.dphe@gov.bd",
+      address: "DPHE Office, Patuakhali, Patuakhali Sadar, Patuakhali - 8600, Bangladesh",
+    },
+  });
+  const flagshipPgBgWorkflow = await prisma.pgBgWorkflow.upsert({
+    where: { documentPurchaseId: flagshipDocumentPurchase!.id },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      documentPurchaseId: flagshipDocumentPurchase!.id,
+      organizationMasterId: masters["DPHE"]!.id,
+      contactId: dpheContact.id,
+      tenderSecurityAmount: flagshipSecurityAmount,
+      noaDate: new Date("2024-05-16T00:00:00.000Z"),
+      noaAmount: 12_500_000,
+      workCategory: "LED Display",
+      acceptNoa: true,
+      pgBgRequired: true,
+      status: "FINALIZED",
+      currentStep: 5,
+      acceptedAt: new Date("2024-05-16T00:00:00.000Z"),
+      acceptedById: adminUser.id,
+      createdById: adminUser.id,
+    },
+  });
+  const flagshipPerformanceGuarantee = await prisma.performanceGuarantee.upsert({
+    where: { pgBgWorkflowId: flagshipPgBgWorkflow.id },
+    update: {},
+    create: {
+      organizationId: organization.id,
+      tenderId: flagshipTender.id,
+      organizationMasterId: masters["DPHE"]!.id,
+      bankAccountId: primeBank.id,
+      pgBgWorkflowId: flagshipPgBgWorkflow.id,
+      type: GuaranteeType.PG,
+      instrumentNo: "PG-102587",
+      amount: 5_000_000,
+      issueDate: new Date("2024-05-20T00:00:00.000Z"),
+      expiryDate: daysFromNow(15),
+      status: InstrumentStatus.ACTIVE,
+      createdById: adminUser.id,
+    },
+  });
+
   const pgBgDefs = [
-    { master: "DPHE", type: GuaranteeType.PG, amount: 5_000_000, issued: 60, expires: 15 },
     { master: "PWD", type: GuaranteeType.BG, amount: 3_500_000, issued: 45, expires: 28 },
     { master: "LGED", type: GuaranteeType.PG, amount: 4_200_000, issued: 90, expires: 60 },
     { master: "RHD", type: GuaranteeType.BG, amount: 2_800_000, issued: 30, expires: 90 },
@@ -344,19 +541,33 @@ async function main() {
     { id: "seed-cms-work-12", master: "DPHE", name: "IT & Networking at DPHE HQ", category: "ICT", value: 9_000_000 },
   ];
   for (const work of cmsWorkDefs) {
+    const isFlagship = work.id === "seed-cms-work-01";
     await prisma.cmsWork.upsert({
       where: { id: work.id },
-      update: {},
+      // Backfill the flagship linkage even if this row already existed from a seed run
+      // before these fields were added — everything else stays untouched on conflict.
+      update: isFlagship
+        ? {
+            tenderId: flagshipTender.id,
+            documentPurchaseId: flagshipDocumentPurchase!.id,
+            pgBgWorkflowId: flagshipPgBgWorkflow.id,
+          }
+        : {},
       create: {
         id: work.id,
         organizationId: organization.id,
         organizationMasterId: masters[work.master]!.id,
+        // The flagship work is the real terminus of the Tender -> ... -> PG/BG chain above.
+        tenderId: isFlagship ? flagshipTender.id : undefined,
+        documentPurchaseId: isFlagship ? flagshipDocumentPurchase!.id : undefined,
+        pgBgWorkflowId: isFlagship ? flagshipPgBgWorkflow.id : undefined,
         workName: work.name,
         workCategory: work.category,
         contractValue: work.value,
         status: CmsWorkStatus.ONGOING,
         startDate: new Date("2024-05-16"),
         expectedCompletionDate: new Date("2025-05-15"),
+        createdById: isFlagship ? adminUser.id : undefined,
       },
     });
   }
@@ -414,8 +625,41 @@ async function main() {
   }
 
   // --- Credit Commitments ----------------------------------------------------
+  // DPHE's credit commitment charge is created below, properly linked into the flagship
+  // chain (real tenderId + a real CreditCommitmentItem against the 1024587 document
+  // purchase), matching what credit-commitments.service.ts's create() flow produces.
+  // CreditCommitmentItem.documentPurchaseId is unique — guard so re-running the seed
+  // doesn't try to create a second item against the same (upserted, stable) purchase.
+  const existingFlagshipCommitmentItem = await prisma.creditCommitmentItem.findUnique({
+    where: { documentPurchaseId: flagshipDocumentPurchase!.id },
+  });
+  if (!existingFlagshipCommitmentItem) {
+    await prisma.creditCommitment.create({
+      data: {
+        organizationId: organization.id,
+        tenderId: flagshipTender.id,
+        organizationMasterId: masters["DPHE"]!.id,
+        paymentFromAccountId: dbbl.id,
+        amount: 8450,
+        totalAmount: 8450,
+        chargeDate: daysFromNow(12),
+        paymentDate: daysFromNow(12),
+        isCharged: false,
+        createdById: adminUser.id,
+        items: {
+          create: [
+            {
+              documentPurchaseId: flagshipDocumentPurchase!.id,
+              bankAccountId: dbbl.id,
+              chargeAmount: 8450,
+            },
+          ],
+        },
+      },
+    });
+  }
+
   const creditCommitmentDefs = [
-    { master: "DPHE", amount: 8450, due: 12, charged: false },
     { master: "PWD", amount: 6200, due: -5, charged: true },
     { master: "LGED", amount: 9100, due: 25, charged: false },
   ];
@@ -424,8 +668,11 @@ async function main() {
       data: {
         organizationId: organization.id,
         organizationMasterId: masters[c.master]!.id,
+        paymentFromAccountId: primeBank.id,
         amount: c.amount,
+        totalAmount: c.amount,
         chargeDate: daysFromNow(c.due),
+        paymentDate: daysFromNow(c.due),
         isCharged: c.charged,
       },
     });
@@ -522,39 +769,163 @@ async function main() {
   }
   await prisma.receiptSequence.upsert({ where: { organizationId_year: { organizationId: organization.id, year: 2026 } }, update: { value: { set: 24 } }, create: { organizationId: organization.id, year: 2026, value: 24 } });
 
-  // --- Documents --------------------------------------------------------------
+  // --- Documents ----------------------------------------------------------
+  // Real seeded rows (no physical file attached — metadata only, same as a document
+  // logged before its file is uploaded). Linked via real FKs where the original demo
+  // data implied a relationship, instead of a free-text "tenderId" string.
   const documentDefs = [
-    { name: "Trade License 2026", category: "Legal", expires: 31 },
-    { name: "VAT Registration Certificate", category: "Legal", expires: 60 },
-    { name: "Company Incorporation Certificate", category: "Legal", expires: null },
-    { name: "Tax Identification Certificate", category: "Legal", expires: 90 },
-    { name: "Bank Solvency Certificate", category: "Finance", expires: 20 },
-  ];
+    {
+      name: "Trade License 2026",
+      category: "Company",
+      documentType: "Trade License",
+      relatedModule: "Company",
+      referenceNumber: "TL/DNCC/2026/1842",
+      certificateNumber: "TRAD/DNCC/1842",
+      issuingAuthority: "Dhaka North City Corporation",
+      issueDate: daysAgo(330),
+      expires: 31,
+      reminderDays: 30,
+      responsiblePerson: "Saiful Islam",
+      description: "Current company trade license.",
+      tags: ["license", "compliance"],
+    },
+    {
+      name: "TIN Certificate",
+      category: "Tax & VAT",
+      documentType: "TIN Certificate",
+      relatedModule: "Company",
+      referenceNumber: "TIN-745921638",
+      certificateNumber: "745921638",
+      issuingAuthority: "National Board of Revenue",
+      issueDate: daysAgo(900),
+      expires: null,
+      responsiblePerson: "Accounts Manager",
+      tags: ["tax", "company"],
+    },
+    {
+      name: "BIN Certificate",
+      category: "Tax & VAT",
+      documentType: "BIN / VAT Certificate",
+      relatedModule: "Company",
+      certificateNumber: "BIN-001482795",
+      issuingAuthority: "National Board of Revenue",
+      issueDate: daysAgo(700),
+      expires: -5,
+      reminderDays: 30,
+      responsiblePerson: "Accounts Manager",
+      tags: ["vat", "compliance"],
+    },
+    {
+      name: "Bank Solvency Certificate",
+      category: "Financial",
+      documentType: "Bank Solvency",
+      relatedModule: "Bank Instrument",
+      organizationMasterId: masters["DPHE"]!.id,
+      tenderId: flagshipTender.id,
+      referenceNumber: "IBBL/SLV/2026/882",
+      issueDate: daysAgo(12),
+      expires: 20,
+      reminderDays: 15,
+      responsiblePerson: "Saiful Islam",
+      tags: ["bank", "tender"],
+    },
+    {
+      name: "Tender Schedule - 1024587",
+      category: "Tender",
+      documentType: "Tender Schedule",
+      relatedModule: "Tender",
+      tenderId: flagshipTender.id,
+      relatedEntityName: flagshipTender.workName,
+      organizationMasterId: masters["DPHE"]!.id,
+      referenceNumber: "e-GP/1024587",
+      issueDate: daysAgo(40),
+      expires: 42,
+      reminderDays: 15,
+      responsiblePerson: "Mahbubur Rahman",
+      tags: ["egp", "schedule"],
+    },
+    {
+      name: "NOA - Supply of LED Display at Patuakhali",
+      category: "Project",
+      documentType: "NOA",
+      relatedModule: "Project / CMS",
+      tenderId: flagshipTender.id,
+      workId: "seed-cms-work-01",
+      relatedEntityName: flagshipTender.workName,
+      organizationMasterId: masters["DPHE"]!.id,
+      referenceNumber: "DPHE/NOA/2026/44",
+      issueDate: daysAgo(60),
+      expires: null,
+      tags: ["noa", "project"],
+    },
+    {
+      name: "Contract Agreement - LED Display",
+      category: "Project",
+      documentType: "Contract Agreement",
+      relatedModule: "Project / CMS",
+      workId: "seed-cms-work-01",
+      relatedEntityName: flagshipTender.workName,
+      organizationMasterId: masters["DPHE"]!.id,
+      referenceNumber: "DPHE/CON/2026/19",
+      issueDate: daysAgo(48),
+      expires: 280,
+      reminderDays: 30,
+      responsiblePerson: "Project Manager",
+      tags: ["contract"],
+    },
+    {
+      name: "Power of Attorney",
+      category: "Legal",
+      documentType: "Power of Attorney",
+      relatedModule: "Company",
+      referenceNumber: "POA-2024-09",
+      issueDate: daysAgo(600),
+      expires: null,
+      tags: ["legal"],
+      archived: true,
+      archiveReason: "Superseded by renewed authorization",
+    },
+  ] as const;
   for (const doc of documentDefs) {
     await prisma.document.create({
       data: {
         organizationId: organization.id,
         name: doc.name,
         category: doc.category,
+        documentType: "documentType" in doc ? doc.documentType : undefined,
+        relatedModule: "relatedModule" in doc ? doc.relatedModule : undefined,
+        relatedEntityName: "relatedEntityName" in doc ? doc.relatedEntityName : undefined,
+        tenderId: "tenderId" in doc ? doc.tenderId : undefined,
+        workId: "workId" in doc ? doc.workId : undefined,
+        organizationMasterId: "organizationMasterId" in doc ? doc.organizationMasterId : undefined,
+        referenceNumber: "referenceNumber" in doc ? doc.referenceNumber : undefined,
+        certificateNumber: "certificateNumber" in doc ? doc.certificateNumber : undefined,
+        issuingAuthority: "issuingAuthority" in doc ? doc.issuingAuthority : undefined,
+        issueDate: "issueDate" in doc ? doc.issueDate : undefined,
         expiryDate: doc.expires === null ? null : daysFromNow(doc.expires),
+        reminderDays: "reminderDays" in doc ? doc.reminderDays : undefined,
+        responsiblePerson: "responsiblePerson" in doc ? doc.responsiblePerson : undefined,
+        description: "description" in doc ? doc.description : undefined,
+        tags: [...doc.tags],
+        status: "archived" in doc && doc.archived ? "ARCHIVED" : "ACTIVE",
+        archivedAt: "archived" in doc && doc.archived ? daysAgo(20) : undefined,
+        archivedByName: "archived" in doc && doc.archived ? "Admin User" : undefined,
+        archiveReason: "archiveReason" in doc ? doc.archiveReason : undefined,
+        uploadedByName: "Saiful Islam",
+        createdById: adminUser.id,
       },
     });
   }
 
   // --- Reminders ---------------------------------------------------------------
+  // Only genuinely "manual" reminder concepts are seeded here (no dedicated auto-sync
+  // source exists for these). Tender Security/PG-BG/Credit Commitment/Document/Tender
+  // Submission & Opening reminders are now generated for real by syncSources() from the
+  // actual seeded instruments/documents/tenders above — seeding duplicate manual summary
+  // rows for those would just be stale fake data sitting next to the real thing.
   const reminderDefs = [
-    { type: "TENDER_SECURITY_EXPIRY", title: "Tender Security Expiry", subtitle: "03 Instruments will expire in next 7 days", due: 7 },
-    { type: "PG_BG_EXPIRY", title: "PG/BG Expiry", subtitle: "02 Guarantees will expire in next 15 days", due: 15 },
-    { type: "CREDIT_COMMITMENT_CHARGE", title: "Credit Commitment Charge", subtitle: "03 Commitments charge due", due: 12 },
-    { type: "DOCUMENT_EXPIRY", title: "Document Expiry", subtitle: "05 Documents will expire soon", due: 31 },
-    { type: "TENDER_OPENING", title: "Tender Opening Today", subtitle: "02 Tenders scheduled for opening today", due: 0 },
-    { type: "TENDER_SECURITY_EXPIRY", title: "Tender Security Expiry", subtitle: "01 Instrument expiring soon", due: 20 },
-    { type: "PG_BG_EXPIRY", title: "PG/BG Expiry", subtitle: "01 Guarantee expiring soon", due: 28 },
-    { type: "CREDIT_COMMITMENT_CHARGE", title: "Credit Commitment Charge", subtitle: "01 Commitment charge due", due: 25 },
-    { type: "DOCUMENT_EXPIRY", title: "Document Expiry", subtitle: "Bank Solvency Certificate expiring soon", due: 20 },
-    { type: "TENDER_OPENING", title: "Tender Opening Upcoming", subtitle: "01 Tender scheduled for opening", due: 3 },
-    { type: "LICENSE_RENEWAL", title: "License Renewal", subtitle: "Trade License renewal due soon", due: 31 },
-    { type: "SUBSCRIPTION_TRIAL", title: "Trial Ending Soon", subtitle: "Upgrade to Premium before trial ends", due: 30 },
+    { type: "License Renewal", title: "License Renewal", subtitle: "Trade License renewal due soon", due: 31 },
+    { type: "Trial Ending Soon", title: "Trial Ending Soon", subtitle: "Upgrade to Premium before trial ends", due: 30 },
   ];
   for (const r of reminderDefs) {
     await prisma.reminder.create({

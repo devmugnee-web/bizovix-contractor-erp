@@ -95,7 +95,7 @@ export class FinanceSettingsService {
     const old = await this.prisma.accountingPeriod.findFirst({ where: { id, organizationId: org } });
     if (!old) throw new NotFoundException("Accounting period not found");
     const row = await this.prisma.accountingPeriod.update({
-      where: { id },
+      where: { id, organizationId: org },
       data:
         status === "LOCKED"
           ? { status, lockedById: userId, lockedAt: new Date() }

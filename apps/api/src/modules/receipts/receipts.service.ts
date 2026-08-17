@@ -96,14 +96,14 @@ export class ReceiptsService {
     if (existing.status === "CANCELLED") throw new BadRequestException("Cancelled receipt cannot be edited");
     const merged: SaveReceiptDto = { receiptDate: dto.receiptDate ?? new Date(existing.receiptDate).toISOString().slice(0, 10), receiptCategory: dto.receiptCategory ?? (existing.receiptCategory === "PROJECT" ? "PROJECT" : "GENERAL"), receiptType: dto.receiptType ?? existing.receiptType, workId: dto.workId ?? existing.work?.id, receivedFrom: dto.receivedFrom ?? existing.receivedFrom, amount: dto.amount ?? Number(existing.amount), receivedInAccountId: dto.receivedInAccountId ?? existing.receivedInAccount?.id ?? "", paymentMethod: dto.paymentMethod ?? existing.paymentMethod, referenceNo: dto.referenceNo ?? existing.referenceNo ?? undefined, description: dto.description ?? existing.description ?? undefined, status: dto.status ?? (existing.status === "PENDING" ? "PENDING" : "RECEIVED") };
     await this.refs(organizationId, merged);
-    const row = await this.prisma.receipt.update({ where: { id }, data: { ...merged, receiptDate: new Date(merged.receiptDate), workId: merged.receiptCategory === "PROJECT" ? merged.workId : null }, include: includeRelations });
+    const row = await this.prisma.receipt.update({ where: { id, organizationId }, data: { ...merged, receiptDate: new Date(merged.receiptDate), workId: merged.receiptCategory === "PROJECT" ? merged.workId : null }, include: includeRelations });
     await this.audit.record({ organizationId, userId, action: "update", entityType: "Receipt", entityId: id, oldValue: existing, newValue: toDto(row) });
     return toDto(row);
   }
 
   async cancel(organizationId: string, userId: string, id: string) {
     const existing = await this.findOne(organizationId, id);
-    const row = await this.prisma.receipt.update({ where: { id }, data: { status: "CANCELLED" }, include: includeRelations });
+    const row = await this.prisma.receipt.update({ where: { id, organizationId }, data: { status: "CANCELLED" }, include: includeRelations });
     await this.audit.record({ organizationId, userId, action: "delete", entityType: "Receipt", entityId: id, oldValue: existing, newValue: toDto(row) });
     return toDto(row);
   }

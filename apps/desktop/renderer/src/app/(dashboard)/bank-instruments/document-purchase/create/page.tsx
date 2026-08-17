@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { Building2, FileText, Info, Landmark, Monitor, Plus, Save } from "lucide-react";
@@ -10,6 +11,7 @@ import {
   useCreateDocumentPurchase,
   useCreateOrganizationMaster,
   useOrganizations,
+  useTender,
 } from "@bizovix/api-client";
 import {
   createDocumentPurchaseSchema,
@@ -34,6 +36,14 @@ import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { Modal } from "@/components/layout/Modal";
 
 export default function AddDocumentPurchasePage() {
+  return (
+    <Suspense fallback={null}>
+      <AddDocumentPurchaseForm />
+    </Suspense>
+  );
+}
+
+function AddDocumentPurchaseForm() {
   useSetBreadcrumb([
     { label: "Bank Instruments" },
     { label: "Document Purchase", href: "/bank-instruments/document-purchase" },
@@ -41,6 +51,9 @@ export default function AddDocumentPurchasePage() {
   ]);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tenderId = searchParams.get("tenderId") ?? undefined;
+  const linkedTender = useTender(tenderId);
   const bankAccounts = useBankAccounts();
   const createMutation = useCreateDocumentPurchase();
 
@@ -73,11 +86,22 @@ export default function AddDocumentPurchasePage() {
 
   const [addOrgOpen, setAddOrgOpen] = React.useState(false);
 
+  const prefilledFromTender = React.useRef(false);
+  React.useEffect(() => {
+    if (!linkedTender.data || prefilledFromTender.current) return;
+    prefilledFromTender.current = true;
+    setValue("organizationMasterId", linkedTender.data.organizationMasterId);
+    setValue("tenderWorkName", linkedTender.data.workName);
+    if (linkedTender.data.egpTenderId) setValue("tenderId", linkedTender.data.egpTenderId);
+    setSelectedOrg({ value: linkedTender.data.organizationMasterId, label: linkedTender.data.organizationMaster.shortName });
+  }, [linkedTender.data, setValue]);
+
   function onSubmit(values: CreateDocumentPurchaseFormValues) {
     createMutation.mutate(
       {
         purchaseType: values.purchaseType,
         tenderId: values.purchaseType === PurchaseType.EGP ? values.tenderId || undefined : undefined,
+        linkedTenderId: tenderId,
         organizationMasterId: values.organizationMasterId,
         tenderWorkName: values.tenderWorkName,
         purchaseDate: values.purchaseDate,
@@ -86,7 +110,7 @@ export default function AddDocumentPurchasePage() {
       },
       {
         onSuccess: (record) => {
-          router.push(`/bank-instruments/document-purchase/${record.id}`);
+          router.push(tenderId ? `/tenders/${tenderId}` : `/bank-instruments/document-purchase/${record.id}`);
         },
       },
     );

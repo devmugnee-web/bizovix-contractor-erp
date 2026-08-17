@@ -1,6 +1,6 @@
 import { PurchaseType } from "@bizovix/database";
 import { Type } from "class-transformer";
-import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsPositive, IsString, ValidateIf } from "class-validator";
+import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, ValidateIf } from "class-validator";
 
 export class CreateDocumentPurchaseDto {
   @IsEnum(PurchaseType)
@@ -10,6 +10,11 @@ export class CreateDocumentPurchaseDto {
   @IsString()
   @IsNotEmpty({ message: "Tender ID is required for e-GP purchases" })
   tenderId?: string;
+
+  /** Real FK to a Tenders module record — set when this purchase is initiated from a Tender's workflow. */
+  @IsOptional()
+  @IsString()
+  linkedTenderId?: string;
 
   @IsString()
   @IsNotEmpty()

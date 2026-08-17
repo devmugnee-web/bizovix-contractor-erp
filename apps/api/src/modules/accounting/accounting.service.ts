@@ -33,6 +33,7 @@ const SYSTEM = [
   ["2200", "Accrued Expenses", "LIABILITY", "CREDIT", "ACCRUED_EXPENSES", "LIABILITIES"],
   ["3010", "Owner's Capital", "EQUITY", "CREDIT", "OWNERS_CAPITAL", "EQUITY"],
   ["3020", "Retained Earnings", "EQUITY", "CREDIT", "RETAINED_EARNINGS", "EQUITY"],
+  ["3030", "Opening Balance Equity", "EQUITY", "CREDIT", "OPENING_BALANCE_EQUITY", "EQUITY"],
   ["4010", "Project Revenue", "INCOME", "CREDIT", "PROJECT_REVENUE", "INCOME"],
   ["4020", "Other Business Income", "INCOME", "CREDIT", "OTHER_INCOME", "INCOME"],
   ["5010", "Project Expense", "EXPENSE", "DEBIT", "PROJECT_EXPENSE", "EXPENSES"],
@@ -49,6 +50,21 @@ const SYSTEM = [
   ],
   ["5060", "PG/BG Charges", "EXPENSE", "DEBIT", "PG_BG_CHARGES", "EXPENSES"],
 ] as const;
+// Sub-ledger-backed accounts: a manual journal entry must never post to these directly —
+// doing so would let Receivable/Payable/Cash/Bank/Opening-balance sub-ledgers diverge from
+// the GL. Real business modules (Receipts, Payables, Cash & Bank, Opening Balances) post to
+// them through AccountingService.post()/bankLedgerAccount(), which is unaffected by this gate.
+const CONTROL_SYSTEM_KEYS = new Set(["ACCOUNTS_RECEIVABLE", "ACCOUNTS_PAYABLE", "OPENING_BALANCE_EQUITY", "CASH", "BANK"]);
+// The one normal balance each account type is allowed to carry — enforced at account
+// create/update so LedgerAccount.normalBalance can never silently drift out of sync with
+// accountType (which is what every balance/report calculation actually keys off).
+const NORMAL_BALANCE_BY_TYPE: Record<string, "DEBIT" | "CREDIT"> = {
+  ASSET: "DEBIT",
+  EXPENSE: "DEBIT",
+  LIABILITY: "CREDIT",
+  EQUITY: "CREDIT",
+  INCOME: "CREDIT",
+};
 @Injectable()
 export class AccountingService {
   constructor(
@@ -73,6 +89,7 @@ export class AccountingService {
           accountType: type,
           normalBalance: normal,
           isSystem: true,
+          isControlAccount: CONTROL_SYSTEM_KEYS.has(key),
           systemKey: key,
         },
       });
@@ -89,6 +106,7 @@ export class AccountingService {
           accountType: type,
           normalBalance: normal,
           isSystem: true,
+          isControlAccount: CONTROL_SYSTEM_KEYS.has(key),
           systemKey: key,
           parentId: parents.get(parent),
         },
@@ -126,9 +144,27 @@ export class AccountingService {
         normalBalance: "DEBIT",
         description: bank.accountNumber ?? undefined,
         isSystem: true,
+        isControlAccount: true,
         linkedBankAccountId: bank.id,
       },
     });
+  }
+  private async assertNoControlAccountLines(
+    tx: Tx,
+    org: string,
+    lines: Array<{ accountId: string }>,
+  ) {
+    const ids = [...new Set(lines.map((l) => l.accountId))];
+    const controlAccounts = await tx.ledgerAccount.findMany({
+      where: { id: { in: ids }, organizationId: org, isControlAccount: true },
+    });
+    if (controlAccounts.length > 0) {
+      throw new BadRequestException(
+        `Manual journal entries cannot post directly to control accounts: ${controlAccounts
+          .map((a) => a.name)
+          .join(", ")}. Use the dedicated module (Receipts, Payables, Cash & Bank, Opening Balances) instead.`,
+      );
+    }
   }
   private validate(
     lines: Array<{ debit: Prisma.Decimal | number; credit: Prisma.Decimal | number }>,
@@ -242,6 +278,14 @@ export class AccountingService {
     });
     return rows;
   }
+  private assertValidNormalBalance(accountType: string, normalBalance: string) {
+    const expected = NORMAL_BALANCE_BY_TYPE[accountType];
+    if (expected && normalBalance !== expected) {
+      throw new BadRequestException(
+        `${accountType} accounts must have a ${expected} normal balance, not ${normalBalance}`,
+      );
+    }
+  }
   async createAccount(org: string, userId: string, dto: CreateAccountDto) {
     if (
       dto.parentId &&
@@ -250,6 +294,7 @@ export class AccountingService {
       }))
     )
       throw new NotFoundException("Parent account not found");
+    this.assertValidNormalBalance(dto.accountType, dto.normalBalance);
     const row = await this.prisma.ledgerAccount.create({
       data: { organizationId: org, ...dto, isSystem: false },
     });
@@ -259,7 +304,8 @@ export class AccountingService {
   async updateAccount(org: string, userId: string, id: string, dto: Partial<CreateAccountDto>) {
     const old = await this.prisma.ledgerAccount.findFirst({ where: { id, organizationId: org } });
     if (!old) throw new NotFoundException("Account not found");
-    const row = await this.prisma.ledgerAccount.update({ where: { id }, data: dto });
+    this.assertValidNormalBalance(dto.accountType ?? old.accountType, dto.normalBalance ?? old.normalBalance);
+    const row = await this.prisma.ledgerAccount.update({ where: { id, organizationId: org }, data: dto });
     await this.log(org, userId, "ACCOUNT_UPDATED", id, row.code);
     return row;
   }
@@ -315,6 +361,7 @@ export class AccountingService {
           }))
         )
           throw new NotFoundException("Ledger account not found");
+      await this.assertNoControlAccountLines(tx, org, dto.lines);
       return tx.journalEntry.create({
         data: {
           organizationId: org,
@@ -353,7 +400,7 @@ export class AccountingService {
     this.validate(row.lines);
     await this.financeSettings.assertPostable(org, row.journalDate);
     const posted = await this.prisma.journalEntry.update({
-      where: { id },
+      where: { id, organizationId: org },
       data: { status: "POSTED", postedById: userId, postedAt: new Date() },
     });
     await this.log(org, userId, "JOURNAL_POSTED", id, row.journalNo);
@@ -623,7 +670,7 @@ export class AccountingService {
       });
       const paid = row.paidAmount.add(dto.amount);
       return tx.payable.update({
-        where: { id },
+        where: { id, organizationId: org },
         data: { paidAmount: paid, status: paid.eq(row.amount) ? "PAID" : "PARTIALLY_PAID" },
       });
     });

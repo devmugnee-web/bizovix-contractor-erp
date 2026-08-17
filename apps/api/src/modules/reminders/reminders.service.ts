@@ -10,7 +10,17 @@ import type {
   UpdateReminderDto,
 } from "./dto/reminder.dto";
 
-const AUTO_SOURCE_MODULES = ["TENDER_SECURITY", "PG_BG", "PAYABLE", "CHEQUE", "DOCUMENT", "RECEIVABLE"] as const;
+const AUTO_SOURCE_MODULES = [
+  "TENDER_SECURITY",
+  "PG_BG",
+  "PAYABLE",
+  "CHEQUE",
+  "DOCUMENT",
+  "RECEIVABLE",
+  "TENDER_SUBMISSION",
+  "TENDER_OPENING",
+] as const;
+const TENDER_NOT_YET_SUBMITTED = ["DRAFT", "PUBLISHED", "DOCUMENT_PURCHASED", "PREPARING"] as const;
 
 @Injectable()
 export class RemindersService {
@@ -123,28 +133,37 @@ export class RemindersService {
     });
   }
   async syncSources(org: string) {
-    const [rules, security, guarantees, payables, cheques, documents, receivables] = await Promise.all([
-      this.reminderRules.allRules(org),
-      this.prisma.tenderSecurity.findMany({
-        where: { organizationId: org, status: "ACTIVE" },
-        include: { tender: true, organizationMaster: true },
-      }),
-      this.prisma.performanceGuarantee.findMany({
-        where: { organizationId: org, status: "ACTIVE" },
-        include: { tender: true, organizationMaster: true },
-      }),
-      this.prisma.payable.findMany({
-        where: { organizationId: org, status: { not: "PAID" }, dueDate: { not: null } },
-      }),
-      this.prisma.cheque.findMany({
-        where: { organizationId: org, status: { in: ["PENDING", "DEPOSITED"] } },
-      }),
-      this.prisma.document.findMany({ where: { organizationId: org, expiryDate: { not: null } } }),
-      this.prisma.receipt.findMany({
-        where: { organizationId: org, status: "PENDING", dueDate: { not: null } },
-        include: { work: true },
-      }),
-    ]);
+    const [rules, security, guarantees, payables, cheques, documents, receivables, submittingTenders, openingTenders] =
+      await Promise.all([
+        this.reminderRules.allRules(org),
+        this.prisma.tenderSecurity.findMany({
+          where: { organizationId: org, status: "ACTIVE" },
+          include: { tender: true, organizationMaster: true },
+        }),
+        this.prisma.performanceGuarantee.findMany({
+          where: { organizationId: org, status: "ACTIVE" },
+          include: { tender: true, organizationMaster: true },
+        }),
+        this.prisma.payable.findMany({
+          where: { organizationId: org, status: { not: "PAID" }, dueDate: { not: null } },
+        }),
+        this.prisma.cheque.findMany({
+          where: { organizationId: org, status: { in: ["PENDING", "DEPOSITED"] } },
+        }),
+        this.prisma.document.findMany({ where: { organizationId: org, expiryDate: { not: null } } }),
+        this.prisma.receipt.findMany({
+          where: { organizationId: org, status: "PENDING", dueDate: { not: null } },
+          include: { work: true },
+        }),
+        this.prisma.tender.findMany({
+          where: { organizationId: org, status: { in: [...TENDER_NOT_YET_SUBMITTED] }, submissionDeadline: { not: null } },
+          include: { organizationMaster: true },
+        }),
+        this.prisma.tender.findMany({
+          where: { organizationId: org, status: "SUBMITTED", openingDate: { not: null } },
+          include: { organizationMaster: true },
+        }),
+      ]);
     /** Settings-driven priority/notification-window per reminder type, falling back to a
      * sane hardcoded default if the rule row is somehow missing (should not normally happen
      * since ReminderRuleService.allRules() ensures every known type has a default row). */
@@ -259,6 +278,40 @@ export class RemindersService {
             notificationBefore: rule.window,
           }),
         ),
+      ...submittingTenders
+        .map((x) => ({ x, rule: effective("TENDER_SUBMISSION_DUE", "HIGH", 7) }))
+        .filter(({ rule }) => rule.enabled)
+        .map(({ x, rule }) =>
+          this.source(org, {
+            type: "Tender Submission Due",
+            title: `Tender submission due: ${x.workName}`,
+            dueDate: x.submissionDeadline!,
+            sourceModule: "TENDER_SUBMISSION",
+            sourceId: x.id,
+            referenceNo: x.egpTenderId,
+            relatedEntityName: x.workName,
+            organizationName: x.organizationMaster.shortName,
+            priority: rule.priority,
+            notificationBefore: rule.window,
+          }),
+        ),
+      ...openingTenders
+        .map((x) => ({ x, rule: effective("TENDER_OPENING_DUE", "MEDIUM", 3) }))
+        .filter(({ rule }) => rule.enabled)
+        .map(({ x, rule }) =>
+          this.source(org, {
+            type: "Tender Opening Due",
+            title: `Tender opening: ${x.workName}`,
+            dueDate: x.openingDate!,
+            sourceModule: "TENDER_OPENING",
+            sourceId: x.id,
+            referenceNo: x.egpTenderId,
+            relatedEntityName: x.workName,
+            organizationName: x.organizationMaster.shortName,
+            priority: rule.priority,
+            notificationBefore: rule.window,
+          }),
+        ),
     ]);
   }
 
@@ -266,32 +319,41 @@ export class RemindersService {
    * released, renewed, or its date changed), auto-complete the reminder that was
    * generated for its previous state, instead of leaving it dangling forever. */
   private async autoResolveStaleReminders(org: string) {
-    const [security, guarantees, payables, cheques, documents, receivables] = await Promise.all([
-      this.prisma.tenderSecurity.findMany({
-        where: { organizationId: org, status: "ACTIVE" },
-        select: { id: true, expiryDate: true },
-      }),
-      this.prisma.performanceGuarantee.findMany({
-        where: { organizationId: org, status: "ACTIVE" },
-        select: { id: true, expiryDate: true },
-      }),
-      this.prisma.payable.findMany({
-        where: { organizationId: org, status: { not: "PAID" }, dueDate: { not: null } },
-        select: { id: true, dueDate: true },
-      }),
-      this.prisma.cheque.findMany({
-        where: { organizationId: org, status: { in: ["PENDING", "DEPOSITED"] } },
-        select: { id: true, chequeDate: true },
-      }),
-      this.prisma.document.findMany({
-        where: { organizationId: org, expiryDate: { not: null } },
-        select: { id: true, expiryDate: true },
-      }),
-      this.prisma.receipt.findMany({
-        where: { organizationId: org, status: "PENDING", dueDate: { not: null } },
-        select: { id: true, dueDate: true },
-      }),
-    ]);
+    const [security, guarantees, payables, cheques, documents, receivables, submittingTenders, openingTenders] =
+      await Promise.all([
+        this.prisma.tenderSecurity.findMany({
+          where: { organizationId: org, status: "ACTIVE" },
+          select: { id: true, expiryDate: true },
+        }),
+        this.prisma.performanceGuarantee.findMany({
+          where: { organizationId: org, status: "ACTIVE" },
+          select: { id: true, expiryDate: true },
+        }),
+        this.prisma.payable.findMany({
+          where: { organizationId: org, status: { not: "PAID" }, dueDate: { not: null } },
+          select: { id: true, dueDate: true },
+        }),
+        this.prisma.cheque.findMany({
+          where: { organizationId: org, status: { in: ["PENDING", "DEPOSITED"] } },
+          select: { id: true, chequeDate: true },
+        }),
+        this.prisma.document.findMany({
+          where: { organizationId: org, expiryDate: { not: null } },
+          select: { id: true, expiryDate: true },
+        }),
+        this.prisma.receipt.findMany({
+          where: { organizationId: org, status: "PENDING", dueDate: { not: null } },
+          select: { id: true, dueDate: true },
+        }),
+        this.prisma.tender.findMany({
+          where: { organizationId: org, status: { in: [...TENDER_NOT_YET_SUBMITTED] }, submissionDeadline: { not: null } },
+          select: { id: true, submissionDeadline: true },
+        }),
+        this.prisma.tender.findMany({
+          where: { organizationId: org, status: "SUBMITTED", openingDate: { not: null } },
+          select: { id: true, openingDate: true },
+        }),
+      ]);
 
     const keyOf = (id: string, date: Date | null | undefined) => `${id}:${date ? date.getTime() : ""}`;
     const activeKeys: Record<(typeof AUTO_SOURCE_MODULES)[number], Set<string>> = {
@@ -301,6 +363,8 @@ export class RemindersService {
       CHEQUE: new Set(cheques.map((x) => keyOf(x.id, x.chequeDate))),
       DOCUMENT: new Set(documents.map((x) => keyOf(x.id, x.expiryDate))),
       RECEIVABLE: new Set(receivables.map((x) => keyOf(x.id, x.dueDate))),
+      TENDER_SUBMISSION: new Set(submittingTenders.map((x) => keyOf(x.id, x.submissionDeadline))),
+      TENDER_OPENING: new Set(openingTenders.map((x) => keyOf(x.id, x.openingDate))),
     };
 
     for (const sourceModule of AUTO_SOURCE_MODULES) {
@@ -464,7 +528,7 @@ export class RemindersService {
   async update(org: string, userId: string, id: string, dto: UpdateReminderDto) {
     const old = await this.one(org, id),
       row = await this.prisma.reminder.update({
-        where: { id },
+        where: { id, organizationId: org },
         data: { ...dto, dueDate: new Date(dto.dueDate) },
       });
     await this.log(org, userId, "REMINDER_UPDATED", row, old);
@@ -474,7 +538,7 @@ export class RemindersService {
   async complete(org: string, user: { id: string; name: string }, id: string) {
     const old = await this.one(org, id),
       row = await this.prisma.reminder.update({
-        where: { id },
+        where: { id, organizationId: org },
         data: {
           status: "COMPLETED",
           isResolved: true,
@@ -490,7 +554,7 @@ export class RemindersService {
   async snooze(org: string, userId: string, id: string, dto: SnoozeReminderDto) {
     const old = await this.one(org, id),
       row = await this.prisma.reminder.update({
-        where: { id },
+        where: { id, organizationId: org },
         data: { status: "SNOOZED", snoozedUntil: new Date(dto.until) },
       });
     await this.notifications.resetForReminders(org, [id]);
@@ -500,7 +564,7 @@ export class RemindersService {
   async cancel(org: string, userId: string, id: string) {
     const old = await this.one(org, id),
       row = await this.prisma.reminder.update({
-        where: { id },
+        where: { id, organizationId: org },
         data: { status: "CANCELLED", cancelledAt: new Date(), isResolved: true },
       });
     await this.notifications.resolveForReminder(org, id);

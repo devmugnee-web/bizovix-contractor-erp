@@ -4,6 +4,7 @@ import {
   Bell,
   Banknote,
   Building2,
+  ClipboardList,
   CreditCard,
   Database,
   FileText,
@@ -45,6 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Archived Works", href: "/cms/archived-works" },
     ],
   },
+  { label: "Tenders", href: "/tenders", icon: ClipboardList },
   {
     label: "Bank Instruments",
     icon: Landmark,

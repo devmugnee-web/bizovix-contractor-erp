@@ -95,7 +95,7 @@ export class RolesService {
     if (old.isSystem && dto.name && dto.name.trim() !== old.name)
       throw new BadRequestException("The name of a system role cannot be changed");
     const row = await this.prisma.role.update({
-      where: { id },
+      where: { id, organizationId: org },
       data: { name: old.isSystem ? undefined : dto.name?.trim(), description: dto.description?.trim() },
     });
     await this.audit.record({
@@ -135,7 +135,7 @@ export class RolesService {
     if (role.isSystem) throw new BadRequestException("System roles cannot be deleted");
     if (role._count.organizationUsers > 0)
       throw new BadRequestException("This role is assigned to one or more users and cannot be deleted");
-    await this.prisma.role.delete({ where: { id } });
+    await this.prisma.role.delete({ where: { id, organizationId: org } });
     await this.audit.record({
       organizationId: org,
       userId: actorId,

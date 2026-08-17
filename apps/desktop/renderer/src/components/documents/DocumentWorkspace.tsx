@@ -36,7 +36,6 @@ import {
   searchDocument,
   type DocumentFilters,
   type DocumentStatus,
-  type DocumentVersion,
   type ErpDocument,
 } from "@/lib/documents";
 import { documentService } from "@/services/document-service";
@@ -171,11 +170,11 @@ function Field({
 function UploadDialog({
   open,
   onClose,
-  onSave,
+  onSaved,
 }: {
   open: boolean;
   onClose: () => void;
-  onSave: (d: ErpDocument) => void;
+  onSaved: () => void;
 }) {
   const [form, setForm] = React.useState({
       name: "",
@@ -193,9 +192,10 @@ function UploadDialog({
       tags: "",
     }),
     [file, setFile] = React.useState<File | null>(null),
-    [error, setError] = React.useState("");
+    [error, setError] = React.useState(""),
+    [saving, setSaving] = React.useState(false);
   if (!open) return null;
-  const save = () => {
+  const save = async () => {
     if (!form.name.trim() || !file) {
       setError("Document Name and File are required.");
       return;
@@ -204,46 +204,33 @@ function UploadDialog({
       setError("File must not exceed 15 MB.");
       return;
     }
-    const now = new Date().toISOString().slice(0, 10),
-      id = `demo-${Date.now()}`,
-      version: DocumentVersion = {
-        id: `${id}-v1`,
-        version: 1,
-        fileName: file.name,
-        fileSize: file.size,
-        uploadedAt: now,
-        uploadedBy: "Current User",
-        changeNote: "Initial demo upload",
-        current: true,
-      };
-    onSave({
-      id,
-      name: form.name,
-      fileName: file.name,
-      fileType: file.type || "application/octet-stream",
-      fileSize: file.size,
-      category: form.category as ErpDocument["category"],
-      documentType: form.type,
-      relatedModule: form.module as ErpDocument["relatedModule"],
-      relatedEntityName: form.related || undefined,
-      organizationName: form.organization || undefined,
-      referenceNumber: form.reference || undefined,
-      certificateNumber: form.certificate || undefined,
-      issueDate: form.issueDate || undefined,
-      expiryDate: form.expiryDate || undefined,
-      reminderDays: Number(form.reminder) || undefined,
-      description: form.description || undefined,
-      tags: form.tags
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean),
-      currentVersion: 1,
-      versions: [version],
-      uploadedBy: "Current User",
-      uploadedAt: now,
-      updatedAt: now,
-    });
-    onClose();
+    setSaving(true);
+    setError("");
+    try {
+      await documentService.create(
+        {
+          name: form.name,
+          category: form.category,
+          documentType: form.type,
+          relatedModule: form.module,
+          relatedEntityName: form.related || form.organization || undefined,
+          referenceNumber: form.reference || undefined,
+          certificateNumber: form.certificate || undefined,
+          issueDate: form.issueDate || undefined,
+          expiryDate: form.expiryDate || undefined,
+          reminderDays: Number(form.reminder) || undefined,
+          description: form.description || undefined,
+          tags: form.tags,
+        },
+        file,
+      );
+      onSaved();
+      onClose();
+    } catch {
+      setError("Failed to upload document. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
   return (
     <Overlay title="Upload Document" onClose={onClose} wide>
@@ -352,16 +339,16 @@ function UploadDialog({
         </Field>
         {file && (
           <p className="mt-2 rounded bg-slate-50 p-2 text-xs">
-            {file.name} · {fileSize(file.size)} · Demo metadata only
+            {file.name} · {fileSize(file.size)}
           </p>
         )}
       </div>
       {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
       <div className="mt-5 flex justify-end gap-2">
         <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
-        <PrimaryButton onClick={save}>
+        <PrimaryButton onClick={save} disabled={saving}>
           <Upload className="h-4 w-4" />
-          Save Document
+          {saving ? "Uploading..." : "Save Document"}
         </PrimaryButton>
       </div>
     </Overlay>
@@ -382,41 +369,22 @@ function DetailsDialog({
     [reference, setReference] = React.useState(document.referenceNumber ?? ""),
     [newFile, setNewFile] = React.useState<File | null>(null),
     [note, setNote] = React.useState("");
-  const download = (fileName = document.fileName) => {
-    const a = window.document.createElement("a"),
-      demo = documentService.createDemoDownload(document, fileName);
-    a.href = demo.url;
-    a.download = demo.downloadName;
-    a.click();
-    URL.revokeObjectURL(a.href);
+  const [busy, setBusy] = React.useState(false);
+  const download = async (version?: number) => {
+    await documentService.download(document.id, version, document.fileName);
   };
-  const replace = () => {
+  const replace = async () => {
     if (!newFile) return;
-    const versions = document.versions.map((v) => ({ ...v, current: false })),
-      next = document.currentVersion + 1,
-      now = new Date().toISOString().slice(0, 10);
-    onChange({
-      ...document,
-      fileName: newFile.name,
-      fileType: newFile.type,
-      fileSize: newFile.size,
-      currentVersion: next,
-      updatedAt: now,
-      versions: [
-        {
-          id: `${document.id}-v${next}`,
-          version: next,
-          fileName: newFile.name,
-          fileSize: newFile.size,
-          uploadedAt: now,
-          uploadedBy: "Current User",
-          changeNote: note || "Replaced version",
-          current: true,
-        },
-        ...versions,
-      ],
-    });
-    setTab("versions");
+    setBusy(true);
+    try {
+      const updated = await documentService.addVersion(document.id, newFile, note);
+      onChange(updated);
+      setTab("versions");
+      setNewFile(null);
+      setNote("");
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <Overlay title={document.name} onClose={onClose} wide>
@@ -496,10 +464,10 @@ function DetailsDialog({
                 <p className="mt-1">{v.changeNote}</p>
               </div>
               <div className="flex gap-2">
-                <SecondaryButton size="sm" onClick={() => download(v.fileName)}>
+                <SecondaryButton size="sm" onClick={() => download(v.version)}>
                   View
                 </SecondaryButton>
-                <SecondaryButton size="sm" onClick={() => download(v.fileName)}>
+                <SecondaryButton size="sm" onClick={() => download(v.version)}>
                   Download
                 </SecondaryButton>
               </div>
@@ -523,8 +491,8 @@ function DetailsDialog({
           <Field label="Change Note">
             <TextInput value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
-          <PrimaryButton disabled={!newFile} onClick={replace}>
-            Save as New Version
+          <PrimaryButton disabled={!newFile || busy} onClick={replace}>
+            {busy ? "Saving..." : "Save as New Version"}
           </PrimaryButton>
         </div>
       )}
@@ -537,17 +505,19 @@ function DetailsDialog({
             <TextInput value={reference} onChange={(e) => setReference(e.target.value)} />
           </Field>
           <PrimaryButton
-            onClick={() => {
-              onChange({
-                ...document,
-                name,
-                referenceNumber: reference,
-                updatedAt: new Date().toISOString().slice(0, 10),
-              });
-              setTab("details");
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const updated = await documentService.update(document.id, { name, referenceNumber: reference });
+                onChange(updated);
+                setTab("details");
+              } finally {
+                setBusy(false);
+              }
             }}
           >
-            Save Metadata
+            {busy ? "Saving..." : "Save Metadata"}
           </PrimaryButton>
         </div>
       )}
@@ -558,28 +528,30 @@ function DetailsDialog({
         </SecondaryButton>
         {!document.archivedAt ? (
           <SecondaryButton
-            onClick={() =>
-              onChange({
-                ...document,
-                archivedAt: new Date().toISOString().slice(0, 10),
-                archivedBy: "Current User",
-                archiveReason: "Archived from document details",
-              })
-            }
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                onChange(await documentService.archive(document.id, "Archived from document details"));
+              } finally {
+                setBusy(false);
+              }
+            }}
           >
             <Archive className="h-4 w-4" />
             Archive
           </SecondaryButton>
         ) : (
           <PrimaryButton
-            onClick={() =>
-              onChange({
-                ...document,
-                archivedAt: undefined,
-                archivedBy: undefined,
-                archiveReason: undefined,
-              })
-            }
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                onChange(await documentService.restore(document.id));
+              } finally {
+                setBusy(false);
+              }
+            }}
           >
             <RefreshCcw className="h-4 w-4" />
             Restore
@@ -595,13 +567,30 @@ export function DocumentWorkspace({ view = "center" }: { view?: View }) {
     { label: "Documents", href: view === "center" ? undefined : "/documents" },
     ...(view !== "center" ? [{ label: META[view].title }] : []),
   ]);
-  const [documents, setDocuments] = React.useState(() => documentService.list()),
+  const [documents, setDocuments] = React.useState<ErpDocument[]>([]),
+    [loading, setLoading] = React.useState(true),
     [draft, setDraft] = React.useState<DocumentFilters>(EMPTY_FILTERS),
     [filters, setFilters] = React.useState<DocumentFilters>(EMPTY_FILTERS),
     [page, setPage] = React.useState(1),
     [upload, setUpload] = React.useState(false),
     [selected, setSelected] = React.useState<ErpDocument | null>(null),
     limit = 8;
+
+  const reload = React.useCallback(() => {
+    setLoading(true);
+    documentService
+      .list()
+      .then(setDocuments)
+      .finally(() => setLoading(false));
+  }, []);
+  // `loading` already starts true, so the initial fetch doesn't need to set it again —
+  // avoids a synchronous setState call directly in the effect body.
+  React.useEffect(() => {
+    documentService
+      .list()
+      .then(setDocuments)
+      .finally(() => setLoading(false));
+  }, []);
   const scoped = React.useMemo(
       () => documents.filter((d) => categoryMatch(d, view)),
       [documents, view],
@@ -938,18 +927,13 @@ export function DocumentWorkspace({ view = "center" }: { view?: View }) {
                         </button>
                         <button
                           title={d.archivedAt ? "Restore" : "Archive"}
-                          onClick={() =>
-                            update({
-                              ...d,
-                              archivedAt: d.archivedAt
-                                ? undefined
-                                : new Date().toISOString().slice(0, 10),
-                              archivedBy: d.archivedAt ? undefined : "Current User",
-                              archiveReason: d.archivedAt
-                                ? undefined
-                                : "Archived from document list",
-                            })
-                          }
+                          onClick={async () => {
+                            update(
+                              d.archivedAt
+                                ? await documentService.restore(d.id)
+                                : await documentService.archive(d.id, "Archived from document list"),
+                            );
+                          }}
                           className="rounded border p-1.5 hover:text-biz-blue"
                         >
                           {d.archivedAt ? (
@@ -966,7 +950,9 @@ export function DocumentWorkspace({ view = "center" }: { view?: View }) {
             </tbody>
           </table>
         </div>
-        {!rows.length ? (
+        {loading ? (
+          <div className="p-14 text-center text-sm font-semibold text-biz-muted">Loading documents...</div>
+        ) : !rows.length ? (
           <div className="p-14 text-center">
             <FileClock className="mx-auto h-10 w-10 text-biz-muted" />
             <p className="mt-3 text-sm font-semibold">
@@ -996,11 +982,7 @@ export function DocumentWorkspace({ view = "center" }: { view?: View }) {
           />
         )}
       </section>
-      <UploadDialog
-        open={upload}
-        onClose={() => setUpload(false)}
-        onSave={(d) => setDocuments((all) => [d, ...all])}
-      />
+      <UploadDialog open={upload} onClose={() => setUpload(false)} onSaved={reload} />
       {selected && (
         <DetailsDialog document={selected} onClose={() => setSelected(null)} onChange={update} />
       )}

@@ -1,5 +1,7 @@
-import { ComingSoonPage } from "@/components/layout/ComingSoonPage";
+import { redirect } from "next/navigation";
 
+// Deprecated route — kept as a redirect (not deleted) in case of external bookmarks.
+// The canonical Bank Accounts feature lives under Cash & Bank.
 export default function BankAccountsPage() {
-  return <ComingSoonPage title="Bank & Accounts" breadcrumb={[{ label: "Bank & Accounts" }]} />;
+  redirect("/cash-bank/bank-accounts");
 }

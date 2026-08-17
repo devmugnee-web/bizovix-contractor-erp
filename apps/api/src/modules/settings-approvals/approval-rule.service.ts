@@ -54,7 +54,7 @@ export class ApprovalRuleService {
   async update(org: string, userId: string, id: string, dto: UpdateApprovalRuleDto) {
     const old = await this.one(org, id);
     const row = await this.prisma.approvalRule.update({
-      where: { id },
+      where: { id, organizationId: org },
       data: {
         module: dto.module,
         transactionType: dto.transactionType?.trim() || null,
@@ -82,7 +82,7 @@ export class ApprovalRuleService {
 
   async remove(org: string, userId: string, id: string) {
     const old = await this.one(org, id);
-    await this.prisma.approvalRule.delete({ where: { id } });
+    await this.prisma.approvalRule.delete({ where: { id, organizationId: org } });
     await this.audit.record({
       organizationId: org,
       userId,

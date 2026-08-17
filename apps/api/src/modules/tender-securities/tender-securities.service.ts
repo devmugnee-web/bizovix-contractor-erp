@@ -5,6 +5,7 @@ import type { PaginationMeta } from "@bizovix/types";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
+import { TenderBankSettingsService } from "../settings-tender-bank/tender-bank-settings.service";
 import { CreateTenderSecurityDto } from "./dto/create-tender-security.dto";
 import { QueryPendingTenderSecurityDto } from "./dto/query-pending-tender-security.dto";
 
@@ -19,19 +20,17 @@ const includeTenderSecurityRelations = {
 type PendingRecord = Prisma.DocumentPurchaseGetPayload<{ include: typeof includePendingRelations }>;
 type TenderSecurityRecord = Prisma.TenderSecurityGetPayload<{ include: typeof includeTenderSecurityRelations }>;
 
-function securityAmountFor(record: PendingRecord): PrismaNamespace.Decimal {
-  const tenderId = record.egpTenderId ?? "";
-  const demoAmounts: Record<string, number> = {
-    "1024587": 500000,
-    "1024523": 300000,
-    "1024480": 750000,
-    "1024401": 400000,
-    "1024322": 250000,
-  };
-  return new PrismaNamespace.Decimal(demoAmounts[tenderId] ?? record.documentPrice.mul(100));
+/**
+ * Real business rule: security amount = Estimated Tender Amount x the org's configured
+ * default security percentage (TenderBankSetting.tsDefaultSecurityPct). If the document
+ * purchase has no estimated tender amount on file, this honestly resolves to 0 rather
+ * than fabricating a figure — the amount is still editable by the user before saving.
+ */
+function securityAmountFor(record: PendingRecord, tsDefaultSecurityPct: PrismaNamespace.Decimal): PrismaNamespace.Decimal {
+  return record.estimatedTenderAmount.mul(tsDefaultSecurityPct).div(100);
 }
 
-function pendingToDto(record: PendingRecord) {
+function pendingToDto(record: PendingRecord, tsDefaultSecurityPct: PrismaNamespace.Decimal) {
   return {
     id: record.id,
     tenderId: record.egpTenderId,
@@ -39,7 +38,7 @@ function pendingToDto(record: PendingRecord) {
     organizationMaster: record.organizationMaster,
     tenderWorkName: record.tenderWorkName,
     purchaseDate: record.purchaseDate,
-    securityAmount: securityAmountFor(record).toFixed(2),
+    securityAmount: securityAmountFor(record, tsDefaultSecurityPct).toFixed(2),
     status: "Security Not Given" as const,
   };
 }
@@ -66,6 +65,7 @@ export class TenderSecuritiesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
+    private readonly tenderBankSettings: TenderBankSettingsService,
   ) {}
 
   async pending(
@@ -74,6 +74,7 @@ export class TenderSecuritiesService {
   ): Promise<{ items: ReturnType<typeof pendingToDto>[]; meta: PaginationMeta }> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 5;
+    const settings = await this.tenderBankSettings.get(organizationId);
     const where: Prisma.DocumentPurchaseWhereInput = {
       organizationId,
       tenderSecurityStatus: "PENDING",
@@ -107,7 +108,10 @@ export class TenderSecuritiesService {
       this.prisma.documentPurchase.count({ where }),
     ]);
 
-    return { items: items.map(pendingToDto), meta: buildPaginationMeta(total, page, limit) };
+    return {
+      items: items.map((item) => pendingToDto(item, settings.tsDefaultSecurityPct)),
+      meta: buildPaginationMeta(total, page, limit),
+    };
   }
 
   async create(organizationId: string, userId: string, dto: CreateTenderSecurityDto) {
@@ -162,6 +166,7 @@ export class TenderSecuritiesService {
       const created = await tx.tenderSecurity.create({
         data: {
           organizationId,
+          tenderId: firstPurchase.linkedTenderId,
           organizationMasterId: firstPurchase.organizationMasterId,
           bankAccountId: dto.bankId,
           chargeFromAccountId: dto.chargeFromAccountId,
