@@ -72,7 +72,7 @@ export class ReportsService {
       new Prisma.Decimal(0),
     );
     return {
-      totalReports: 84,
+      totalReports: 93,
       thisMonthExpenses: s(expenses._sum.amount),
       thisMonthReceipts: s(receipts._sum.amount),
       outstandingReceivables: s(outstanding),
@@ -435,6 +435,7 @@ export class ReportsService {
     if (report === "variations") return this.variationRegister(org, q);
     if (report === "time-extensions") return this.timeExtensionRegister(org, q);
     if (report === "progress") return this.projectProgressReport(org, q);
+    if (["completion-certificates", "final-bills", "dlp-register", "open-defects", "retention-releases", "pg-bg-releases", "handovers", "closeout-status", "final-profitability"].includes(report)) return this.closeoutReport(org, report, q);
     // "ongoing"/"archived" filter to that specific status; every other card (summary, cost,
     // profit-loss, receivable, expense-summary, financial-summary, performance) is a
     // portfolio-wide view across all project statuses, not just ongoing ones.
@@ -534,6 +535,41 @@ export class ReportsService {
       },
       q,
     );
+  }
+
+  private async closeoutReport(org: string, report: string, q: QueryReportDto): Promise<Report> {
+    const projectFilter = q.workId ? { id: q.workId } : undefined;
+    if (report === "completion-certificates") {
+      const rows = await this.prisma.completionCertificate.findMany({ where: { organizationId: org, work: projectFilter }, include: { work: true, contract: true }, orderBy: { createdAt: "desc" } });
+      return this.finish({ title: "Completion Certificate Register", subtitle: "Tenant-scoped completion certificates from the authoritative closeout source.", kpis: [{ label: "Certificates", value: String(rows.length) }], columns: [{ key: "certificateNo", label: "Certificate No." }, { key: "project", label: "Project" }, { key: "contract", label: "Contract" }, { key: "actualCompletion", label: "Actual Completion", type: "date" }, { key: "certifiedCompletion", label: "Certified Completion", type: "date" }, { key: "status", label: "Status" }], rows: rows.map((row) => ({ certificateNo: row.certificateNo, project: row.work.workName, contract: row.contract.contractNo, actualCompletion: row.actualCompletionDate.toISOString(), certifiedCompletion: row.certifiedCompletionDate?.toISOString() ?? null, status: row.status })) }, q);
+    }
+    if (report === "final-bills") {
+      const rows = await this.prisma.projectBill.findMany({ where: { organizationId: org, billType: "FINAL", cmsWork: projectFilter }, include: { cmsWork: true, receivable: true }, orderBy: { billDate: "desc" } });
+      return this.finish({ title: "Final Bill Register", subtitle: "Final bills from the existing ProjectBill and Receivable sources.", kpis: [{ label: "Final Bills", value: String(rows.length) }], columns: [{ key: "billNo", label: "Bill No." }, { key: "project", label: "Project" }, moneyCol("certified", "Net Certified"), moneyCol("received", "Received"), moneyCol("outstanding", "Outstanding"), { key: "status", label: "Status" }], rows: rows.map((row) => { const received = row.receivable?.receivedAmount ?? row.receivedAmount; return { billNo: row.billNo, project: row.cmsWork.workName, certified: s(row.netCertifiedAmount), received: s(received), outstanding: s(row.netCertifiedAmount.sub(received)), status: row.status }; }) }, q);
+    }
+    if (report === "dlp-register") {
+      const rows = await this.prisma.defectLiabilityPeriod.findMany({ where: { organizationId: org, work: projectFilter }, include: { work: true, extensions: true }, orderBy: { endDate: "desc" } });
+      return this.finish({ title: "DLP Register", subtitle: "Defects liability periods with preserved extension history.", kpis: [{ label: "DLP Records", value: String(rows.length) }], columns: [{ key: "project", label: "Project" }, { key: "start", label: "Start", type: "date" }, { key: "originalEnd", label: "Original End", type: "date" }, { key: "revisedEnd", label: "Revised End", type: "date" }, { key: "extensions", label: "Extensions" }, { key: "status", label: "Status" }], rows: rows.map((row) => ({ project: row.work.workName, start: row.startDate.toISOString(), originalEnd: row.originalEndDate?.toISOString() ?? row.endDate.toISOString(), revisedEnd: row.endDate.toISOString(), extensions: row.extensions.length, status: row.status })) }, q);
+    }
+    if (report === "open-defects") {
+      const rows = await this.prisma.dlpDefect.findMany({ where: { organizationId: org, work: projectFilter, status: { notIn: ["VERIFIED", "CLOSED"] } }, include: { work: true }, orderBy: { targetRectificationDate: "asc" } });
+      return this.finish({ title: "Open Defect Register", subtitle: "Unresolved defect and rectification commitments.", kpis: [{ label: "Open Defects", value: String(rows.length) }], columns: [{ key: "defectNo", label: "Defect No." }, { key: "project", label: "Project" }, { key: "description", label: "Description" }, { key: "priority", label: "Priority" }, { key: "due", label: "Target Date", type: "date" }, { key: "status", label: "Status" }], rows: rows.map((row) => ({ defectNo: row.defectNo, project: row.work.workName, description: row.description, priority: row.priority, due: row.targetRectificationDate?.toISOString() ?? null, status: row.status })) }, q);
+    }
+    if (report === "retention-releases") {
+      const rows = await this.prisma.retentionRelease.findMany({ where: { organizationId: org, work: projectFilter }, include: { work: true }, orderBy: { createdAt: "desc" } });
+      return this.finish({ title: "Retention Release Register", subtitle: "Retention release records reconciled through the closeout source.", kpis: [{ label: "Released", value: s(rows.filter((row) => row.status === "RELEASED").reduce((sum, row) => sum.add(row.amount), new Prisma.Decimal(0))), kind: "money" }], columns: [{ key: "releaseNo", label: "Release Ref" }, { key: "project", label: "Project" }, moneyCol("amount", "Amount"), { key: "date", label: "Release Date", type: "date" }, { key: "status", label: "Status" }], rows: rows.map((row) => ({ releaseNo: row.releaseNo, project: row.work.workName, amount: s(row.amount), date: row.releaseDate?.toISOString() ?? null, status: row.status })) }, q);
+    }
+    if (report === "handovers") {
+      const rows = await this.prisma.projectHandover.findMany({ where: { organizationId: org, work: projectFilter }, include: { work: true }, orderBy: { handoverDate: "desc" } });
+      return this.finish({ title: "Handover Register", subtitle: "Provisional and final project handovers.", kpis: [{ label: "Handovers", value: String(rows.length) }], columns: [{ key: "handoverNo", label: "Reference" }, { key: "project", label: "Project" }, { key: "type", label: "Type" }, { key: "date", label: "Date", type: "date" }, { key: "authority", label: "Authority" }, { key: "status", label: "Status" }], rows: rows.map((row) => ({ handoverNo: row.handoverNo, project: row.work.workName, type: row.handoverType, date: row.handoverDate.toISOString(), authority: row.authority, status: row.status })) }, q);
+    }
+    if (report === "pg-bg-releases") {
+      const rows = await this.prisma.performanceGuarantee.findMany({ where: { organizationId: org, pgBgWorkflow: q.workId ? { cmsWork: { id: q.workId } } : undefined }, orderBy: { expiryDate: "desc" } });
+      return this.finish({ title: "PG/BG Release Register", subtitle: "Guarantee release and return lifecycle from the existing PG/BG module.", kpis: [{ label: "Guarantees", value: String(rows.length) }], columns: [{ key: "instrumentNo", label: "Instrument" }, moneyCol("amount", "Amount"), { key: "expiry", label: "Expiry", type: "date" }, { key: "releaseDate", label: "Release Date", type: "date" }, { key: "reference", label: "Release Reference" }, { key: "status", label: "Status" }], rows: rows.map((row) => ({ instrumentNo: row.instrumentNo, amount: s(row.amount), expiry: row.expiryDate.toISOString(), releaseDate: row.releaseDate?.toISOString() ?? null, reference: row.releaseReference, status: row.status })) }, q);
+    }
+    const works = await this.prisma.cmsWork.findMany({ where: { organizationId: org, id: q.workId }, include: { organizationMaster: true, contracts: { where: { status: { not: "CANCELLED" } }, take: 1 }, projectExpenses: { where: { status: "APPROVED" } }, bills: { where: { status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] } } }, receipts: { where: { status: "RECEIVED" } } } });
+    const mapped = works.map((work) => { const cost = work.projectExpenses.reduce((sum, row) => sum.add(row.amount), new Prisma.Decimal(0)); const certified = work.bills.reduce((sum, row) => sum.add(row.grossBillAmount), new Prisma.Decimal(0)); const received = work.receipts.reduce((sum, row) => sum.add(row.amount), new Prisma.Decimal(0)); const profit = certified.sub(cost); return { project: work.workName, organization: work.organizationMaster.shortName, status: work.status, contract: s(work.contracts[0]?.currentContractValue ?? work.contractValue), certified: s(certified), received: s(received), cost: s(cost), profit: s(profit), margin: certified.gt(0) ? `${profit.div(certified).mul(100).toFixed(2)}%` : "N/A" }; });
+    return this.finish({ title: report === "final-profitability" ? "Final Project Profitability" : "Project Closeout Status", subtitle: "Project lifecycle and authoritative financial closeout position.", kpis: [{ label: "Projects", value: String(works.length) }], columns: [{ key: "project", label: "Project" }, { key: "organization", label: "Organization" }, { key: "status", label: "Status" }, moneyCol("contract", "Current Contract"), moneyCol("certified", "Certified"), moneyCol("received", "Received"), moneyCol("cost", "Actual Cost"), moneyCol("profit", "Accrued Profit / Loss"), { key: "margin", label: "Margin" }], rows: mapped }, q);
   }
 
   private async contractRegister(org: string, q: QueryReportDto) {
@@ -1660,7 +1696,7 @@ export class ReportsService {
     );
   }
   private async financial(org: string, report: string, q: QueryReportDto) {
-    if (report === "receivable-aging") return this.receipts(org, "outstanding", q);
+    if (report === "receivable-aging") return this.billReceivableReport(org, q);
     if (report === "payable-aging") return this.payableAging(org, q);
     if (report === "running-bill-register") return this.runningBillRegister(org, q);
     if (report === "retention-register") return this.retentionRegister(org, q);

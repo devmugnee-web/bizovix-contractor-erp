@@ -9,5 +9,6 @@ import { ProjectClosingService } from "./project-closing.service";
   imports: [AccountingModule, AuditLogModule, NumberingModule],
   controllers: [ProjectClosingController],
   providers: [ProjectClosingService],
+  exports: [ProjectClosingService],
 })
 export class ProjectClosingModule {}

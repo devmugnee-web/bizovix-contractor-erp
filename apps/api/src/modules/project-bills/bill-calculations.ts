@@ -2,6 +2,7 @@ import { BadRequestException } from "@nestjs/common";
 import { Prisma } from "@bizovix/database";
 
 const D = (v: Prisma.Decimal | number | string) => new Prisma.Decimal(v);
+export const CERTIFIED_BILL_HISTORY_STATUSES = ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] as const;
 
 export interface BoqCeiling {
   id: string;

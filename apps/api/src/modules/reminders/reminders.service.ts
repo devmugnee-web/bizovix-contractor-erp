@@ -3,6 +3,7 @@ import { AuditLogService } from "../audit-logs/audit-log.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ReminderRuleService } from "../settings-notifications/reminder-rule.service";
+import { ProjectClosingService } from "../project-closing/project-closing.service";
 import type {
   QueryReminderDto,
   SaveReminderDto,
@@ -31,6 +32,7 @@ export class RemindersService {
     private readonly audit: AuditLogService,
     private readonly notifications: NotificationsService,
     private readonly reminderRules: ReminderRuleService,
+    private readonly projectClosing: ProjectClosingService,
   ) {}
   private day(date = new Date()) {
     const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())),
@@ -44,9 +46,36 @@ export class RemindersService {
    * Reused by both the request-triggered path (list/stats/quick) and the scheduler. */
   async syncOrganization(org: string): Promise<void> {
     await this.syncSources(org);
+    await this.syncCloseoutReadiness(org);
     await this.autoResolveStaleReminders(org);
     await this.refreshStatuses(org);
     await this.notifications.generateForOrg(org);
+  }
+
+  private async syncCloseoutReadiness(org: string) {
+    const works = await this.prisma.cmsWork.findMany({
+      where: { organizationId: org, status: { notIn: ["COMPLETED", "ARCHIVED", "CANCELLED"] } },
+      select: { id: true, workName: true },
+    });
+    const readyIds: string[] = [];
+    for (const work of works) {
+      const readiness = await this.projectClosing.readiness(org, work.id);
+      if (!readiness.status.startsWith("READY_")) continue;
+      readyIds.push(work.id);
+      const dueDate = new Date();
+      dueDate.setUTCHours(0, 0, 0, 0);
+      await this.prisma.reminder.upsert({
+        where: { organizationId_sourceModule_sourceId_type_dueDate: { organizationId: org, sourceModule: "PROJECT_CLOSEOUT", sourceId: work.id, type: "Project Ready to Close", dueDate } },
+        update: { status: "UPCOMING", isResolved: false, title: `Project ready to close: ${work.workName}` },
+        create: { organizationId: org, type: "Project Ready to Close", title: `Project ready to close: ${work.workName}`, description: `/cms/ongoing-works/${work.id}?tab=Completion%20%26%20Closeout`, dueDate, priority: "HIGH", sourceModule: "PROJECT_CLOSEOUT", sourceType: "READY_TO_CLOSE", sourceId: work.id, relatedEntityType: "CmsWork", relatedEntityId: work.id, relatedEntityName: work.workName, notificationBefore: 0, assignedToName: "Unassigned" },
+      });
+    }
+    const stale = await this.prisma.reminder.findMany({ where: { organizationId: org, sourceModule: "PROJECT_CLOSEOUT", sourceId: { notIn: readyIds }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, select: { id: true } });
+    if (stale.length) {
+      const ids = stale.map((item) => item.id);
+      await this.prisma.reminder.updateMany({ where: { id: { in: ids }, organizationId: org }, data: { status: "COMPLETED", isResolved: true, completedAt: new Date() } });
+      for (const id of ids) await this.notifications.resolveForReminder(org, id);
+    }
   }
 
   private async refreshStatuses(org: string) {
@@ -135,7 +164,7 @@ export class RemindersService {
     });
   }
   async syncSources(org: string) {
-    const [rules, security, guarantees, payables, cheques, documents, receivables, submittingTenders, openingTenders, activeContracts, retentionBills] =
+    const [rules, security, guarantees, payables, cheques, documents, receivables, submittingTenders, openingTenders, activeContracts, retentionBills, dlps, defects, pendingCertificates, pendingHandovers] =
       await Promise.all([
         this.reminderRules.allRules(org),
         this.prisma.tenderSecurity.findMany({
@@ -178,6 +207,10 @@ export class RemindersService {
           },
           include: { cmsWork: true },
         }),
+        this.prisma.defectLiabilityPeriod.findMany({ where: { organizationId: org, status: { in: ["ACTIVE", "EXTENDED"] } }, include: { work: true } }),
+        this.prisma.dlpDefect.findMany({ where: { organizationId: org, status: { notIn: ["VERIFIED", "CLOSED"] }, targetRectificationDate: { not: null } }, include: { work: true } }),
+        this.prisma.completionCertificate.findMany({ where: { organizationId: org, status: { in: ["DRAFT", "SUBMITTED"] } }, include: { work: true } }),
+        this.prisma.projectHandover.findMany({ where: { organizationId: org, status: { in: ["DRAFT", "SUBMITTED"] } }, include: { work: true } }),
       ]);
     /** Settings-driven priority/notification-window per reminder type, falling back to a
      * sane hardcoded default if the rule row is somehow missing (should not normally happen
@@ -379,6 +412,10 @@ export class RemindersService {
             notificationBefore: rule.window,
           }),
         ),
+      ...dlps.map((x) => this.source(org, { type: "DLP Expiring", title: `DLP expiring: ${x.work.workName}`, dueDate: x.endDate, sourceModule: "DLP", sourceId: x.id, relatedEntityName: x.work.workName, priority: "HIGH", notificationBefore: 30 })),
+      ...defects.map((x) => this.source(org, { type: "Defect Rectification Due", title: `Defect due: ${x.defectNo}`, dueDate: x.targetRectificationDate!, sourceModule: "DLP_DEFECT", sourceId: x.id, referenceNo: x.defectNo, relatedEntityName: x.work.workName, priority: x.priority === "CRITICAL" ? "CRITICAL" : "HIGH", notificationBefore: 7 })),
+      ...pendingCertificates.map((x) => this.source(org, { type: "Completion Certificate Pending", title: `Completion Certificate pending: ${x.work.workName}`, dueDate: x.actualCompletionDate, sourceModule: "COMPLETION_CERTIFICATE", sourceId: x.id, referenceNo: x.certificateNo, relatedEntityName: x.work.workName, priority: "HIGH", notificationBefore: 0 })),
+      ...pendingHandovers.map((x) => this.source(org, { type: "Handover Pending", title: `Handover pending: ${x.work.workName}`, dueDate: x.handoverDate, sourceModule: "PROJECT_HANDOVER", sourceId: x.id, referenceNo: x.handoverNo, relatedEntityName: x.work.workName, priority: "HIGH", notificationBefore: 0 })),
     ]);
   }
 

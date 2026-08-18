@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@bizovix/database";
 import { PrismaService } from "../prisma/prisma.service";
+import { ProjectLifecycleGuardService } from "../prisma/project-lifecycle-guard.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { CreateProjectBudgetDto } from "./dto/create-project-budget.dto";
 
@@ -25,6 +26,7 @@ export class ProjectBudgetsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
+    private readonly lifecycle: ProjectLifecycleGuardService,
   ) {}
 
   private async assertWork(organizationId: string, cmsWorkId: string) {
@@ -52,6 +54,7 @@ export class ProjectBudgetsService {
   }
 
   async saveDraft(organizationId: string, userId: string, cmsWorkId: string, dto: CreateProjectBudgetDto) {
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, cmsWorkId, "changing the project budget");
     await this.assertWork(organizationId, cmsWorkId);
 
     const heads = await Promise.all(dto.lines.map((line) => this.resolveExpenseHead(organizationId, line.category)));
@@ -124,6 +127,7 @@ export class ProjectBudgetsService {
   }
 
   async approve(organizationId: string, userId: string, cmsWorkId: string, budgetId: string) {
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, cmsWorkId, "approving the project budget");
     await this.assertWork(organizationId, cmsWorkId);
     const budget = await this.prisma.projectBudget.findFirst({ where: { id: budgetId, organizationId, cmsWorkId } });
     if (!budget) throw new NotFoundException("Budget version not found");

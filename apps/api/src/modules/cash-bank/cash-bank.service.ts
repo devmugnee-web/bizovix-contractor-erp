@@ -36,6 +36,34 @@ export class CashBankService {
     return tx.financialTransaction.create({ data: { ...input, amount, transactionNo: this.no("FT"), balanceAfter: updated.currentBalance, status: "POSTED" } });
   }
 
+  async reverseSource(tx: Tx, input: { organizationId: string; sourceModule: string; sourceId: string; userId: string; reason: string }) {
+    const original = await tx.financialTransaction.findFirst({
+      where: { organizationId: input.organizationId, sourceModule: input.sourceModule, sourceId: input.sourceId, status: "POSTED" },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!original) throw new NotFoundException("Posted cash/bank transaction not found");
+    const reversalType = `REVERSAL:${original.sourceType}`;
+    const existing = await tx.financialTransaction.findFirst({
+      where: { organizationId: input.organizationId, sourceModule: `${input.sourceModule}_REVERSAL`, sourceType: reversalType, sourceId: original.id, accountId: original.accountId },
+    });
+    if (existing) return existing;
+    const reversed = await this.post(tx, {
+      organizationId: input.organizationId,
+      accountId: original.accountId,
+      direction: original.direction === "IN" ? "OUT" : "IN",
+      amount: original.amount,
+      sourceModule: `${input.sourceModule}_REVERSAL`,
+      sourceType: reversalType,
+      sourceId: original.id,
+      referenceNo: original.referenceNo,
+      description: `${input.reason}: ${original.description}`,
+      transactionDate: new Date(),
+      createdById: input.userId,
+    });
+    await tx.financialTransaction.update({ where: { id: original.id }, data: { status: "REVERSED" } });
+    return reversed;
+  }
+
   async ensureCashAccounts(organizationId: string) {
     for (const name of ["Main Cash", "Petty Cash"] as const) {
       await this.prisma.bankAccount.upsert({ where: { id: `${organizationId}:${name}` }, update: {}, create: { id: `${organizationId}:${name}`, organizationId, accountName: name, accountType: "CASH", openingBalance: 0, currentBalance: 0, openingBalanceDate: new Date(), currency: "BDT" } });

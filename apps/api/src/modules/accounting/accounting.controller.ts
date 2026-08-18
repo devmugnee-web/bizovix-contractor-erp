@@ -17,6 +17,9 @@ export class AccountingController {
   @Get("summary") @RequirePermissions("accounts.read") summary(@CurrentUser() u: AuthUser) {
     return this.service.summary(u.organizationId);
   }
+  @Get("integrity") @RequirePermissions("accounts.read") integrity(@CurrentUser() u: AuthUser) {
+    return this.service.integrity(u.organizationId);
+  }
   @Get("chart") @RequirePermissions("chart_of_accounts.read") chart(@CurrentUser() u: AuthUser) {
     return this.service.chart(u.organizationId);
   }

@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -23,6 +24,15 @@ export class SaveCompletionCertificateDto {
   @IsOptional() @IsString() remarks?: string;
 }
 
+export class UpdateCompletionCertificateDto {
+  @IsOptional() @IsDateString() applicationDate?: string;
+  @IsOptional() @IsDateString() actualCompletionDate?: string;
+  @IsOptional() @IsDateString() certifiedCompletionDate?: string;
+  @IsOptional() @IsDateString() certificateDate?: string;
+  @IsOptional() @IsString() issuingAuthority?: string;
+  @IsOptional() @IsString() remarks?: string;
+}
+
 export class CertificateStatusDto {
   @IsEnum(CompletionCertificateStatus) status!: CompletionCertificateStatus;
   @IsOptional() @IsString() remarks?: string;
@@ -30,8 +40,8 @@ export class CertificateStatusDto {
 
 export class CreateDlpDto {
   @IsString() completionCertificateId!: string;
-  @IsDateString() startDate!: string;
-  @Type(() => Number) @IsInt() @Min(0) durationDays!: number;
+  @IsOptional() @IsDateString() startDate?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) durationDays?: number;
   @IsOptional() @IsString() remarks?: string;
 }
 
@@ -48,6 +58,7 @@ export class CreateDefectDto {
   @IsOptional() @IsString() responsiblePerson?: string;
   @IsOptional() @IsDateString() targetRectificationDate?: string;
   @IsOptional() @IsBoolean() mandatory?: boolean;
+  @IsOptional() @IsIn(["LOW", "MEDIUM", "HIGH", "CRITICAL"]) priority?: string;
   @IsOptional() @IsString() remarks?: string;
 }
 
@@ -82,5 +93,9 @@ export class CloseProjectDto {
 }
 
 export class ReopenProjectDto {
+  @IsString() @IsNotEmpty() reason!: string;
+}
+
+export class ArchiveProjectDto {
   @IsString() @IsNotEmpty() reason!: string;
 }

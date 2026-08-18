@@ -3,6 +3,7 @@
 import { CheckCircle2, CircleAlert, Loader2 } from "lucide-react";
 import { useFinalProjectProfitability, useProjectClosing } from "@bizovix/api-client";
 import { formatBDT, formatDate } from "@bizovix/utils";
+import { ProjectCloseoutActions } from "./ProjectCloseoutActions";
 
 const moneyFields = [
   ["Original Contract", "originalContractValue"],
@@ -35,6 +36,24 @@ export function ProjectCloseoutPanel({ workId }: { workId: string }) {
   const data = closing.data;
   return (
     <div className="space-y-5">
+      <ProjectCloseoutActions workId={workId} data={data} />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          ["Completion", data.certificates.find((item) => item.status === "APPROVED")?.status ?? "PENDING"],
+          ["DLP", data.dlps[0]?.status ?? "NOT APPLICABLE"],
+          ["Open Defects", data.defects.filter((item) => !["VERIFIED", "CLOSED"].includes(item.status)).length],
+          ["Retention Outstanding", formatBDT(data.retention.outstandingRetention)],
+          ["Final Bill", data.readiness.items.find((item) => item.key === "final_bill")?.status ?? "PENDING"],
+          ["Outstanding Receivable", data.readiness.items.find((item) => item.key === "receivable")?.value ?? "0.00"],
+          ["Guarantees", data.guarantees.some((item) => ["ACTIVE", "RELEASE_REQUESTED", "EXPIRED"].includes(item.status)) ? "ACTIVE" : "RESOLVED"],
+          ["Readiness", data.readiness.status.replaceAll("_", " ")],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-biz-border bg-biz-surface p-3 shadow-card">
+            <div className="text-[11px] text-biz-muted">{label}</div>
+            <div className="mt-1 text-[13px] font-semibold text-biz-text">{value}</div>
+          </div>
+        ))}
+      </div>
       <div className="rounded-lg border border-biz-border bg-biz-surface p-5 shadow-card">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -62,6 +81,7 @@ export function ProjectCloseoutPanel({ workId }: { workId: string }) {
               )}
               <span className="flex-1">{item.label}</span>
               {item.value !== undefined && <span className="font-medium">{item.value}</span>}
+              {item.status === "NOT_APPLICABLE" && <span className="text-biz-muted">Not applicable</span>}
             </div>
           ))}
         </div>

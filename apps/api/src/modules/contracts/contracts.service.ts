@@ -3,6 +3,7 @@ import type { Prisma } from "@bizovix/database";
 import type { PaginationMeta } from "@bizovix/types";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { PrismaService } from "../prisma/prisma.service";
+import { ProjectLifecycleGuardService } from "../prisma/project-lifecycle-guard.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { CreateContractDto } from "./dto/create-contract.dto";
 import { UpdateContractDto } from "./dto/update-contract.dto";
@@ -47,6 +48,7 @@ export class ContractsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
+    private readonly lifecycle: ProjectLifecycleGuardService,
   ) {}
 
   private where(organizationId: string, query: QueryContractDto): Prisma.ProjectContractWhereInput {
@@ -157,6 +159,7 @@ export class ContractsService {
   async create(organizationId: string, userId: string, dto: CreateContractDto) {
     const work = await this.assertRelations(organizationId, dto);
     if (!work) throw new BadRequestException("Linked Project / Work is required");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, work.id, "creating a contract");
 
     if (dto.tenderId) {
       const tender = await this.prisma.tender.findFirst({ where: { id: dto.tenderId, organizationId } });
@@ -222,6 +225,7 @@ export class ContractsService {
   async update(organizationId: string, userId: string, id: string, dto: UpdateContractDto) {
     const existing = await this.prisma.projectContract.findFirst({ where: { id, organizationId }, include: includeRelations });
     if (!existing) throw new NotFoundException("Contract not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "updating a contract");
 
     if (dto.cmsWorkId) await this.assertRelations(organizationId, dto);
     if (dto.tenderId) {
@@ -287,6 +291,7 @@ export class ContractsService {
   async activate(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectContract.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Contract not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "activating a contract");
     if (existing.status !== "DRAFT") {
       throw new BadRequestException("Only a Draft contract can be activated");
     }

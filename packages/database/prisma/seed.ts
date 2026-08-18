@@ -1,6 +1,7 @@
 import { PrismaClient, PurchaseType, TenderStatus, GuaranteeType, InstrumentStatus, AccountType, ExpenseStatus, ReceiptStatus, CmsWorkStatus, ContractType, ContractStatus, ProjectBudgetStatus, BillType, BillStatus, AdjustmentDirection, DeductionCalcType, VariationType, VariationStatus, TimeExtensionStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { syncPermissions } from "./lib/sync-permissions";
+import { seedDemoBankAccounts } from "../src/demo-bank-seed";
 
 const prisma = new PrismaClient();
 
@@ -119,48 +120,7 @@ async function main() {
     });
   }
 
-  const dbbl = await prisma.bankAccount.create({
-    data: {
-      organizationId: organization.id,
-      accountName: "DBBL A/C",
-      accountType: AccountType.BANK,
-      bankName: "Dutch-Bangla Bank",
-      accountNumber: "1012000045781",
-      currentBalance: 320_000_000,
-    },
-  });
-  const primeBank = await prisma.bankAccount.create({
-    data: {
-      organizationId: organization.id,
-      accountName: "Prime Bank A/C",
-      accountType: AccountType.BANK,
-      bankName: "Prime Bank PLC",
-      accountNumber: "2091000078452",
-      currentBalance: 600_000_000,
-    },
-  });
-  const cash = await prisma.bankAccount.create({
-    data: {
-      organizationId: organization.id,
-      accountName: "Cash",
-      accountType: AccountType.CASH,
-      currentBalance: 13_000_000,
-    },
-  });
-  // Fixed id: referenced by the general expense demo rows further below.
-  const islamiBank = await prisma.bankAccount.upsert({
-    where: { id: "seed-bank-islami-01" },
-    update: {},
-    create: {
-      id: "seed-bank-islami-01",
-      organizationId: organization.id,
-      accountName: "Islami Bank Current Account",
-      accountType: AccountType.BANK,
-      bankName: "Islami Bank Bangladesh PLC",
-      accountNumber: "2050100012345",
-      currentBalance: 45_000_000,
-    },
-  });
+  const { dbbl, primeBank, cash, islamiBank } = await seedDemoBankAccounts(prisma, organization.id);
   const bankAccounts = [dbbl, primeBank, cash, islamiBank];
 
   const now = new Date();

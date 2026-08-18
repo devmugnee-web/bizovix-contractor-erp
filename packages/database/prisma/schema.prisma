@@ -36,6 +36,8 @@ enum ExpenseStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
+  AMENDED
 }
 
 enum ReceiptStatus {
@@ -753,6 +755,8 @@ model PerformanceGuarantee {
   releaseReference     String?
   bankConfirmation     String?
   releaseRemarks       String?
+  releaseRequestedById String?
+  releasedById         String?
 
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tender             Tender?             @relation(fields: [tenderId], references: [id])
@@ -831,6 +835,10 @@ model CmsWork {
   startDate              DateTime?
   expectedCompletionDate DateTime?
   completionDate         DateTime?
+  closedAt               DateTime?
+  closedById             String?
+  archivedAt             DateTime?
+  archivedById           String?
   createdById            String?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
@@ -1308,6 +1316,8 @@ model DefectLiabilityPeriod {
   completionCertificateId String    @unique
   startDate               DateTime
   endDate                 DateTime
+  originalStartDate       DateTime?
+  originalEndDate         DateTime?
   durationDays            Int
   status                  DlpStatus @default(NOT_STARTED)
   remarks                 String?
@@ -1358,6 +1368,9 @@ model DlpDefect {
   responsiblePerson       String?
   targetRectificationDate DateTime?
   rectifiedDate           DateTime?
+  verifiedDate            DateTime?
+  closedDate              DateTime?
+  priority                String                @default("MEDIUM")
   status                  DefectStatus          @default(OPEN)
   mandatory               Boolean               @default(true)
   remarks                 String?
@@ -1444,6 +1457,7 @@ model ProjectClosureEvent {
   previousStatus CmsWorkStatus
   newStatus      CmsWorkStatus
   performedById  String
+  readinessSnapshot Json?
   createdAt      DateTime      @default(now())
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   work           CmsWork       @relation(fields: [workId], references: [id])
@@ -1494,6 +1508,10 @@ model Expense {
   referenceNo       String?
   approvedById      String?
   createdById       String?
+  cancelledAt       DateTime?
+  cancelledById     String?
+  cancellationReason String?
+  replacesExpenseId String? @unique
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -1503,11 +1521,14 @@ model Expense {
   expenseBy       User?               @relation("ExpenseThrough", fields: [expenseById], references: [id])
   paidFromAccount BankAccount?        @relation(fields: [paidFromAccountId], references: [id])
   attachments     ExpenseAttachment[]
+  replaces        Expense?             @relation("ExpenseAmendment", fields: [replacesExpenseId], references: [id])
+  replacement     Expense?             @relation("ExpenseAmendment")
 
   @@unique([organizationId, referenceNo])
   @@index([organizationId, workId, expenseDate])
   @@index([organizationId, expenseHeadId])
   @@index([organizationId, status])
+  @@index([organizationId, replacesExpenseId])
   @@map("expenses")
 }
 
@@ -1566,6 +1587,10 @@ model Receipt {
   /// prevention instead of only a loose project-level total.
   receivableId        String?
   createdById         String?
+  cancelledAt         DateTime?
+  cancelledById       String?
+  cancellationReason  String?
+  replacesReceiptId   String? @unique
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -1574,11 +1599,14 @@ model Receipt {
   work              CmsWork?     @relation(fields: [workId], references: [id])
   receivedInAccount BankAccount? @relation(fields: [receivedInAccountId], references: [id])
   receivable        Receivable?  @relation(fields: [receivableId], references: [id])
+  replaces          Receipt?     @relation("ReceiptAmendment", fields: [replacesReceiptId], references: [id])
+  replacement       Receipt?     @relation("ReceiptAmendment")
 
   @@unique([organizationId, receiptNo])
   @@index([organizationId, receiptDate])
   @@index([organizationId, workId])
   @@index([organizationId, status])
+  @@index([organizationId, replacesReceiptId])
   @@map("receipts")
 }
 

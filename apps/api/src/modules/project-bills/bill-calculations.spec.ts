@@ -1,6 +1,6 @@
 import { BadRequestException } from "@nestjs/common";
 import { Prisma } from "@bizovix/database";
-import { calculateBillItem, summarizeBill } from "./bill-calculations";
+import { calculateBillItem, CERTIFIED_BILL_HISTORY_STATUSES, summarizeBill } from "./bill-calculations";
 
 const D = (v: number) => new Prisma.Decimal(v);
 
@@ -37,6 +37,10 @@ describe("calculateBillItem (master task test case 56 — over-billing rejection
   it("rejects when cumulative quantity would exceed the approved BOQ ceiling", () => {
     // Contract Qty=100, previous certified=90, current attempt=20 -> cumulative 110 > 100.
     expect(() => calculateBillItem(boq({ contractQty: D(100) }), 90, 20)).toThrow(BadRequestException);
+  });
+
+  it("keeps collected certified bills in cumulative quantity history", () => {
+    expect(CERTIFIED_BILL_HISTORY_STATUSES).toEqual(["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"]);
   });
 
   it("allows billing exactly up to the ceiling (no false rejection at the boundary)", () => {

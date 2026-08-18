@@ -396,6 +396,7 @@ export class PgBgService {
         status: "RELEASE_REQUESTED",
         releaseRequestDate: new Date(dto.releaseRequestDate),
         releaseRemarks: dto.remarks,
+        releaseRequestedById: userId,
       },
     });
     await this.auditLogService.record({
@@ -423,6 +424,7 @@ export class PgBgService {
         releaseReference: dto.releaseReference,
         bankConfirmation: dto.bankConfirmation,
         releaseRemarks: dto.remarks ?? existing.releaseRemarks,
+        releasedById: userId,
       },
     });
     await this.auditLogService.record({

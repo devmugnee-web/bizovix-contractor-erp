@@ -49,13 +49,12 @@ export class DashboardService {
       ongoingAgg,
       tenderSecurityAgg,
       pgBgAgg,
-      pendingReceiptsAgg,
-      overdueReceiptsAgg,
+      receivables,
       outstandingPayables,
       bankAccounts,
       ongoingProjectMasters,
     ] = await Promise.all([
-      this.prisma.tender.aggregate({
+      this.prisma.cmsWork.aggregate({
         where: { organizationId, status: "ONGOING" },
         _count: true,
         _sum: { contractValue: true },
@@ -70,19 +69,15 @@ export class DashboardService {
         _count: true,
         _sum: { amount: true },
       }),
-      this.prisma.receipt.aggregate({ where: { organizationId, status: "PENDING" }, _sum: { amount: true } }),
-      this.prisma.receipt.aggregate({
-        where: { organizationId, status: "PENDING", dueDate: { lt: new Date() } },
-        _sum: { amount: true },
-      }),
+      this.prisma.receivable.findMany({ where: { organizationId, status: { not: "RECEIVED" } }, select: { amount: true, receivedAmount: true, dueDate: true } }),
       // Real accounts-payable sub-ledger — Expense.status is never transitioned to PENDING by
       // any create/update path in this app, so it cannot be used as a live payables signal.
       this.prisma.payable.findMany({
         where: { organizationId, status: { not: "PAID" } },
         select: { amount: true, paidAmount: true, dueDate: true },
       }),
-      this.prisma.bankAccount.findMany({ where: { organizationId }, select: { currentBalance: true } }),
-      this.prisma.tender.findMany({
+      this.prisma.bankAccount.findMany({ where: { organizationId, isActive: true }, select: { currentBalance: true } }),
+      this.prisma.cmsWork.findMany({
         where: { organizationId, status: "ONGOING" },
         select: { organizationMasterId: true },
         distinct: ["organizationMasterId"],
@@ -90,6 +85,8 @@ export class DashboardService {
     ]);
 
     const bankAndCashTotal = bankAccounts.reduce((sum, acc) => sum + Number(acc.currentBalance), 0);
+    const receivableTotal = receivables.reduce((sum, row) => sum + Number(row.amount) - Number(row.receivedAmount), 0);
+    const overdueReceivableTotal = receivables.filter((row) => row.dueDate && row.dueDate < now).reduce((sum, row) => sum + Number(row.amount) - Number(row.receivedAmount), 0);
     const outstandingPayableTotal = outstandingPayables.reduce(
       (sum, p) => sum + (Number(p.amount) - Number(p.paidAmount)),
       0,
@@ -122,8 +119,8 @@ export class DashboardService {
         available: false,
       },
       receivables: {
-        amount: (pendingReceiptsAgg._sum.amount ?? 0).toString(),
-        overdue: (overdueReceiptsAgg._sum.amount ?? 0).toString(),
+        amount: receivableTotal.toFixed(2),
+        overdue: overdueReceivableTotal.toFixed(2),
       },
       payables: {
         amount: outstandingPayableTotal.toFixed(2),
@@ -210,8 +207,9 @@ export class DashboardService {
   }
 
   private async getUpcomingReminders(organizationId: string) {
+    const now = new Date();
     const reminders = await this.prisma.reminder.findMany({
-      where: { organizationId, isResolved: false },
+      where: { organizationId, isResolved: false, dueDate: { gte: now } },
       orderBy: { dueDate: "asc" },
       take: 5,
     });

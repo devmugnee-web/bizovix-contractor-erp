@@ -58,7 +58,7 @@ const SYSTEM = [
 // doing so would let Receivable/Payable/Cash/Bank/Opening-balance sub-ledgers diverge from
 // the GL. Real business modules (Receipts, Payables, Cash & Bank, Opening Balances) post to
 // them through AccountingService.post()/bankLedgerAccount(), which is unaffected by this gate.
-const CONTROL_SYSTEM_KEYS = new Set(["ACCOUNTS_RECEIVABLE", "ACCOUNTS_PAYABLE", "OPENING_BALANCE_EQUITY", "CASH", "BANK"]);
+const CONTROL_SYSTEM_KEYS = new Set(["ACCOUNTS_RECEIVABLE", "ACCOUNTS_PAYABLE", "RETENTION_RECEIVABLE", "TAX_DEDUCTED_VAT", "TAX_DEDUCTED_AIT", "OTHER_DEDUCTION_RECEIVABLE", "OPENING_BALANCE_EQUITY", "CASH", "BANK"]);
 // The one normal balance each account type is allowed to carry — enforced at account
 // create/update so LedgerAccount.normalBalance can never silently drift out of sync with
 // accountType (which is what every balance/report calculation actually keys off).
@@ -442,6 +442,23 @@ export class AccountingService {
     await this.log(org, userId, "JOURNAL_REVERSED", id, original.journalNo);
     return reversal;
   }
+
+  async reverseSource(tx: Prisma.TransactionClient, org: string, userId: string, sourceModule: string, sourceId: string) {
+    const original = await tx.journalEntry.findFirst({ where: { organizationId: org, sourceModule, sourceId }, include: { lines: true } });
+    if (!original) throw new NotFoundException("Posted journal not found");
+    if (original.status === "REVERSED") {
+      return tx.journalEntry.findFirst({ where: { organizationId: org, reversalOfId: original.id } });
+    }
+    if (original.status !== "POSTED") throw new BadRequestException("Only posted journals can be reversed");
+    const reversal = await this.post(tx, {
+      organizationId: org, userId, journalDate: new Date(), referenceNo: original.journalNo,
+      description: `Reversal of ${original.journalNo}: ${original.description}`,
+      sourceModule: "JOURNAL_REVERSAL", sourceType: "REVERSAL", sourceId: original.id,
+      lines: original.lines.map((line) => ({ accountId: line.accountId, projectId: line.projectId, partyName: line.partyName, partyType: line.partyType, debit: line.credit, credit: line.debit, description: line.description })),
+    });
+    await tx.journalEntry.update({ where: { id: original.id }, data: { status: "REVERSED" } });
+    return tx.journalEntry.update({ where: { id: reversal.id }, data: { reversalOfId: original.id } });
+  }
   async ledger(org: string, q: QueryAccountingDto) {
     const page = q.page ?? 1,
       limit = q.limit ?? 10;
@@ -469,15 +486,21 @@ export class AccountingService {
           : undefined,
       },
     };
-    const [all, total] = await Promise.all([
+    const openingWhere: Prisma.JournalLineWhereInput = q.dateFrom ? {
+      account: { organizationId: org }, accountId: q.accountId, projectId: q.projectId, partyName: q.party,
+      journalEntry: { status: "POSTED", journalDate: { lt: new Date(q.dateFrom) } },
+    } : { id: { in: [] } };
+    const [all, total, openingRows] = await Promise.all([
       this.prisma.journalLine.findMany({
         where,
         include: { account: true, journalEntry: true, project: true },
         orderBy: { journalEntry: { journalDate: "asc" } },
       }),
       this.prisma.journalLine.count({ where }),
+      this.prisma.journalLine.findMany({ where: openingWhere, select: { debit: true, credit: true } }),
     ]);
-    let balance = D(0);
+    const openingBalance = openingRows.reduce((sum, line) => sum.add(line.debit).sub(line.credit), D(0));
+    let balance = openingBalance;
     const mapped = all.map((l) => {
       balance = balance.add(l.debit).sub(l.credit);
       return { ...l, runningBalance: balance.toFixed(2) };
@@ -487,7 +510,7 @@ export class AccountingService {
     return {
       items: mapped.slice((page - 1) * limit, page * limit),
       summary: {
-        openingBalance: "0.00",
+        openingBalance: openingBalance.toFixed(2),
         totalDebit: debit.toFixed(2),
         totalCredit: credit.toFixed(2),
         closingBalance: balance.toFixed(2),
@@ -498,35 +521,36 @@ export class AccountingService {
   async receivables(org: string, q: QueryAccountingDto) {
     const page = q.page ?? 1,
       limit = q.limit ?? 10;
-    const rows = await this.prisma.cmsWork.findMany({
+    const rows = await this.prisma.receivable.findMany({
       where: {
         organizationId: org,
-        id: q.projectId,
+        projectId: q.projectId,
+        status: { not: "RECEIVED" },
         OR: q.search
           ? [
-              { workName: { contains: q.search, mode: "insensitive" } },
-              { organizationMaster: { shortName: { contains: q.search, mode: "insensitive" } } },
+              { billNo: { contains: q.search, mode: "insensitive" } },
+              { partyName: { contains: q.search, mode: "insensitive" } },
+              { project: { workName: { contains: q.search, mode: "insensitive" } } },
             ]
           : undefined,
       },
       include: {
-        organizationMaster: true,
-        receipts: { where: { status: "RECEIVED" }, orderBy: { receiptDate: "desc" } },
+        project: { include: { organizationMaster: true } },
       },
-      orderBy: { contractValue: "desc" },
+      orderBy: { billDate: "desc" },
     });
     const items = rows
       .map((r) => {
-        const received = r.receipts.reduce((n, x) => n.add(x.amount), D(0)),
-          outstanding = Prisma.Decimal.max(D(0), r.contractValue.sub(received)),
-          due = r.expectedCompletionDate,
+        const received = r.receivedAmount,
+          outstanding = Prisma.Decimal.max(D(0), r.amount.sub(received)),
+          due = r.dueDate,
           days = due ? Math.max(0, Math.floor((Date.now() - due.getTime()) / 864e5)) : 0;
         return {
           id: r.id,
-          project: r.workName,
-          organization: r.organizationMaster.shortName,
-          contractValue: r.contractValue,
-          totalBilled: r.contractValue,
+          project: r.project.workName,
+          organization: r.project.organizationMaster.shortName,
+          contractValue: r.amount,
+          totalBilled: r.amount,
           totalReceived: received,
           outstanding,
           dueDate: due,
@@ -556,6 +580,38 @@ export class AccountingService {
       },
       meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     };
+  }
+
+  async integrity(org: string) {
+    await this.ensureChart(org);
+    const accounts = await this.prisma.ledgerAccount.findMany({ where: { organizationId: org }, select: { id: true, systemKey: true, linkedBankAccountId: true } });
+    const ids = new Map(accounts.filter((a) => a.systemKey).map((a) => [a.systemKey!, a.id]));
+    const glBalance = async (accountId: string | undefined, creditNormal = false) => {
+      if (!accountId) return D(0);
+      const rows = await this.prisma.journalLine.findMany({ where: { accountId, journalEntry: { organizationId: org, status: "POSTED" } }, select: { debit: true, credit: true } });
+      const debitMinusCredit = rows.reduce((sum, row) => sum.add(row.debit).sub(row.credit), D(0));
+      return creditNormal ? debitMinusCredit.negated() : debitMinusCredit;
+    };
+    const [arGl, apGl, retentionGl, receivables, payables, heldBills, releasedRetention, banks, journals] = await Promise.all([
+      glBalance(ids.get("ACCOUNTS_RECEIVABLE")), glBalance(ids.get("ACCOUNTS_PAYABLE"), true), glBalance(ids.get("RETENTION_RECEIVABLE")),
+      this.prisma.receivable.findMany({ where: { organizationId: org }, select: { amount: true, receivedAmount: true } }),
+      this.prisma.payable.findMany({ where: { organizationId: org }, select: { amount: true, paidAmount: true } }),
+      this.prisma.projectBill.aggregate({ where: { organizationId: org, status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] } }, _sum: { retentionAmount: true } }),
+      this.prisma.retentionRelease.aggregate({ where: { organizationId: org, status: "RELEASED" }, _sum: { amount: true } }),
+      this.prisma.bankAccount.findMany({ where: { organizationId: org, isActive: true }, select: { id: true, accountName: true, currentBalance: true } }),
+      this.prisma.journalEntry.findMany({ where: { organizationId: org, status: "POSTED" }, include: { lines: { select: { debit: true, credit: true } } } }),
+    ]);
+    const arSubledger = receivables.reduce((sum, row) => sum.add(row.amount).sub(row.receivedAmount), D(0));
+    const apSubledger = payables.reduce((sum, row) => sum.add(row.amount).sub(row.paidAmount), D(0));
+    const retentionSubledger = D(heldBills._sum.retentionAmount ?? 0).sub(releasedRetention._sum.amount ?? 0);
+    const item = (gl: Prisma.Decimal, subledger: Prisma.Decimal) => ({ glBalance: gl.toFixed(2), subledgerBalance: subledger.toFixed(2), difference: gl.sub(subledger).toFixed(2), status: gl.eq(subledger) ? "BALANCED" : "OUT_OF_BALANCE" });
+    const bankRows = await Promise.all(banks.map(async (bank) => {
+      const account = accounts.find((a) => a.linkedBankAccountId === bank.id);
+      const gl = await glBalance(account?.id);
+      return { bankAccountId: bank.id, accountName: bank.accountName, operationalBalance: bank.currentBalance.toFixed(2), glBalance: gl.toFixed(2), difference: gl.sub(bank.currentBalance).toFixed(2), status: gl.eq(bank.currentBalance) ? "BALANCED" : "OUT_OF_BALANCE" };
+    }));
+    const unbalancedJournalCount = journals.filter((journal) => !journal.lines.reduce((sum, line) => sum.add(line.debit).sub(line.credit), D(0)).isZero()).length;
+    return { ar: item(arGl, arSubledger), ap: item(apGl, apSubledger), retention: item(retentionGl, retentionSubledger), banks: bankRows, unbalancedJournalCount };
   }
   async payables(org: string, q: QueryAccountingDto) {
     const page = q.page ?? 1,

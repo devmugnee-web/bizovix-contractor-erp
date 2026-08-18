@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
@@ -6,6 +6,7 @@ import { CashBankService } from "../cash-bank/cash-bank.service";
 import { AccountingService } from "../accounting/accounting.service";
 import { NumberingService } from "../settings-numbering/numbering.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { ProjectLifecycleGuardService } from "../prisma/project-lifecycle-guard.service";
 import { QueryProjectExpenseDto } from "./dto/query-project-expense.dto";
 import { SaveProjectExpenseDto } from "./dto/save-project-expense.dto";
 import { UpdateProjectExpenseDto } from "./dto/update-project-expense.dto";
@@ -27,6 +28,10 @@ function toDto(record: ExpenseRecord) {
     amount: record.amount.toFixed(2),
     description: record.description,
     status: record.status,
+    replacesExpenseId: record.replacesExpenseId,
+    cancelledAt: record.cancelledAt,
+    cancelledById: record.cancelledById,
+    cancellationReason: record.cancellationReason,
     expenseHead: record.expenseHead!,
     expenseBy: record.expenseBy!,
     paidFromAccount: record.paidFromAccount!,
@@ -35,7 +40,7 @@ function toDto(record: ExpenseRecord) {
 
 @Injectable()
 export class ProjectExpensesService {
-  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService, private readonly cashBank: CashBankService, private readonly accounting: AccountingService, private readonly numbering: NumberingService) {}
+  constructor(private readonly prisma: PrismaService, private readonly auditLogService: AuditLogService, private readonly cashBank: CashBankService, private readonly accounting: AccountingService, private readonly numbering: NumberingService, private readonly lifecycle: ProjectLifecycleGuardService) {}
 
   private where(organizationId: string, query: QueryProjectExpenseDto): Prisma.ExpenseWhereInput {
     return {
@@ -105,6 +110,7 @@ export class ProjectExpensesService {
   }
 
   async create(organizationId: string, userId: string, dto: SaveProjectExpenseDto) {
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, dto.workId, "recording a normal project expense");
     const { head } = await this.assertReferences(organizationId, dto);
     const record = await this.prisma.$transaction(async (tx) => {
       const referenceNo = await this.numbering.next(organizationId, "EXPENSE", tx);
@@ -135,6 +141,13 @@ export class ProjectExpensesService {
 
   async update(organizationId: string, userId: string, id: string, dto: UpdateProjectExpenseDto) {
     const existing = await this.findOne(organizationId, id);
+    if (["CANCELLED", "AMENDED"].includes(existing.status)) throw new BadRequestException("Cancelled or amended expense cannot be edited");
+    const financialChange = dto.workId !== undefined || dto.expenseDate !== undefined || dto.expenseHeadId !== undefined || dto.amount !== undefined || dto.expenseById !== undefined || dto.paidFromAccountId !== undefined;
+    if (!financialChange) {
+      const metadata = await this.prisma.expense.update({ where: { id, organizationId }, data: { description: dto.description?.trim() || null }, include: includeRelations });
+      await this.auditLogService.record({ organizationId, userId, action: "EXPENSE_METADATA_UPDATED", entityType: "ProjectExpense", entityId: id, oldValue: existing, newValue: toDto(metadata) });
+      return toDto(metadata);
+    }
     const merged: SaveProjectExpenseDto = {
       workId: dto.workId ?? existing.workId,
       expenseDate: dto.expenseDate ?? new Date(existing.expenseDate).toISOString().slice(0, 10),
@@ -145,29 +158,30 @@ export class ProjectExpensesService {
       description: dto.description ?? existing.description ?? undefined,
     };
     const { head } = await this.assertReferences(organizationId, merged);
-    const record = await this.prisma.expense.update({
-      where: { id, organizationId },
-      data: {
-        workId: merged.workId,
-        expenseDate: new Date(merged.expenseDate),
-        expenseHeadId: merged.expenseHeadId,
-        category: head.name,
-        amount: merged.amount,
-        expenseById: merged.expenseById,
-        paidFromAccountId: merged.paidFromAccountId,
-        description: merged.description?.trim() || null,
-      },
-      include: includeRelations,
+    const record = await this.prisma.$transaction(async (tx) => {
+      await this.accounting.reverseSource(tx, organizationId, userId, "PROJECT_EXPENSE", id);
+      await this.cashBank.reverseSource(tx, { organizationId, sourceModule: "PROJECT_EXPENSE", sourceId: id, userId, reason: "Expense amendment" });
+      await tx.expense.update({ where: { id, organizationId }, data: { status: "AMENDED", cancelledAt: new Date(), cancelledById: userId, cancellationReason: "Replaced by financial amendment" } });
+      const referenceNo = await this.numbering.next(organizationId, "EXPENSE", tx);
+      const replacement = await tx.expense.create({ data: { organizationId, workId: merged.workId, expenseHeadId: merged.expenseHeadId, expenseById: merged.expenseById, paidFromAccountId: merged.paidFromAccountId, category: head.name, description: merged.description?.trim() || null, amount: merged.amount, expenseDate: new Date(merged.expenseDate), status: "APPROVED", referenceNo, createdById: userId, replacesExpenseId: id }, include: includeRelations });
+      await this.cashBank.post(tx, { organizationId, accountId: merged.paidFromAccountId, direction: "OUT", amount: merged.amount, sourceModule: "PROJECT_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, referenceNo, description: merged.description?.trim() || head.name, transactionDate: replacement.expenseDate, createdById: userId });
+      await this.accounting.post(tx, { organizationId, userId, journalDate: replacement.expenseDate, referenceNo, description: merged.description?.trim() || head.name, sourceModule: "PROJECT_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, lines: [{ systemKey: "PROJECT_EXPENSE", projectId: merged.workId, debit: merged.amount, credit: 0 }, { bankAccountId: merged.paidFromAccountId, projectId: merged.workId, debit: 0, credit: merged.amount }] });
+      return replacement;
     });
-    await this.auditLogService.record({ organizationId, userId, action: "update", entityType: "ProjectExpense", entityId: id, oldValue: existing, newValue: toDto(record) });
+    await this.auditLogService.record({ organizationId, userId, action: "EXPENSE_AMENDED", entityType: "ProjectExpense", entityId: id, oldValue: existing, newValue: toDto(record) });
     return toDto(record);
   }
 
   async remove(organizationId: string, userId: string, id: string) {
     const existing = await this.findOne(organizationId, id);
-    await this.prisma.expense.delete({ where: { id, organizationId } });
-    await this.auditLogService.record({ organizationId, userId, action: "delete", entityType: "ProjectExpense", entityId: id, oldValue: existing });
-    return null;
+    if (["CANCELLED", "AMENDED"].includes(existing.status)) return existing;
+    const row = await this.prisma.$transaction(async (tx) => {
+      await this.accounting.reverseSource(tx, organizationId, userId, "PROJECT_EXPENSE", id);
+      await this.cashBank.reverseSource(tx, { organizationId, sourceModule: "PROJECT_EXPENSE", sourceId: id, userId, reason: "Expense cancellation" });
+      return tx.expense.update({ where: { id, organizationId }, data: { status: "CANCELLED", cancelledAt: new Date(), cancelledById: userId, cancellationReason: "Cancelled by user" }, include: includeRelations });
+    });
+    await this.auditLogService.record({ organizationId, userId, action: "EXPENSE_CANCELLED", entityType: "ProjectExpense", entityId: id, oldValue: existing, newValue: toDto(row) });
+    return toDto(row);
   }
 
   async exportCsv(organizationId: string, userId: string, query: QueryProjectExpenseDto) {

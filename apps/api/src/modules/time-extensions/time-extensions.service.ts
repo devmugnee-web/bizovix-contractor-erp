@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@bizovix/database";
 import { PrismaService } from "../prisma/prisma.service";
+import { ProjectLifecycleGuardService } from "../prisma/project-lifecycle-guard.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { NumberingService } from "../settings-numbering/numbering.service";
 import { ApproveTimeExtensionDto, SaveTimeExtensionDto } from "./dto/save-time-extension.dto";
@@ -25,6 +26,7 @@ export class TimeExtensionsService {
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
     private readonly numbering: NumberingService,
+    private readonly lifecycle: ProjectLifecycleGuardService,
   ) {}
 
   private async assertContract(organizationId: string, contractId: string) {
@@ -50,6 +52,7 @@ export class TimeExtensionsService {
 
   async saveDraft(organizationId: string, userId: string, id: string | null, dto: SaveTimeExtensionDto) {
     const contract = await this.assertContract(organizationId, dto.contractId);
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, contract.cmsWorkId, "changing time extensions");
     const existing = id ? await this.prisma.timeExtension.findFirst({ where: { id, organizationId } }) : null;
     if (id && !existing) throw new NotFoundException("Time Extension not found");
     if (existing && !EDITABLE_STATUSES.has(existing.status)) throw new BadRequestException("Only a Draft time extension can be edited");
@@ -100,6 +103,7 @@ export class TimeExtensionsService {
   async submit(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.timeExtension.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Time Extension not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "submitting time extensions");
     if (existing.status !== "DRAFT") throw new BadRequestException("Only a Draft time extension can be submitted");
     const record = await this.prisma.timeExtension.update({ where: { id }, data: { status: "SUBMITTED" }, include: includeRelations });
     await this.auditLogService.record({ organizationId, userId, action: "EOT_SUBMITTED", entityType: "TimeExtension", entityId: id, referenceNo: record.eotNo });
@@ -109,6 +113,7 @@ export class TimeExtensionsService {
   async reject(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.timeExtension.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Time Extension not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "rejecting time extensions");
     if (existing.status !== "SUBMITTED") throw new BadRequestException("Only a Submitted time extension can be rejected");
     const record = await this.prisma.timeExtension.update({ where: { id }, data: { status: "REJECTED" }, include: includeRelations });
     await this.auditLogService.record({ organizationId, userId, action: "EOT_REJECTED", entityType: "TimeExtension", entityId: id, referenceNo: record.eotNo });
@@ -118,6 +123,7 @@ export class TimeExtensionsService {
   async cancel(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.timeExtension.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Time Extension not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "cancelling time extensions");
     if (existing.status === "APPROVED") throw new BadRequestException("An approved time extension cannot be cancelled — its completion-date impact is permanent");
     const record = await this.prisma.timeExtension.update({ where: { id }, data: { status: "CANCELLED" }, include: includeRelations });
     await this.auditLogService.record({ organizationId, userId, action: "EOT_UPDATED", entityType: "TimeExtension", entityId: id, referenceNo: record.eotNo, description: "Time extension cancelled" });
@@ -130,6 +136,7 @@ export class TimeExtensionsService {
   async approve(organizationId: string, userId: string, id: string, dto: ApproveTimeExtensionDto) {
     const existing = await this.prisma.timeExtension.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Time Extension not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "approving time extensions");
     if (existing.status !== "SUBMITTED") throw new BadRequestException("Only a Submitted time extension can be approved");
 
     const approvedDays = dto.approvedDays ?? existing.requestedDays;

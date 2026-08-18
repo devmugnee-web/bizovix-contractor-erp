@@ -24,12 +24,16 @@ ALTER TABLE "expenses" ADD CONSTRAINT "expenses_expenseHeadId_fkey" FOREIGN KEY 
 ALTER TABLE "expenses" ADD CONSTRAINT "expenses_expenseById_fkey" FOREIGN KEY ("expenseById") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "expenses" ADD CONSTRAINT "expenses_paidFromAccountId_fkey" FOREIGN KEY ("paidFromAccountId") REFERENCES "bank_accounts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
-INSERT INTO "expense_heads" ("id", "organizationId", "name", "createdAt", "updatedAt") VALUES
-  ('seed-expense-head-material', 'seed-org-bizovix', 'Material Purchase', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('seed-expense-head-transport', 'seed-org-bizovix', 'Transport', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('seed-expense-head-labour', 'seed-org-bizovix', 'Installation Labour', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('seed-expense-head-accommodation', 'seed-org-bizovix', 'Accommodation', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('seed-expense-head-food', 'seed-org-bizovix', 'Food & Refreshment', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+INSERT INTO "expense_heads" ("id", "organizationId", "name", "createdAt", "updatedAt")
+SELECT seed.id, organization.id, seed.name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM (VALUES
+  ('seed-expense-head-material', 'Material Purchase'),
+  ('seed-expense-head-transport', 'Transport'),
+  ('seed-expense-head-labour', 'Installation Labour'),
+  ('seed-expense-head-accommodation', 'Accommodation'),
+  ('seed-expense-head-food', 'Food & Refreshment')
+) AS seed(id, name)
+JOIN "organizations" organization ON organization.id = 'seed-org-bizovix'
 ON CONFLICT ("organizationId", "name") DO NOTHING;
 
 INSERT INTO "users" ("id", "email", "passwordHash", "name", "isActive", "createdAt", "updatedAt") VALUES
@@ -45,9 +49,13 @@ JOIN "roles" role ON role."organizationId" = 'seed-org-bizovix' AND role."name" 
 WHERE person.id IN ('seed-user-shajib', 'seed-user-galib', 'seed-user-rokon')
 ON CONFLICT ("organizationId", "userId") DO NOTHING;
 
-INSERT INTO "bank_accounts" ("id", "organizationId", "accountName", "accountType", "bankName", "accountNumber", "currentBalance", "createdAt", "updatedAt") VALUES
-  ('seed-bank-islami-01', 'seed-org-bizovix', 'Islami Bank - 01', 'BANK'::"AccountType", 'Islami Bank Bangladesh PLC', '120100022345', 250000000, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('seed-bank-dutch-02', 'seed-org-bizovix', 'Dutch Bangla - 02', 'BANK'::"AccountType", 'Dutch-Bangla Bank PLC', '1012000045781', 180000000, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+INSERT INTO "bank_accounts" ("id", "organizationId", "accountName", "accountType", "bankName", "accountNumber", "currentBalance", "createdAt", "updatedAt")
+SELECT seed.id, organization.id, seed.account_name, 'BANK'::"AccountType", seed.bank_name, seed.account_number, seed.balance, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM (VALUES
+  ('seed-bank-islami-01', 'Islami Bank - 01', 'Islami Bank Bangladesh PLC', '120100022345', 250000000::numeric),
+  ('seed-bank-dutch-02', 'Dutch Bangla - 02', 'Dutch-Bangla Bank PLC', '1012000045781', 180000000::numeric)
+) AS seed(id, account_name, bank_name, account_number, balance)
+JOIN "organizations" organization ON organization.id = 'seed-org-bizovix'
 ON CONFLICT ("id") DO NOTHING;
 
 INSERT INTO "expenses" (

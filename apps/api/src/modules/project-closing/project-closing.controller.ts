@@ -14,6 +14,8 @@ import {
   ExtendDlpDto,
   ReopenProjectDto,
   SaveCompletionCertificateDto,
+  UpdateCompletionCertificateDto,
+  ArchiveProjectDto,
 } from "./dto/project-closing.dto";
 
 @Controller("project-closing")
@@ -26,11 +28,24 @@ export class ProjectClosingController {
   ) {
     return this.service.overview(user.organizationId, id);
   }
+  @Patch("certificates/:id") @RequirePermissions("completion_certificate.update") updateCertificate(
+    @Param("id") id: string,
+    @Body() dto: UpdateCompletionCertificateDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.updateCertificate(user.organizationId, user.id, id, dto);
+  }
   @Get(":workId/readiness") @RequirePermissions("project_close.read") readiness(
     @Param("workId") id: string,
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.readiness(user.organizationId, id);
+  }
+  @Get(":workId/readiness-snapshot") @RequirePermissions("project_close.read") snapshot(
+    @Param("workId") id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.latestReadinessSnapshot(user.organizationId, id);
   }
   @Get(":workId/profitability") @RequirePermissions("report.view") profitability(
     @Param("workId") id: string,
@@ -140,5 +155,12 @@ export class ProjectClosingController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.reopen(user.organizationId, user.id, id, dto);
+  }
+  @Post(":workId/archive") @RequirePermissions("project_close.archive") archive(
+    @Param("workId") id: string,
+    @Body() dto: ArchiveProjectDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.archive(user.organizationId, user.id, id, dto);
   }
 }

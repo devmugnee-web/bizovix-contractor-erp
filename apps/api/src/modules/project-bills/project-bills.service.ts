@@ -2,13 +2,14 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { Prisma } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { PrismaService } from "../prisma/prisma.service";
+import { ProjectLifecycleGuardService } from "../prisma/project-lifecycle-guard.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { AccountingService } from "../accounting/accounting.service";
 import { DeductionConfigsService } from "../deduction-configs/deduction-configs.service";
 import { NumberingService } from "../settings-numbering/numbering.service";
 import { SaveProjectBillDto, BillAdjustmentInputDto, BillItemInputDto } from "./dto/save-project-bill.dto";
 import { QueryProjectBillDto } from "./dto/query-project-bill.dto";
-import { calculateBillItem, summarizeBill } from "./bill-calculations";
+import { calculateBillItem, CERTIFIED_BILL_HISTORY_STATUSES, summarizeBill } from "./bill-calculations";
 
 type Tx = Prisma.TransactionClient;
 const D = (v: Prisma.Decimal | number | string) => new Prisma.Decimal(v);
@@ -77,6 +78,7 @@ export class ProjectBillsService {
     private readonly accounting: AccountingService,
     private readonly deductionConfigs: DeductionConfigsService,
     private readonly numbering: NumberingService,
+    private readonly lifecycle: ProjectLifecycleGuardService,
   ) {}
 
   private async assertWork(organizationId: string, cmsWorkId: string) {
@@ -172,7 +174,7 @@ export class ProjectBillsService {
     const certifiedRows = await tx.projectBillItem.findMany({
       where: {
         boqItemId: { in: boqItemIds },
-        bill: { status: "CERTIFIED", ...(excludeBillId ? { id: { not: excludeBillId } } : {}) },
+        bill: { status: { in: [...CERTIFIED_BILL_HISTORY_STATUSES] }, ...(excludeBillId ? { id: { not: excludeBillId } } : {}) },
       },
       select: { boqItemId: true, currentQty: true },
     });
@@ -226,6 +228,7 @@ export class ProjectBillsService {
 
   async saveDraft(organizationId: string, userId: string, id: string | null, dto: SaveProjectBillDto) {
     const contract = await this.assertContract(organizationId, dto.contractId);
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, contract.cmsWorkId, "changing project bills");
     await this.assertWork(organizationId, contract.cmsWorkId);
 
     const existing = id
@@ -252,6 +255,11 @@ export class ProjectBillsService {
     const record = await this.prisma.$transaction(async (tx) => {
       const calculatedItems = await this.calculateItems(tx, organizationId, contract.cmsWorkId, dto.items, existing?.id ?? null);
       const calculatedAdjustments = this.calculateAdjustments(dto.adjustments);
+      const adjustmentAccountIds = calculatedAdjustments.map((item) => item.ledgerAccountId).filter((id): id is string => Boolean(id));
+      if (adjustmentAccountIds.length) {
+        const allowed = await tx.ledgerAccount.findMany({ where: { id: { in: adjustmentAccountIds }, organizationId, isActive: true, isControlAccount: false }, select: { id: true } });
+        if (allowed.length !== new Set(adjustmentAccountIds).size) throw new BadRequestException("One or more adjustment ledger accounts are invalid, inactive, cross-tenant, or control accounts");
+      }
       const retentionPct = dto.retentionPctOverride !== undefined ? D(dto.retentionPctOverride) : contract.retentionPct;
       const vatConfig = await this.deductionConfigs.effectiveConfig(organizationId, "VAT", new Date(dto.billDate));
       const aitConfig = await this.deductionConfigs.effectiveConfig(organizationId, "AIT", new Date(dto.billDate));
@@ -332,6 +340,7 @@ export class ProjectBillsService {
   async submit(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectBill.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Running Bill not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "submitting project bills");
     if (existing.status !== "DRAFT") throw new BadRequestException("Only a Draft bill can be submitted");
 
     const record = await this.prisma.projectBill.update({
@@ -356,6 +365,7 @@ export class ProjectBillsService {
   async startReview(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectBill.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Running Bill not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "certifying project bills");
     if (existing.status !== "SUBMITTED") throw new BadRequestException("Only a Submitted bill can move to review");
     const record = await this.prisma.projectBill.update({ where: { id }, data: { status: "UNDER_REVIEW" }, include: includeRelations });
     await this.auditLogService.record({
@@ -373,6 +383,7 @@ export class ProjectBillsService {
   async reject(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectBill.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Running Bill not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "rejecting project bills");
     if (!["SUBMITTED", "UNDER_REVIEW"].includes(existing.status)) {
       throw new BadRequestException("Only a Submitted or Under Review bill can be rejected");
     }
@@ -392,6 +403,7 @@ export class ProjectBillsService {
   async cancel(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectBill.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Running Bill not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "cancelling project bills");
     if (!CANCELLABLE_STATUSES.has(existing.status)) {
       throw new BadRequestException(
         "A Certified bill cannot be cancelled directly — this requires a formal reversal, which is not yet supported",

@@ -28,6 +28,10 @@ function toDto(record: ExpenseRecord) {
     amount: record.amount.toFixed(2),
     description: record.description,
     status: record.status,
+    replacesExpenseId: record.replacesExpenseId,
+    cancelledAt: record.cancelledAt,
+    cancelledById: record.cancelledById,
+    cancellationReason: record.cancellationReason,
     expenseHead: record.expenseHead!,
     expenseBy: record.expenseBy!,
     paidFromAccount: record.paidFromAccount!,
@@ -108,6 +112,13 @@ export class GeneralExpensesService {
 
   async update(organizationId: string, userId: string, id: string, dto: UpdateGeneralExpenseDto) {
     const existing = await this.findOne(organizationId, id);
+    if (["CANCELLED", "AMENDED"].includes(existing.status)) throw new BadRequestException("Cancelled or amended expense cannot be edited");
+    const financialChange = dto.expenseDate !== undefined || dto.expenseHeadId !== undefined || dto.amount !== undefined || dto.expenseById !== undefined || dto.paidFromAccountId !== undefined;
+    if (!financialChange) {
+      const metadata = await this.prisma.expense.update({ where: { id, organizationId }, data: { description: dto.description?.trim() || null }, include: includeRelations });
+      await this.auditLogService.record({ organizationId, userId, action: "EXPENSE_METADATA_UPDATED", entityType: "GeneralExpense", entityId: id, oldValue: existing, newValue: toDto(metadata) });
+      return toDto(metadata);
+    }
     const merged: SaveGeneralExpenseDto = {
       expenseDate: dto.expenseDate ?? new Date(existing.expenseDate).toISOString().slice(0, 10),
       expenseHeadId: dto.expenseHeadId ?? existing.expenseHead.id,
@@ -116,12 +127,17 @@ export class GeneralExpensesService {
       description: dto.description ?? existing.description ?? undefined,
     };
     const { head } = await this.assertReferences(organizationId, merged);
-    const record = await this.prisma.expense.update({ where: { id, organizationId }, data: {
-      expenseDate: new Date(merged.expenseDate), expenseHeadId: merged.expenseHeadId, category: head.name,
-      amount: merged.amount, expenseById: merged.expenseById, paidFromAccountId: merged.paidFromAccountId,
-      description: merged.description?.trim() || null,
-    }, include: includeRelations });
-    await this.auditLogService.record({ organizationId, userId, action: "update", entityType: "GeneralExpense", entityId: id, oldValue: existing, newValue: toDto(record) });
+    const record = await this.prisma.$transaction(async (tx) => {
+      await this.accounting.reverseSource(tx, organizationId, userId, "GENERAL_EXPENSE", id);
+      await this.cashBank.reverseSource(tx, { organizationId, sourceModule: "GENERAL_EXPENSE", sourceId: id, userId, reason: "Expense amendment" });
+      await tx.expense.update({ where: { id, organizationId }, data: { status: "AMENDED", cancelledAt: new Date(), cancelledById: userId, cancellationReason: "Replaced by financial amendment" } });
+      const referenceNo = await this.numbering.next(organizationId, "EXPENSE", tx);
+      const replacement = await tx.expense.create({ data: { organizationId, workId: null, expenseHeadId: merged.expenseHeadId, expenseById: merged.expenseById, paidFromAccountId: merged.paidFromAccountId, category: head.name, description: merged.description?.trim() || null, amount: merged.amount, expenseDate: new Date(merged.expenseDate), status: "APPROVED", referenceNo, createdById: userId, replacesExpenseId: id }, include: includeRelations });
+      await this.cashBank.post(tx, { organizationId, accountId: merged.paidFromAccountId, direction: "OUT", amount: merged.amount, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, referenceNo, description: merged.description?.trim() || head.name, transactionDate: replacement.expenseDate, createdById: userId });
+      await this.accounting.post(tx, { organizationId, userId, journalDate: replacement.expenseDate, referenceNo, description: merged.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, lines: [{ systemKey: "GENERAL_EXPENSE", debit: merged.amount, credit: 0 }, { bankAccountId: merged.paidFromAccountId, debit: 0, credit: merged.amount }] });
+      return replacement;
+    });
+    await this.auditLogService.record({ organizationId, userId, action: "EXPENSE_AMENDED", entityType: "GeneralExpense", entityId: id, oldValue: existing, newValue: toDto(record) });
     return toDto(record);
   }
 
@@ -137,9 +153,14 @@ export class GeneralExpensesService {
 
   async remove(organizationId: string, userId: string, id: string) {
     const existing = await this.findOne(organizationId, id);
-    await this.prisma.expense.delete({ where: { id, organizationId } });
-    await this.auditLogService.record({ organizationId, userId, action: "delete", entityType: "GeneralExpense", entityId: id, oldValue: existing });
-    return null;
+    if (["CANCELLED", "AMENDED"].includes(existing.status)) return existing;
+    const row = await this.prisma.$transaction(async (tx) => {
+      await this.accounting.reverseSource(tx, organizationId, userId, "GENERAL_EXPENSE", id);
+      await this.cashBank.reverseSource(tx, { organizationId, sourceModule: "GENERAL_EXPENSE", sourceId: id, userId, reason: "Expense cancellation" });
+      return tx.expense.update({ where: { id, organizationId }, data: { status: "CANCELLED", cancelledAt: new Date(), cancelledById: userId, cancellationReason: "Cancelled by user" }, include: includeRelations });
+    });
+    await this.auditLogService.record({ organizationId, userId, action: "EXPENSE_CANCELLED", entityType: "GeneralExpense", entityId: id, oldValue: existing, newValue: toDto(row) });
+    return toDto(row);
   }
 
   async exportCsv(organizationId: string, userId: string, query: QueryGeneralExpenseDto) {

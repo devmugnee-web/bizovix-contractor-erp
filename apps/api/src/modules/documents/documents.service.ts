@@ -99,6 +99,31 @@ export class DocumentsService {
       : [];
   }
 
+  private async assertLinkedEntities(organizationId: string, dto: Partial<CreateDocumentDto>) {
+    const [tender, work, contract, bill, variation, eot, master, certificate, dlp, defect, retention, handover] = await Promise.all([
+      dto.tenderId ? this.prisma.tender.findFirst({ where: { id: dto.tenderId, organizationId }, select: { id: true } }) : null,
+      dto.workId ? this.prisma.cmsWork.findFirst({ where: { id: dto.workId, organizationId }, select: { id: true } }) : null,
+      dto.contractId ? this.prisma.projectContract.findFirst({ where: { id: dto.contractId, organizationId }, select: { id: true, cmsWorkId: true } }) : null,
+      dto.projectBillId ? this.prisma.projectBill.findFirst({ where: { id: dto.projectBillId, organizationId }, select: { id: true, cmsWorkId: true, contractId: true } }) : null,
+      dto.variationOrderId ? this.prisma.variationOrder.findFirst({ where: { id: dto.variationOrderId, organizationId }, select: { id: true, cmsWorkId: true, contractId: true } }) : null,
+      dto.timeExtensionId ? this.prisma.timeExtension.findFirst({ where: { id: dto.timeExtensionId, organizationId }, select: { id: true, cmsWorkId: true, contractId: true } }) : null,
+      dto.organizationMasterId ? this.prisma.organizationMaster.findFirst({ where: { id: dto.organizationMasterId, organizationId }, select: { id: true } }) : null,
+      dto.completionCertificateId ? this.prisma.completionCertificate.findFirst({ where: { id: dto.completionCertificateId, organizationId }, select: { id: true, workId: true, contractId: true } }) : null,
+      dto.dlpId ? this.prisma.defectLiabilityPeriod.findFirst({ where: { id: dto.dlpId, organizationId }, select: { id: true, workId: true, contractId: true } }) : null,
+      dto.defectId ? this.prisma.dlpDefect.findFirst({ where: { id: dto.defectId, organizationId }, select: { id: true, dlp: { select: { workId: true } } } }) : null,
+      dto.retentionReleaseId ? this.prisma.retentionRelease.findFirst({ where: { id: dto.retentionReleaseId, organizationId }, select: { id: true, workId: true, contractId: true } }) : null,
+      dto.projectHandoverId ? this.prisma.projectHandover.findFirst({ where: { id: dto.projectHandoverId, organizationId }, select: { id: true, workId: true, contractId: true } }) : null,
+    ]);
+    const checks: Array<[unknown, string | undefined, string]> = [[tender, dto.tenderId, "Tender"], [work, dto.workId, "Project"], [contract, dto.contractId, "Contract"], [bill, dto.projectBillId, "Project bill"], [variation, dto.variationOrderId, "Variation"], [eot, dto.timeExtensionId, "Time extension"], [master, dto.organizationMasterId, "Organization master"], [certificate, dto.completionCertificateId, "Completion certificate"], [dlp, dto.dlpId, "DLP"], [defect, dto.defectId, "Defect"], [retention, dto.retentionReleaseId, "Retention release"], [handover, dto.projectHandoverId, "Handover"]];
+    for (const [record, supplied, label] of checks) if (supplied && !record) throw new NotFoundException(`${label} not found in this organization`);
+    const expectedWorkId = dto.workId;
+    for (const linked of [contract, bill, variation, eot, certificate, dlp, retention, handover]) {
+      if (expectedWorkId && linked && ("cmsWorkId" in linked ? linked.cmsWorkId : linked.workId) !== expectedWorkId) throw new BadRequestException("Linked records must belong to the selected project");
+    }
+    if (expectedWorkId && defect && defect.dlp.workId !== expectedWorkId) throw new BadRequestException("Defect does not belong to the selected project");
+    if (dto.contractId) for (const linked of [bill, variation, eot, certificate, dlp, retention, handover]) if (linked && linked.contractId !== dto.contractId) throw new BadRequestException("Linked records must belong to the selected contract");
+  }
+
   async create(
     organizationId: string,
     userId: string,
@@ -106,6 +131,7 @@ export class DocumentsService {
     dto: CreateDocumentDto,
     file?: UploadedDocumentFile,
   ) {
+    await this.assertLinkedEntities(organizationId, dto);
     let fileMeta: { fileName?: string; fileType?: string; fileSize?: number; storageKey?: string } = {};
     if (file) {
       const storageKey = await this.storage.save(organizationId, file.buffer, file.originalname);
@@ -186,6 +212,20 @@ export class DocumentsService {
   async update(organizationId: string, userId: string, id: string, dto: UpdateDocumentDto) {
     const existing = await this.prisma.document.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Document not found");
+    await this.assertLinkedEntities(organizationId, {
+      tenderId: dto.tenderId === undefined ? existing.tenderId ?? undefined : dto.tenderId ?? undefined,
+      workId: dto.workId === undefined ? existing.workId ?? undefined : dto.workId ?? undefined,
+      contractId: dto.contractId === undefined ? existing.contractId ?? undefined : dto.contractId ?? undefined,
+      projectBillId: dto.projectBillId === undefined ? existing.projectBillId ?? undefined : dto.projectBillId ?? undefined,
+      variationOrderId: dto.variationOrderId === undefined ? existing.variationOrderId ?? undefined : dto.variationOrderId ?? undefined,
+      timeExtensionId: dto.timeExtensionId === undefined ? existing.timeExtensionId ?? undefined : dto.timeExtensionId ?? undefined,
+      completionCertificateId: dto.completionCertificateId === undefined ? existing.completionCertificateId ?? undefined : dto.completionCertificateId ?? undefined,
+      dlpId: dto.dlpId === undefined ? existing.dlpId ?? undefined : dto.dlpId ?? undefined,
+      defectId: dto.defectId === undefined ? existing.defectId ?? undefined : dto.defectId ?? undefined,
+      retentionReleaseId: dto.retentionReleaseId === undefined ? existing.retentionReleaseId ?? undefined : dto.retentionReleaseId ?? undefined,
+      projectHandoverId: dto.projectHandoverId === undefined ? existing.projectHandoverId ?? undefined : dto.projectHandoverId ?? undefined,
+      organizationMasterId: dto.organizationMasterId === undefined ? existing.organizationMasterId ?? undefined : dto.organizationMasterId ?? undefined,
+    });
 
     const record = await this.prisma.document.update({
       where: { id, organizationId },

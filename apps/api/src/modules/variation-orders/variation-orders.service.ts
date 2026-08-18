@@ -3,6 +3,7 @@ import { Prisma } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import type { PaginationMeta } from "@bizovix/types";
 import { PrismaService } from "../prisma/prisma.service";
+import { ProjectLifecycleGuardService } from "../prisma/project-lifecycle-guard.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { NumberingService } from "../settings-numbering/numbering.service";
 import { ApproveVariationOrderDto, SaveVariationOrderDto, VariationItemInputDto } from "./dto/save-variation-order.dto";
@@ -43,6 +44,7 @@ export class VariationOrdersService {
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
     private readonly numbering: NumberingService,
+    private readonly lifecycle: ProjectLifecycleGuardService,
   ) {}
 
   private async assertContract(organizationId: string, contractId: string) {
@@ -112,6 +114,7 @@ export class VariationOrdersService {
 
   async saveDraft(organizationId: string, userId: string, id: string | null, dto: SaveVariationOrderDto) {
     const contract = await this.assertContract(organizationId, dto.contractId);
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, contract.cmsWorkId, "changing variation orders");
     const existing = id ? await this.prisma.variationOrder.findFirst({ where: { id, organizationId } }) : null;
     if (id && !existing) throw new NotFoundException("Variation Order not found");
     if (existing && !EDITABLE_STATUSES.has(existing.status)) throw new BadRequestException("Only a Draft variation can be edited");
@@ -171,6 +174,7 @@ export class VariationOrdersService {
   async submit(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.variationOrder.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Variation Order not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "submitting variation orders");
     if (existing.status !== "DRAFT") throw new BadRequestException("Only a Draft variation can be submitted");
     const record = await this.prisma.variationOrder.update({ where: { id }, data: { status: "SUBMITTED" }, include: includeRelations });
     await this.auditLogService.record({
@@ -187,6 +191,8 @@ export class VariationOrdersService {
   async reject(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.variationOrder.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Variation Order not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "rejecting variation orders");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "approving variation orders");
     if (existing.status !== "SUBMITTED") throw new BadRequestException("Only a Submitted variation can be rejected");
     const record = await this.prisma.variationOrder.update({ where: { id }, data: { status: "REJECTED" }, include: includeRelations });
     await this.auditLogService.record({
@@ -203,6 +209,7 @@ export class VariationOrdersService {
   async cancel(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.variationOrder.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Variation Order not found");
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "cancelling variation orders");
     if (existing.status === "APPROVED") throw new BadRequestException("An approved variation cannot be cancelled — its BOQ/contract impact is permanent");
     const record = await this.prisma.variationOrder.update({ where: { id }, data: { status: "CANCELLED" }, include: includeRelations });
     await this.auditLogService.record({
@@ -229,13 +236,15 @@ export class VariationOrdersService {
     if (!existing) throw new NotFoundException("Variation Order not found");
     if (existing.status !== "SUBMITTED") throw new BadRequestException("Only a Submitted variation can be approved");
 
-    const approvedAmount = dto.approvedAmount !== undefined ? D(dto.approvedAmount) : existing.requestedAmount;
+    const approvedAmount = existing.items.reduce((sum, item) => sum.add(item.amount), D(0));
+    const signedApprovedAmount = signVariationAmount(existing.variationType, approvedAmount);
+    if (dto.approvedAmount !== undefined && !D(dto.approvedAmount).eq(signedApprovedAmount)) throw new BadRequestException(`Approved amount must equal the backend-calculated item impact of ${signedApprovedAmount.toFixed(2)}`);
 
     const record = await this.prisma.$transaction(async (tx) => {
       for (const item of existing.items) {
         if (item.boqItemId) {
           await tx.boqItem.update({
-            where: { id: item.boqItemId },
+            where: { id: item.boqItemId, organizationId },
             data: { contractQty: item.revisedQty!, unitRate: item.revisedRate!, contractAmount: item.revisedQty!.mul(item.revisedRate!) },
           });
         } else {
@@ -260,7 +269,7 @@ export class VariationOrdersService {
 
       await tx.variationOrder.update({
         where: { id },
-        data: { status: "APPROVED", approvalDate: new Date(), approvedById: userId, approvedAmount },
+        data: { status: "APPROVED", approvalDate: new Date(), approvedById: userId, approvedAmount: signedApprovedAmount },
       });
 
       const approvedVariations = await tx.variationOrder.findMany({

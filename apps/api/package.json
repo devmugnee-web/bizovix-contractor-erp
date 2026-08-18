@@ -8,8 +8,14 @@
     "start": "dotenv -e ../../.env -- node dist/main.js",
     "start:prod": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\"",
+    "lint:integration": "eslint \"test-integration/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "jest"
+    "typecheck:integration": "tsc --noEmit -p tsconfig.integration.json",
+    "test": "jest",
+    "test:integration": "node scripts/run-integration-tests.mjs",
+    "reconcile:legacy-financial": "nest build && dotenv -e ../../.env -- node dist/scripts/reconcile-legacy-financial-data.js",
+    "cleanup:demo-banks": "nest build && dotenv -e ../../.env -- node dist/scripts/cleanup-demo-bank-data.js",
+    "test:e2e": "node scripts/run-integration-tests.mjs --e2e"
   },
   "dependencies": {
     "@bizovix/database": "workspace:*",
@@ -36,15 +42,18 @@
   "devDependencies": {
     "@bizovix/config": "workspace:*",
     "@nestjs/cli": "^11.0.24",
+    "@nestjs/testing": "^11.2.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.2",
     "@types/passport-jwt": "^4.0.1",
     "@types/pdfkit": "^0.13.4",
+    "@types/supertest": "^7.2.1",
     "dotenv-cli": "^7.4.4",
     "eslint": "^9.17.0",
     "jest": "^30.4.2",
+    "supertest": "^7.2.2",
     "ts-jest": "^29.4.12",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.19.0"

@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@bizovix/database";
 import { PrismaService } from "../prisma/prisma.service";
+import { ProjectLifecycleGuardService } from "../prisma/project-lifecycle-guard.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { CreateBoqItemDto } from "./dto/create-boq-item.dto";
 import { UpdateBoqItemDto } from "./dto/update-boq-item.dto";
@@ -37,6 +38,7 @@ export class BoqService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
+    private readonly lifecycle: ProjectLifecycleGuardService,
   ) {}
 
   private async assertWork(organizationId: string, cmsWorkId: string) {
@@ -94,6 +96,7 @@ export class BoqService {
   }
 
   async create(organizationId: string, userId: string, cmsWorkId: string, dto: CreateBoqItemDto) {
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, cmsWorkId, "creating BOQ items");
     await this.assertWork(organizationId, cmsWorkId);
     const section = dto.section ? await this.resolveSection(organizationId, cmsWorkId, dto.section) : null;
     const contractAmount = new Prisma.Decimal(dto.contractQty).mul(dto.unitRate);
@@ -133,11 +136,20 @@ export class BoqService {
   }
 
   async update(organizationId: string, userId: string, cmsWorkId: string, itemId: string, dto: UpdateBoqItemDto) {
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, cmsWorkId, "editing BOQ items");
     const existing = await this.prisma.boqItem.findFirst({
       where: { id: itemId, organizationId, cmsWorkId },
       include: includeRelations,
     });
     if (!existing) throw new NotFoundException("BOQ item not found");
+    const changesFinancialCeiling = dto.contractQty !== undefined || dto.unitRate !== undefined;
+    if (changesFinancialCeiling) {
+      const [billCount, approvedVariationCount] = await Promise.all([
+        this.prisma.projectBillItem.count({ where: { boqItemId: itemId, bill: { status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] } } } }),
+        this.prisma.variationItem.count({ where: { boqItemId: itemId, variationOrder: { status: "APPROVED" } } }),
+      ]);
+      if (existing.executedQty.gt(0) || billCount > 0 || approvedVariationCount > 0) throw new BadRequestException("BOQ quantity/rate is locked after execution; use an approved Variation Order");
+    }
 
     const section = dto.section !== undefined && dto.section !== null && dto.section !== ""
       ? await this.resolveSection(organizationId, cmsWorkId, dto.section)
@@ -147,7 +159,7 @@ export class BoqService {
     const contractAmount = new Prisma.Decimal(nextQty).mul(nextRate);
 
     const record = await this.prisma.boqItem.update({
-      where: { id: itemId },
+      where: { id: itemId, organizationId },
       data: {
         ...(section ? { sectionId: section.id } : {}),
         ...(dto.itemCode !== undefined ? { itemCode: dto.itemCode } : {}),
@@ -177,10 +189,13 @@ export class BoqService {
   }
 
   async remove(organizationId: string, userId: string, cmsWorkId: string, itemId: string) {
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, cmsWorkId, "deleting BOQ items");
     const existing = await this.prisma.boqItem.findFirst({ where: { id: itemId, organizationId, cmsWorkId } });
     if (!existing) throw new NotFoundException("BOQ item not found");
 
-    await this.prisma.boqItem.delete({ where: { id: itemId } });
+    const usage = await this.prisma.projectBillItem.count({ where: { boqItemId: itemId } });
+    if (usage > 0) throw new BadRequestException("A BOQ item with billing history cannot be deleted");
+    await this.prisma.boqItem.delete({ where: { id: itemId, organizationId } });
 
     await this.auditLogService.record({
       organizationId,
