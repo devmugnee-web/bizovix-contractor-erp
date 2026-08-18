@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { OrganizationMasterOption } from "@bizovix/types";
-import { apiRequest } from "../http-client";
+import type { OrganizationMasterOption, OrganizationMasterQuery, OrganizationMasterRecord } from "@bizovix/types";
+import { apiRequest, apiRequestPaginated } from "../http-client";
 import { queryKeys } from "./query-keys";
 
 export function useOrganizations(search: string) {
@@ -15,6 +15,14 @@ export function useAllOrganizations() {
   return useQuery({
     queryKey: queryKeys.organizations(),
     queryFn: () => apiRequest<OrganizationMasterOption[]>("/organizations"),
+  });
+}
+
+export function useOrganizationMasters(query: OrganizationMasterQuery) {
+  return useQuery({
+    queryKey: queryKeys.organizationMasters(query),
+    queryFn: () => apiRequestPaginated<OrganizationMasterRecord>("/organizations/all", { params: { ...query } }),
+    placeholderData: (previous) => previous,
   });
 }
 

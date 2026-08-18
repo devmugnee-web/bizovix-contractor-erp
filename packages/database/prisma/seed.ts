@@ -1,4 +1,4 @@
-import { PrismaClient, PurchaseType, TenderStatus, GuaranteeType, InstrumentStatus, AccountType, ExpenseStatus, ReceiptStatus, CmsWorkStatus, ContractType, ContractStatus, ProjectBudgetStatus, BillType, BillStatus, AdjustmentDirection, DeductionCalcType, VariationType, VariationStatus, TimeExtensionStatus } from "@prisma/client";
+import { PrismaClient, PurchaseType, TenderStatus, GuaranteeType, InstrumentStatus, AccountType, ExpenseStatus, ReceiptStatus, CmsWorkStatus, ContractType, ContractStatus, ProjectBudgetStatus, BillType, BillStatus, AdjustmentDirection, DeductionCalcType, VariationType, VariationStatus, TimeExtensionStatus, PartyRole, PartyStatus, MasterCategoryType, ItemType, ItemStatus, PrPriority, PrStatus, RfqStatus, QuotationStatus, ComparativeStatementStatus, TechnicalComplianceStatus, PurchaseOrderStatus, GrnInspectionStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { syncPermissions } from "./lib/sync-permissions";
 import { seedDemoBankAccounts } from "../src/demo-bank-seed";
@@ -1307,6 +1307,808 @@ async function main() {
   await prisma.projectContract.update({
     where: { id: flagshipContract.id },
     data: { currentCompletionDate: new Date("2025-06-29T00:00:00.000Z") },
+  });
+
+  // ---------------------------------------------------------------------------
+  // Masters — Vendor / Supplier / Subcontractor / Item Foundation
+  // ---------------------------------------------------------------------------
+
+  const uomDefs: Array<{ id: string; code: string; name: string; symbol: string }> = [
+    { id: "seed-uom-pcs", code: "PCS", name: "Pieces", symbol: "pcs" },
+    { id: "seed-uom-kg", code: "KG", name: "Kilogram", symbol: "kg" },
+    { id: "seed-uom-ton", code: "TON", name: "Ton", symbol: "t" },
+    { id: "seed-uom-m", code: "M", name: "Meter", symbol: "m" },
+    { id: "seed-uom-sqm", code: "SQM", name: "Square Meter", symbol: "m²" },
+    { id: "seed-uom-cft", code: "CFT", name: "Cubic Feet", symbol: "cft" },
+    { id: "seed-uom-liter", code: "LITER", name: "Liter", symbol: "L" },
+    { id: "seed-uom-lot", code: "LOT", name: "Lot", symbol: "lot" },
+    { id: "seed-uom-day", code: "DAY", name: "Day", symbol: "day" },
+    { id: "seed-uom-month", code: "MONTH", name: "Month", symbol: "mo" },
+    { id: "seed-uom-job", code: "JOB", name: "Job", symbol: "job" },
+  ];
+  const uoms: Record<string, { id: string }> = {};
+  for (const def of uomDefs) {
+    uoms[def.code] = await prisma.unitOfMeasurement.upsert({
+      where: { id: def.id },
+      update: {},
+      create: { id: def.id, organizationId: organization.id, code: def.code, name: def.name, symbol: def.symbol },
+    });
+  }
+
+  const paymentTermDefs: Array<{ id: string; name: string; days: number }> = [
+    { id: "seed-pt-immediate", name: "Immediate", days: 0 },
+    { id: "seed-pt-7", name: "7 Days", days: 7 },
+    { id: "seed-pt-15", name: "15 Days", days: 15 },
+    { id: "seed-pt-30", name: "30 Days", days: 30 },
+    { id: "seed-pt-45", name: "45 Days", days: 45 },
+    { id: "seed-pt-60", name: "60 Days", days: 60 },
+  ];
+  const paymentTerms: Record<string, { id: string }> = {};
+  for (const def of paymentTermDefs) {
+    paymentTerms[def.name] = await prisma.paymentTerm.upsert({
+      where: { id: def.id },
+      update: {},
+      create: { id: def.id, organizationId: organization.id, name: def.name, days: def.days },
+    });
+  }
+
+  const vendorCategoryDefs: Array<{ id: string; name: string }> = [
+    { id: "seed-cat-vendor-electrical", name: "Electrical Equipment Supplier" },
+    { id: "seed-cat-vendor-led", name: "LED Display Supplier" },
+    { id: "seed-cat-vendor-it", name: "IT Equipment Supplier" },
+    { id: "seed-cat-vendor-general", name: "General Contractor Supplier" },
+  ];
+  const vendorCategories: Record<string, { id: string }> = {};
+  for (const def of vendorCategoryDefs) {
+    vendorCategories[def.name] = await prisma.masterCategory.upsert({
+      where: { id: def.id },
+      update: {},
+      create: { id: def.id, organizationId: organization.id, type: MasterCategoryType.VENDOR, name: def.name },
+    });
+  }
+
+  const materialCategoryDefs: Array<{ id: string; name: string }> = [
+    { id: "seed-cat-material-electrical", name: "Electrical Materials" },
+    { id: "seed-cat-material-led", name: "LED & Display Components" },
+    { id: "seed-cat-material-it", name: "IT & Networking Equipment" },
+    { id: "seed-cat-material-civil", name: "Civil Construction Materials" },
+  ];
+  const materialCategories: Record<string, { id: string }> = {};
+  for (const def of materialCategoryDefs) {
+    materialCategories[def.name] = await prisma.masterCategory.upsert({
+      where: { id: def.id },
+      update: {},
+      create: { id: def.id, organizationId: organization.id, type: MasterCategoryType.MATERIAL, name: def.name },
+    });
+  }
+
+  const tradeCategoryDefs: Array<{ id: string; name: string }> = [
+    { id: "seed-cat-trade-electrical", name: "Electrical Works" },
+    { id: "seed-cat-trade-civil", name: "Civil Works" },
+    { id: "seed-cat-trade-led", name: "LED Installation" },
+  ];
+  const tradeCategories: Record<string, { id: string }> = {};
+  for (const def of tradeCategoryDefs) {
+    tradeCategories[def.name] = await prisma.masterCategory.upsert({
+      where: { id: def.id },
+      update: {},
+      create: { id: def.id, organizationId: organization.id, type: MasterCategoryType.SUBCONTRACTOR_TRADE, name: def.name },
+    });
+  }
+
+  // ABC Engineering — the master task's own worked example of a multi-role party
+  // (Supplier + Subcontractor on the same record, not a duplicated pair of rows).
+  const abcEngineering = await prisma.party.upsert({
+    where: { id: "seed-party-abc-engineering" },
+    update: {},
+    create: {
+      id: "seed-party-abc-engineering",
+      organizationId: organization.id,
+      code: "VEN-0001",
+      name: "ABC Engineering Ltd",
+      roles: [PartyRole.SUPPLIER, PartyRole.SUBCONTRACTOR],
+      status: PartyStatus.ACTIVE,
+      contactPerson: "Md. Aminul Islam",
+      phone: "+880-1711-000001",
+      email: "info@abcengineering.example",
+      address: "House 12, Road 5, Banani",
+      district: "Dhaka",
+      country: "Bangladesh",
+      binVat: "000123456-0101",
+      tinNo: "123456789012",
+      tradeLicenseNo: "TRAD/DNCC/000111/2020",
+      bankName: "Dutch Bangla Bank",
+      bankAccountName: "ABC Engineering Ltd",
+      bankAccountNo: "1011000000123",
+      bankBranch: "Banani Branch",
+      paymentTermId: paymentTerms["30 Days"]!.id,
+      categoryId: vendorCategories["Electrical Equipment Supplier"]!.id,
+      createdById: adminUser.id,
+    },
+  });
+  await prisma.subcontractorProfile.upsert({
+    where: { id: "seed-subprofile-abc" },
+    update: {},
+    create: {
+      id: "seed-subprofile-abc",
+      organizationId: organization.id,
+      partyId: abcEngineering.id,
+      tradeCategoryId: tradeCategories["Electrical Works"]!.id,
+      specialization: "Electrical supply and installation for commercial projects",
+      defaultRetentionPct: 5,
+      performanceRating: 4.5,
+    },
+  });
+
+  const primeElectronics = await prisma.party.upsert({
+    where: { id: "seed-party-prime-electronics" },
+    update: {},
+    create: {
+      id: "seed-party-prime-electronics",
+      organizationId: organization.id,
+      code: "VEN-0002",
+      name: "Prime Electronics & Supplies",
+      roles: [PartyRole.VENDOR, PartyRole.SUPPLIER],
+      status: PartyStatus.ACTIVE,
+      contactPerson: "Farhana Kabir",
+      phone: "+880-1711-000002",
+      email: "sales@primeelectronics.example",
+      address: "Shop 45, Elephant Road",
+      district: "Dhaka",
+      country: "Bangladesh",
+      binVat: "000234567-0101",
+      tinNo: "234567890123",
+      bankName: "Islami Bank Bangladesh",
+      bankAccountName: "Prime Electronics & Supplies",
+      bankAccountNo: "2022000000456",
+      paymentTermId: paymentTerms["15 Days"]!.id,
+      categoryId: vendorCategories["IT Equipment Supplier"]!.id,
+      createdById: adminUser.id,
+    },
+  });
+
+  const bengalLed = await prisma.party.upsert({
+    where: { id: "seed-party-bengal-led" },
+    update: {},
+    create: {
+      id: "seed-party-bengal-led",
+      organizationId: organization.id,
+      code: "VEN-0003",
+      name: "Bengal LED Display Suppliers",
+      roles: [PartyRole.SUPPLIER],
+      status: PartyStatus.ACTIVE,
+      contactPerson: "Shahriar Kabir",
+      phone: "+880-1711-000003",
+      email: "contact@bengalled.example",
+      address: "Plot 8, Tejgaon Industrial Area",
+      district: "Dhaka",
+      country: "Bangladesh",
+      binVat: "000345678-0101",
+      tinNo: "345678901234",
+      bankName: "Prime Bank",
+      bankAccountName: "Bengal LED Display Suppliers",
+      bankAccountNo: "3033000000789",
+      paymentTermId: paymentTerms["30 Days"]!.id,
+      categoryId: vendorCategories["LED Display Supplier"]!.id,
+      createdById: adminUser.id,
+    },
+  });
+
+  const souravTrading = await prisma.party.upsert({
+    where: { id: "seed-party-sourav-trading" },
+    update: {},
+    create: {
+      id: "seed-party-sourav-trading",
+      organizationId: organization.id,
+      code: "VEN-0004",
+      name: "Sourav Trading",
+      roles: [PartyRole.VENDOR],
+      status: PartyStatus.ACTIVE,
+      contactPerson: "Sourav Ahmed",
+      phone: "+880-1711-000004",
+      address: "Karwan Bazar",
+      district: "Dhaka",
+      country: "Bangladesh",
+      paymentTermId: paymentTerms["Immediate"]!.id,
+      categoryId: vendorCategories["General Contractor Supplier"]!.id,
+      createdById: adminUser.id,
+    },
+  });
+
+  const karimElectrical = await prisma.party.upsert({
+    where: { id: "seed-party-karim-electrical" },
+    update: {},
+    create: {
+      id: "seed-party-karim-electrical",
+      organizationId: organization.id,
+      code: "SUB-0001",
+      name: "Karim Electrical Works",
+      roles: [PartyRole.SUBCONTRACTOR],
+      status: PartyStatus.ACTIVE,
+      contactPerson: "Abdul Karim",
+      phone: "+880-1711-000005",
+      address: "Mirpur-1",
+      district: "Dhaka",
+      country: "Bangladesh",
+      tinNo: "456789012345",
+      bankName: "Sonali Bank",
+      bankAccountName: "Abdul Karim",
+      bankAccountNo: "4044000000012",
+      paymentTermId: paymentTerms["7 Days"]!.id,
+      createdById: adminUser.id,
+    },
+  });
+  await prisma.subcontractorProfile.upsert({
+    where: { id: "seed-subprofile-karim" },
+    update: {},
+    create: {
+      id: "seed-subprofile-karim",
+      organizationId: organization.id,
+      partyId: karimElectrical.id,
+      tradeCategoryId: tradeCategories["Electrical Works"]!.id,
+      specialization: "Electrical wiring, panel installation and maintenance",
+      defaultRetentionPct: 5,
+      performanceRating: 4.2,
+    },
+  });
+
+  await prisma.organizationContact.upsert({
+    where: { id: "seed-party-contact-abc-accounts" },
+    update: {},
+    create: {
+      id: "seed-party-contact-abc-accounts",
+      organizationId: organization.id,
+      partyId: abcEngineering.id,
+      contactRole: "Accounts",
+      name: "Nasrin Sultana",
+      designation: "Accounts Manager",
+      mobile: "+880-1711-000011",
+      email: "accounts@abcengineering.example",
+      address: "House 12, Road 5, Banani, Dhaka",
+    },
+  });
+
+  const itemDefs: Array<{
+    id: string;
+    itemCode: string;
+    itemName: string;
+    itemType: ItemType;
+    categoryId?: string;
+    uomCode: string;
+    defaultPurchaseRate?: number;
+    preferredVendorId?: string;
+    brandModel?: string;
+  }> = [
+    { id: "seed-item-01", itemCode: "ITM-0001", itemName: "LED Display Panel P3 Outdoor", itemType: ItemType.MATERIAL, categoryId: materialCategories["LED & Display Components"]!.id, uomCode: "PCS", defaultPurchaseRate: 12_000, preferredVendorId: bengalLed.id },
+    { id: "seed-item-02", itemCode: "ITM-0002", itemName: "LED Controller Card", itemType: ItemType.MATERIAL, categoryId: materialCategories["LED & Display Components"]!.id, uomCode: "PCS", defaultPurchaseRate: 8_500, preferredVendorId: bengalLed.id },
+    { id: "seed-item-03", itemCode: "ITM-0003", itemName: "Steel Structure Frame", itemType: ItemType.MATERIAL, categoryId: materialCategories["Civil Construction Materials"]!.id, uomCode: "LOT", defaultPurchaseRate: 400_000 },
+    { id: "seed-item-04", itemCode: "ITM-0004", itemName: "Power Supply Unit 5V 40A", itemType: ItemType.MATERIAL, categoryId: materialCategories["Electrical Materials"]!.id, uomCode: "PCS", defaultPurchaseRate: 4_500, preferredVendorId: primeElectronics.id },
+    { id: "seed-item-05", itemCode: "ITM-0005", itemName: "Copper Cable 2.5mm", itemType: ItemType.MATERIAL, categoryId: materialCategories["Electrical Materials"]!.id, uomCode: "M", defaultPurchaseRate: 45 },
+    { id: "seed-item-06", itemCode: "ITM-0006", itemName: "MCB Distribution Box", itemType: ItemType.MATERIAL, categoryId: materialCategories["Electrical Materials"]!.id, uomCode: "PCS", defaultPurchaseRate: 2_200 },
+    { id: "seed-item-07", itemCode: "ITM-0007", itemName: "Networking Switch 24-Port", itemType: ItemType.MATERIAL, categoryId: materialCategories["IT & Networking Equipment"]!.id, uomCode: "PCS", defaultPurchaseRate: 15_000, preferredVendorId: primeElectronics.id, brandModel: "TP-Link TL-SG1024" },
+    { id: "seed-item-08", itemCode: "ITM-0008", itemName: "CAT6 Network Cable", itemType: ItemType.MATERIAL, categoryId: materialCategories["IT & Networking Equipment"]!.id, uomCode: "M", defaultPurchaseRate: 35 },
+    { id: "seed-item-09", itemCode: "ITM-0009", itemName: "Cement (OPC, 50kg bag)", itemType: ItemType.MATERIAL, categoryId: materialCategories["Civil Construction Materials"]!.id, uomCode: "PCS", defaultPurchaseRate: 620 },
+    { id: "seed-item-10", itemCode: "ITM-0010", itemName: "Sand (Local, Fine)", itemType: ItemType.MATERIAL, categoryId: materialCategories["Civil Construction Materials"]!.id, uomCode: "CFT", defaultPurchaseRate: 55 },
+    { id: "seed-item-11", itemCode: "ITM-0011", itemName: "Site Supervision Service", itemType: ItemType.SERVICE, uomCode: "MONTH", defaultPurchaseRate: 50_000 },
+    { id: "seed-item-12", itemCode: "ITM-0012", itemName: "Electrical Installation Service", itemType: ItemType.SERVICE, uomCode: "JOB", defaultPurchaseRate: 150_000, preferredVendorId: abcEngineering.id },
+    { id: "seed-item-13", itemCode: "ITM-0013", itemName: "Diesel Generator 20kVA (Rental)", itemType: ItemType.EQUIPMENT, uomCode: "DAY", defaultPurchaseRate: 3_500 },
+    { id: "seed-item-14", itemCode: "ITM-0014", itemName: "Scaffolding (Rental)", itemType: ItemType.EQUIPMENT, uomCode: "MONTH", defaultPurchaseRate: 25_000 },
+    { id: "seed-item-15", itemCode: "ITM-0015", itemName: "Site Security Service", itemType: ItemType.SERVICE, uomCode: "MONTH", defaultPurchaseRate: 40_000 },
+  ];
+  for (const def of itemDefs) {
+    await prisma.item.upsert({
+      where: { id: def.id },
+      update: {},
+      create: {
+        id: def.id,
+        organizationId: organization.id,
+        itemCode: def.itemCode,
+        itemName: def.itemName,
+        itemType: def.itemType,
+        status: ItemStatus.ACTIVE,
+        categoryId: def.categoryId,
+        uomId: uoms[def.uomCode]!.id,
+        defaultPurchaseRate: def.defaultPurchaseRate,
+        preferredVendorId: def.preferredVendorId,
+        brandModel: def.brandModel,
+        createdById: adminUser.id,
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Procurement Core — demo PR -> RFQ -> Quotations -> Comparative Statement ->
+  // Purchase Order -> Goods Receipts chain
+  // ---------------------------------------------------------------------------
+  // Runs against the flagship ONGOING project (seed-cms-work-01) using the vendors/items
+  // seeded above. Deliberately non-financial — no Payable/JournalEntry/Expense/InventoryStock
+  // record is created anywhere in this block; Procurement Core stays a pre-financial workflow.
+
+  const ledPanelItem = await prisma.item.findUniqueOrThrow({ where: { id: "seed-item-01" } });
+  const ledControllerItem = await prisma.item.findUniqueOrThrow({ where: { id: "seed-item-02" } });
+
+  const seedPr = await prisma.purchaseRequisition.upsert({
+    where: { id: "seed-pr-01" },
+    update: {},
+    create: {
+      id: "seed-pr-01",
+      organizationId: organization.id,
+      prNo: "PR-SEED-0001",
+      requestDate: daysAgo(20),
+      requiredByDate: daysFromNow(15),
+      cmsWorkId: "seed-cms-work-01",
+      department: "Site — Patuakhali",
+      priority: PrPriority.HIGH,
+      purpose: "LED display panel replenishment for the Patuakhali site",
+      // Already carried through to RFQ in this seed, mirroring what PurchaseRequisitionsService's
+      // markConverted() does at real RFQ-creation time.
+      status: PrStatus.CONVERTED,
+      submittedAt: daysAgo(19),
+      approvedById: adminUser.id,
+      approvedAt: daysAgo(18),
+      createdById: adminUser.id,
+    },
+  });
+  const seedPrItem1 = await prisma.purchaseRequisitionItem.upsert({
+    where: { id: "seed-pr-item-01" },
+    update: {},
+    create: {
+      id: "seed-pr-item-01",
+      organizationId: organization.id,
+      purchaseRequisitionId: seedPr.id,
+      itemId: ledPanelItem.id,
+      descriptionSnapshot: ledPanelItem.itemName,
+      uomId: uoms["PCS"]!.id,
+      requestedQty: 50,
+      estimatedRate: 12_000,
+      estimatedAmount: 600_000,
+    },
+  });
+  const seedPrItem2 = await prisma.purchaseRequisitionItem.upsert({
+    where: { id: "seed-pr-item-02" },
+    update: {},
+    create: {
+      id: "seed-pr-item-02",
+      organizationId: organization.id,
+      purchaseRequisitionId: seedPr.id,
+      itemId: ledControllerItem.id,
+      descriptionSnapshot: ledControllerItem.itemName,
+      uomId: uoms["PCS"]!.id,
+      requestedQty: 10,
+      estimatedRate: 8_500,
+      estimatedAmount: 85_000,
+    },
+  });
+
+  const seedRfq = await prisma.requestForQuotation.upsert({
+    where: { id: "seed-rfq-01" },
+    update: {},
+    create: {
+      id: "seed-rfq-01",
+      organizationId: organization.id,
+      rfqNo: "RFQ-SEED-0001",
+      purchaseRequisitionId: seedPr.id,
+      cmsWorkId: "seed-cms-work-01",
+      issueDate: daysAgo(17),
+      submissionDeadline: daysAgo(10),
+      deliveryLocation: "Patuakhali Site Store",
+      paymentTerms: "As quoted",
+      status: RfqStatus.AWARDED,
+      issuedById: adminUser.id,
+      issuedAt: daysAgo(17),
+      createdById: adminUser.id,
+    },
+  });
+  for (const supplierId of [bengalLed.id, primeElectronics.id, abcEngineering.id]) {
+    await prisma.rfqSupplier.upsert({
+      where: { rfqId_supplierId: { rfqId: seedRfq.id, supplierId } },
+      update: {},
+      create: { organizationId: organization.id, rfqId: seedRfq.id, supplierId, invitedAt: daysAgo(17) },
+    });
+  }
+  const seedRfqItem1 = await prisma.rfqItem.upsert({
+    where: { id: "seed-rfq-item-01" },
+    update: {},
+    create: {
+      id: "seed-rfq-item-01",
+      organizationId: organization.id,
+      rfqId: seedRfq.id,
+      itemId: ledPanelItem.id,
+      purchaseRequisitionItemId: seedPrItem1.id,
+      itemCodeSnapshot: ledPanelItem.itemCode,
+      itemNameSnapshot: ledPanelItem.itemName,
+      unitSnapshot: "PCS",
+      requestedQty: 50,
+    },
+  });
+  const seedRfqItem2 = await prisma.rfqItem.upsert({
+    where: { id: "seed-rfq-item-02" },
+    update: {},
+    create: {
+      id: "seed-rfq-item-02",
+      organizationId: organization.id,
+      rfqId: seedRfq.id,
+      itemId: ledControllerItem.id,
+      purchaseRequisitionItemId: seedPrItem2.id,
+      itemCodeSnapshot: ledControllerItem.itemCode,
+      itemNameSnapshot: ledControllerItem.itemName,
+      unitSnapshot: "PCS",
+      requestedQty: 10,
+    },
+  });
+
+  // Three invited suppliers, three RECEIVED quotations — Bengal LED comes out lowest evaluated
+  // and is the one the Comparative Statement below explicitly selects.
+  const seedQuoteBengal = await prisma.supplierQuotation.upsert({
+    where: { id: "seed-quote-bengal" },
+    update: {},
+    create: {
+      id: "seed-quote-bengal",
+      organizationId: organization.id,
+      rfqId: seedRfq.id,
+      supplierId: bengalLed.id,
+      quotationRef: "BLD-Q-2201",
+      quotationDate: daysAgo(14),
+      validityDate: daysFromNow(30),
+      deliveryDays: 15,
+      paymentTerms: "30 Days",
+      warranty: "1 Year",
+      status: QuotationStatus.RECEIVED,
+      revisionNo: 1,
+      totalAmount: 661_200,
+      createdById: adminUser.id,
+    },
+  });
+  await prisma.supplierQuotationItem.upsert({
+    where: { id: "seed-quote-bengal-item-01" },
+    update: {},
+    create: {
+      id: "seed-quote-bengal-item-01",
+      organizationId: organization.id,
+      quotationId: seedQuoteBengal.id,
+      rfqItemId: seedRfqItem1.id,
+      offeredQty: 50,
+      unitRate: 11_800,
+      discountPct: 2,
+      lineAmount: 578_200,
+      deliveryDays: 15,
+    },
+  });
+  await prisma.supplierQuotationItem.upsert({
+    where: { id: "seed-quote-bengal-item-02" },
+    update: {},
+    create: {
+      id: "seed-quote-bengal-item-02",
+      organizationId: organization.id,
+      quotationId: seedQuoteBengal.id,
+      rfqItemId: seedRfqItem2.id,
+      offeredQty: 10,
+      unitRate: 8_300,
+      lineAmount: 83_000,
+      deliveryDays: 15,
+    },
+  });
+
+  const seedQuotePrime = await prisma.supplierQuotation.upsert({
+    where: { id: "seed-quote-prime" },
+    update: {},
+    create: {
+      id: "seed-quote-prime",
+      organizationId: organization.id,
+      rfqId: seedRfq.id,
+      supplierId: primeElectronics.id,
+      quotationRef: "PES-Q-3301",
+      quotationDate: daysAgo(13),
+      validityDate: daysFromNow(30),
+      deliveryDays: 20,
+      paymentTerms: "15 Days",
+      warranty: "6 Months",
+      status: QuotationStatus.RECEIVED,
+      revisionNo: 1,
+      totalAmount: 713_000,
+      createdById: adminUser.id,
+    },
+  });
+  await prisma.supplierQuotationItem.upsert({
+    where: { id: "seed-quote-prime-item-01" },
+    update: {},
+    create: {
+      id: "seed-quote-prime-item-01",
+      organizationId: organization.id,
+      quotationId: seedQuotePrime.id,
+      rfqItemId: seedRfqItem1.id,
+      offeredQty: 50,
+      unitRate: 12_500,
+      lineAmount: 625_000,
+      deliveryDays: 20,
+    },
+  });
+  await prisma.supplierQuotationItem.upsert({
+    where: { id: "seed-quote-prime-item-02" },
+    update: {},
+    create: {
+      id: "seed-quote-prime-item-02",
+      organizationId: organization.id,
+      quotationId: seedQuotePrime.id,
+      rfqItemId: seedRfqItem2.id,
+      offeredQty: 10,
+      unitRate: 8_800,
+      lineAmount: 88_000,
+      deliveryDays: 20,
+    },
+  });
+
+  const seedQuoteAbc = await prisma.supplierQuotation.upsert({
+    where: { id: "seed-quote-abc" },
+    update: {},
+    create: {
+      id: "seed-quote-abc",
+      organizationId: organization.id,
+      rfqId: seedRfq.id,
+      supplierId: abcEngineering.id,
+      quotationRef: "ABC-Q-4401",
+      quotationDate: daysAgo(12),
+      validityDate: daysFromNow(30),
+      deliveryDays: 18,
+      paymentTerms: "30 Days",
+      warranty: "1 Year",
+      status: QuotationStatus.RECEIVED,
+      revisionNo: 1,
+      totalAmount: 689_040,
+      createdById: adminUser.id,
+    },
+  });
+  await prisma.supplierQuotationItem.upsert({
+    where: { id: "seed-quote-abc-item-01" },
+    update: {},
+    create: {
+      id: "seed-quote-abc-item-01",
+      organizationId: organization.id,
+      quotationId: seedQuoteAbc.id,
+      rfqItemId: seedRfqItem1.id,
+      offeredQty: 50,
+      unitRate: 12_200,
+      discountPct: 1,
+      lineAmount: 603_900,
+      deliveryDays: 18,
+    },
+  });
+  await prisma.supplierQuotationItem.upsert({
+    where: { id: "seed-quote-abc-item-02" },
+    update: {},
+    create: {
+      id: "seed-quote-abc-item-02",
+      organizationId: organization.id,
+      quotationId: seedQuoteAbc.id,
+      rfqItemId: seedRfqItem2.id,
+      offeredQty: 10,
+      unitRate: 8_600,
+      discountPct: 1,
+      lineAmount: 85_140,
+      deliveryDays: 18,
+    },
+  });
+
+  // Comparative Statement — Bengal LED explicitly selected (it also happens to be lowest
+  // evaluated, so no decision note is required) and approved, which awards the RFQ above.
+  const seedCs = await prisma.comparativeStatement.upsert({
+    where: { id: "seed-cs-01" },
+    update: {},
+    create: {
+      id: "seed-cs-01",
+      organizationId: organization.id,
+      rfqId: seedRfq.id,
+      cmsWorkId: "seed-cms-work-01",
+      csNo: "CS-SEED-0001",
+      status: ComparativeStatementStatus.APPROVED,
+      preparedById: adminUser.id,
+      approvedById: adminUser.id,
+      approvedAt: daysAgo(8),
+    },
+  });
+  const csSupplierDefs = [
+    { id: "seed-cs-supplier-bengal", supplierId: bengalLed.id, quotationId: seedQuoteBengal.id, quotedTotal: 661_200, deliveryDays: 15, paymentTerms: "30 Days", rank: 1, isSelected: true, recommended: true },
+    { id: "seed-cs-supplier-abc", supplierId: abcEngineering.id, quotationId: seedQuoteAbc.id, quotedTotal: 689_040, deliveryDays: 18, paymentTerms: "30 Days", rank: 2, isSelected: false, recommended: false },
+    { id: "seed-cs-supplier-prime", supplierId: primeElectronics.id, quotationId: seedQuotePrime.id, quotedTotal: 713_000, deliveryDays: 20, paymentTerms: "15 Days", rank: 3, isSelected: false, recommended: false },
+  ];
+  for (const def of csSupplierDefs) {
+    await prisma.comparativeStatementSupplier.upsert({
+      where: { id: def.id },
+      update: {},
+      create: {
+        id: def.id,
+        organizationId: organization.id,
+        comparativeStatementId: seedCs.id,
+        supplierId: def.supplierId,
+        quotationId: def.quotationId,
+        quotedTotal: def.quotedTotal,
+        evaluatedTotal: def.quotedTotal,
+        deliveryDays: def.deliveryDays,
+        paymentTerms: def.paymentTerms,
+        technicalStatus: TechnicalComplianceStatus.COMPLIANT,
+        recommended: def.recommended,
+        rank: def.rank,
+        isSelected: def.isSelected,
+      },
+    });
+  }
+
+  // Purchase Order raised from the approved CS, then fully received across two GRNs below —
+  // ends this demo chain at RECEIVED/CLOSED-ready, matching real PO->GRN status derivation.
+  const seedPo = await prisma.purchaseOrder.upsert({
+    where: { id: "seed-po-01" },
+    update: {},
+    create: {
+      id: "seed-po-01",
+      organizationId: organization.id,
+      poNo: "PO-SEED-0001",
+      poDate: daysAgo(7),
+      supplierId: bengalLed.id,
+      cmsWorkId: "seed-cms-work-01",
+      purchaseRequisitionId: seedPr.id,
+      rfqId: seedRfq.id,
+      comparativeStatementId: seedCs.id,
+      deliveryAddress: "Patuakhali Site Store",
+      paymentTerms: "30 Days",
+      deliveryTerms: "Ex-Warehouse, Dhaka",
+      currency: "BDT",
+      subtotal: 673_000,
+      discountAmount: 11_800,
+      taxAmount: 0,
+      otherCharges: 0,
+      grandTotal: 661_200,
+      status: PurchaseOrderStatus.RECEIVED,
+      createdById: adminUser.id,
+      approvedById: adminUser.id,
+      approvedAt: daysAgo(6),
+      issuedAt: daysAgo(5),
+    },
+  });
+  const seedPoItem1 = await prisma.purchaseOrderItem.upsert({
+    where: { id: "seed-po-item-01" },
+    update: {},
+    create: {
+      id: "seed-po-item-01",
+      organizationId: organization.id,
+      purchaseOrderId: seedPo.id,
+      itemId: ledPanelItem.id,
+      itemCodeSnapshot: ledPanelItem.itemCode,
+      itemNameSnapshot: ledPanelItem.itemName,
+      unitSnapshot: "PCS",
+      orderedQty: 50,
+      unitRate: 11_800,
+      discountAmount: 11_800,
+      netRate: 11_564,
+      lineAmount: 578_200,
+      receivedQty: 50,
+      cmsWorkId: "seed-cms-work-01",
+      sourceQuotationItemId: "seed-quote-bengal-item-01",
+    },
+  });
+  const seedPoItem2 = await prisma.purchaseOrderItem.upsert({
+    where: { id: "seed-po-item-02" },
+    update: {},
+    create: {
+      id: "seed-po-item-02",
+      organizationId: organization.id,
+      purchaseOrderId: seedPo.id,
+      itemId: ledControllerItem.id,
+      itemCodeSnapshot: ledControllerItem.itemCode,
+      itemNameSnapshot: ledControllerItem.itemName,
+      unitSnapshot: "PCS",
+      orderedQty: 10,
+      unitRate: 8_300,
+      discountAmount: 0,
+      netRate: 8_300,
+      lineAmount: 83_000,
+      receivedQty: 10,
+      cmsWorkId: "seed-cms-work-01",
+      sourceQuotationItemId: "seed-quote-bengal-item-02",
+    },
+  });
+
+  // GRN 1 — partial receipt (30 of 50 panels, all 10 controllers)
+  const seedGrn1 = await prisma.goodsReceiptNote.upsert({
+    where: { id: "seed-grn-01" },
+    update: {},
+    create: {
+      id: "seed-grn-01",
+      organizationId: organization.id,
+      grnNo: "GRN-SEED-0001",
+      purchaseOrderId: seedPo.id,
+      supplierId: bengalLed.id,
+      cmsWorkId: "seed-cms-work-01",
+      receiptDate: daysAgo(5),
+      deliveryChallanNo: "DC-BLD-1001",
+      deliveryChallanDate: daysAgo(5),
+      receivedById: "Site Store Keeper",
+      inspectionStatus: GrnInspectionStatus.ACCEPTED,
+      warehouseLocation: "Patuakhali Site Store",
+      remarks: "First partial delivery",
+      createdById: adminUser.id,
+    },
+  });
+  await prisma.grnItem.upsert({
+    where: { id: "seed-grn1-item-01" },
+    update: {},
+    create: {
+      id: "seed-grn1-item-01",
+      organizationId: organization.id,
+      grnId: seedGrn1.id,
+      purchaseOrderItemId: seedPoItem1.id,
+      descriptionSnapshot: ledPanelItem.itemName,
+      unitSnapshot: "PCS",
+      orderedQty: 50,
+      previouslyReceivedQty: 0,
+      currentReceivedQty: 30,
+      cumulativeReceivedQty: 30,
+      remainingQty: 20,
+      acceptedQty: 30,
+      rejectedQty: 0,
+      damagedQty: 0,
+    },
+  });
+  await prisma.grnItem.upsert({
+    where: { id: "seed-grn1-item-02" },
+    update: {},
+    create: {
+      id: "seed-grn1-item-02",
+      organizationId: organization.id,
+      grnId: seedGrn1.id,
+      purchaseOrderItemId: seedPoItem2.id,
+      descriptionSnapshot: ledControllerItem.itemName,
+      unitSnapshot: "PCS",
+      orderedQty: 10,
+      previouslyReceivedQty: 0,
+      currentReceivedQty: 10,
+      cumulativeReceivedQty: 10,
+      remainingQty: 0,
+      acceptedQty: 10,
+      rejectedQty: 0,
+      damagedQty: 0,
+    },
+  });
+
+  // GRN 2 — final receipt (remaining 20 of 50 panels), pushing the PO to fully RECEIVED
+  const seedGrn2 = await prisma.goodsReceiptNote.upsert({
+    where: { id: "seed-grn-02" },
+    update: {},
+    create: {
+      id: "seed-grn-02",
+      organizationId: organization.id,
+      grnNo: "GRN-SEED-0002",
+      purchaseOrderId: seedPo.id,
+      supplierId: bengalLed.id,
+      cmsWorkId: "seed-cms-work-01",
+      receiptDate: daysAgo(2),
+      deliveryChallanNo: "DC-BLD-1002",
+      deliveryChallanDate: daysAgo(2),
+      receivedById: "Site Store Keeper",
+      inspectionStatus: GrnInspectionStatus.ACCEPTED,
+      warehouseLocation: "Patuakhali Site Store",
+      remarks: "Final delivery — balance quantity",
+      createdById: adminUser.id,
+    },
+  });
+  await prisma.grnItem.upsert({
+    where: { id: "seed-grn2-item-01" },
+    update: {},
+    create: {
+      id: "seed-grn2-item-01",
+      organizationId: organization.id,
+      grnId: seedGrn2.id,
+      purchaseOrderItemId: seedPoItem1.id,
+      descriptionSnapshot: ledPanelItem.itemName,
+      unitSnapshot: "PCS",
+      orderedQty: 50,
+      previouslyReceivedQty: 30,
+      currentReceivedQty: 20,
+      cumulativeReceivedQty: 50,
+      remainingQty: 0,
+      acceptedQty: 20,
+      rejectedQty: 0,
+      damagedQty: 0,
+    },
   });
 
   console.log("Seed complete.");

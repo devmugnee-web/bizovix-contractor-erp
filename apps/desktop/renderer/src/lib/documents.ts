@@ -21,6 +21,12 @@ export type DocumentModule =
   | "Receipt"
   | "Cash & Bank"
   | "Bank Instrument"
+  | "Vendor / Supplier"
+  | "Subcontractor"
+  | "Purchase Requisition"
+  | "RFQ"
+  | "Purchase Order"
+  | "GRN"
   | "Company"
   | "General";
 export interface DocumentVersion {
@@ -156,6 +162,12 @@ export const DOCUMENT_MODULES: DocumentModule[] = [
   "Receipt",
   "Cash & Bank",
   "Bank Instrument",
+  "Vendor / Supplier",
+  "Subcontractor",
+  "Purchase Requisition",
+  "RFQ",
+  "Purchase Order",
+  "GRN",
   "Company",
   "General",
 ];

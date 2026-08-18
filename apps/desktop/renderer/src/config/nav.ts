@@ -3,6 +3,7 @@ import {
   BarChart3,
   Bell,
   Banknote,
+  Boxes,
   Building2,
   ClipboardList,
   CreditCard,
@@ -14,6 +15,7 @@ import {
   Receipt,
   Landmark,
   Settings,
+  ShoppingCart,
   Wallet,
 } from "lucide-react";
 
@@ -48,6 +50,32 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   { label: "Tenders", href: "/tenders", icon: ClipboardList },
+  {
+    label: "Masters",
+    href: "/masters",
+    icon: Boxes,
+    children: [
+      { label: "Organizations / Clients", href: "/masters/organizations" },
+      { label: "Vendors & Suppliers", href: "/masters/vendors" },
+      { label: "Subcontractors", href: "/masters/subcontractors" },
+      { label: "Materials / Items", href: "/masters/items" },
+      { label: "Units of Measurement", href: "/masters/units" },
+      { label: "Categories", href: "/masters/categories" },
+      { label: "Payment Terms", href: "/masters/payment-terms" },
+    ],
+  },
+  {
+    label: "Procurement",
+    href: "/procurement",
+    icon: ShoppingCart,
+    children: [
+      { label: "Purchase Requisitions", href: "/procurement/requisitions" },
+      { label: "RFQs", href: "/procurement/rfqs" },
+      { label: "Comparative Statements", href: "/procurement/comparative-statements" },
+      { label: "Purchase Orders", href: "/procurement/purchase-orders" },
+      { label: "Goods Receipts", href: "/procurement/grns" },
+    ],
+  },
   {
     label: "Bank Instruments",
     icon: Landmark,

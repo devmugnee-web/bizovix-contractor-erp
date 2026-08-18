@@ -140,3 +140,112 @@ export const TenderSecurityDocumentStatus = {
 } as const;
 export type TenderSecurityDocumentStatus =
   (typeof TenderSecurityDocumentStatus)[keyof typeof TenderSecurityDocumentStatus];
+
+export const PartyRole = {
+  CLIENT: "CLIENT",
+  VENDOR: "VENDOR",
+  SUPPLIER: "SUPPLIER",
+  SUBCONTRACTOR: "SUBCONTRACTOR",
+  SERVICE_PROVIDER: "SERVICE_PROVIDER",
+  OTHER: "OTHER",
+} as const;
+export type PartyRole = (typeof PartyRole)[keyof typeof PartyRole];
+
+export const PartyStatus = {
+  ACTIVE: "ACTIVE",
+  INACTIVE: "INACTIVE",
+  SUSPENDED: "SUSPENDED",
+  BLACKLISTED: "BLACKLISTED",
+  ARCHIVED: "ARCHIVED",
+} as const;
+export type PartyStatus = (typeof PartyStatus)[keyof typeof PartyStatus];
+
+export const MasterCategoryType = {
+  VENDOR: "VENDOR",
+  MATERIAL: "MATERIAL",
+  SUBCONTRACTOR_TRADE: "SUBCONTRACTOR_TRADE",
+} as const;
+export type MasterCategoryType = (typeof MasterCategoryType)[keyof typeof MasterCategoryType];
+
+export const ItemType = {
+  MATERIAL: "MATERIAL",
+  SERVICE: "SERVICE",
+  EQUIPMENT: "EQUIPMENT",
+  CONSUMABLE: "CONSUMABLE",
+  OTHER: "OTHER",
+} as const;
+export type ItemType = (typeof ItemType)[keyof typeof ItemType];
+
+export const ItemStatus = {
+  ACTIVE: "ACTIVE",
+  INACTIVE: "INACTIVE",
+} as const;
+export type ItemStatus = (typeof ItemStatus)[keyof typeof ItemStatus];
+
+export const PrPriority = {
+  LOW: "LOW",
+  MEDIUM: "MEDIUM",
+  HIGH: "HIGH",
+  URGENT: "URGENT",
+} as const;
+export type PrPriority = (typeof PrPriority)[keyof typeof PrPriority];
+
+export const PrStatus = {
+  DRAFT: "DRAFT",
+  SUBMITTED: "SUBMITTED",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  CANCELLED: "CANCELLED",
+  CONVERTED: "CONVERTED",
+} as const;
+export type PrStatus = (typeof PrStatus)[keyof typeof PrStatus];
+
+export const RfqStatus = {
+  DRAFT: "DRAFT",
+  ISSUED: "ISSUED",
+  CLOSED: "CLOSED",
+  CANCELLED: "CANCELLED",
+  AWARDED: "AWARDED",
+} as const;
+export type RfqStatus = (typeof RfqStatus)[keyof typeof RfqStatus];
+
+export const QuotationStatus = {
+  RECEIVED: "RECEIVED",
+  SUPERSEDED: "SUPERSEDED",
+  WITHDRAWN: "WITHDRAWN",
+} as const;
+export type QuotationStatus = (typeof QuotationStatus)[keyof typeof QuotationStatus];
+
+export const TechnicalComplianceStatus = {
+  COMPLIANT: "COMPLIANT",
+  PARTIALLY_COMPLIANT: "PARTIALLY_COMPLIANT",
+  NON_COMPLIANT: "NON_COMPLIANT",
+} as const;
+export type TechnicalComplianceStatus = (typeof TechnicalComplianceStatus)[keyof typeof TechnicalComplianceStatus];
+
+export const ComparativeStatementStatus = {
+  DRAFT: "DRAFT",
+  EVALUATED: "EVALUATED",
+  APPROVED: "APPROVED",
+  CANCELLED: "CANCELLED",
+} as const;
+export type ComparativeStatementStatus = (typeof ComparativeStatementStatus)[keyof typeof ComparativeStatementStatus];
+
+export const PurchaseOrderStatus = {
+  DRAFT: "DRAFT",
+  APPROVED: "APPROVED",
+  ISSUED: "ISSUED",
+  PARTIALLY_RECEIVED: "PARTIALLY_RECEIVED",
+  RECEIVED: "RECEIVED",
+  CANCELLED: "CANCELLED",
+  CLOSED: "CLOSED",
+} as const;
+export type PurchaseOrderStatus = (typeof PurchaseOrderStatus)[keyof typeof PurchaseOrderStatus];
+
+export const GrnInspectionStatus = {
+  PENDING: "PENDING",
+  ACCEPTED: "ACCEPTED",
+  PARTIAL: "PARTIAL",
+  REJECTED: "REJECTED",
+} as const;
+export type GrnInspectionStatus = (typeof GrnInspectionStatus)[keyof typeof GrnInspectionStatus];

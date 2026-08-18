@@ -167,6 +167,53 @@ export const PERMISSIONS = [
   "billing.view",
   "billing.manage",
   "billing.invoice.view",
+
+  "masters.read",
+
+  "vendor.read",
+  "vendor.create",
+  "vendor.update",
+  "vendor.archive",
+
+  "subcontractor.read",
+  "subcontractor.create",
+  "subcontractor.update",
+  "subcontractor.archive",
+
+  "item.read",
+  "item.create",
+  "item.update",
+  "item.archive",
+
+  "uom.manage",
+  "payment_terms.manage",
+
+  "procurement.read",
+
+  "pr.create",
+  "pr.update",
+  "pr.submit",
+  "pr.approve",
+
+  "rfq.create",
+  "rfq.update",
+  "rfq.issue",
+
+  "quotation.create",
+  "quotation.update",
+
+  "cs.create",
+  "cs.evaluate",
+  "cs.approve",
+
+  "po.create",
+  "po.update",
+  "po.approve",
+  "po.issue",
+
+  "grn.create",
+  "grn.update",
+  "grn.approve",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

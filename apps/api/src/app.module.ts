@@ -50,6 +50,17 @@ import { SecuritySettingsModule } from "./modules/settings-security/security-set
 import { SystemSettingsModule } from "./modules/settings-system/system-settings.module";
 import { BillingModule } from "./modules/billing/billing.module";
 import { ProjectClosingModule } from "./modules/project-closing/project-closing.module";
+import { PartiesModule } from "./modules/parties/parties.module";
+import { MasterCategoriesModule } from "./modules/master-categories/master-categories.module";
+import { UomsModule } from "./modules/uoms/uoms.module";
+import { PaymentTermsModule } from "./modules/payment-terms/payment-terms.module";
+import { ItemsModule } from "./modules/items/items.module";
+import { PurchaseRequisitionsModule } from "./modules/purchase-requisitions/purchase-requisitions.module";
+import { RfqsModule } from "./modules/rfqs/rfqs.module";
+import { SupplierQuotationsModule } from "./modules/supplier-quotations/supplier-quotations.module";
+import { ComparativeStatementsModule } from "./modules/comparative-statements/comparative-statements.module";
+import { PurchaseOrdersModule } from "./modules/purchase-orders/purchase-orders.module";
+import { GrnModule } from "./modules/grn/grn.module";
 
 @Module({
   imports: [
@@ -98,6 +109,17 @@ import { ProjectClosingModule } from "./modules/project-closing/project-closing.
     SystemSettingsModule,
     BillingModule,
     ProjectClosingModule,
+    PartiesModule,
+    MasterCategoriesModule,
+    UomsModule,
+    PaymentTermsModule,
+    ItemsModule,
+    PurchaseRequisitionsModule,
+    RfqsModule,
+    SupplierQuotationsModule,
+    ComparativeStatementsModule,
+    PurchaseOrdersModule,
+    GrnModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

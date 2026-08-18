@@ -81,6 +81,17 @@ export interface DocumentQuery {
   relatedModule?: string;
   tenderId?: string;
   workId?: string;
+  contractId?: string;
+  projectBillId?: string;
+  variationOrderId?: string;
+  timeExtensionId?: string;
+  partyId?: string;
+  purchaseRequisitionId?: string;
+  rfqId?: string;
+  supplierQuotationId?: string;
+  comparativeStatementId?: string;
+  purchaseOrderId?: string;
+  goodsReceiptNoteId?: string;
   status?: string;
   expiringWithinDays?: number;
 }

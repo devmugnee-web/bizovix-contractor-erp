@@ -11,3 +11,18 @@ export interface BankAccountOption {
   bankName?: string | null;
   accountNumber?: string | null;
 }
+
+export interface OrganizationMasterRecord {
+  id: string;
+  organizationId: string;
+  shortName: string;
+  fullName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrganizationMasterQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+}

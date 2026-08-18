@@ -171,66 +171,85 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users                  OrganizationUser[]
-  roles                  Role[]
-  subscription           Subscription?
-  licenses               License[]
-  organizationMasters    OrganizationMaster[]
-  bankAccounts           BankAccount[]
-  tenders                Tender[]
-  documentPurchases      DocumentPurchase[]
-  tenderSecurities       TenderSecurity[]
-  creditCommitments      CreditCommitment[]
-  pgBgWorkflows          PgBgWorkflow[]
-  organizationContacts   OrganizationContact[]
-  cmsWorks               CmsWork[]
-  performanceGuarantees  PerformanceGuarantee[]
-  expenses               Expense[]
-  expenseAttachments     ExpenseAttachment[]
-  expenseHeads           ExpenseHead[]
-  receipts               Receipt[]
-  receiptSequences       ReceiptSequence[]
-  reminders              Reminder[]
-  notifications          Notification[]
-  documents              Document[]
-  auditLogs              AuditLog[]
-  appSettings            AppSetting[]
-  monthlyTargets         MonthlyTarget[]
-  ledgerAccounts         LedgerAccount[]
-  journalEntries         JournalEntry[]
-  payables               Payable[]
-  financialTransactions  FinancialTransaction[]
-  fundTransfers          FundTransfer[]
-  bankReconciliations    BankReconciliation[]
-  cheques                Cheque[]
-  generalSetting         GeneralSetting?
-  companyProfile         CompanyProfile?
-  tenderBankSetting      TenderBankSetting?
-  financeSetting         FinanceSetting?
-  accountingPeriods      AccountingPeriod[]
-  numberSequences        NumberSequence[]
-  reminderRuleSettings   ReminderRuleSetting[]
-  documentSetting        DocumentSetting?
-  approvalRules          ApprovalRule[]
-  securitySetting        SecuritySetting?
-  systemSetting          SystemSetting?
-  billingProfile         BillingProfile?
-  invoices               Invoice[]
-  projectContracts       ProjectContract[]
-  projectBudgets         ProjectBudget[]
-  boqSections            BoqSection[]
-  boqItems               BoqItem[]
-  projectBills           ProjectBill[]
-  receivables            Receivable[]
-  variationOrders        VariationOrder[]
-  timeExtensions         TimeExtension[]
-  deductionConfigs       DeductionConfig[]
-  completionCertificates CompletionCertificate[]
-  defectLiabilityPeriods DefectLiabilityPeriod[]
-  defects                DlpDefect[]
-  retentionReleases      RetentionRelease[]
-  projectHandovers       ProjectHandover[]
-  projectClosureEvents   ProjectClosureEvent[]
+  users                         OrganizationUser[]
+  roles                         Role[]
+  subscription                  Subscription?
+  licenses                      License[]
+  organizationMasters           OrganizationMaster[]
+  bankAccounts                  BankAccount[]
+  tenders                       Tender[]
+  documentPurchases             DocumentPurchase[]
+  tenderSecurities              TenderSecurity[]
+  creditCommitments             CreditCommitment[]
+  pgBgWorkflows                 PgBgWorkflow[]
+  organizationContacts          OrganizationContact[]
+  cmsWorks                      CmsWork[]
+  performanceGuarantees         PerformanceGuarantee[]
+  expenses                      Expense[]
+  expenseAttachments            ExpenseAttachment[]
+  expenseHeads                  ExpenseHead[]
+  receipts                      Receipt[]
+  receiptSequences              ReceiptSequence[]
+  reminders                     Reminder[]
+  notifications                 Notification[]
+  documents                     Document[]
+  auditLogs                     AuditLog[]
+  appSettings                   AppSetting[]
+  monthlyTargets                MonthlyTarget[]
+  ledgerAccounts                LedgerAccount[]
+  journalEntries                JournalEntry[]
+  payables                      Payable[]
+  financialTransactions         FinancialTransaction[]
+  fundTransfers                 FundTransfer[]
+  bankReconciliations           BankReconciliation[]
+  cheques                       Cheque[]
+  generalSetting                GeneralSetting?
+  companyProfile                CompanyProfile?
+  tenderBankSetting             TenderBankSetting?
+  financeSetting                FinanceSetting?
+  accountingPeriods             AccountingPeriod[]
+  numberSequences               NumberSequence[]
+  reminderRuleSettings          ReminderRuleSetting[]
+  documentSetting               DocumentSetting?
+  approvalRules                 ApprovalRule[]
+  securitySetting               SecuritySetting?
+  systemSetting                 SystemSetting?
+  billingProfile                BillingProfile?
+  invoices                      Invoice[]
+  projectContracts              ProjectContract[]
+  projectBudgets                ProjectBudget[]
+  boqSections                   BoqSection[]
+  boqItems                      BoqItem[]
+  projectBills                  ProjectBill[]
+  receivables                   Receivable[]
+  variationOrders               VariationOrder[]
+  timeExtensions                TimeExtension[]
+  deductionConfigs              DeductionConfig[]
+  completionCertificates        CompletionCertificate[]
+  defectLiabilityPeriods        DefectLiabilityPeriod[]
+  defects                       DlpDefect[]
+  retentionReleases             RetentionRelease[]
+  projectHandovers              ProjectHandover[]
+  projectClosureEvents          ProjectClosureEvent[]
+  parties                       Party[]
+  masterCategories              MasterCategory[]
+  unitsOfMeasurement            UnitOfMeasurement[]
+  paymentTerms                  PaymentTerm[]
+  items                         Item[]
+  subcontractorProfiles         SubcontractorProfile[]
+  purchaseRequisitions          PurchaseRequisition[]
+  purchaseRequisitionItems      PurchaseRequisitionItem[]
+  requestForQuotations          RequestForQuotation[]
+  rfqSuppliers                  RfqSupplier[]
+  rfqItems                      RfqItem[]
+  supplierQuotations            SupplierQuotation[]
+  supplierQuotationItems        SupplierQuotationItem[]
+  comparativeStatements         ComparativeStatement[]
+  comparativeStatementSuppliers ComparativeStatementSupplier[]
+  purchaseOrders                PurchaseOrder[]
+  purchaseOrderItems            PurchaseOrderItem[]
+  goodsReceiptNotes             GoodsReceiptNote[]
+  grnItems                      GrnItem[]
 
   @@map("organizations")
 }
@@ -771,7 +790,14 @@ model PerformanceGuarantee {
 model OrganizationContact {
   id                   String   @id @default(cuid())
   organizationId       String
-  organizationMasterId String
+  /// Exactly one of organizationMasterId/partyId is set (enforced at the service layer) —
+  /// this table now serves both the client/issuing-org side (OrganizationMaster) and the
+  /// new vendor/supplier/subcontractor side (Party) rather than duplicating contact infra.
+  organizationMasterId String?
+  partyId              String?
+  /// Free-text tag such as "Primary" | "Accounts" | "Sales" | "Technical" — not a DB enum
+  /// so tenants aren't locked into a fixed contact-role list.
+  contactRole          String?
   name                 String
   designation          String
   mobile               String
@@ -780,12 +806,15 @@ model OrganizationContact {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
+  party              Party?              @relation(fields: [partyId], references: [id])
   pgBgWorkflows      PgBgWorkflow[]
 
   @@unique([organizationId, organizationMasterId, mobile])
+  @@unique([organizationId, partyId, mobile])
   @@index([organizationId, organizationMasterId])
+  @@index([organizationId, partyId])
   @@map("organization_contacts")
 }
 
@@ -867,6 +896,12 @@ model CmsWork {
   retentionReleases      RetentionRelease[]
   handovers              ProjectHandover[]
   closureEvents          ProjectClosureEvent[]
+  purchaseRequisitions   PurchaseRequisition[]
+  rfqs                   RequestForQuotation[]
+  comparativeStatements  ComparativeStatement[]
+  purchaseOrders         PurchaseOrder[]
+  purchaseOrderItems     PurchaseOrderItem[]
+  goodsReceiptNotes      GoodsReceiptNote[]
 
   @@index([organizationId, status])
   @@index([organizationId, status, completionDate])
@@ -1022,11 +1057,13 @@ model BoqItem {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  cmsWork        CmsWork           @relation(fields: [cmsWorkId], references: [id])
-  section        BoqSection?       @relation(fields: [sectionId], references: [id])
-  billItems      ProjectBillItem[]
-  variationItems VariationItem[]
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork                  CmsWork                   @relation(fields: [cmsWorkId], references: [id])
+  section                  BoqSection?               @relation(fields: [sectionId], references: [id])
+  billItems                ProjectBillItem[]
+  variationItems           VariationItem[]
+  purchaseRequisitionItems PurchaseRequisitionItem[]
+  purchaseOrderItems       PurchaseOrderItem[]
 
   @@unique([cmsWorkId, itemCode])
   @@index([organizationId, cmsWorkId])
@@ -1448,19 +1485,19 @@ model ProjectHandover {
 }
 
 model ProjectClosureEvent {
-  id             String        @id @default(cuid())
-  organizationId String
-  workId         String
-  action         String
-  reason         String?
-  overrideReason String?
-  previousStatus CmsWorkStatus
-  newStatus      CmsWorkStatus
-  performedById  String
+  id                String        @id @default(cuid())
+  organizationId    String
+  workId            String
+  action            String
+  reason            String?
+  overrideReason    String?
+  previousStatus    CmsWorkStatus
+  newStatus         CmsWorkStatus
+  performedById     String
   readinessSnapshot Json?
-  createdAt      DateTime      @default(now())
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  work           CmsWork       @relation(fields: [workId], references: [id])
+  createdAt         DateTime      @default(now())
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  work              CmsWork       @relation(fields: [workId], references: [id])
 
   @@index([organizationId, workId, createdAt])
   @@map("project_closure_events")
@@ -1493,27 +1530,27 @@ model DeductionConfig {
 // ---------------------------------------------------------------------------
 
 model Expense {
-  id                String        @id @default(cuid())
-  organizationId    String
-  workId            String?
-  expenseHeadId     String?
-  expenseById       String?
-  paidFromAccountId String?
-  category          String?
-  description       String?
-  amount            Decimal       @db.Decimal(18, 2)
-  expenseDate       DateTime
-  dueDate           DateTime?
-  status            ExpenseStatus @default(PENDING)
-  referenceNo       String?
-  approvedById      String?
-  createdById       String?
-  cancelledAt       DateTime?
-  cancelledById     String?
+  id                 String        @id @default(cuid())
+  organizationId     String
+  workId             String?
+  expenseHeadId      String?
+  expenseById        String?
+  paidFromAccountId  String?
+  category           String?
+  description        String?
+  amount             Decimal       @db.Decimal(18, 2)
+  expenseDate        DateTime
+  dueDate            DateTime?
+  status             ExpenseStatus @default(PENDING)
+  referenceNo        String?
+  approvedById       String?
+  createdById        String?
+  cancelledAt        DateTime?
+  cancelledById      String?
   cancellationReason String?
-  replacesExpenseId String? @unique
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  replacesExpenseId  String?       @unique
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   work            CmsWork?            @relation(fields: [workId], references: [id])
@@ -1521,8 +1558,8 @@ model Expense {
   expenseBy       User?               @relation("ExpenseThrough", fields: [expenseById], references: [id])
   paidFromAccount BankAccount?        @relation(fields: [paidFromAccountId], references: [id])
   attachments     ExpenseAttachment[]
-  replaces        Expense?             @relation("ExpenseAmendment", fields: [replacesExpenseId], references: [id])
-  replacement     Expense?             @relation("ExpenseAmendment")
+  replaces        Expense?            @relation("ExpenseAmendment", fields: [replacesExpenseId], references: [id])
+  replacement     Expense?            @relation("ExpenseAmendment")
 
   @@unique([organizationId, referenceNo])
   @@index([organizationId, workId, expenseDate])
@@ -1590,7 +1627,7 @@ model Receipt {
   cancelledAt         DateTime?
   cancelledById       String?
   cancellationReason  String?
-  replacesReceiptId   String? @unique
+  replacesReceiptId   String?       @unique
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -1812,6 +1849,9 @@ model JournalLine {
 model Payable {
   id             String    @id @default(cuid())
   organizationId String
+  /// Additive, nullable — new Payables may link a real Party; historical free-text
+  /// partyName rows stay unlinked rather than being guessed at (see migration notes).
+  partyId        String?
   partyName      String
   partyType      String    @default("VENDOR")
   projectId      String?
@@ -1828,10 +1868,12 @@ model Payable {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      CmsWork?     @relation(fields: [projectId], references: [id])
+  party        Party?       @relation(fields: [partyId], references: [id])
 
   @@unique([organizationId, billNo])
   @@index([organizationId, status, dueDate])
   @@index([organizationId, partyName])
+  @@index([organizationId, partyId])
   @@map("payables")
 }
 
@@ -1931,6 +1973,13 @@ model Document {
   retentionReleaseId      String?
   projectHandoverId       String?
   organizationMasterId    String?
+  partyId                 String?
+  purchaseRequisitionId   String?
+  rfqId                   String?
+  supplierQuotationId     String?
+  comparativeStatementId  String?
+  purchaseOrderId         String?
+  goodsReceiptNoteId      String?
   referenceNumber         String?
   certificateNumber       String?
   issuingAuthority        String?
@@ -1974,6 +2023,13 @@ model Document {
   retentionRelease      RetentionRelease?      @relation(fields: [retentionReleaseId], references: [id])
   projectHandover       ProjectHandover?       @relation(fields: [projectHandoverId], references: [id])
   organizationMaster    OrganizationMaster?    @relation(fields: [organizationMasterId], references: [id])
+  party                 Party?                 @relation(fields: [partyId], references: [id])
+  purchaseRequisition   PurchaseRequisition?   @relation(fields: [purchaseRequisitionId], references: [id])
+  rfq                   RequestForQuotation?   @relation(fields: [rfqId], references: [id])
+  supplierQuotation     SupplierQuotation?     @relation(fields: [supplierQuotationId], references: [id])
+  comparativeStatement  ComparativeStatement?  @relation(fields: [comparativeStatementId], references: [id])
+  purchaseOrder         PurchaseOrder?         @relation(fields: [purchaseOrderId], references: [id])
+  goodsReceiptNote      GoodsReceiptNote?      @relation(fields: [goodsReceiptNoteId], references: [id])
   versions              DocumentVersion[]
 
   @@index([organizationId, category])
@@ -2397,4 +2453,673 @@ model PaymentRecord {
 
   @@index([invoiceId])
   @@map("payment_records")
+}
+
+// ---------------------------------------------------------------------------
+// Masters — Vendor / Supplier / Subcontractor / Item Foundation
+// ---------------------------------------------------------------------------
+
+enum PartyRole {
+  CLIENT
+  VENDOR
+  SUPPLIER
+  SUBCONTRACTOR
+  SERVICE_PROVIDER
+  OTHER
+}
+
+enum PartyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  BLACKLISTED
+  ARCHIVED
+}
+
+enum MasterCategoryType {
+  VENDOR
+  MATERIAL
+  SUBCONTRACTOR_TRADE
+}
+
+enum ItemType {
+  MATERIAL
+  SERVICE
+  EQUIPMENT
+  CONSUMABLE
+  OTHER
+}
+
+enum ItemStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// A commercial party this organization deals with on the pay-out side (vendor, supplier,
+/// subcontractor, service provider). Deliberately unified rather than one model per role —
+/// one company can carry multiple roles (e.g. Supplier + Subcontractor) via `roles`, matching
+/// the client's own explicit "avoid duplicate records per role" instruction. This is distinct
+/// from OrganizationMaster, which models the opposite party (who this org tenders/contracts TO).
+model Party {
+  id             String      @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  displayName    String?
+  roles          PartyRole[]
+  status         PartyStatus @default(ACTIVE)
+
+  contactPerson  String?
+  phone          String?
+  alternatePhone String?
+  email          String?
+  website        String?
+
+  address  String?
+  district String?
+  country  String?
+
+  binVat         String?
+  tinNo          String?
+  tradeLicenseNo String?
+  registrationNo String?
+
+  bankName         String?
+  bankAccountName  String?
+  bankAccountNo    String?
+  bankBranch       String?
+  bankRoutingSwift String?
+
+  paymentTermId   String?
+  defaultCurrency String?  @default("BDT")
+  creditLimit     Decimal? @db.Decimal(18, 2)
+
+  categoryId String?
+
+  notes String?
+
+  createdById  String?
+  archivedAt   DateTime?
+  archivedById String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  organization                Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  paymentTerm                 PaymentTerm?                   @relation(fields: [paymentTermId], references: [id])
+  category                    MasterCategory?                @relation(fields: [categoryId], references: [id])
+  subcontractorProfile        SubcontractorProfile?
+  contacts                    OrganizationContact[]
+  payables                    Payable[]
+  documents                   Document[]
+  preferredForItems           Item[]                         @relation("PreferredVendor")
+  rfqInvitations              RfqSupplier[]
+  supplierQuotations          SupplierQuotation[]
+  comparativeStatementEntries ComparativeStatementSupplier[]
+  purchaseOrders              PurchaseOrder[]
+  goodsReceiptNotes           GoodsReceiptNote[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([organizationId, name])
+  @@map("parties")
+}
+
+/// 1:1 extension of Party, present only when a party carries the SUBCONTRACTOR role — keeps
+/// the base Party table lean for the common vendor/supplier case while still supporting
+/// subcontractor-specific fields. VAT/AIT rates deliberately are NOT duplicated here: they
+/// come from the existing org-level effective-dated DeductionConfig, never a hardcoded or
+/// per-party override, per the "use existing configuration architecture" instruction.
+model SubcontractorProfile {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  partyId             String   @unique
+  tradeCategoryId     String?
+  specialization      String?
+  defaultRetentionPct Decimal? @db.Decimal(5, 2)
+  performanceRating   Decimal? @db.Decimal(3, 2)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  party         Party           @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  tradeCategory MasterCategory? @relation(fields: [tradeCategoryId], references: [id])
+
+  @@map("subcontractor_profiles")
+}
+
+/// One typed, reusable category master (discriminated by `type`) instead of three separate
+/// category tables — avoids both a generic over-engineered category engine and duplicate
+/// per-domain category models.
+model MasterCategory {
+  id             String             @id @default(cuid())
+  organizationId String
+  type           MasterCategoryType
+  name           String
+  description    String?
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parties               Party[]
+  subcontractorProfiles SubcontractorProfile[]
+  items                 Item[]
+
+  @@unique([organizationId, type, name])
+  @@map("master_categories")
+}
+
+model UnitOfMeasurement {
+  id             String   @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  symbol         String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items                    Item[]
+  purchaseRequisitionItems PurchaseRequisitionItem[]
+
+  @@unique([organizationId, code])
+  @@map("units_of_measurement")
+}
+
+model PaymentTerm {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  days           Int      @default(0)
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parties      Party[]
+
+  @@unique([organizationId, name])
+  @@map("payment_terms")
+}
+
+/// Master data only — no stock/quantity-on-hand fields. Deliberately shaped so future
+/// Procurement (RFQ/PO/GRN) and Inventory phases can layer on top without a redesign.
+model Item {
+  id                  String     @id @default(cuid())
+  organizationId      String
+  itemCode            String
+  itemName            String
+  description         String?
+  itemType            ItemType   @default(MATERIAL)
+  categoryId          String?
+  uomId               String?
+  defaultPurchaseRate Decimal?   @db.Decimal(18, 2)
+  preferredVendorId   String?
+  specification       String?
+  brandModel          String?
+  status              ItemStatus @default(ACTIVE)
+  createdById         String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category                 MasterCategory?           @relation(fields: [categoryId], references: [id])
+  uom                      UnitOfMeasurement?        @relation(fields: [uomId], references: [id])
+  preferredVendor          Party?                    @relation("PreferredVendor", fields: [preferredVendorId], references: [id])
+  purchaseRequisitionItems PurchaseRequisitionItem[]
+  rfqItems                 RfqItem[]
+  purchaseOrderItems       PurchaseOrderItem[]
+
+  @@unique([organizationId, itemCode])
+  @@index([organizationId, status])
+  @@map("items")
+}
+
+// ---------------------------------------------------------------------------
+// Procurement Core — PR / RFQ / Supplier Quotation / Comparative Statement / PO / GRN
+// ---------------------------------------------------------------------------
+
+enum PrPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum PrStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+  CONVERTED
+}
+
+enum RfqStatus {
+  DRAFT
+  ISSUED
+  CLOSED
+  CANCELLED
+  AWARDED
+}
+
+enum QuotationStatus {
+  RECEIVED
+  SUPERSEDED
+  WITHDRAWN
+}
+
+enum TechnicalComplianceStatus {
+  COMPLIANT
+  PARTIALLY_COMPLIANT
+  NON_COMPLIANT
+}
+
+enum ComparativeStatementStatus {
+  DRAFT
+  EVALUATED
+  APPROVED
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  APPROVED
+  ISSUED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+  CLOSED
+}
+
+/// PENDING is reachable only by a future two-step inspection workflow — the current
+/// single-step GRN creation always computes ACCEPTED/PARTIAL/REJECTED immediately from the
+/// entered accepted/rejected/damaged quantities (see grn-calculations.ts).
+enum GrnInspectionStatus {
+  PENDING
+  ACCEPTED
+  PARTIAL
+  REJECTED
+}
+
+model PurchaseRequisition {
+  id             String     @id @default(cuid())
+  organizationId String
+  prNo           String
+  requestDate    DateTime
+  requiredByDate DateTime?
+  cmsWorkId      String?
+  department     String?
+  requestedById  String?
+  priority       PrPriority @default(MEDIUM)
+  purpose        String?
+  remarks        String?
+  status         PrStatus   @default(DRAFT)
+  submittedAt    DateTime?
+  approvedById   String?
+  approvedAt     DateTime?
+  rejectedReason String?
+  createdById    String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork        CmsWork?                  @relation(fields: [cmsWorkId], references: [id])
+  items          PurchaseRequisitionItem[]
+  rfqs           RequestForQuotation[]
+  purchaseOrders PurchaseOrder[]
+  documents      Document[]
+
+  @@unique([organizationId, prNo])
+  @@index([organizationId, status])
+  @@map("purchase_requisitions")
+}
+
+model PurchaseRequisitionItem {
+  id                    String    @id @default(cuid())
+  organizationId        String
+  purchaseRequisitionId String
+  itemId                String
+  descriptionSnapshot   String
+  uomId                 String?
+  requestedQty          Decimal   @db.Decimal(18, 3)
+  estimatedRate         Decimal?  @db.Decimal(18, 2)
+  estimatedAmount       Decimal?  @db.Decimal(18, 2)
+  requiredDate          DateTime?
+  boqItemId             String?
+  remarks               String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseRequisition PurchaseRequisition @relation(fields: [purchaseRequisitionId], references: [id], onDelete: Cascade)
+  item                Item                @relation(fields: [itemId], references: [id])
+  uom                 UnitOfMeasurement?  @relation(fields: [uomId], references: [id])
+  boqItem             BoqItem?            @relation(fields: [boqItemId], references: [id])
+  rfqItems            RfqItem[]
+
+  @@index([organizationId, purchaseRequisitionId])
+  @@map("purchase_requisition_items")
+}
+
+model RequestForQuotation {
+  id                    String    @id @default(cuid())
+  organizationId        String
+  rfqNo                 String
+  purchaseRequisitionId String?
+  cmsWorkId             String?
+  issueDate             DateTime
+  submissionDeadline    DateTime
+  deliveryLocation      String?
+  termsConditions       String?
+  paymentTerms          String?
+  remarks               String?
+  status                RfqStatus @default(DRAFT)
+  issuedById            String?
+  issuedAt              DateTime?
+  createdById           String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseRequisition  PurchaseRequisition?  @relation(fields: [purchaseRequisitionId], references: [id])
+  cmsWork              CmsWork?              @relation(fields: [cmsWorkId], references: [id])
+  suppliers            RfqSupplier[]
+  items                RfqItem[]
+  quotations           SupplierQuotation[]
+  comparativeStatement ComparativeStatement?
+  purchaseOrders       PurchaseOrder[]
+  documents            Document[]
+
+  @@unique([organizationId, rfqNo])
+  @@index([organizationId, status])
+  @@map("request_for_quotations")
+}
+
+model RfqSupplier {
+  id             String   @id @default(cuid())
+  organizationId String
+  rfqId          String
+  supplierId     String
+  invitedAt      DateTime @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rfq          RequestForQuotation @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  supplier     Party               @relation(fields: [supplierId], references: [id])
+
+  @@unique([rfqId, supplierId])
+  @@map("rfq_suppliers")
+}
+
+/// Snapshotted item detail so later edits to the Item master never change what an already-
+/// issued RFQ historically asked suppliers to quote against.
+model RfqItem {
+  id                        String   @id @default(cuid())
+  organizationId            String
+  rfqId                     String
+  itemId                    String
+  purchaseRequisitionItemId String?
+  itemCodeSnapshot          String
+  itemNameSnapshot          String
+  descriptionSnapshot       String?
+  unitSnapshot              String
+  requestedQty              Decimal  @db.Decimal(18, 3)
+  remarks                   String?
+  createdAt                 DateTime @default(now())
+
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rfq                     RequestForQuotation      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  item                    Item                     @relation(fields: [itemId], references: [id])
+  purchaseRequisitionItem PurchaseRequisitionItem? @relation(fields: [purchaseRequisitionItemId], references: [id])
+  quotationItems          SupplierQuotationItem[]
+
+  @@index([organizationId, rfqId])
+  @@map("rfq_items")
+}
+
+model SupplierQuotation {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  rfqId              String
+  supplierId         String
+  quotationRef       String
+  quotationDate      DateTime
+  validityDate       DateTime?
+  currency           String          @default("BDT")
+  deliveryDays       Int?
+  paymentTerms       String?
+  warranty           String?
+  remarks            String?
+  status             QuotationStatus @default(RECEIVED)
+  revisionNo         Int             @default(1)
+  previousRevisionId String?         @unique
+  totalAmount        Decimal         @db.Decimal(18, 2)
+  createdById        String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  organization                  Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rfq                           RequestForQuotation            @relation(fields: [rfqId], references: [id])
+  supplier                      Party                          @relation(fields: [supplierId], references: [id])
+  previousRevision              SupplierQuotation?             @relation("QuotationRevision", fields: [previousRevisionId], references: [id])
+  nextRevision                  SupplierQuotation?             @relation("QuotationRevision")
+  items                         SupplierQuotationItem[]
+  comparativeStatementSuppliers ComparativeStatementSupplier[]
+  documents                     Document[]
+
+  @@unique([rfqId, supplierId, quotationRef, revisionNo])
+  @@index([organizationId, rfqId, status])
+  @@map("supplier_quotations")
+}
+
+model SupplierQuotationItem {
+  id             String  @id @default(cuid())
+  organizationId String
+  quotationId    String
+  rfqItemId      String
+  offeredQty     Decimal @db.Decimal(18, 3)
+  unitRate       Decimal @db.Decimal(18, 2)
+  discountPct    Decimal @default(0) @db.Decimal(5, 2)
+  taxPct         Decimal @default(0) @db.Decimal(5, 2)
+  lineAmount     Decimal @db.Decimal(18, 2)
+  deliveryDays   Int?
+  brandModel     String?
+  specification  String?
+  remarks        String?
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quotation    SupplierQuotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  rfqItem      RfqItem           @relation(fields: [rfqItemId], references: [id])
+
+  @@index([organizationId, quotationId])
+  @@map("supplier_quotation_items")
+}
+
+/// One CS per RFQ, single-supplier-award model (deliberately practical, not a full split-award
+/// engine — see master task's own "keep initial architecture practical" instruction). Per-item
+/// comparison (which supplier is cheapest on which line) is computed at read time by joining
+/// RfqItem + SupplierQuotationItem; only the supplier-level evaluation outcome is persisted here.
+model ComparativeStatement {
+  id             String                     @id @default(cuid())
+  organizationId String
+  rfqId          String                     @unique
+  cmsWorkId      String?
+  csNo           String
+  status         ComparativeStatementStatus @default(DRAFT)
+  decisionNotes  String?
+  preparedById   String?
+  approvedById   String?
+  approvedAt     DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  organization   Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rfq            RequestForQuotation            @relation(fields: [rfqId], references: [id])
+  cmsWork        CmsWork?                       @relation(fields: [cmsWorkId], references: [id])
+  suppliers      ComparativeStatementSupplier[]
+  purchaseOrders PurchaseOrder[]
+  documents      Document[]
+
+  @@unique([organizationId, csNo])
+  @@map("comparative_statements")
+}
+
+model ComparativeStatementSupplier {
+  id                     String                    @id @default(cuid())
+  organizationId         String
+  comparativeStatementId String
+  supplierId             String
+  quotationId            String
+  quotedTotal            Decimal                   @db.Decimal(18, 2)
+  commercialAdjustment   Decimal                   @default(0) @db.Decimal(18, 2)
+  evaluatedTotal         Decimal                   @db.Decimal(18, 2)
+  deliveryDays           Int?
+  paymentTerms           String?
+  technicalStatus        TechnicalComplianceStatus @default(COMPLIANT)
+  recommended            Boolean                   @default(false)
+  rank                   Int?
+  isSelected             Boolean                   @default(false)
+  remarks                String?
+
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  comparativeStatement ComparativeStatement @relation(fields: [comparativeStatementId], references: [id], onDelete: Cascade)
+  supplier             Party                @relation(fields: [supplierId], references: [id])
+  quotation            SupplierQuotation    @relation(fields: [quotationId], references: [id])
+
+  @@unique([comparativeStatementId, supplierId])
+  @@map("comparative_statement_suppliers")
+}
+
+model PurchaseOrder {
+  id                     String              @id @default(cuid())
+  organizationId         String
+  poNo                   String
+  poDate                 DateTime
+  supplierId             String
+  cmsWorkId              String?
+  purchaseRequisitionId  String?
+  rfqId                  String?
+  comparativeStatementId String?
+  deliveryAddress        String?
+  paymentTerms           String?
+  deliveryTerms          String?
+  currency               String              @default("BDT")
+  subtotal               Decimal             @db.Decimal(18, 2)
+  discountAmount         Decimal             @default(0) @db.Decimal(18, 2)
+  taxAmount              Decimal             @default(0) @db.Decimal(18, 2)
+  otherCharges           Decimal             @default(0) @db.Decimal(18, 2)
+  grandTotal             Decimal             @db.Decimal(18, 2)
+  remarks                String?
+  status                 PurchaseOrderStatus @default(DRAFT)
+  createdById            String?
+  approvedById           String?
+  approvedAt             DateTime?
+  issuedAt               DateTime?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier             Party                 @relation(fields: [supplierId], references: [id])
+  cmsWork              CmsWork?              @relation(fields: [cmsWorkId], references: [id])
+  purchaseRequisition  PurchaseRequisition?  @relation(fields: [purchaseRequisitionId], references: [id])
+  rfq                  RequestForQuotation?  @relation(fields: [rfqId], references: [id])
+  comparativeStatement ComparativeStatement? @relation(fields: [comparativeStatementId], references: [id])
+  items                PurchaseOrderItem[]
+  goodsReceiptNotes    GoodsReceiptNote[]
+  documents            Document[]
+
+  @@unique([organizationId, poNo])
+  @@index([organizationId, status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id                    String    @id @default(cuid())
+  organizationId        String
+  purchaseOrderId       String
+  itemId                String
+  itemCodeSnapshot      String
+  itemNameSnapshot      String
+  descriptionSnapshot   String?
+  unitSnapshot          String
+  orderedQty            Decimal   @db.Decimal(18, 3)
+  unitRate              Decimal   @db.Decimal(18, 2)
+  discountAmount        Decimal   @default(0) @db.Decimal(18, 2)
+  netRate               Decimal   @db.Decimal(18, 2)
+  lineAmount            Decimal   @db.Decimal(18, 2)
+  /// Running cumulative total across all GRNs against this line — updated transactionally at
+  /// GRN creation, mirroring the BoqItem.executedQty ceiling-tracking pattern.
+  receivedQty           Decimal   @default(0) @db.Decimal(18, 3)
+  deliveryDate          DateTime?
+  cmsWorkId             String?
+  boqItemId             String?
+  sourceQuotationItemId String?
+  remarks               String?
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item          Item          @relation(fields: [itemId], references: [id])
+  cmsWork       CmsWork?      @relation(fields: [cmsWorkId], references: [id])
+  boqItem       BoqItem?      @relation(fields: [boqItemId], references: [id])
+  grnItems      GrnItem[]
+
+  @@index([organizationId, purchaseOrderId])
+  @@map("purchase_order_items")
+}
+
+model GoodsReceiptNote {
+  id                  String              @id @default(cuid())
+  organizationId      String
+  grnNo               String
+  purchaseOrderId     String
+  supplierId          String
+  cmsWorkId           String?
+  receiptDate         DateTime
+  deliveryChallanNo   String?
+  deliveryChallanDate DateTime?
+  receivedById        String?
+  inspectionStatus    GrnInspectionStatus @default(PENDING)
+  warehouseLocation   String?
+  remarks             String?
+  createdById         String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  supplier      Party         @relation(fields: [supplierId], references: [id])
+  cmsWork       CmsWork?      @relation(fields: [cmsWorkId], references: [id])
+  items         GrnItem[]
+  documents     Document[]
+
+  @@unique([organizationId, grnNo])
+  @@index([organizationId, purchaseOrderId])
+  @@map("goods_receipt_notes")
+}
+
+model GrnItem {
+  id                    String  @id @default(cuid())
+  organizationId        String
+  grnId                 String
+  purchaseOrderItemId   String
+  descriptionSnapshot   String
+  unitSnapshot          String
+  orderedQty            Decimal @db.Decimal(18, 3)
+  previouslyReceivedQty Decimal @db.Decimal(18, 3)
+  currentReceivedQty    Decimal @db.Decimal(18, 3)
+  cumulativeReceivedQty Decimal @db.Decimal(18, 3)
+  remainingQty          Decimal @db.Decimal(18, 3)
+  acceptedQty           Decimal @db.Decimal(18, 3)
+  rejectedQty           Decimal @default(0) @db.Decimal(18, 3)
+  damagedQty            Decimal @default(0) @db.Decimal(18, 3)
+  inspectionRemarks     String?
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  grn               GoodsReceiptNote  @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
+
+  @@index([organizationId, grnId])
+  @@map("grn_items")
 }

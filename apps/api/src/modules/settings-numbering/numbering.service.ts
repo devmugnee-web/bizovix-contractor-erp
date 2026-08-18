@@ -25,6 +25,14 @@ export const NUMBERING_MODULE_KEYS = [
   "DLP_DEFECT",
   "RETENTION_RELEASE",
   "HANDOVER",
+  "VENDOR",
+  "SUBCONTRACTOR",
+  "ITEM",
+  "PURCHASE_REQUISITION",
+  "RFQ",
+  "COMPARATIVE_STATEMENT",
+  "PURCHASE_ORDER",
+  "GOODS_RECEIPT_NOTE",
 ] as const;
 export type NumberingModuleKey = (typeof NUMBERING_MODULE_KEYS)[number];
 
@@ -49,6 +57,14 @@ const DEFAULT_PREFIX: Record<NumberingModuleKey, string> = {
   DLP_DEFECT: "DEF",
   RETENTION_RELEASE: "RR",
   HANDOVER: "HO",
+  VENDOR: "VEN",
+  SUBCONTRACTOR: "SUB",
+  ITEM: "ITM",
+  PURCHASE_REQUISITION: "PR",
+  RFQ: "RFQ",
+  COMPARATIVE_STATEMENT: "CS",
+  PURCHASE_ORDER: "PO",
+  GOODS_RECEIPT_NOTE: "GRN",
 };
 
 /** RECEIPT keeps its pre-existing 5-digit format (the live ReceiptSequence counter

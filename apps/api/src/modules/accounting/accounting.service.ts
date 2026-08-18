@@ -646,10 +646,16 @@ export class AccountingService {
     };
   }
   async createPayable(org: string, userId: string, dto: CreatePayableDto) {
+    if (dto.partyId) {
+      const party = await this.prisma.party.findFirst({ where: { id: dto.partyId, organizationId: org } });
+      if (!party) throw new NotFoundException("Party not found");
+      if (party.status === "ARCHIVED") throw new BadRequestException("Cannot link an archived vendor/party to a new payable");
+    }
     const row = await this.prisma.$transaction(async (tx) => {
       const p = await tx.payable.create({
         data: {
           organizationId: org,
+          partyId: dto.partyId,
           partyName: dto.partyName,
           partyType: dto.partyType,
           projectId: dto.projectId,

@@ -50,6 +50,7 @@ export class CreateJournalDto {
   @IsOptional() @IsBoolean() post?: boolean;
 }
 export class CreatePayableDto {
+  @IsOptional() @IsString() partyId?: string;
   @IsString() partyName!: string;
   @IsOptional() @IsString() partyType?: string;
   @IsOptional() @IsString() projectId?: string;

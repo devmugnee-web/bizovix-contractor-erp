@@ -40,6 +40,13 @@ export class DocumentsService {
       ...(query.projectBillId ? { projectBillId: query.projectBillId } : {}),
       ...(query.variationOrderId ? { variationOrderId: query.variationOrderId } : {}),
       ...(query.timeExtensionId ? { timeExtensionId: query.timeExtensionId } : {}),
+      ...(query.partyId ? { partyId: query.partyId } : {}),
+      ...(query.purchaseRequisitionId ? { purchaseRequisitionId: query.purchaseRequisitionId } : {}),
+      ...(query.rfqId ? { rfqId: query.rfqId } : {}),
+      ...(query.supplierQuotationId ? { supplierQuotationId: query.supplierQuotationId } : {}),
+      ...(query.comparativeStatementId ? { comparativeStatementId: query.comparativeStatementId } : {}),
+      ...(query.purchaseOrderId ? { purchaseOrderId: query.purchaseOrderId } : {}),
+      ...(query.goodsReceiptNoteId ? { goodsReceiptNoteId: query.goodsReceiptNoteId } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.expiringWithinDays
         ? {
@@ -99,8 +106,16 @@ export class DocumentsService {
       : [];
   }
 
+  /** Blocks picking an archived party for a document link. Only meaningful when the caller is
+   * actually assigning a NEW partyId — never re-checked for unrelated edits to a document whose
+   * party link was set before that party was archived (historical linkage stays intact). */
+  private async assertPartyNotArchived(organizationId: string, partyId: string) {
+    const party = await this.prisma.party.findFirst({ where: { id: partyId, organizationId }, select: { status: true } });
+    if (party?.status === "ARCHIVED") throw new BadRequestException("Cannot link an archived vendor/party to a document");
+  }
+
   private async assertLinkedEntities(organizationId: string, dto: Partial<CreateDocumentDto>) {
-    const [tender, work, contract, bill, variation, eot, master, certificate, dlp, defect, retention, handover] = await Promise.all([
+    const [tender, work, contract, bill, variation, eot, master, party, certificate, dlp, defect, retention, handover, pr, rfq, quotation, cs, po, grn] = await Promise.all([
       dto.tenderId ? this.prisma.tender.findFirst({ where: { id: dto.tenderId, organizationId }, select: { id: true } }) : null,
       dto.workId ? this.prisma.cmsWork.findFirst({ where: { id: dto.workId, organizationId }, select: { id: true } }) : null,
       dto.contractId ? this.prisma.projectContract.findFirst({ where: { id: dto.contractId, organizationId }, select: { id: true, cmsWorkId: true } }) : null,
@@ -108,16 +123,23 @@ export class DocumentsService {
       dto.variationOrderId ? this.prisma.variationOrder.findFirst({ where: { id: dto.variationOrderId, organizationId }, select: { id: true, cmsWorkId: true, contractId: true } }) : null,
       dto.timeExtensionId ? this.prisma.timeExtension.findFirst({ where: { id: dto.timeExtensionId, organizationId }, select: { id: true, cmsWorkId: true, contractId: true } }) : null,
       dto.organizationMasterId ? this.prisma.organizationMaster.findFirst({ where: { id: dto.organizationMasterId, organizationId }, select: { id: true } }) : null,
+      dto.partyId ? this.prisma.party.findFirst({ where: { id: dto.partyId, organizationId }, select: { id: true } }) : null,
       dto.completionCertificateId ? this.prisma.completionCertificate.findFirst({ where: { id: dto.completionCertificateId, organizationId }, select: { id: true, workId: true, contractId: true } }) : null,
       dto.dlpId ? this.prisma.defectLiabilityPeriod.findFirst({ where: { id: dto.dlpId, organizationId }, select: { id: true, workId: true, contractId: true } }) : null,
       dto.defectId ? this.prisma.dlpDefect.findFirst({ where: { id: dto.defectId, organizationId }, select: { id: true, dlp: { select: { workId: true } } } }) : null,
       dto.retentionReleaseId ? this.prisma.retentionRelease.findFirst({ where: { id: dto.retentionReleaseId, organizationId }, select: { id: true, workId: true, contractId: true } }) : null,
       dto.projectHandoverId ? this.prisma.projectHandover.findFirst({ where: { id: dto.projectHandoverId, organizationId }, select: { id: true, workId: true, contractId: true } }) : null,
+      dto.purchaseRequisitionId ? this.prisma.purchaseRequisition.findFirst({ where: { id: dto.purchaseRequisitionId, organizationId }, select: { id: true, cmsWorkId: true } }) : null,
+      dto.rfqId ? this.prisma.requestForQuotation.findFirst({ where: { id: dto.rfqId, organizationId }, select: { id: true, cmsWorkId: true } }) : null,
+      dto.supplierQuotationId ? this.prisma.supplierQuotation.findFirst({ where: { id: dto.supplierQuotationId, organizationId }, select: { id: true } }) : null,
+      dto.comparativeStatementId ? this.prisma.comparativeStatement.findFirst({ where: { id: dto.comparativeStatementId, organizationId }, select: { id: true, cmsWorkId: true } }) : null,
+      dto.purchaseOrderId ? this.prisma.purchaseOrder.findFirst({ where: { id: dto.purchaseOrderId, organizationId }, select: { id: true, cmsWorkId: true } }) : null,
+      dto.goodsReceiptNoteId ? this.prisma.goodsReceiptNote.findFirst({ where: { id: dto.goodsReceiptNoteId, organizationId }, select: { id: true, cmsWorkId: true } }) : null,
     ]);
-    const checks: Array<[unknown, string | undefined, string]> = [[tender, dto.tenderId, "Tender"], [work, dto.workId, "Project"], [contract, dto.contractId, "Contract"], [bill, dto.projectBillId, "Project bill"], [variation, dto.variationOrderId, "Variation"], [eot, dto.timeExtensionId, "Time extension"], [master, dto.organizationMasterId, "Organization master"], [certificate, dto.completionCertificateId, "Completion certificate"], [dlp, dto.dlpId, "DLP"], [defect, dto.defectId, "Defect"], [retention, dto.retentionReleaseId, "Retention release"], [handover, dto.projectHandoverId, "Handover"]];
+    const checks: Array<[unknown, string | undefined, string]> = [[tender, dto.tenderId, "Tender"], [work, dto.workId, "Project"], [contract, dto.contractId, "Contract"], [bill, dto.projectBillId, "Project bill"], [variation, dto.variationOrderId, "Variation"], [eot, dto.timeExtensionId, "Time extension"], [master, dto.organizationMasterId, "Organization master"], [party, dto.partyId, "Vendor/Party"], [certificate, dto.completionCertificateId, "Completion certificate"], [dlp, dto.dlpId, "DLP"], [defect, dto.defectId, "Defect"], [retention, dto.retentionReleaseId, "Retention release"], [handover, dto.projectHandoverId, "Handover"], [pr, dto.purchaseRequisitionId, "Purchase Requisition"], [rfq, dto.rfqId, "RFQ"], [quotation, dto.supplierQuotationId, "Supplier Quotation"], [cs, dto.comparativeStatementId, "Comparative Statement"], [po, dto.purchaseOrderId, "Purchase Order"], [grn, dto.goodsReceiptNoteId, "GRN"]];
     for (const [record, supplied, label] of checks) if (supplied && !record) throw new NotFoundException(`${label} not found in this organization`);
     const expectedWorkId = dto.workId;
-    for (const linked of [contract, bill, variation, eot, certificate, dlp, retention, handover]) {
+    for (const linked of [contract, bill, variation, eot, certificate, dlp, retention, handover, pr, rfq, cs, po, grn]) {
       if (expectedWorkId && linked && ("cmsWorkId" in linked ? linked.cmsWorkId : linked.workId) !== expectedWorkId) throw new BadRequestException("Linked records must belong to the selected project");
     }
     if (expectedWorkId && defect && defect.dlp.workId !== expectedWorkId) throw new BadRequestException("Defect does not belong to the selected project");
@@ -132,6 +154,7 @@ export class DocumentsService {
     file?: UploadedDocumentFile,
   ) {
     await this.assertLinkedEntities(organizationId, dto);
+    if (dto.partyId) await this.assertPartyNotArchived(organizationId, dto.partyId);
     let fileMeta: { fileName?: string; fileType?: string; fileSize?: number; storageKey?: string } = {};
     if (file) {
       const storageKey = await this.storage.save(organizationId, file.buffer, file.originalname);
@@ -160,6 +183,13 @@ export class DocumentsService {
           retentionReleaseId: dto.retentionReleaseId,
           projectHandoverId: dto.projectHandoverId,
           organizationMasterId: dto.organizationMasterId,
+          partyId: dto.partyId,
+          purchaseRequisitionId: dto.purchaseRequisitionId,
+          rfqId: dto.rfqId,
+          supplierQuotationId: dto.supplierQuotationId,
+          comparativeStatementId: dto.comparativeStatementId,
+          purchaseOrderId: dto.purchaseOrderId,
+          goodsReceiptNoteId: dto.goodsReceiptNoteId,
           referenceNumber: dto.referenceNumber,
           certificateNumber: dto.certificateNumber,
           issuingAuthority: dto.issuingAuthority,
@@ -225,7 +255,15 @@ export class DocumentsService {
       retentionReleaseId: dto.retentionReleaseId === undefined ? existing.retentionReleaseId ?? undefined : dto.retentionReleaseId ?? undefined,
       projectHandoverId: dto.projectHandoverId === undefined ? existing.projectHandoverId ?? undefined : dto.projectHandoverId ?? undefined,
       organizationMasterId: dto.organizationMasterId === undefined ? existing.organizationMasterId ?? undefined : dto.organizationMasterId ?? undefined,
+      partyId: dto.partyId === undefined ? existing.partyId ?? undefined : dto.partyId ?? undefined,
+      purchaseRequisitionId: dto.purchaseRequisitionId === undefined ? existing.purchaseRequisitionId ?? undefined : dto.purchaseRequisitionId ?? undefined,
+      rfqId: dto.rfqId === undefined ? existing.rfqId ?? undefined : dto.rfqId ?? undefined,
+      supplierQuotationId: dto.supplierQuotationId === undefined ? existing.supplierQuotationId ?? undefined : dto.supplierQuotationId ?? undefined,
+      comparativeStatementId: dto.comparativeStatementId === undefined ? existing.comparativeStatementId ?? undefined : dto.comparativeStatementId ?? undefined,
+      purchaseOrderId: dto.purchaseOrderId === undefined ? existing.purchaseOrderId ?? undefined : dto.purchaseOrderId ?? undefined,
+      goodsReceiptNoteId: dto.goodsReceiptNoteId === undefined ? existing.goodsReceiptNoteId ?? undefined : dto.goodsReceiptNoteId ?? undefined,
     });
+    if (dto.partyId !== undefined && dto.partyId !== existing.partyId && dto.partyId) await this.assertPartyNotArchived(organizationId, dto.partyId);
 
     const record = await this.prisma.document.update({
       where: { id, organizationId },
@@ -248,6 +286,13 @@ export class DocumentsService {
         ...(dto.retentionReleaseId !== undefined ? { retentionReleaseId: dto.retentionReleaseId } : {}),
         ...(dto.projectHandoverId !== undefined ? { projectHandoverId: dto.projectHandoverId } : {}),
         ...(dto.organizationMasterId !== undefined ? { organizationMasterId: dto.organizationMasterId } : {}),
+        ...(dto.partyId !== undefined ? { partyId: dto.partyId } : {}),
+        ...(dto.purchaseRequisitionId !== undefined ? { purchaseRequisitionId: dto.purchaseRequisitionId } : {}),
+        ...(dto.rfqId !== undefined ? { rfqId: dto.rfqId } : {}),
+        ...(dto.supplierQuotationId !== undefined ? { supplierQuotationId: dto.supplierQuotationId } : {}),
+        ...(dto.comparativeStatementId !== undefined ? { comparativeStatementId: dto.comparativeStatementId } : {}),
+        ...(dto.purchaseOrderId !== undefined ? { purchaseOrderId: dto.purchaseOrderId } : {}),
+        ...(dto.goodsReceiptNoteId !== undefined ? { goodsReceiptNoteId: dto.goodsReceiptNoteId } : {}),
         ...(dto.referenceNumber !== undefined ? { referenceNumber: dto.referenceNumber } : {}),
         ...(dto.certificateNumber !== undefined ? { certificateNumber: dto.certificateNumber } : {}),
         ...(dto.issuingAuthority !== undefined ? { issuingAuthority: dto.issuingAuthority } : {}),
