@@ -33,6 +33,8 @@ const SYSTEM = [
   ["1200", "Security Deposit", "ASSET", "DEBIT", "SECURITY_DEPOSIT", "ASSETS"],
   ["1300", "Advances", "ASSET", "DEBIT", "ADVANCES", "ASSETS"],
   ["2010", "Accounts Payable", "LIABILITY", "CREDIT", "ACCOUNTS_PAYABLE", "LIABILITIES"],
+  ["2020", "AIT Payable (Withheld from Suppliers)", "LIABILITY", "CREDIT", "AIT_PAYABLE_SUPPLIERS", "LIABILITIES"],
+  ["2030", "Other Payable Deductions Withheld", "LIABILITY", "CREDIT", "OTHER_PAYABLE_DEDUCTION", "LIABILITIES"],
   ["2100", "Loans", "LIABILITY", "CREDIT", "LOANS", "LIABILITIES"],
   ["2200", "Accrued Expenses", "LIABILITY", "CREDIT", "ACCRUED_EXPENSES", "LIABILITIES"],
   ["3010", "Owner's Capital", "EQUITY", "CREDIT", "OWNERS_CAPITAL", "EQUITY"],

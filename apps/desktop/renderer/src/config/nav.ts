@@ -74,6 +74,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Comparative Statements", href: "/procurement/comparative-statements" },
       { label: "Purchase Orders", href: "/procurement/purchase-orders" },
       { label: "Goods Receipts", href: "/procurement/grns" },
+      { label: "Supplier Bills", href: "/procurement/supplier-bills" },
     ],
   },
   {

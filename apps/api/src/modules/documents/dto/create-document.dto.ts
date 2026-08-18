@@ -90,6 +90,14 @@ export class CreateDocumentDto {
 
   @IsOptional()
   @IsString()
+  supplierBillId?: string;
+
+  @IsOptional()
+  @IsString()
+  supplierPaymentId?: string;
+
+  @IsOptional()
+  @IsString()
   referenceNumber?: string;
 
   @IsOptional()

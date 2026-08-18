@@ -92,6 +92,8 @@ export interface DocumentQuery {
   comparativeStatementId?: string;
   purchaseOrderId?: string;
   goodsReceiptNoteId?: string;
+  supplierBillId?: string;
+  supplierPaymentId?: string;
   status?: string;
   expiringWithinDays?: number;
 }

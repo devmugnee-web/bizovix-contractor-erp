@@ -214,6 +214,19 @@ export const PERMISSIONS = [
   "grn.create",
   "grn.update",
   "grn.approve",
+
+  "supplier_bill.read",
+  "supplier_bill.create",
+  "supplier_bill.update",
+  "supplier_bill.submit",
+  "supplier_bill.approve",
+  "supplier_bill.cancel",
+
+  "supplier_payment.read",
+  "supplier_payment.create",
+  "supplier_payment.cancel",
+
+  "supplier_ledger.read",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

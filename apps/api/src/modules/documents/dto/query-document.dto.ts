@@ -64,6 +64,14 @@ export class QueryDocumentDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsString()
+  supplierBillId?: string;
+
+  @IsOptional()
+  @IsString()
+  supplierPaymentId?: string;
+
+  @IsOptional()
+  @IsString()
   status?: string;
 
   @IsOptional()

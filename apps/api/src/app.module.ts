@@ -61,6 +61,9 @@ import { SupplierQuotationsModule } from "./modules/supplier-quotations/supplier
 import { ComparativeStatementsModule } from "./modules/comparative-statements/comparative-statements.module";
 import { PurchaseOrdersModule } from "./modules/purchase-orders/purchase-orders.module";
 import { GrnModule } from "./modules/grn/grn.module";
+import { SupplierBillsModule } from "./modules/supplier-bills/supplier-bills.module";
+import { SupplierPaymentsModule } from "./modules/supplier-payments/supplier-payments.module";
+import { SupplierLedgerModule } from "./modules/supplier-ledger/supplier-ledger.module";
 
 @Module({
   imports: [
@@ -120,6 +123,9 @@ import { GrnModule } from "./modules/grn/grn.module";
     ComparativeStatementsModule,
     PurchaseOrdersModule,
     GrnModule,
+    SupplierBillsModule,
+    SupplierPaymentsModule,
+    SupplierLedgerModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

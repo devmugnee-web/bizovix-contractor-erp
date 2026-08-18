@@ -41,3 +41,6 @@ export * from "./supplier-quotation";
 export * from "./comparative-statement";
 export * from "./purchase-order";
 export * from "./grn";
+export * from "./supplier-bill";
+export * from "./supplier-payment";
+export * from "./supplier-ledger";

@@ -1,4 +1,5 @@
-import { IsBoolean, IsDateString, IsIn, IsOptional, IsString, MaxLength } from "class-validator";
+import { Type } from "class-transformer";
+import { IsBoolean, IsDateString, IsIn, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 
 export class UpdateFinanceSettingDto {
   @IsOptional() @IsString() defaultCashAccountId?: string;
@@ -14,6 +15,9 @@ export class UpdateFinanceSettingDto {
   @IsBoolean() requireApprovalBeforePosting!: boolean;
   @IsBoolean() allowBackdatedTransactions!: boolean;
   @IsBoolean() allowFutureDatedTransactions!: boolean;
+  /** Supplier Bill 3-way-match rate tolerance (%) — omit/null means zero tolerance, so any
+   * invoice-vs-PO rate difference is flagged as a variance. */
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(100) billRateTolerancePct?: number;
 }
 
 export class CreateAccountingPeriodDto {

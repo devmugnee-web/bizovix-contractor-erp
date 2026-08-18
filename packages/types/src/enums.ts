@@ -249,3 +249,30 @@ export const GrnInspectionStatus = {
   REJECTED: "REJECTED",
 } as const;
 export type GrnInspectionStatus = (typeof GrnInspectionStatus)[keyof typeof GrnInspectionStatus];
+
+export const SupplierBillStatus = {
+  DRAFT: "DRAFT",
+  APPROVAL_PENDING: "APPROVAL_PENDING",
+  APPROVED: "APPROVED",
+  PARTIALLY_PAID: "PARTIALLY_PAID",
+  PAID: "PAID",
+  REJECTED: "REJECTED",
+  CANCELLED: "CANCELLED",
+} as const;
+export type SupplierBillStatus = (typeof SupplierBillStatus)[keyof typeof SupplierBillStatus];
+
+export const BillMatchStatus = {
+  MATCHED: "MATCHED",
+  QUANTITY_VARIANCE: "QUANTITY_VARIANCE",
+  RATE_VARIANCE: "RATE_VARIANCE",
+  AMOUNT_VARIANCE: "AMOUNT_VARIANCE",
+  MISSING_RECEIPT: "MISSING_RECEIPT",
+  BLOCKED: "BLOCKED",
+} as const;
+export type BillMatchStatus = (typeof BillMatchStatus)[keyof typeof BillMatchStatus];
+
+export const SupplierPaymentStatus = {
+  ACTIVE: "ACTIVE",
+  CANCELLED: "CANCELLED",
+} as const;
+export type SupplierPaymentStatus = (typeof SupplierPaymentStatus)[keyof typeof SupplierPaymentStatus];

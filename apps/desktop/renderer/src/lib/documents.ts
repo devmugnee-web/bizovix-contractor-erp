@@ -27,6 +27,8 @@ export type DocumentModule =
   | "RFQ"
   | "Purchase Order"
   | "GRN"
+  | "Supplier Bill"
+  | "Supplier Payment"
   | "Company"
   | "General";
 export interface DocumentVersion {
@@ -168,6 +170,8 @@ export const DOCUMENT_MODULES: DocumentModule[] = [
   "RFQ",
   "Purchase Order",
   "GRN",
+  "Supplier Bill",
+  "Supplier Payment",
   "Company",
   "General",
 ];

@@ -250,6 +250,10 @@ model Organization {
   purchaseOrderItems            PurchaseOrderItem[]
   goodsReceiptNotes             GoodsReceiptNote[]
   grnItems                      GrnItem[]
+  supplierBills                 SupplierBill[]
+  supplierBillItems             SupplierBillItem[]
+  supplierBillDeductions        SupplierBillDeduction[]
+  supplierPayments               SupplierPayment[]
 
   @@map("organizations")
 }
@@ -452,6 +456,7 @@ model BankAccount {
   reconciliations          BankReconciliation[]
   cheques                  Cheque[]
   ledgerAccounts           LedgerAccount[]
+  supplierPayments         SupplierPayment[]
 
   @@map("bank_accounts")
 }
@@ -902,6 +907,7 @@ model CmsWork {
   purchaseOrders         PurchaseOrder[]
   purchaseOrderItems     PurchaseOrderItem[]
   goodsReceiptNotes      GoodsReceiptNote[]
+  supplierBills          SupplierBill[]
 
   @@index([organizationId, status])
   @@index([organizationId, status, completionDate])
@@ -1866,9 +1872,13 @@ model Payable {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      CmsWork?     @relation(fields: [projectId], references: [id])
-  party        Party?       @relation(fields: [partyId], references: [id])
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project         CmsWork?         @relation(fields: [projectId], references: [id])
+  party           Party?           @relation(fields: [partyId], references: [id])
+  /// Opposite side of SupplierBill.payableId — present only for Payables created by an
+  /// approved Supplier Bill; historical/manual Payables (CMS, Tender, generic AP entry) have none.
+  supplierBill    SupplierBill?
+  supplierPayments SupplierPayment[]
 
   @@unique([organizationId, billNo])
   @@index([organizationId, status, dueDate])
@@ -1980,6 +1990,8 @@ model Document {
   comparativeStatementId  String?
   purchaseOrderId         String?
   goodsReceiptNoteId      String?
+  supplierBillId          String?
+  supplierPaymentId       String?
   referenceNumber         String?
   certificateNumber       String?
   issuingAuthority        String?
@@ -2030,6 +2042,8 @@ model Document {
   comparativeStatement  ComparativeStatement?  @relation(fields: [comparativeStatementId], references: [id])
   purchaseOrder         PurchaseOrder?         @relation(fields: [purchaseOrderId], references: [id])
   goodsReceiptNote      GoodsReceiptNote?      @relation(fields: [goodsReceiptNoteId], references: [id])
+  supplierBill          SupplierBill?          @relation(fields: [supplierBillId], references: [id])
+  supplierPayment       SupplierPayment?       @relation(fields: [supplierPaymentId], references: [id])
   versions              DocumentVersion[]
 
   @@index([organizationId, category])
@@ -2201,6 +2215,10 @@ model FinanceSetting {
   requireApprovalBeforePosting           Boolean  @default(true)
   allowBackdatedTransactions             Boolean  @default(true)
   allowFutureDatedTransactions           Boolean  @default(false)
+  /// Supplier Bill 3-way-match rate tolerance — null means "no tolerance configured", so any
+  /// rate difference from the PO is flagged as a variance. Deliberately tenant-configurable,
+  /// never a hardcoded universal percentage.
+  billRateTolerancePct                   Decimal? @db.Decimal(5, 2)
   updatedById                            String?
   createdAt                              DateTime @default(now())
   updatedAt                              DateTime @updatedAt
@@ -2557,6 +2575,8 @@ model Party {
   comparativeStatementEntries ComparativeStatementSupplier[]
   purchaseOrders              PurchaseOrder[]
   goodsReceiptNotes           GoodsReceiptNote[]
+  supplierBills               SupplierBill[]
+  supplierPayments            SupplierPayment[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
@@ -2637,8 +2657,9 @@ model PaymentTerm {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parties      Party[]
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parties       Party[]
+  supplierBills SupplierBill[]
 
   @@unique([organizationId, name])
   @@map("payment_terms")
@@ -2671,6 +2692,7 @@ model Item {
   purchaseRequisitionItems PurchaseRequisitionItem[]
   rfqItems                 RfqItem[]
   purchaseOrderItems       PurchaseOrderItem[]
+  supplierBillItems        SupplierBillItem[]
 
   @@unique([organizationId, itemCode])
   @@index([organizationId, status])
@@ -2742,6 +2764,33 @@ enum GrnInspectionStatus {
   ACCEPTED
   PARTIAL
   REJECTED
+}
+
+enum SupplierBillStatus {
+  DRAFT
+  APPROVAL_PENDING
+  APPROVED
+  PARTIALLY_PAID
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+/// Per-item and overall 3-way-match outcome (PO vs GRN vs Supplier Bill). MISSING_RECEIPT and
+/// BLOCKED are hard stops that prevent approval; QUANTITY_VARIANCE/RATE_VARIANCE/AMOUNT_VARIANCE
+/// are informational — visible on the bill, but do not by themselves block approval.
+enum BillMatchStatus {
+  MATCHED
+  QUANTITY_VARIANCE
+  RATE_VARIANCE
+  AMOUNT_VARIANCE
+  MISSING_RECEIPT
+  BLOCKED
+}
+
+enum SupplierPaymentStatus {
+  ACTIVE
+  CANCELLED
 }
 
 model PurchaseRequisition {
@@ -3029,6 +3078,7 @@ model PurchaseOrder {
   items                PurchaseOrderItem[]
   goodsReceiptNotes    GoodsReceiptNote[]
   documents            Document[]
+  supplierBills        SupplierBill[]
 
   @@unique([organizationId, poNo])
   @@index([organizationId, status])
@@ -3052,6 +3102,9 @@ model PurchaseOrderItem {
   /// Running cumulative total across all GRNs against this line — updated transactionally at
   /// GRN creation, mirroring the BoqItem.executedQty ceiling-tracking pattern.
   receivedQty           Decimal   @default(0) @db.Decimal(18, 3)
+  /// Running cumulative total across all APPROVED Supplier Bills against this line — updated
+  /// transactionally at bill approval only, mirroring receivedQty's ceiling-tracking pattern.
+  billedQty             Decimal   @default(0) @db.Decimal(18, 3)
   deliveryDate          DateTime?
   cmsWorkId             String?
   boqItemId             String?
@@ -3064,6 +3117,7 @@ model PurchaseOrderItem {
   cmsWork       CmsWork?      @relation(fields: [cmsWorkId], references: [id])
   boqItem       BoqItem?      @relation(fields: [boqItemId], references: [id])
   grnItems      GrnItem[]
+  supplierBillItems SupplierBillItem[]
 
   @@index([organizationId, purchaseOrderId])
   @@map("purchase_order_items")
@@ -3122,4 +3176,150 @@ model GrnItem {
 
   @@index([organizationId, grnId])
   @@map("grn_items")
+}
+
+// ---------------------------------------------------------------------------
+// Supplier Bill / Accounts Payable — the Procurement Core's terminus into AP.
+// A bill only becomes financial (Payable + GL posting) once APPROVED; DRAFT /
+// APPROVAL_PENDING bills are pure matching/review state with zero accounting side effects.
+// ---------------------------------------------------------------------------
+
+model SupplierBill {
+  id                   String             @id @default(cuid())
+  organizationId       String
+  billNo               String
+  supplierInvoiceNo    String
+  supplierInvoiceDate  DateTime
+  supplierId           String
+  purchaseOrderId      String
+  cmsWorkId            String?
+  paymentTermId        String?
+  currency             String             @default("BDT")
+  dueDate              DateTime?
+  remarks              String?
+  status               SupplierBillStatus @default(DRAFT)
+  matchStatus          BillMatchStatus    @default(MATCHED)
+  subtotal             Decimal            @default(0) @db.Decimal(18, 2)
+  discountAmount       Decimal            @default(0) @db.Decimal(18, 2)
+  taxableBase          Decimal            @default(0) @db.Decimal(18, 2)
+  vatRate              Decimal?           @db.Decimal(8, 4)
+  vatAmount            Decimal            @default(0) @db.Decimal(18, 2)
+  aitRate              Decimal?           @db.Decimal(8, 4)
+  aitAmount            Decimal            @default(0) @db.Decimal(18, 2)
+  otherDeductionAmount Decimal            @default(0) @db.Decimal(18, 2)
+  netPayable           Decimal            @default(0) @db.Decimal(18, 2)
+  /// Set only once APPROVED — this is the single Payable this bill produced.
+  payableId            String?            @unique
+  submittedAt          DateTime?
+  approvedById         String?
+  approvedAt           DateTime?
+  rejectedReason       String?
+  createdById          String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  organization  Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier      Party                   @relation(fields: [supplierId], references: [id])
+  purchaseOrder PurchaseOrder           @relation(fields: [purchaseOrderId], references: [id])
+  cmsWork       CmsWork?                @relation(fields: [cmsWorkId], references: [id])
+  paymentTerm   PaymentTerm?            @relation(fields: [paymentTermId], references: [id])
+  payable       Payable?                @relation(fields: [payableId], references: [id])
+  items         SupplierBillItem[]
+  deductions    SupplierBillDeduction[]
+  documents     Document[]
+
+  @@unique([organizationId, billNo])
+  @@unique([organizationId, supplierId, supplierInvoiceNo])
+  @@index([organizationId, status])
+  @@index([organizationId, purchaseOrderId])
+  @@map("supplier_bills")
+}
+
+/// Snapshotted item detail per bill line — mirrors ProjectBillItem's pattern. `acceptedQty`/
+/// `previouslyBilledQty` are recomputed fresh (not trusted from a stale cache) at both match-time
+/// and approval-time, matching ProjectBill's own defense against drift/races.
+model SupplierBillItem {
+  id                   String          @id @default(cuid())
+  organizationId       String
+  supplierBillId       String
+  purchaseOrderItemId  String
+  itemId               String
+  itemCodeSnapshot     String
+  itemNameSnapshot     String
+  descriptionSnapshot  String?
+  unitSnapshot         String
+  orderedQty           Decimal         @db.Decimal(18, 3)
+  acceptedQty          Decimal         @db.Decimal(18, 3)
+  previouslyBilledQty  Decimal         @db.Decimal(18, 3)
+  currentBilledQty     Decimal         @db.Decimal(18, 3)
+  remainingBillableQty Decimal         @db.Decimal(18, 3)
+  poRate               Decimal         @db.Decimal(18, 2)
+  invoiceRate          Decimal         @db.Decimal(18, 2)
+  discountAmount       Decimal         @default(0) @db.Decimal(18, 2)
+  lineAmount           Decimal         @db.Decimal(18, 2)
+  matchStatus          BillMatchStatus
+  remarks              String?
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplierBill      SupplierBill      @relation(fields: [supplierBillId], references: [id], onDelete: Cascade)
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
+  item              Item              @relation(fields: [itemId], references: [id])
+
+  @@index([organizationId, supplierBillId])
+  @@index([organizationId, purchaseOrderItemId])
+  @@map("supplier_bill_items")
+}
+
+/// Generic snapshotted deduction line (VAT / AIT / OTHER) — mirrors BillAdjustment's rate/base/
+/// amount snapshot so a later DeductionConfig change never rewrites an already-approved bill.
+model SupplierBillDeduction {
+  id             String   @id @default(cuid())
+  organizationId String
+  supplierBillId String
+  type           String
+  code           String?
+  rate           Decimal  @db.Decimal(8, 4)
+  base           Decimal  @db.Decimal(18, 2)
+  amount         Decimal  @db.Decimal(18, 2)
+  remarks        String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplierBill SupplierBill @relation(fields: [supplierBillId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, supplierBillId])
+  @@map("supplier_bill_deductions")
+}
+
+/// One row per discrete payment against a Payable. Payable.paidAmount stays the single running-
+/// total source of truth (kept in sync transactionally with an optimistic-lock guard), but this
+/// table gives each payment its own reversible GL/Cash-Bank posting and audit trail — something
+/// the generic AccountingService.payPayable() cash path does not provide on its own.
+model SupplierPayment {
+  id                 String                @id @default(cuid())
+  organizationId     String
+  payableId          String
+  supplierId         String
+  bankAccountId      String
+  amount             Decimal               @db.Decimal(18, 2)
+  paymentDate        DateTime
+  paymentMethod      String?
+  referenceNo        String?
+  remarks            String?
+  status             SupplierPaymentStatus @default(ACTIVE)
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancellationReason String?
+  createdById        String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  payable      Payable      @relation(fields: [payableId], references: [id])
+  supplier     Party        @relation(fields: [supplierId], references: [id])
+  bankAccount  BankAccount  @relation(fields: [bankAccountId], references: [id])
+  documents    Document[]
+
+  @@index([organizationId, payableId])
+  @@index([organizationId, supplierId])
+  @@map("supplier_payments")
 }

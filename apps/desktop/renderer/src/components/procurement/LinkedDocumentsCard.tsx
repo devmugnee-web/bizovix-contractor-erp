@@ -13,7 +13,14 @@ interface LinkedDocumentsCardProps {
    * card only surfaces what is already linked to this record. */
   filter: Pick<
     DocumentQuery,
-    "purchaseRequisitionId" | "rfqId" | "supplierQuotationId" | "comparativeStatementId" | "purchaseOrderId" | "goodsReceiptNoteId"
+    | "purchaseRequisitionId"
+    | "rfqId"
+    | "supplierQuotationId"
+    | "comparativeStatementId"
+    | "purchaseOrderId"
+    | "goodsReceiptNoteId"
+    | "supplierBillId"
+    | "supplierPaymentId"
   >;
 }
 

@@ -15,7 +15,8 @@
     "test:integration": "node scripts/run-integration-tests.mjs",
     "reconcile:legacy-financial": "nest build && dotenv -e ../../.env -- node dist/scripts/reconcile-legacy-financial-data.js",
     "cleanup:demo-banks": "nest build && dotenv -e ../../.env -- node dist/scripts/cleanup-demo-bank-data.js",
-    "test:e2e": "node scripts/run-integration-tests.mjs --e2e"
+    "test:e2e": "node scripts/run-integration-tests.mjs --e2e",
+    "seed:supplier-bill-ap": "nest build && dotenv -e ../../.env -- node dist/scripts/seed-supplier-bill-ap.js"
   },
   "dependencies": {
     "@bizovix/database": "workspace:*",
