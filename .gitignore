@@ -158,3 +158,6 @@ packages/database/generated/
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Local development database backups (demo-reset safety backups)
+backups/
