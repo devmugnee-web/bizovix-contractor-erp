@@ -8,4 +8,9 @@ export class CreateCmsWorkDto {
   @Type(() => Number) @IsNumber() @IsPositive() contractValue!: number;
   @IsOptional() @IsDateString() startDate?: string;
   @IsOptional() @IsDateString() expectedCompletionDate?: string;
+
+  /** Optional real FK to the awarded Tender — the Award → CMS handoff link. When set, the
+   * backend validates the tender, blocks a duplicate work for the same tender, back-links the
+   * originating Document Purchase where resolvable, and advances the tender to ONGOING. */
+  @IsOptional() @IsString() tenderId?: string;
 }

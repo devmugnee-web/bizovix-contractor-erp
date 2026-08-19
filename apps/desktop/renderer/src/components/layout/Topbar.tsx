@@ -142,7 +142,7 @@ export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: Top
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
         <div className={cn("hidden items-center gap-2 md:flex", !showWhatsApp && "md:hidden")}>
           <Link
-            href="/cms"
+            href="/bank-instruments/document-purchase/create"
             className="flex h-8 items-center gap-1.5 rounded-md bg-biz-orange px-3 text-[10px] font-bold text-white shadow-card hover:bg-biz-orange/90"
           >
             <Plus className="h-3 w-3" />

@@ -253,7 +253,7 @@ model Organization {
   supplierBills                 SupplierBill[]
   supplierBillItems             SupplierBillItem[]
   supplierBillDeductions        SupplierBillDeduction[]
-  supplierPayments               SupplierPayment[]
+  supplierPayments              SupplierPayment[]
 
   @@map("organizations")
 }
@@ -642,6 +642,10 @@ model DocumentPurchase {
   purchaseDate          DateTime
   documentPrice         Decimal                      @db.Decimal(18, 2)
   estimatedTenderAmount Decimal                      @default(0) @db.Decimal(18, 2)
+  category              String?
+  submissionDate        DateTime?
+  openingDate           DateTime?
+  remarks               String?
   tenderSecurityStatus  TenderSecurityDocumentStatus @default(PENDING)
   createdById           String?
   createdAt             DateTime                     @default(now())
@@ -1872,12 +1876,12 @@ model Payable {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project         CmsWork?         @relation(fields: [projectId], references: [id])
-  party           Party?           @relation(fields: [partyId], references: [id])
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project          CmsWork?          @relation(fields: [projectId], references: [id])
+  party            Party?            @relation(fields: [partyId], references: [id])
   /// Opposite side of SupplierBill.payableId — present only for Payables created by an
   /// approved Supplier Bill; historical/manual Payables (CMS, Tender, generic AP entry) have none.
-  supplierBill    SupplierBill?
+  supplierBill     SupplierBill?
   supplierPayments SupplierPayment[]
 
   @@unique([organizationId, billNo])
@@ -3111,12 +3115,12 @@ model PurchaseOrderItem {
   sourceQuotationItemId String?
   remarks               String?
 
-  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  item          Item          @relation(fields: [itemId], references: [id])
-  cmsWork       CmsWork?      @relation(fields: [cmsWorkId], references: [id])
-  boqItem       BoqItem?      @relation(fields: [boqItemId], references: [id])
-  grnItems      GrnItem[]
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrder     PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item              Item               @relation(fields: [itemId], references: [id])
+  cmsWork           CmsWork?           @relation(fields: [cmsWorkId], references: [id])
+  boqItem           BoqItem?           @relation(fields: [boqItemId], references: [id])
+  grnItems          GrnItem[]
   supplierBillItems SupplierBillItem[]
 
   @@index([organizationId, purchaseOrderId])
@@ -3273,14 +3277,14 @@ model SupplierBillItem {
 /// Generic snapshotted deduction line (VAT / AIT / OTHER) — mirrors BillAdjustment's rate/base/
 /// amount snapshot so a later DeductionConfig change never rewrites an already-approved bill.
 model SupplierBillDeduction {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   organizationId String
   supplierBillId String
   type           String
   code           String?
-  rate           Decimal  @db.Decimal(8, 4)
-  base           Decimal  @db.Decimal(18, 2)
-  amount         Decimal  @db.Decimal(18, 2)
+  rate           Decimal @db.Decimal(8, 4)
+  base           Decimal @db.Decimal(18, 2)
+  amount         Decimal @db.Decimal(18, 2)
   remarks        String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

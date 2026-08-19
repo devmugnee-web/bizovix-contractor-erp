@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Bell,
   Building2,
+  CreditCard,
   FileCog,
   Hash,
   Landmark,
@@ -29,6 +30,7 @@ const SECTIONS = [
   { href: "/settings/approvals", label: "Approvals", icon: ListChecks },
   { href: "/settings/security", label: "Security", icon: Shield },
   { href: "/settings/system", label: "System", icon: Server },
+  { href: "/plan-billing", label: "Plan & Billing", icon: CreditCard },
 ];
 
 export function SettingsNav() {

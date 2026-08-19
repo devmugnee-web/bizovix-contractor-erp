@@ -12,6 +12,11 @@ export const createDocumentPurchaseSchema = z
       .number({ invalid_type_error: "Enter a valid amount" })
       .positive("Document price must be greater than 0"),
     paymentFromAccountId: z.string().min(1, "Payment account is required"),
+    category: z.string().optional().or(z.literal("")),
+    estimatedTenderAmount: z.coerce.number().optional(),
+    submissionDate: z.string().optional().or(z.literal("")),
+    openingDate: z.string().optional().or(z.literal("")),
+    remarks: z.string().optional().or(z.literal("")),
   })
   .refine((data) => data.purchaseType !== PurchaseType.EGP || !!data.tenderId, {
     message: "Tender ID is required for e-GP purchases",

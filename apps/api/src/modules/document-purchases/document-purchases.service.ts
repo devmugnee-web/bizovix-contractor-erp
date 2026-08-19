@@ -131,20 +131,50 @@ export class DocumentPurchasesService {
     await this.assertBelongsToOrg(organizationId, dto.organizationMasterId, dto.paymentFromAccountId);
     await this.assertTenderBelongsToOrg(organizationId, dto.linkedTenderId);
 
-    const record = await this.prisma.documentPurchase.create({
-      data: {
-        organizationId,
-        purchaseType: dto.purchaseType,
-        egpTenderId: dto.purchaseType === "EGP" ? dto.tenderId : null,
-        linkedTenderId: dto.linkedTenderId ?? null,
-        organizationMasterId: dto.organizationMasterId,
-        tenderWorkName: dto.tenderWorkName,
-        purchaseDate: new Date(dto.purchaseDate),
-        documentPrice: dto.documentPrice,
-        paymentFromAccountId: dto.paymentFromAccountId,
-        createdById: userId,
-      },
-      include: includeRelations,
+    const record = await this.prisma.$transaction(async (tx) => {
+      // If this purchase isn't explicitly linked to an existing Tender (i.e. it wasn't started
+      // from a Tender's own page), create the internal Tender record here from the same fields —
+      // Bank Instruments is the primary entry point and users must never enter the same tender twice.
+      let linkedTenderId = dto.linkedTenderId ?? null;
+      if (!linkedTenderId) {
+        const tender = await tx.tender.create({
+          data: {
+            organizationId,
+            organizationMasterId: dto.organizationMasterId,
+            egpTenderId: dto.purchaseType === "EGP" ? dto.tenderId : null,
+            workName: dto.tenderWorkName,
+            category: dto.category ?? "General",
+            contractValue: dto.estimatedTenderAmount ?? 0,
+            status: "DOCUMENT_PURCHASED",
+            submissionDeadline: dto.submissionDate ? new Date(dto.submissionDate) : null,
+            openingDate: dto.openingDate ? new Date(dto.openingDate) : null,
+            description: dto.remarks,
+            createdById: userId,
+          },
+        });
+        linkedTenderId = tender.id;
+      }
+
+      return tx.documentPurchase.create({
+        data: {
+          organizationId,
+          purchaseType: dto.purchaseType,
+          egpTenderId: dto.purchaseType === "EGP" ? dto.tenderId : null,
+          linkedTenderId,
+          organizationMasterId: dto.organizationMasterId,
+          tenderWorkName: dto.tenderWorkName,
+          purchaseDate: new Date(dto.purchaseDate),
+          documentPrice: dto.documentPrice,
+          estimatedTenderAmount: dto.estimatedTenderAmount ?? 0,
+          category: dto.category,
+          submissionDate: dto.submissionDate ? new Date(dto.submissionDate) : null,
+          openingDate: dto.openingDate ? new Date(dto.openingDate) : null,
+          remarks: dto.remarks,
+          paymentFromAccountId: dto.paymentFromAccountId,
+          createdById: userId,
+        },
+        include: includeRelations,
+      });
     });
 
     await this.auditLogService.record({
@@ -191,6 +221,13 @@ export class DocumentPurchasesService {
         ...(dto.purchaseDate ? { purchaseDate: new Date(dto.purchaseDate) } : {}),
         ...(dto.documentPrice !== undefined ? { documentPrice: dto.documentPrice } : {}),
         ...(dto.paymentFromAccountId ? { paymentFromAccountId: dto.paymentFromAccountId } : {}),
+        ...(dto.estimatedTenderAmount !== undefined ? { estimatedTenderAmount: dto.estimatedTenderAmount } : {}),
+        ...(dto.category !== undefined ? { category: dto.category } : {}),
+        ...(dto.submissionDate !== undefined
+          ? { submissionDate: dto.submissionDate ? new Date(dto.submissionDate) : null }
+          : {}),
+        ...(dto.openingDate !== undefined ? { openingDate: dto.openingDate ? new Date(dto.openingDate) : null } : {}),
+        ...(dto.remarks !== undefined ? { remarks: dto.remarks } : {}),
       },
       include: includeRelations,
     });

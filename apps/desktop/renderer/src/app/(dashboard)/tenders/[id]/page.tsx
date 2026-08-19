@@ -80,6 +80,7 @@ export default function TenderDetailPage() {
   ];
   const canSubmit = !["AWARDED", "ONGOING", "COMPLETED", "CANCELLED"].includes(t.status);
   const canRecordOpening = hasSubmitted;
+  const canCreateWork = ["AWARDED", "NOA", "ONGOING"].includes(t.status) && !hasProject;
 
   return (
     <div className="flex flex-col gap-6">
@@ -199,7 +200,22 @@ export default function TenderDetailPage() {
           ))}
         </LinkedCard>
 
-        <LinkedCard icon={FolderOpen} title="Project (CMS)" count={t.linked.cmsWorks.length} viewHref="/cms/ongoing-works">
+        <LinkedCard
+          icon={FolderOpen}
+          title="Project (CMS)"
+          count={t.linked.cmsWorks.length}
+          viewHref="/cms/ongoing-works"
+          emptyAction={
+            canCreateWork ? (
+              <Link href={`/cms/ongoing-works/create?tenderId=${t.id}`}>
+                <SecondaryButton>
+                  <Plus className="h-4 w-4" />
+                  Create Ongoing Work
+                </SecondaryButton>
+              </Link>
+            ) : undefined
+          }
+        >
           {t.linked.cmsWorks.map((w) => (
             <div key={w.id} className="flex items-center justify-between text-[12px]">
               <span className="text-biz-text">{w.workName}</span>

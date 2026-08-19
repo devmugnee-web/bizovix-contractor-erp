@@ -41,4 +41,6 @@ export interface CreateCmsWorkInput {
   contractValue: number;
   startDate?: string;
   expectedCompletionDate?: string;
+  /** Real FK to the awarded Tender — the Award → CMS handoff link. */
+  tenderId?: string;
 }

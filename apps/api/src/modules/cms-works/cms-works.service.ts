@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { CmsWorkStatus, Prisma } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
@@ -75,20 +75,52 @@ export class CmsWorksService {
     await this.planLimits.assertCanCreateProject(organizationId);
     const master = await this.prisma.organizationMaster.findFirst({ where: { id: dto.organizationMasterId, organizationId } });
     if (!master) throw new NotFoundException("Organization not found");
-    const work = await this.prisma.cmsWork.create({
-      data: {
-        organizationId,
-        organizationMasterId: dto.organizationMasterId,
-        workName: dto.workName,
-        workCategory: dto.workCategory,
-        contractValue: dto.contractValue,
-        status: "ONGOING",
-        startDate: dto.startDate ? new Date(dto.startDate) : null,
-        expectedCompletionDate: dto.expectedCompletionDate ? new Date(dto.expectedCompletionDate) : null,
-        createdById: userId,
-      },
-      include: includeRelations,
+
+    let documentPurchaseId: string | null = null;
+    let tender: { status: string; awardedAt: Date | null } | null = null;
+    if (dto.tenderId) {
+      tender = await this.prisma.tender.findFirst({ where: { id: dto.tenderId, organizationId } });
+      if (!tender) throw new NotFoundException("Tender not found");
+
+      const duplicate = await this.prisma.cmsWork.findFirst({
+        where: { organizationId, tenderId: dto.tenderId, status: { not: "CANCELLED" } },
+      });
+      if (duplicate) throw new BadRequestException("An ongoing or archived work already exists for this tender");
+
+      const purchase = await this.prisma.documentPurchase.findFirst({
+        where: { organizationId, linkedTenderId: dto.tenderId, cmsWork: null },
+      });
+      documentPurchaseId = purchase?.id ?? null;
+    }
+
+    const work = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.cmsWork.create({
+        data: {
+          organizationId,
+          organizationMasterId: dto.organizationMasterId,
+          workName: dto.workName,
+          workCategory: dto.workCategory,
+          contractValue: dto.contractValue,
+          status: "ONGOING",
+          startDate: dto.startDate ? new Date(dto.startDate) : null,
+          expectedCompletionDate: dto.expectedCompletionDate ? new Date(dto.expectedCompletionDate) : null,
+          tenderId: dto.tenderId ?? null,
+          documentPurchaseId,
+          createdById: userId,
+        },
+        include: includeRelations,
+      });
+
+      if (dto.tenderId && tender && !["ONGOING", "COMPLETED", "CANCELLED"].includes(tender.status)) {
+        await tx.tender.update({
+          where: { id: dto.tenderId, organizationId },
+          data: { status: "ONGOING", awardedAt: tender.awardedAt ?? new Date() },
+        });
+      }
+
+      return created;
     });
+
     await this.auditLogService.record({ organizationId, userId, action: "create", entityType: "CmsWork", entityId: work.id, newValue: toDto(work) });
     return toDto(work);
   }

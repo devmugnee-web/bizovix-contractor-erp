@@ -11,6 +11,11 @@ export interface DocumentPurchase {
   tenderWorkName: string;
   purchaseDate: string;
   documentPrice: string;
+  estimatedTenderAmount: string;
+  category: string | null;
+  submissionDate: string | null;
+  openingDate: string | null;
+  remarks: string | null;
   paymentFromAccountId: string;
   paymentFromAccount: { id: string; accountName: string };
   createdAt: string;
@@ -26,6 +31,11 @@ export interface CreateDocumentPurchaseInput {
   purchaseDate: string;
   documentPrice: number;
   paymentFromAccountId: string;
+  category?: string;
+  estimatedTenderAmount?: number;
+  submissionDate?: string;
+  openingDate?: string;
+  remarks?: string;
 }
 
 export type UpdateDocumentPurchaseInput = Partial<CreateDocumentPurchaseInput>;
