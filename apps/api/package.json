@@ -16,7 +16,8 @@
     "reconcile:legacy-financial": "nest build && dotenv -e ../../.env -- node dist/scripts/reconcile-legacy-financial-data.js",
     "cleanup:demo-banks": "nest build && dotenv -e ../../.env -- node dist/scripts/cleanup-demo-bank-data.js",
     "test:e2e": "node scripts/run-integration-tests.mjs --e2e",
-    "seed:supplier-bill-ap": "nest build && dotenv -e ../../.env -- node dist/scripts/seed-supplier-bill-ap.js"
+    "seed:supplier-bill-ap": "nest build && dotenv -e ../../.env -- node dist/scripts/seed-supplier-bill-ap.js",
+    "vendor-admin:create": "nest build && dotenv -e ../../.env -- node dist/scripts/create-vendor-admin.js"
   },
   "dependencies": {
     "@bizovix/database": "workspace:*",
@@ -30,6 +31,7 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.29",
     "@nestjs/schedule": "^6.1.3",
+    "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.1.0",
     "bcryptjs": "^2.4.3",
     "class-transformer": "^0.5.1",

@@ -5,7 +5,6 @@ export interface EligiblePgBgTender {
   tenderId: string | null;
   tenderWorkName: string;
   organizationMaster: { id: string; shortName: string; fullName: string };
-  tenderSecurityAmount: string;
 }
 
 export interface PgBgEligibleQuery {
@@ -36,7 +35,6 @@ export interface SavePgBgWorkflowInput {
 export interface PgBgWorkflow {
   id: string;
   documentPurchaseId: string;
-  tenderSecurityAmount: string;
   noaDate: string | null;
   noaAmount: string | null;
   workCategory: string | null;

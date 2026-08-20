@@ -49,21 +49,21 @@ interface DryRunReport {
   dryRunDate: string;
   canApply: boolean;
   failureReasons: string[];
-  beforeCounts: Record<string, number>;
-  afterCounts: Record<string, number>;
-  deletionPlan: Record<string, number>;
-  preservationPlan: Record<string, number>;
+  beforeCounts: { [key: string]: number };
+  afterCounts: { [key: string]: number };
+  deletionPlan: { [key: string]: number };
+  preservationPlan: { [key: string]: number };
   classifications: {
-    journalEntries: Record[];
-    financialTransactions: Record[];
-    documents: Record[];
-    reminders: Record[];
+    journalEntries: any[];
+    financialTransactions: any[];
+    documents: any[];
+    reminders: any[];
   };
   financialReconciliation: {
     ar: FinancialState;
     ap: FinancialState;
     retention: FinancialState;
-    banks: Record<string, FinancialState>;
+    banks: { [key: string]: FinancialState };
     trialBalance: { debit: Prisma.Decimal; credit: Prisma.Decimal; difference: Prisma.Decimal };
     unbalancedJournalCount: number;
   };
@@ -111,8 +111,8 @@ async function checkEnvironment(): Promise<boolean> {
   return true;
 }
 
-async function getTableCounts(prisma: PrismaClient): Promise<Record<string, number>> {
-  const counts: Record<string, number> = {};
+async function getTableCounts(prisma: PrismaClient): Promise<{ [key: string]: number }> {
+  const counts: { [key: string]: number } = {};
 
   const tables = [
     "tenders",
@@ -174,8 +174,8 @@ async function getTableCounts(prisma: PrismaClient): Promise<Record<string, numb
 
   for (const table of tables) {
     try {
-      const result = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM "${table}"`);
-      counts[table] = result[0]?.count || 0;
+      const result = (await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM "${table}"`)) as any[];
+      counts[table] = (result[0] as any)?.count || 0;
     } catch (err) {
       counts[table] = 0; // Table may not exist, skip
     }
@@ -378,7 +378,7 @@ async function dryRunReport(
     ...txnClassifications,
   ].filter((r) => r.classification === "UNKNOWN");
 
-  const deletionPlan: Record<string, number> = {
+  const deletionPlan: { [key: string]: number } = {
     "JournalEntry (demo-source)": demoSourceJournals.length,
     "Document (transaction-linked)": docClassifications.filter(
       (d) => d.classification === "TRANSACTION_LINKED_DEMO"
@@ -386,7 +386,7 @@ async function dryRunReport(
     // ... add comprehensive counts from above classifications
   };
 
-  const afterCounts: Record<string, number> = {};
+  const afterCounts: { [key: string]: number } = {};
   Object.entries(beforeCounts).forEach(([table, count]) => {
     afterCounts[table] = count; // Placeholder; would subtract actual deletions
   });
@@ -542,7 +542,7 @@ async function main() {
       const journalByClass = report.classifications.journalEntries.reduce((acc, j) => {
         acc[j.classification] = (acc[j.classification] || 0) + 1;
         return acc;
-      }, {} as Record<string, number>);
+      }, {} as { [key: string]: number });
       Object.entries(journalByClass).forEach(([cls, count]) => {
         console.log(`    ${cls}: ${count}`);
       });
@@ -551,7 +551,7 @@ async function main() {
       const txnByClass = report.classifications.financialTransactions.reduce((acc, t) => {
         acc[t.classification] = (acc[t.classification] || 0) + 1;
         return acc;
-      }, {} as Record<string, number>);
+      }, {} as { [key: string]: number });
       Object.entries(txnByClass).forEach(([cls, count]) => {
         console.log(`    ${cls}: ${count}`);
       });

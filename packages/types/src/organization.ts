@@ -10,6 +10,7 @@ export interface BankAccountOption {
   accountType: "BANK" | "CASH";
   bankName?: string | null;
   accountNumber?: string | null;
+  isActive: boolean;
 }
 
 export interface OrganizationMasterRecord {

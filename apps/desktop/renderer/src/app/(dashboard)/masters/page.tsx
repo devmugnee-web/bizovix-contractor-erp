@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Boxes, Building2, ClipboardList, HardHat, Layers, Ruler, Truck } from "lucide-react";
+import { ArrowRight, Boxes, Building2, ClipboardList, HardHat, Layers, ReceiptText, Ruler, Truck } from "lucide-react";
 import { useItemStats, usePartyStats, usePaymentTerms, useUoms } from "@bizovix/api-client";
 import { PageHeader } from "@bizovix/ui";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
@@ -16,6 +16,13 @@ export default function MastersPage() {
   const paymentTerms = usePaymentTerms();
 
   const cards = [
+    {
+      href: "/masters/expense-heads",
+      icon: ReceiptText,
+      title: "Expense Heads",
+      description: "Manage expense heads and their Budget vs Actual category mappings.",
+      count: undefined,
+    },
     {
       href: "/masters/organizations",
       icon: Building2,

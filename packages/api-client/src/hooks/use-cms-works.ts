@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CmsWork, CmsWorkExport, CmsWorkQuery, CmsWorkStats, CmsWorkStatus, CreateCmsWorkInput } from "@bizovix/types";
+import type { CmsWork, CmsWorkExport, CmsWorkOverview, CmsWorkQuery, CmsWorkStats, CmsWorkStatus, CreateCmsWorkInput } from "@bizovix/types";
 import { apiRequest, apiRequestPaginated } from "../http-client";
 import { queryKeys } from "./query-keys";
 
@@ -16,6 +16,23 @@ export function useCmsWork(id: string | undefined) {
     queryKey: queryKeys.cmsWork(id ?? ""),
     queryFn: () => apiRequest<CmsWork>(`/cms/works/${id}`),
     enabled: !!id,
+  });
+}
+
+export function useCmsWorkOverview(id: string | undefined) {
+  return useQuery({
+    queryKey: [...queryKeys.cmsWork(id ?? ""), "overview"],
+    queryFn: () => apiRequest<CmsWorkOverview>(`/cms/works/${id}/overview`),
+    enabled: !!id,
+  });
+}
+
+export function useAddCmsWorkContact(workId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; designation: string; mobile: string; email?: string; address?: string }) =>
+      apiRequest(`/cms/works/${workId}/contacts`, { method: "POST", body }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [...queryKeys.cmsWork(workId), "overview"] }),
   });
 }
 

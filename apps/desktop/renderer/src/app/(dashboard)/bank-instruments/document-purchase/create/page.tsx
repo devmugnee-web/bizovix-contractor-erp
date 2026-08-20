@@ -75,9 +75,7 @@ function AddDocumentPurchaseForm() {
       documentPrice: undefined,
       paymentFromAccountId: "",
       category: "",
-      estimatedTenderAmount: undefined,
       submissionDate: "",
-      openingDate: "",
       remarks: "",
     },
   });
@@ -113,9 +111,7 @@ function AddDocumentPurchaseForm() {
         documentPrice: Number(values.documentPrice),
         paymentFromAccountId: values.paymentFromAccountId,
         category: values.category || undefined,
-        estimatedTenderAmount: values.estimatedTenderAmount ? Number(values.estimatedTenderAmount) : undefined,
         submissionDate: values.submissionDate || undefined,
-        openingDate: values.openingDate || undefined,
         remarks: values.remarks || undefined,
       },
       {
@@ -246,20 +242,12 @@ function AddDocumentPurchaseForm() {
             <TextInput placeholder="e.g. Civil, Electrical" {...register("category")} />
           </FormField>
 
-          <FormField label="9. Estimated Tender Amount" helper="If available" error={errors.estimatedTenderAmount?.message}>
-            <CurrencyInput placeholder="Enter estimated tender amount" {...register("estimatedTenderAmount")} />
-          </FormField>
-
-          <FormField label="10. Submission Date" error={errors.submissionDate?.message}>
+          <FormField label="9. Submission Date" error={errors.submissionDate?.message}>
             <Controller control={control} name="submissionDate" render={({ field }) => <DateInput {...field} />} />
           </FormField>
 
-          <FormField label="11. Opening Date" error={errors.openingDate?.message}>
-            <Controller control={control} name="openingDate" render={({ field }) => <DateInput {...field} />} />
-          </FormField>
-
           <div className="md:col-span-2">
-            <FormField label="12. Remarks" error={errors.remarks?.message}>
+            <FormField label="10. Remarks" error={errors.remarks?.message}>
               <TextInput placeholder="Optional remarks" {...register("remarks")} />
             </FormField>
           </div>

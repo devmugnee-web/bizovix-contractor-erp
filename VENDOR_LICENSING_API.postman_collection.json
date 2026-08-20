@@ -1,0 +1,1590 @@
+{
+  "info": {
+    "name": "Vendor Licensing API",
+    "description": "Private Admin API (/vendor-admin/*) and Client Software API (/vendor-license/*) for the Bizovix Contractor ERP licensing/tracking system. Companion to VENDOR_LICENSING_API.md, which is the source of truth for every field/status code/error shape here. Run folders 1 through 10 top-to-bottom in order — each request saves the ids the next one needs into collection variables, so the whole collection executes as one coherent, working flow with zero forward-references.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000/api/v1"
+    },
+    {
+      "key": "vendorAdminToken",
+      "value": ""
+    },
+    {
+      "key": "packageId",
+      "value": ""
+    },
+    {
+      "key": "oneTimePackageId",
+      "value": ""
+    },
+    {
+      "key": "saasPackageId",
+      "value": ""
+    },
+    {
+      "key": "trialPackageId",
+      "value": ""
+    },
+    {
+      "key": "trialLicenseKey",
+      "value": ""
+    },
+    {
+      "key": "trialId",
+      "value": ""
+    },
+    {
+      "key": "customerId",
+      "value": ""
+    },
+    {
+      "key": "licenseId",
+      "value": ""
+    },
+    {
+      "key": "licenseKey",
+      "value": ""
+    },
+    {
+      "key": "subscriptionId",
+      "value": ""
+    },
+    {
+      "key": "deviceId",
+      "value": "device-1"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Admin Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner@bizovix.com\",\n  \"password\": \"CHANGE_ME\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "if (data && data.accessToken !== undefined) pm.collectionVariables.set('vendorAdminToken', data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "auth",
+                "me"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Admin Packages",
+      "item": [
+        {
+          "name": "List Packages",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/packages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "packages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create One-Time Package",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/packages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "packages"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"BIZ-LIFETIME\",\n  \"name\": \"Business Lifetime\",\n  \"type\": \"ONE_TIME\",\n  \"maxDevices\": 3,\n  \"price\": 499,\n  \"currency\": \"USD\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "if (data && data.id !== undefined) pm.collectionVariables.set('oneTimePackageId', data.id);",
+                  "const data = pm.response.json().data;",
+                  "if (data && data.id !== undefined) pm.collectionVariables.set('packageId', data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create SaaS Monthly Package",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/packages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "packages"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SAAS-MONTHLY\",\n  \"name\": \"SaaS Monthly\",\n  \"type\": \"SUBSCRIPTION\",\n  \"billingCycle\": \"MONTHLY\",\n  \"maxDevices\": 3,\n  \"durationDays\": 30,\n  \"price\": 49\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "if (data && data.id !== undefined) pm.collectionVariables.set('saasPackageId', data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Trial Package",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/packages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "packages"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"TRIAL-14\",\n  \"name\": \"14-Day Trial\",\n  \"type\": \"TRIAL\",\n  \"maxDevices\": 1,\n  \"durationDays\": 14\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "if (data && data.id !== undefined) pm.collectionVariables.set('trialPackageId', data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Package",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/packages/{{oneTimePackageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "packages",
+                "{{oneTimePackageId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Package",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/packages/{{oneTimePackageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "packages",
+                "{{oneTimePackageId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 599\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Client: Request Trial (needs the Trial package from folder 2)",
+      "item": [
+        {
+          "name": "Request Trial",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-license/trial",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-license",
+                "trial"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"Acme Co\",\n  \"email\": \"acme@example.com\",\n  \"deviceId\": \"trial-device-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "if (data && data.licenseKey !== undefined) pm.collectionVariables.set('trialLicenseKey', data.licenseKey);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Admin Customers",
+      "item": [
+        {
+          "name": "List Customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/customers?page=1&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "customers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "customers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"Karim Builders\",\n  \"contactName\": \"Karim\",\n  \"email\": \"karim@example.com\",\n  \"phone\": \"01700000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "if (data && data.id !== undefined) pm.collectionVariables.set('customerId', data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Duplicate Customer (expect 409, not 500)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "customers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"Karim Builders Again\",\n  \"email\": \"karim@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get Customer",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "customers",
+                "{{customerId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Customer",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "customers",
+                "{{customerId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"01711111111\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Admin Licenses",
+      "item": [
+        {
+          "name": "List Licenses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses?page=1&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Issue One-Time License (existing customer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"packageId\": \"{{oneTimePackageId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "if (data && data.id !== undefined) pm.collectionVariables.set('licenseId', data.id);",
+                  "const data = pm.response.json().data;",
+                  "if (data && data.licenseKey !== undefined) pm.collectionVariables.set('licenseKey', data.licenseKey);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Issue SaaS License (new customer, auto-creates subscription)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newCustomer\": {\n    \"companyName\": \"SaaS Customer Co\",\n    \"email\": \"saas@example.com\"\n  },\n  \"packageId\": \"{{saasPackageId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "if (data && data.subscription) pm.collectionVariables.set('subscriptionId', data.subscription.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get License",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses/{{licenseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses",
+                "{{licenseId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update License (change device limit)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses/{{licenseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses",
+                "{{licenseId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"maxDevices\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Extend License",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses/{{licenseId}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses",
+                "{{licenseId}}",
+                "extend"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"days\": 30\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Suspend License",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses/{{licenseId}}/suspend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses",
+                "{{licenseId}}",
+                "suspend"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"payment overdue\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Reactivate License",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses/{{licenseId}}/reactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses",
+                "{{licenseId}}",
+                "reactivate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Find Trial License (to get its id for conversion)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses?search={{trialLicenseKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "if (data && data[0]) pm.collectionVariables.set('trialId', data[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Convert Trial To Paid License",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses/{{trialId}}/convert-trial",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses",
+                "{{trialId}}",
+                "convert-trial"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"packageId\": \"{{oneTimePackageId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Admin Subscriptions",
+      "item": [
+        {
+          "name": "List Subscriptions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/subscriptions?page=1&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "subscriptions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Subscription",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/subscriptions/{{subscriptionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "subscriptions",
+                "{{subscriptionId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Renew Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/subscriptions/{{subscriptionId}}/renew",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "subscriptions",
+                "{{subscriptionId}}",
+                "renew"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"periods\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Suspend Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/subscriptions/{{subscriptionId}}/suspend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "subscriptions",
+                "{{subscriptionId}}",
+                "suspend"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"payment failed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Reactivate Subscription (NOT the same as /vendor-license/activate)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/subscriptions/{{subscriptionId}}/activate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "subscriptions",
+                "{{subscriptionId}}",
+                "activate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/subscriptions/{{subscriptionId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "subscriptions",
+                "{{subscriptionId}}",
+                "cancel"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"customer request\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Admin Dashboard",
+      "item": [
+        {
+          "name": "Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/dashboard/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "dashboard",
+                "summary"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Activity Feed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/dashboard/activity?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "dashboard",
+                "activity"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Companies",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/dashboard/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "dashboard",
+                "companies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Package Usage",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/dashboard/packages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "dashboard",
+                "packages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Downloads",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/dashboard/downloads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "dashboard",
+                "downloads"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Client Software API (public — no admin token; uses the one-time license from folder 5)",
+      "item": [
+        {
+          "name": "Activate Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-license/activate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-license",
+                "activate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"licenseKey\": \"{{licenseKey}}\",\n  \"deviceId\": \"{{deviceId}}\",\n  \"hostname\": \"DESKTOP-ABC\",\n  \"platform\": \"windows\",\n  \"appVersion\": \"1.0.0\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Verify License",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-license/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-license",
+                "verify"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"licenseKey\": \"{{licenseKey}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Heartbeat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-license/heartbeat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-license",
+                "heartbeat"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"licenseKey\": \"{{licenseKey}}\",\n  \"deviceId\": \"{{deviceId}}\",\n  \"appVersion\": \"1.0.0\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Deactivate Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-license/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-license",
+                "deactivate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"licenseKey\": \"{{licenseKey}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Track Download",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-license/downloads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-license",
+                "downloads"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"downloader@example.com\",\n  \"platform\": \"windows\",\n  \"version\": \"1.0.0\",\n  \"source\": \"website\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Admin: Devices (run after folder 8 — needs at least one real activation to exist)",
+      "item": [
+        {
+          "name": "List All Devices (global)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/devices?pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "devices"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List All Devices — Online Only",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/devices?onlineStatus=online",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "devices"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List All Devices — Filter By Customer",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/devices?customerId={{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "devices"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Devices On One License",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses/{{licenseId}}/devices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses",
+                "{{licenseId}}",
+                "devices"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revoke Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses/{{licenseId}}/devices/{{deviceId}}/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses",
+                "{{licenseId}}",
+                "devices",
+                "{{deviceId}}",
+                "revoke"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reactivate A Revoked Device (via the CLIENT api, not an admin one — see VENDOR_LICENSING_API.md §8)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-license/activate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-license",
+                "activate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"licenseKey\": \"{{licenseKey}}\",\n  \"deviceId\": \"{{deviceId}}\",\n  \"hostname\": \"DESKTOP-ABC\",\n  \"platform\": \"windows\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Admin: Revoke License (terminal — run last, nothing after this can activate against it again)",
+      "item": [
+        {
+          "name": "Revoke License",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorAdminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor-admin/licenses/{{licenseId}}/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor-admin",
+                "licenses",
+                "{{licenseId}}",
+                "revoke"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"chargeback\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

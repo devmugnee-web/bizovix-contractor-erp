@@ -210,15 +210,15 @@ export class ProjectBudgetsService {
         include: includeRelations,
       }),
       this.prisma.expense.findMany({
-        where: { organizationId, workId: cmsWorkId, status: { not: "REJECTED" }, expenseHeadId: { not: null } },
-        include: { expenseHead: { select: { id: true, name: true } } },
+        where: { organizationId, workId: cmsWorkId, status: { notIn: ["REJECTED", "CANCELLED", "AMENDED"] }, expenseHeadId: { not: null } },
+        include: { expenseHead: { select: { id: true, name: true, budgetCategory: true } } },
       }),
     ]);
 
-    const actualByHead = new Map<string, Prisma.Decimal>();
+    const actualByCategory = new Map<string, Prisma.Decimal>();
     for (const expense of expenses) {
-      const key = expense.expenseHeadId!;
-      actualByHead.set(key, (actualByHead.get(key) ?? new Prisma.Decimal(0)).add(expense.amount));
+      const category = expense.expenseHead?.budgetCategory ?? "Unmapped / Unbudgeted";
+      actualByCategory.set(category, (actualByCategory.get(category) ?? new Prisma.Decimal(0)).add(expense.amount));
     }
 
     const status = (budget: Prisma.Decimal, actual: Prisma.Decimal): string => {
@@ -230,8 +230,8 @@ export class ProjectBudgetsService {
     };
 
     const rows = (active?.lines ?? []).map((line) => {
-      const actual = actualByHead.get(line.expenseHeadId) ?? new Prisma.Decimal(0);
-      actualByHead.delete(line.expenseHeadId);
+      const actual = actualByCategory.get(line.category) ?? new Prisma.Decimal(0);
+      actualByCategory.delete(line.category);
       const variance = line.amount.minus(actual);
       const variancePct = line.amount.gt(0) ? variance.div(line.amount).mul(100).toFixed(2) : "0.00";
       return {
@@ -244,16 +244,14 @@ export class ProjectBudgetsService {
       };
     });
 
-    // Actuals posted against a head with no matching budget line — surfaced, not silently dropped.
-    for (const [headId, actual] of actualByHead) {
-      const headName = expenses.find((e) => e.expenseHeadId === headId)?.expenseHead?.name ?? "Unbudgeted";
+    for (const [category, actual] of actualByCategory) {
       rows.push({
-        category: headName,
+        category,
         budget: "0.00",
         actual: actual.toFixed(2),
         variance: new Prisma.Decimal(0).minus(actual).toFixed(2),
         variancePct: "0.00",
-        status: "Over Budget",
+        status: category === "Unmapped / Unbudgeted" ? "Unbudgeted" : "Over Budget",
       });
     }
 

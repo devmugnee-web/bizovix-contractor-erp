@@ -72,7 +72,15 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "General Expense", href: "/expenses/general-expense" },
     ],
   },
-  { label: "Receipts", href: "/receipts", icon: Receipt },
+  {
+    label: "Receipts",
+    href: "/receipts",
+    icon: Receipt,
+    children: [
+      { label: "Project Receipt", href: "/receipts/add" },
+      { label: "General Receipt", href: "/receipts/general/add" },
+    ],
+  },
   {
     label: "Reports",
     href: "/reports",

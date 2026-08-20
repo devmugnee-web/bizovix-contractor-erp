@@ -393,8 +393,8 @@ async function getEntityCounts(
 
   for (const table of ENTITY_TABLES) {
     try {
-      const result = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM "${table}" WHERE "organizationId" = $1`, [orgId]);
-      const beforeCount = result[0]?.count || 0;
+      const result = (await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM "${table}" WHERE "organizationId" = $1`, [orgId])) as any[];
+      const beforeCount = (result[0] as any)?.count || 0;
 
       let plannedDeleteCount = 0;
       if (table === "journal_entries") plannedDeleteCount = demoSourceJournalIds.size;
@@ -555,8 +555,8 @@ async function calculateFinancialState(
     where: { organizationId: orgId, id: { in: Array.from(preservedJournalIds) } },
   });
 
-  let totalDebit = new Prisma.Decimal(0);
-  let totalCredit = new Prisma.Decimal(0);
+  const totalDebit = new Prisma.Decimal(0);
+  const totalCredit = new Prisma.Decimal(0);
 
   // For now, assume journals are balanced (simplified reconciliation)
   const trialBalance = {

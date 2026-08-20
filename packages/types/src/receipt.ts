@@ -26,6 +26,8 @@ export interface ReceiptSummary { totalReceived: string; thisMonth: string; proj
 
 export interface SaveReceiptInput {
   receiptDate: string; receiptCategory: ReceiptCategory; receiptType: string; workId?: string;
+  receivableId?: string;
+  receiptHeadAccountId?: string;
   receivedFrom: string; amount: number; receivedInAccountId: string; paymentMethod: string;
   referenceNo?: string; description?: string; status?: ReceiptRecordStatus;
 }

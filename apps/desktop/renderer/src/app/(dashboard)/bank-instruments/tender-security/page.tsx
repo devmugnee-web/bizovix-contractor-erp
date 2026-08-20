@@ -135,9 +135,10 @@ export default function TenderSecurityPage() {
   const [securityType, setSecurityType] = React.useState<SecurityType>("PAY_ORDER");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
   const [selectedRows, setSelectedRows] = React.useState<SelectedTender[]>([]);
+  const [showDetails, setShowDetails] = React.useState(false);
   const [fundingType, setFundingType] = React.useState<FundingType>("LOAN");
-  const [bankId, setBankId] = React.useState("");
-  const [chargeFromAccountId, setChargeFromAccountId] = React.useState("");
+  const [issuingBankName, setIssuingBankName] = React.useState("");
+  const [companyAccountId, setCompanyAccountId] = React.useState("");
   const [issueDate, setIssueDate] = React.useState(() => isoDateInput(new Date()));
   const [validityMonths, setValidityMonths] = React.useState("4");
   const [interestRate, setInterestRate] = React.useState("15.00");
@@ -155,9 +156,26 @@ export default function TenderSecurityPage() {
   const pendingItems = pendingQuery.data?.items ?? [];
   const meta = pendingQuery.data?.meta ?? { page: 1, limit: 5, total: 0, totalPages: 1 };
   const expiryDate = addMonths(issueDate, Number(validityMonths || 0));
-  const firstBank = bankAccounts.data?.find((account) => account.accountType === "BANK") ?? bankAccounts.data?.[0];
-  const effectiveBankId = bankId || firstBank?.id || "";
-  const effectiveChargeFromAccountId = chargeFromAccountId || firstBank?.id || "";
+  const activeBankAccounts = React.useMemo(
+    () => (bankAccounts.data ?? []).filter((account) => account.accountType === "BANK" && account.isActive && account.bankName?.trim()),
+    [bankAccounts.data],
+  );
+  const issuingBanks = React.useMemo(() => {
+    const uniqueBanks = new Map<string, string>();
+    for (const account of activeBankAccounts) {
+      const name = account.bankName!.trim();
+      if (!uniqueBanks.has(name.toLocaleLowerCase())) uniqueBanks.set(name.toLocaleLowerCase(), name);
+    }
+    return [...uniqueBanks.values()];
+  }, [activeBankAccounts]);
+  const effectiveIssuingBankName = issuingBankName || issuingBanks[0] || "";
+  const matchingCompanyAccounts = React.useMemo(
+    () => activeBankAccounts.filter((account) => account.bankName!.trim().toLocaleLowerCase() === effectiveIssuingBankName.toLocaleLowerCase()),
+    [activeBankAccounts, effectiveIssuingBankName],
+  );
+  const effectiveCompanyAccountId = matchingCompanyAccounts.length === 1
+    ? matchingCompanyAccounts[0]!.id
+    : matchingCompanyAccounts.some((account) => account.id === companyAccountId) ? companyAccountId : "";
   const section2Ref = React.useRef<HTMLDivElement>(null);
 
   function toggleRow(row: PendingTenderSecurity) {
@@ -193,6 +211,19 @@ export default function TenderSecurityPage() {
     setSelectedRows((rows) => rows.map((row) => ({ ...row, referenceNo: makeReference(row.tenderId, next) })));
   }
 
+  function openDetails() {
+    if (selectedRows.length === 0) {
+      setMessage({ type: "error", text: "Select one or more tenders first." });
+      return;
+    }
+    setMessage(null);
+    setShowDetails(true);
+    window.requestAnimationFrame(() => {
+      section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      section2Ref.current?.focus({ preventScroll: true });
+    });
+  }
+
   const totals = selectedRows.reduce(
     (acc, row) => {
       const securityAmount = Number(row.securityAmount || 0);
@@ -200,7 +231,7 @@ export default function TenderSecurityPage() {
       return {
         security: acc.security + securityAmount,
         margin: acc.margin + marginAmount,
-        finance: acc.finance + securityAmount - marginAmount,
+        finance: acc.finance + (fundingType === "LOAN" ? securityAmount - marginAmount : 0),
       };
     },
     { security: 0, margin: 0, finance: 0 },
@@ -211,13 +242,13 @@ export default function TenderSecurityPage() {
     try {
       await createTenderSecurity.mutateAsync({
         securityType,
-        bankId: effectiveBankId,
+        bankId: effectiveCompanyAccountId,
         fundingType,
         issueDate,
         validityMonths: Number(validityMonths),
         expiryDate,
-        interestRate: Number(interestRate),
-        chargeFromAccountId: effectiveChargeFromAccountId,
+        interestRate: fundingType === "LOAN" ? Number(interestRate) : 0,
+        chargeFromAccountId: effectiveCompanyAccountId,
         remarks,
         items: selectedRows.map((row) => ({
           documentPurchaseId: row.id,
@@ -229,6 +260,8 @@ export default function TenderSecurityPage() {
       setMessage({ type: "success", text: "Tender security saved successfully." });
       setSelectedIds(new Set());
       setSelectedRows([]);
+      setShowDetails(false);
+      await pendingQuery.refetch();
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to save tender security." });
     }
@@ -241,6 +274,8 @@ export default function TenderSecurityPage() {
       setMessage({ type: "success", text: "Selected tenders marked as not required." });
       setSelectedIds(new Set());
       setSelectedRows([]);
+      setShowDetails(false);
+      await pendingQuery.refetch();
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to update selected tenders." });
     }
@@ -340,7 +375,7 @@ export default function TenderSecurityPage() {
             <Button
               size="sm"
               disabled={selectedRows.length === 0}
-              onClick={() => section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              onClick={openDetails}
             >
               <FileText className="h-4 w-4" />
               Create Tender Security
@@ -369,7 +404,7 @@ export default function TenderSecurityPage() {
         </div>
       </section>
 
-      <section ref={section2Ref} className="rounded-lg border border-biz-border bg-white p-4 shadow-card">
+      {showDetails && <section ref={section2Ref} tabIndex={-1} className="rounded-lg border border-biz-border bg-white p-4 shadow-card outline-none">
         <h2 className="mb-3 text-[15px] font-bold text-biz-navy">2. Tender Security Information <span className="font-semibold">(For Selected Tenders)</span></h2>
 
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.5fr_1.2fr_1.4fr_1.2fr_1fr_1.2fr]">
@@ -381,8 +416,8 @@ export default function TenderSecurityPage() {
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-[12px] font-semibold text-biz-navy">Bank <span className="text-biz-danger">*</span></label>
-            <SelectInput value={effectiveBankId} onChange={(e) => setBankId(e.target.value)} options={(bankAccounts.data ?? []).map((account) => ({ label: account.bankName ?? account.accountName, value: account.id }))} />
+            <label className="mb-1 block text-[12px] font-semibold text-biz-navy">Issuing Bank <span className="text-biz-danger">*</span></label>
+            <SelectInput value={effectiveIssuingBankName} onChange={(e) => { setIssuingBankName(e.target.value); setCompanyAccountId(""); }} options={issuingBanks.map((name) => ({ label: name, value: name }))} />
           </div>
           <div>
             <label className="mb-1 block text-[12px] font-semibold text-biz-navy">Funding Type <span className="text-biz-danger">*</span></label>
@@ -409,17 +444,18 @@ export default function TenderSecurityPage() {
         </div>
 
         <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-[1.1fr_1.7fr_4fr]">
-          <div>
+          {fundingType === "LOAN" && <div>
             <label className="mb-1 block text-[12px] font-semibold text-biz-navy">Interest Rate (% p.a.) <span className="text-biz-danger">*</span></label>
             <div className="flex">
               <TextInput value={interestRate} onChange={(e) => setInterestRate(e.target.value)} className="rounded-r-none text-right" />
               <span className="flex h-11 w-10 items-center justify-center rounded-r-sm border border-l-0 border-biz-border bg-biz-bg text-[13px] font-semibold">%</span>
             </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-[12px] font-semibold text-biz-navy">Charge From (Margin & Bank Charge) <span className="text-biz-danger">*</span></label>
-            <SelectInput value={effectiveChargeFromAccountId} onChange={(e) => setChargeFromAccountId(e.target.value)} options={(bankAccounts.data ?? []).map((account) => ({ label: `${account.bankName ?? account.accountName}${account.accountNumber ? ` - ${account.accountNumber}` : ""}`, value: account.id }))} />
-          </div>
+          </div>}
+          {matchingCompanyAccounts.length > 1 && <div>
+            <label className="mb-1 block text-[12px] font-semibold text-biz-navy">Company Account <span className="text-biz-danger">*</span></label>
+            <SelectInput placeholder="Select company account" value={effectiveCompanyAccountId} onChange={(e) => setCompanyAccountId(e.target.value)} options={matchingCompanyAccounts.map((account) => ({ label: `${account.accountName}${account.accountNumber ? ` - ${account.accountNumber}` : ""}`, value: account.id }))} />
+          </div>}
+          {matchingCompanyAccounts.length === 0 && <div className="flex items-end text-[12px] font-semibold text-biz-danger">No active company account is linked to this bank.</div>}
           <div>
             <label className="mb-1 block text-[12px] font-semibold text-biz-navy">Remarks (optional)</label>
             <TextInput value={remarks} onChange={(e) => setRemarks(e.target.value)} />
@@ -431,14 +467,14 @@ export default function TenderSecurityPage() {
           <table className="w-full min-w-[1120px] text-[12px]">
             <thead className="bg-[#F7FAFF] text-[11px] font-semibold text-biz-navy">
               <tr className="border-b border-biz-border">
-                {["SL", "Tender ID", "Organization", "Work / Tender Name", "Security Amount (৳)", "Margin %", "Margin Amount (৳)", "Bank Finance (৳)", `Reference No. (${securityType === "BANK_GUARANTEE" ? "BG No." : "PO No."})`].map((header) => (
+                {["SL", "Tender ID", "Organization", "Work / Tender Name", "Security Amount (৳)", "Margin %", "Margin Amount (৳)", ...(fundingType === "LOAN" ? ["Bank Finance (৳)"] : []), `Reference No. (${securityType === "BANK_GUARANTEE" ? "BG No." : "PO No."})`].map((header) => (
                   <th key={header} className="px-3 py-2 text-left">{header}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {selectedRows.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-biz-muted">No selected tenders. Select one or more pending tenders above.</td></tr>
+                <tr><td colSpan={fundingType === "LOAN" ? 9 : 8} className="px-4 py-8 text-center text-biz-muted">No selected tenders. Select one or more pending tenders above.</td></tr>
               ) : (
                 selectedRows.map((row, index) => {
                   const securityAmount = Number(row.securityAmount || 0);
@@ -453,7 +489,7 @@ export default function TenderSecurityPage() {
                       <td className="px-3 py-1.5"><input value={row.securityAmount} onChange={(e) => setSelectedValue(row.id, "securityAmount", e.target.value)} className="h-8 w-32 rounded border border-biz-border px-2 text-right" /></td>
                       <td className="px-3 py-1.5"><div className="flex"><input value={row.marginPercentage} onChange={(e) => setSelectedValue(row.id, "marginPercentage", e.target.value)} className="h-8 w-20 rounded-l border border-biz-border px-2 text-right" /><span className="flex h-8 w-8 items-center justify-center rounded-r border border-l-0 border-biz-border bg-biz-bg">%</span></div></td>
                       <td className="px-3 py-1.5"><input readOnly value={money(marginAmount)} className="h-8 w-32 rounded border border-biz-border bg-white px-2 text-right" /></td>
-                      <td className="px-3 py-1.5"><input readOnly value={money(bankFinance)} className="h-8 w-32 rounded border border-biz-border bg-white px-2 text-right" /></td>
+                      {fundingType === "LOAN" && <td className="px-3 py-1.5"><input readOnly value={money(bankFinance)} className="h-8 w-32 rounded border border-biz-border bg-white px-2 text-right" /></td>}
                       <td className="px-3 py-1.5"><input value={row.referenceNo} onChange={(e) => setSelectedValue(row.id, "referenceNo", e.target.value)} className="h-8 w-40 rounded border border-biz-border px-2" /></td>
                     </tr>
                   );
@@ -464,21 +500,21 @@ export default function TenderSecurityPage() {
         </div>
 
         <div className="mt-3 flex justify-center">
-          <div className="grid w-full max-w-[650px] grid-cols-3 overflow-hidden rounded-md border border-biz-border bg-[#F7FAFF] text-center text-[12px]">
+          <div className={`grid w-full max-w-[650px] ${fundingType === "LOAN" ? "grid-cols-3" : "grid-cols-2"} overflow-hidden rounded-md border border-biz-border bg-[#F7FAFF] text-center text-[12px]`}>
             <div className="border-r border-biz-border px-4 py-3"><div className="font-semibold text-biz-blue">Total Security Amount (৳)</div><div className="mt-1 text-[17px] font-bold text-biz-blue">{money(totals.security)}</div></div>
             <div className="border-r border-biz-border px-4 py-3"><div className="font-semibold text-biz-success">Total Margin (৳)</div><div className="mt-1 text-[17px] font-bold text-biz-success">{money(totals.margin)}</div></div>
-            <div className="px-4 py-3"><div className="font-semibold text-biz-navy">Bank Finance Amount (৳)</div><div className="mt-1 text-[17px] font-bold text-biz-navy">{money(totals.finance)}</div></div>
+            {fundingType === "LOAN" && <div className="px-4 py-3"><div className="font-semibold text-biz-navy">Bank Finance Amount (৳)</div><div className="mt-1 text-[17px] font-bold text-biz-navy">{money(totals.finance)}</div></div>}
           </div>
         </div>
 
         <div className="mt-3 flex justify-end gap-3">
-          <Button variant="outline" className="w-28">Cancel</Button>
-          <Button className="w-44" disabled={selectedRows.length === 0 || createTenderSecurity.isPending} onClick={save}>
+          <Button variant="outline" className="w-28" onClick={() => setShowDetails(false)}>Cancel</Button>
+          <Button className="w-44" disabled={selectedRows.length === 0 || !effectiveCompanyAccountId || createTenderSecurity.isPending} onClick={save}>
             <Save className="h-4 w-4" />
             {createTenderSecurity.isPending ? "Saving..." : "Save Tender Security"}
           </Button>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

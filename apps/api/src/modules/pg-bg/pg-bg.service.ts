@@ -3,7 +3,6 @@ import type { Prisma } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { TenderBankSettingsService } from "../settings-tender-bank/tender-bank-settings.service";
 import { AcceptNoaDto, FinalizePgBgDto, SavePgBgWorkflowDto } from "./dto/save-pg-bg-workflow.dto";
 import { QueryPgBgDto } from "./dto/query-pg-bg.dto";
 import type { CompletePgBgReleaseDto, RequestPgBgReleaseDto } from "./dto/release-pg-bg.dto";
@@ -14,6 +13,7 @@ type WorkflowRecord = Prisma.PgBgWorkflowGetPayload<{ include: typeof workflowIn
 function workflowToDto(record: WorkflowRecord) {
   return {
     ...record,
+    // Retained in the response for older clients; the current NOA/PG-BG flow does not use it.
     tenderSecurityAmount: record.tenderSecurityAmount.toFixed(2),
     noaAmount: record.noaAmount?.toFixed(2) ?? null,
   };
@@ -24,26 +24,7 @@ export class PgBgService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
-    private readonly tenderBankSettings: TenderBankSettingsService,
   ) {}
-
-  /**
-   * Real business rule: reuse the actual Tender Security amount already recorded for this
-   * document purchase (TenderSecurityItem.securityAmount) when one exists — that figure is
-   * authoritative since the tender security step runs before PG/BG. If no Tender Security
-   * was ever created for this purchase, fall back to the same configured
-   * percentage-of-estimate rule used on the Tender Security pending list — never a
-   * per-tender hardcoded amount.
-   */
-  private async securityAmountFor(
-    documentPurchaseId: string,
-    estimatedTenderAmount: Prisma.Decimal,
-    tsDefaultSecurityPct: Prisma.Decimal,
-  ) {
-    const item = await this.prisma.tenderSecurityItem.findUnique({ where: { documentPurchaseId } });
-    if (item) return item.securityAmount;
-    return estimatedTenderAmount.mul(tsDefaultSecurityPct).div(100);
-  }
 
   async eligibleTenders(organizationId: string, query: QueryPgBgDto) {
     const page = query.page ?? 1;
@@ -63,7 +44,7 @@ export class PgBgService {
     const relation = {
       organizationMaster: { select: { id: true, shortName: true, fullName: true } },
     } as const;
-    const [items, total, settings] = await Promise.all([
+    const [items, total] = await Promise.all([
       this.prisma.documentPurchase.findMany({
         where,
         include: relation,
@@ -72,25 +53,15 @@ export class PgBgService {
         take: limit,
       }),
       this.prisma.documentPurchase.count({ where }),
-      this.tenderBankSettings.get(organizationId),
     ]);
-    const withAmounts = await Promise.all(
-      items.map(async (item) => ({
-        id: item.id,
-        tenderId: item.egpTenderId,
-        tenderWorkName: item.tenderWorkName,
-        organizationMaster: item.organizationMaster,
-        tenderSecurityAmount: (
-          await this.securityAmountFor(
-            item.id,
-            item.estimatedTenderAmount,
-            settings.tsDefaultSecurityPct,
-          )
-        ).toFixed(2),
-      })),
-    );
+    const eligibleItems = items.map((item) => ({
+      id: item.id,
+      tenderId: item.egpTenderId,
+      tenderWorkName: item.tenderWorkName,
+      organizationMaster: item.organizationMaster,
+    }));
     return {
-      items: withAmounts,
+      items: eligibleItems,
       meta: buildPaginationMeta(total, page, limit),
     };
   }
@@ -117,13 +88,6 @@ export class PgBgService {
       where: { id: dto.documentPurchaseId, organizationId },
     });
     if (!purchase) throw new NotFoundException("Eligible tender not found");
-    const settings = await this.tenderBankSettings.get(organizationId);
-    const tenderSecurityAmount = await this.securityAmountFor(
-      purchase.id,
-      purchase.estimatedTenderAmount,
-      settings.tsDefaultSecurityPct,
-    );
-
     const record = await this.prisma.$transaction(async (tx) => {
       let contactId: string | undefined;
       if (
@@ -174,7 +138,6 @@ export class PgBgService {
           organizationId,
           documentPurchaseId: purchase.id,
           organizationMasterId: purchase.organizationMasterId,
-          tenderSecurityAmount,
           noaDate: dto.noaDate ? new Date(dto.noaDate) : null,
           noaAmount: dto.noaAmount,
           workCategory: dto.workCategory,

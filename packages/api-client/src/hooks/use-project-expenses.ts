@@ -23,13 +23,39 @@ export function useExpenseHeads() {
   return useQuery({ queryKey: queryKeys.projectExpenseHeads, queryFn: () => apiRequest<ExpenseHeadOption[]>("/project-expenses/expense-heads") });
 }
 
+export function useManagedExpenseHeads() {
+  return useQuery({ queryKey: [...queryKeys.projectExpenseHeads, "manage"], queryFn: () => apiRequest<ExpenseHeadOption[]>("/project-expenses/expense-heads/manage") });
+}
+
+export function useCreateExpenseHead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: import("@bizovix/types").SaveExpenseHeadInput) => apiRequest<ExpenseHeadOption>("/project-expenses/expense-heads", { method: "POST", body }),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.projectExpenseHeads }),
+  });
+}
+
+export function useUpdateExpenseHead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: import("@bizovix/types").SaveExpenseHeadInput }) => apiRequest<ExpenseHeadOption>(`/project-expenses/expense-heads/${id}`, { method: "PATCH", body }),
+    onSuccess: () => Promise.all([
+      client.invalidateQueries({ queryKey: queryKeys.projectExpenseHeads }),
+      client.invalidateQueries({ queryKey: ["cms-works"] }),
+    ]),
+  });
+}
+
 export function useExpensePeople() {
   return useQuery({ queryKey: queryKeys.projectExpensePeople, queryFn: () => apiRequest<ExpensePersonOption[]>("/project-expenses/people") });
 }
 
 function useInvalidateProjectExpenses() {
   const client = useQueryClient();
-  return () => client.invalidateQueries({ queryKey: ["project-expenses"] });
+  return () => Promise.all([
+    client.invalidateQueries({ queryKey: ["project-expenses"] }),
+    client.invalidateQueries({ queryKey: ["cms-works"] }),
+  ]);
 }
 
 export function useCreateProjectExpense() {

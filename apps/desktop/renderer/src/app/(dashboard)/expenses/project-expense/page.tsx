@@ -18,6 +18,7 @@ import {
 import {
   useBankAccounts,
   useCmsWorks,
+  useCmsWork,
   useCreateProjectExpense,
   useDeleteProjectExpense,
   useExpenseHeads,
@@ -59,8 +60,10 @@ export default function ProjectExpensePage() {
   const deferredProjectSearch = React.useDeferredValue(projectSearch.trim());
   const [selectingProject, setSelectingProject] = React.useState(false);
   const [selectedProject, setSelectedProject] = React.useState<CmsWork | null | undefined>(undefined);
+  const [linkedWorkId] = React.useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("workId") ?? "");
+  const linkedWork = useCmsWork(linkedWorkId || undefined);
   const projects = useCmsWorks({ status: "ONGOING", search: deferredProjectSearch || undefined, page: 1, limit: 20 });
-  const activeProject = selectedProject === undefined ? projects.data?.items[0] ?? null : selectedProject;
+  const activeProject = linkedWork.data ?? (selectedProject === undefined ? projects.data?.items[0] ?? null : selectedProject);
 
   const heads = useExpenseHeads();
   const people = useExpensePeople();
@@ -89,22 +92,25 @@ export default function ProjectExpensePage() {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState("");
 
-  const form = useForm<ProjectExpenseFormValues>({
+  const getTodayDate = () => new Date().toISOString().slice(0, 10);
+  const form = useForm<ProjectExpenseFormValues & { expenseByText?: string }>({
     resolver: zodResolver(projectExpenseSchema),
-    defaultValues: { expenseDate: "2024-05-12", expenseHeadId: "", amount: 85000, expenseById: "", paidFromAccountId: "", description: "LED Module purchase for main screen" },
+    defaultValues: { expenseDate: getTodayDate(), expenseHeadId: "", amount: 0, expenseById: "", paidFromAccountId: "", description: "", expenseByText: "" },
   });
+  const [useCustomExpenseBy, setUseCustomExpenseBy] = React.useState(false);
   const defaultsSet = React.useRef(false);
 
   React.useEffect(() => {
-    if (defaultsSet.current || !heads.data?.length || !people.data?.length || !accounts.data?.length) return;
+    if (defaultsSet.current || !heads.data?.length || !accounts.data?.length) return;
     defaultsSet.current = true;
     form.reset({
-      expenseDate: "2024-05-12",
-      expenseHeadId: heads.data.find((item) => item.name === "Material Purchase")?.id ?? heads.data[0]!.id,
-      amount: 85000,
-      expenseById: people.data.find((item) => item.name === "Shajib (CEO)")?.id ?? people.data[0]!.id,
-      paidFromAccountId: accounts.data.find((item) => item.accountName === "Islami Bank - 01")?.id ?? accounts.data[0]!.id,
-      description: "LED Module purchase for main screen",
+      expenseDate: getTodayDate(),
+      expenseHeadId: heads.data[0]!.id,
+      amount: 0,
+      expenseById: people.data?.length ? people.data[0]!.id : "",
+      paidFromAccountId: accounts.data[0]!.id,
+      description: "",
+      expenseByText: "",
     });
   }, [accounts.data, form, heads.data, people.data]);
 
@@ -118,13 +124,15 @@ export default function ProjectExpensePage() {
 
   function resetExpenseForm() {
     setEditingId(null);
+    setUseCustomExpenseBy(false);
     form.reset({
-      expenseDate: "2024-05-12",
-      expenseHeadId: heads.data?.find((item) => item.name === "Material Purchase")?.id ?? "",
-      amount: 85000,
-      expenseById: people.data?.find((item) => item.name === "Shajib (CEO)")?.id ?? "",
-      paidFromAccountId: accounts.data?.find((item) => item.accountName === "Islami Bank - 01")?.id ?? "",
-      description: "LED Module purchase for main screen",
+      expenseDate: getTodayDate(),
+      expenseHeadId: heads.data?.[0]?.id ?? "",
+      amount: 0,
+      expenseById: people.data?.[0]?.id ?? "",
+      paidFromAccountId: accounts.data?.[0]?.id ?? "",
+      description: "",
+      expenseByText: "",
     });
   }
 
@@ -138,27 +146,42 @@ export default function ProjectExpensePage() {
     resetExpenseForm();
   }
 
-  function onSubmit(values: ProjectExpenseFormValues) {
+  async function onSubmit(values: ProjectExpenseFormValues & { expenseByText?: string }) {
     if (!activeProject) return;
-    const payload: SaveProjectExpenseInput = { ...values, workId: activeProject.id, amount: Number(values.amount), description: values.description || undefined };
+    if (useCustomExpenseBy && !values.expenseByText?.trim()) return;
+    const payload: SaveProjectExpenseInput = { ...values, workId: activeProject.id, amount: Number(values.amount), description: values.description || undefined, expenseById: useCustomExpenseBy ? (values.expenseByText?.trim() || "") : values.expenseById };
     const done = () => {
       setNotice(editingId ? "Expense updated successfully." : "Expense saved successfully.");
       window.setTimeout(() => setNotice(""), 2500);
       resetExpenseForm();
     };
-    if (editingId) updateExpense.mutate({ id: editingId, payload }, { onSuccess: done });
-    else createExpense.mutate(payload, { onSuccess: done });
+    try {
+      if (editingId) await updateExpense.mutateAsync({ id: editingId, payload });
+      else await createExpense.mutateAsync(payload);
+      done();
+      const returnTo = new URLSearchParams(window.location.search).get("returnTo");
+      if (!editingId && returnTo) window.location.assign(returnTo);
+    } catch {
+      setNotice("");
+    }
   }
 
   function editExpense(expense: ProjectExpense) {
     setEditingId(expense.id);
-    form.reset({ expenseDate: new Date(expense.expenseDate).toISOString().slice(0, 10), expenseHeadId: expense.expenseHead.id, amount: Number(expense.amount), expenseById: expense.expenseBy.id, paidFromAccountId: expense.paidFromAccount.id, description: expense.description ?? "" });
+    setUseCustomExpenseBy(false);
+    form.reset({ expenseDate: new Date(expense.expenseDate).toISOString().slice(0, 10), expenseHeadId: expense.expenseHead.id, amount: Number(expense.amount), expenseById: expense.expenseBy.id, paidFromAccountId: expense.paidFromAccount.id, description: expense.description ?? "", expenseByText: "" });
     document.getElementById("expense-details")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function removeExpense(id: string) {
+  async function removeExpense(id: string) {
     if (!window.confirm("Delete this project expense? This cannot be undone.")) return;
-    deleteExpense.mutate(id, { onSuccess: () => { setNotice("Expense deleted successfully."); window.setTimeout(() => setNotice(""), 2500); } });
+    try {
+      await deleteExpense.mutateAsync(id);
+      setNotice("Expense deleted successfully.");
+      window.setTimeout(() => setNotice(""), 2500);
+    } catch {
+      setNotice("");
+    }
   }
 
   function exportList() {
@@ -196,7 +219,7 @@ export default function ProjectExpensePage() {
             <FormField label="Expense Date" required error={form.formState.errors.expenseDate?.message}><TextInput type="date" {...form.register("expenseDate")} /></FormField>
             <FormField label="Expense For / Expense Head" required error={form.formState.errors.expenseHeadId?.message}><SelectInput placeholder="Select expense head" options={(heads.data ?? []).map((item) => ({ label: item.name, value: item.id }))} {...form.register("expenseHeadId")} /></FormField>
             <FormField label="Amount (BDT)" required error={form.formState.errors.amount?.message}><TextInput type="number" step="0.01" min="0.01" placeholder="85,000.00" {...form.register("amount")} /></FormField>
-            <FormField label="Expense By / Through" required error={form.formState.errors.expenseById?.message}><SelectInput placeholder="Select person" options={(people.data ?? []).map((item) => ({ label: item.name, value: item.id }))} {...form.register("expenseById")} /></FormField>
+            <FormField label="Expense By / Through" required error={form.formState.errors.expenseById?.message || form.formState.errors.expenseByText?.message}>{useCustomExpenseBy ? <TextInput placeholder="Enter person name" {...form.register("expenseByText")} /> : <SelectInput placeholder="Select person" options={[...(people.data ?? []).map((item) => ({ label: item.name, value: item.id })), { label: "Custom / Other", value: "__custom__" }]} {...form.register("expenseById")} onChange={(e) => { form.setValue("expenseById", e.target.value); if (e.target.value === "__custom__") setUseCustomExpenseBy(true); }} />}</FormField>
             <FormField label="Paid From" required error={form.formState.errors.paidFromAccountId?.message}><SelectInput placeholder="Select account" options={(accounts.data ?? []).map((item) => ({ label: `${item.accountName}${item.accountNumber ? ` (${item.accountNumber})` : ""}`, value: item.id }))} {...form.register("paidFromAccountId")} /></FormField>
             <FormField label="Description / Remarks" error={form.formState.errors.description?.message}><TextInput placeholder="LED Module purchase for main screen" {...form.register("description")} /></FormField>
           </fieldset>

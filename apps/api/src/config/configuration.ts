@@ -9,6 +9,10 @@ export interface AppConfig {
     accessExpiresIn: string;
     refreshExpiresIn: string;
   };
+  vendorAdminJwt: {
+    secret: string;
+    expiresIn: string;
+  };
 }
 
 export default (): { app: AppConfig } => ({
@@ -22,6 +26,10 @@ export default (): { app: AppConfig } => ({
       refreshSecret: process.env.JWT_REFRESH_SECRET ?? "",
       accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? "15m",
       refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? "7d",
+    },
+    vendorAdminJwt: {
+      secret: process.env.VENDOR_ADMIN_JWT_SECRET ?? "",
+      expiresIn: process.env.VENDOR_ADMIN_JWT_EXPIRES_IN ?? "12h",
     },
   },
 });

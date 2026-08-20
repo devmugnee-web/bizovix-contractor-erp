@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { useLogin } from "@bizovix/api-client";
+import { tokenStorage, useDevLogin, useLogin } from "@bizovix/api-client";
 import { loginSchema, type LoginFormValues } from "@bizovix/validation";
 import { PrimaryButton, TextInput } from "@bizovix/ui";
 import { ApiError } from "@bizovix/api-client";
@@ -13,13 +13,27 @@ import { ApiError } from "@bizovix/api-client";
 export default function LoginPage() {
   const router = useRouter();
   const login = useLogin();
+  const devLogin = useDevLogin();
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS !== "true") return;
+    if (tokenStorage.getAccessToken()) {
+      router.replace("/dashboard");
+      return;
+    }
+    devLogin.mutate(undefined, { onSuccess: () => router.replace("/dashboard") });
+  }, [devLogin, router]);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
+
+  if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true") {
+    return <div className="flex min-h-screen items-center justify-center bg-biz-bg text-[13px] text-biz-muted">Opening dashboard...</div>;
+  }
 
   const onSubmit = (values: LoginFormValues) => {
     login.mutate(values, {

@@ -132,6 +132,17 @@ export class TenderSecuritiesService {
 
     if (!bank) throw new NotFoundException("Bank not found");
     if (!chargeAccount) throw new NotFoundException("Charge account not found");
+    if (bank.accountType !== "BANK" || !bank.isActive) {
+      throw new BadRequestException("Issuing bank account must be an active bank account");
+    }
+    if (chargeAccount.accountType !== "BANK" || !chargeAccount.isActive) {
+      throw new BadRequestException("Company account must be an active bank account");
+    }
+    const issuingBankName = bank.bankName?.trim().toLocaleLowerCase();
+    const companyBankName = chargeAccount.bankName?.trim().toLocaleLowerCase();
+    if (!issuingBankName || !companyBankName || issuingBankName !== companyBankName) {
+      throw new BadRequestException("Company account must belong to the issuing bank");
+    }
     if (purchases.length !== documentPurchaseIds.length) {
       throw new BadRequestException("One or more selected tenders are not eligible");
     }
@@ -147,7 +158,9 @@ export class TenderSecuritiesService {
       const securityAmount = new PrismaNamespace.Decimal(item.securityAmount);
       const marginPercentage = new PrismaNamespace.Decimal(item.marginPercentage);
       const marginAmount = securityAmount.mul(marginPercentage).div(100);
-      const bankFinanceAmount = securityAmount.minus(marginAmount);
+      const bankFinanceAmount = dto.fundingType === "LOAN"
+        ? securityAmount.minus(marginAmount)
+        : new PrismaNamespace.Decimal(0);
       totalSecurity = totalSecurity.plus(securityAmount);
       totalMargin = totalMargin.plus(marginAmount);
       totalBankFinance = totalBankFinance.plus(bankFinanceAmount);
@@ -175,7 +188,7 @@ export class TenderSecuritiesService {
           amount: totalSecurity,
           marginAmount: totalMargin,
           bankFinanceAmount: totalBankFinance,
-          interestRate: dto.interestRate,
+          interestRate: dto.fundingType === "LOAN" ? dto.interestRate : 0,
           validityMonths: dto.validityMonths,
           issueDate: new Date(dto.issueDate),
           expiryDate: new Date(dto.expiryDate),

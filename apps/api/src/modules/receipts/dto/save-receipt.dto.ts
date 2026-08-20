@@ -7,11 +7,12 @@ export class SaveReceiptDto {
   @IsString() @IsNotEmpty() receiptType!: string;
   @IsOptional() @IsString() workId?: string;
   @IsOptional() @IsString() receivableId?: string;
+  @IsOptional() @IsString() receiptHeadAccountId?: string;
   @IsString() @IsNotEmpty() receivedFrom!: string;
   @Type(() => Number) @IsNumber() @IsPositive() amount!: number;
   @IsString() @IsNotEmpty() receivedInAccountId!: string;
   @IsString() @IsNotEmpty() paymentMethod!: string;
   @IsOptional() @IsString() @MaxLength(100) referenceNo?: string;
-  @IsOptional() @IsString() @MaxLength(500) description?: string;
+  @IsOptional() @IsString() @MaxLength(300) description?: string;
   @IsOptional() @IsIn(["PENDING", "RECEIVED"]) status?: "PENDING" | "RECEIVED";
 }

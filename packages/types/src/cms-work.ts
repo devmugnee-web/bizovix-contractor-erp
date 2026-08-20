@@ -44,3 +44,32 @@ export interface CreateCmsWorkInput {
   /** Real FK to the awarded Tender — the Award → CMS handoff link. */
   tenderId?: string;
 }
+
+export interface CmsWorkOverviewTransaction {
+  id: string;
+  date: string;
+  type: "EXPENSE" | "RECEIPT";
+  item: string;
+  amount: string;
+  party: string;
+  referenceNo: string | null;
+  remarks: string | null;
+}
+
+export interface CmsWorkOverview {
+  project: CmsWork & { contractId: string | null };
+  primaryContact: { id: string; name: string; designation: string; mobile: string; email: string | null; address: string } | null;
+  otherContacts: Array<{ id: string; name: string; designation: string; mobile: string; email: string | null; address: string }>;
+  financial: {
+    contractValue: string;
+    vatRate: string | null;
+    vatAmount: string | null;
+    taxRate: string | null;
+    taxAmount: string | null;
+    valueAfterVatTax: string | null;
+    securityDeposit: { state: "NOT_APPLICABLE" | "NOT_CONFIGURED" | "CONFIGURED"; rate: string | null; amount: string | null; heldAmount: string | null; method: string | null; status: string | null; releasedDate: string | null };
+    netReceivableAfterSd: string | null;
+  };
+  transactions: CmsWorkOverviewTransaction[];
+  summary: { totalExpense: string; totalReceipt: string; securityDepositHeld: string | null; balanceReceivable: string | null; currentMarginPct: string | null };
+}

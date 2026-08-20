@@ -1,11 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import type { CmsWorkStatus, Prisma } from "@bizovix/database";
+import { Prisma, type CmsWorkStatus } from "@bizovix/database";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { PlanLimitsService } from "../billing/plan-limits.service";
 import { CreateCmsWorkDto } from "./dto/create-cms-work.dto";
 import { QueryCmsWorkDto } from "./dto/query-cms-work.dto";
+import { CreateWorkContactDto } from "./dto/create-work-contact.dto";
 
 const includeRelations = { organizationMaster: { select: { id: true, shortName: true, fullName: true } } } satisfies Prisma.CmsWorkInclude;
 type WorkRecord = Prisma.CmsWorkGetPayload<{ include: typeof includeRelations }>;
@@ -69,6 +70,110 @@ export class CmsWorksService {
     const work = await this.prisma.cmsWork.findFirst({ where: { id, organizationId }, include: includeRelations });
     if (!work) throw new NotFoundException("Work not found");
     return toDto(work);
+  }
+
+  async overview(organizationId: string, id: string) {
+    const work = await this.prisma.cmsWork.findFirst({
+      where: { id, organizationId },
+      include: {
+        organizationMaster: { select: { id: true, shortName: true, fullName: true } },
+        pgBgWorkflow: { include: { contact: true } },
+        contracts: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    });
+    if (!work) throw new NotFoundException("Work not found");
+
+    const [contacts, expenses, receipts] = await Promise.all([
+      this.prisma.organizationContact.findMany({
+        where: { organizationId, organizationMasterId: work.organizationMasterId },
+        orderBy: [{ createdAt: "asc" }, { name: "asc" }],
+      }),
+      this.prisma.expense.findMany({
+        where: { organizationId, workId: id, status: { in: ["PENDING", "APPROVED"] } },
+        include: { expenseHead: true, expenseBy: true },
+        orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
+      }),
+      this.prisma.receipt.findMany({
+        where: { organizationId, workId: id, status: { in: ["PENDING", "RECEIVED"] } },
+        orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }],
+      }),
+    ]);
+
+    const primaryContact = work.pgBgWorkflow?.contact ?? contacts[0] ?? null;
+    const otherContacts = contacts.filter((contact) => contact.id !== primaryContact?.id);
+    const contract = work.contracts[0] ?? null;
+    const securityRate = contract?.securityDepositPct ?? null;
+    const vatRate = contract?.vatPct ?? null;
+    const taxRate = contract?.taxPct ?? null;
+    const contractValue = contract?.currentContractValue ?? work.contractValue;
+    const valueExcludingVat = vatRate ? contractValue.div(new Prisma.Decimal(1).plus(vatRate.div(100))) : null;
+    const vatAmount = valueExcludingVat ? contractValue.minus(valueExcludingVat) : null;
+    const taxAmount = valueExcludingVat && taxRate ? valueExcludingVat.mul(taxRate).div(100) : null;
+    const valueAfterVatTax = valueExcludingVat && taxAmount ? valueExcludingVat.minus(taxAmount) : null;
+    const sdConfigured = Boolean(securityRate?.gt(0) && contract?.securityDepositMethod && valueAfterVatTax);
+    const securityState = securityRate?.gt(0) ? (sdConfigured ? "CONFIGURED" : "NOT_CONFIGURED") : "NOT_APPLICABLE";
+    const securityAmount = sdConfigured ? valueAfterVatTax!.mul(securityRate!).div(100) : null;
+    const releasedAmount = contract?.securityDepositReleasedAmount ?? new Prisma.Decimal(0);
+    const heldAmount = securityAmount ? (contract?.securityDepositStatus === "RELEASED" ? new Prisma.Decimal(0) : Prisma.Decimal.max(0, securityAmount.minus(releasedAmount))) : null;
+    const netReceivableAfterSd = valueAfterVatTax && heldAmount ? valueAfterVatTax.minus(heldAmount) : valueAfterVatTax;
+    const totalExpense = expenses.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
+    const receivedRows = receipts.filter((row) => row.status === "RECEIVED");
+    const totalReceipt = receivedRows.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
+    const balanceReceivable = netReceivableAfterSd ? netReceivableAfterSd.minus(totalReceipt) : null;
+    const currentMarginPct = valueAfterVatTax?.gt(0) ? totalReceipt.minus(totalExpense).div(valueAfterVatTax).mul(100) : null;
+    const transactions = [
+      ...expenses.map((row) => ({ id: row.id, date: row.expenseDate.toISOString(), type: "EXPENSE" as const, item: row.expenseHead?.name ?? row.category ?? "Project Expense", amount: row.amount.toFixed(2), party: row.expenseBy?.name ?? "-", referenceNo: row.referenceNo, remarks: row.description })),
+      ...receipts.map((row) => ({ id: row.id, date: row.receiptDate.toISOString(), type: "RECEIPT" as const, item: row.description ?? row.receiptType.replaceAll("_", " "), amount: row.amount.toFixed(2), party: row.receivedFrom, referenceNo: row.referenceNo ?? row.receiptNo, remarks: row.description })),
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return {
+      project: {
+        id: work.id,
+        workName: work.workName,
+        workCategory: work.workCategory,
+        contractValue: work.contractValue.toFixed(2),
+        status: work.status,
+        startDate: work.startDate,
+        expectedCompletionDate: work.expectedCompletionDate,
+        completionDate: work.completionDate,
+        organizationMaster: work.organizationMaster,
+        contractId: contract?.id ?? null,
+      },
+      primaryContact,
+      otherContacts,
+      financial: {
+        contractValue: contractValue.toFixed(2),
+        vatRate: vatRate?.toFixed(2) ?? null,
+        vatAmount: vatAmount?.toFixed(2) ?? null,
+        taxRate: taxRate?.toFixed(2) ?? null,
+        taxAmount: taxAmount?.toFixed(2) ?? null,
+        valueAfterVatTax: valueAfterVatTax?.toFixed(2) ?? null,
+        securityDeposit: { state: securityState, rate: securityRate?.toFixed(2) ?? null, amount: securityAmount?.toFixed(2) ?? null, heldAmount: heldAmount?.toFixed(2) ?? null, method: contract?.securityDepositMethod ?? null, status: contract?.securityDepositStatus ?? null, releasedDate: contract?.securityDepositReleasedDate?.toISOString() ?? null },
+        netReceivableAfterSd: netReceivableAfterSd?.toFixed(2) ?? null,
+      },
+      transactions,
+      summary: { totalExpense: totalExpense.toFixed(2), totalReceipt: totalReceipt.toFixed(2), securityDepositHeld: heldAmount?.toFixed(2) ?? null, balanceReceivable: balanceReceivable?.toFixed(2) ?? null, currentMarginPct: currentMarginPct?.toFixed(2) ?? null },
+    };
+  }
+
+  async addContact(organizationId: string, workId: string, dto: CreateWorkContactDto) {
+    const work = await this.prisma.cmsWork.findFirst({ where: { id: workId, organizationId }, select: { organizationMasterId: true } });
+    if (!work) throw new NotFoundException("Work not found");
+    const duplicate = await this.prisma.organizationContact.findFirst({
+      where: { organizationId, organizationMasterId: work.organizationMasterId, mobile: dto.mobile.trim() },
+    });
+    if (duplicate) throw new BadRequestException("A contact with this mobile number already exists");
+    return this.prisma.organizationContact.create({
+      data: {
+        organizationId,
+        organizationMasterId: work.organizationMasterId,
+        name: dto.name.trim(),
+        designation: dto.designation.trim(),
+        mobile: dto.mobile.trim(),
+        email: dto.email?.trim() || null,
+        address: dto.address?.trim() || "Not provided",
+      },
+    });
   }
 
   async create(organizationId: string, userId: string, dto: CreateCmsWorkDto) {

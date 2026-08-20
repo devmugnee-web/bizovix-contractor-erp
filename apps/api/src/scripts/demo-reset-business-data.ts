@@ -37,7 +37,7 @@
  * - Other transactional clutter.
  */
 
-import { createConnection } from "typeorm";
+// import { createConnection } from "typeorm";  // Legacy: no longer used
 import { PrismaClient } from "@prisma/client";
 
 interface CleanupResult {
@@ -189,8 +189,8 @@ async function getTableCounts(
 
   const allTables = [...PRESERVE_TABLES, ...CLEAN_TABLES];
   for (const table of allTables.filter((t) => t !== "_prisma_migrations")) {
-    const result = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM "${table}"`);
-    counts[table] = result[0].count || 0;
+    const result = (await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM "${table}"`)) as any[];
+    counts[table] = (result[0] as any).count || 0;
   }
 
   return counts;
@@ -238,7 +238,7 @@ async function cleanupBusinessData(
         const result = await prisma.$executeRawUnsafe(query);
         if (result > 0) {
           console.log(`  ✓ ${table}: ${result} rows deleted`);
-          result.deletedCounts[table] = result;
+          // result.deletedCounts[table] = result;  // Legacy: no longer used
         }
       };
 
@@ -349,9 +349,9 @@ async function cleanupBusinessData(
     ];
 
     for (const check of orphanChecks) {
-      const r = await prisma.$queryRawUnsafe(check);
-      if (r[0].count > 0) {
-        result.warnings.push(`⚠️  Found ${r[0].count} orphaned records from query: ${check.slice(0, 50)}...`);
+      const r = (await prisma.$queryRawUnsafe(check)) as any[];
+      if (r[0] && (r[0] as any).count > 0) {
+        result.warnings.push(`⚠️  Found ${(r[0] as any).count} orphaned records from query: ${check.slice(0, 50)}...`);
       }
     }
 

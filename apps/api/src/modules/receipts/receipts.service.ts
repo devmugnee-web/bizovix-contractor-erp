@@ -69,13 +69,15 @@ export class ReceiptsService {
   }
 
   private async refs(organizationId: string, dto: SaveReceiptDto) {
-    const [work, account, receivable] = await Promise.all([
+    const [work, account, receivable, receiptHead] = await Promise.all([
       dto.workId ? this.prisma.cmsWork.findFirst({ where: { id: dto.workId, organizationId } }) : null,
       this.prisma.bankAccount.findFirst({ where: { id: dto.receivedInAccountId, organizationId } }),
       dto.receivableId ? this.prisma.receivable.findFirst({ where: { id: dto.receivableId, organizationId } }) : null,
+      dto.receiptHeadAccountId ? this.prisma.ledgerAccount.findFirst({ where: { id: dto.receiptHeadAccountId, organizationId, accountType: "INCOME", isActive: true } }) : null,
     ]);
     if (dto.receiptCategory === "PROJECT" && !work) throw new NotFoundException("Project not found");
     if (!account) throw new NotFoundException("Receiving account not found");
+    if (dto.receiptHeadAccountId && !receiptHead) throw new NotFoundException("Active receipt head not found");
     if (dto.receivableId) {
       if (!receivable) throw new NotFoundException("Receivable not found");
       if (dto.receiptCategory !== "PROJECT" || !dto.workId || receivable.projectId !== dto.workId) {
@@ -88,12 +90,12 @@ export class ReceiptsService {
         );
       }
     }
-    return { receivable };
+    return { receivable, receiptHead };
   }
 
   async create(organizationId: string, userId: string, dto: SaveReceiptDto) {
     if (dto.workId) await this.lifecycle.assertOperationalMutationAllowed(organizationId, dto.workId, "allocating a project receipt");
-    await this.refs(organizationId, dto);
+    const { receiptHead } = await this.refs(organizationId, dto);
     const year = new Date(dto.receiptDate).getUTCFullYear();
     const row = await this.prisma.$transaction(async (tx) => {
       const receivable = dto.receivableId
@@ -120,7 +122,9 @@ export class ReceiptsService {
           sourceId: receipt.id,
           lines: [
             { bankAccountId: dto.receivedInAccountId, projectId: receipt.workId, partyName: dto.receivedFrom.trim(), partyType: receipt.workId ? "CUSTOMER" : "OTHER", debit: dto.amount, credit: 0 },
-            { systemKey: receivable ? "ACCOUNTS_RECEIVABLE" : "OTHER_INCOME", projectId: receipt.workId, partyName: dto.receivedFrom.trim(), partyType: receivable ? "CUSTOMER" : "OTHER", debit: 0, credit: dto.amount },
+            receiptHead && dto.receiptCategory === "GENERAL"
+              ? { accountId: receiptHead.id, projectId: null, partyName: dto.receivedFrom.trim(), partyType: "OTHER", debit: 0, credit: dto.amount }
+              : { systemKey: receivable ? "ACCOUNTS_RECEIVABLE" : "OTHER_INCOME", projectId: receipt.workId, partyName: dto.receivedFrom.trim(), partyType: receivable ? "CUSTOMER" : "OTHER", debit: 0, credit: dto.amount },
           ],
         });
         if (receivable) {
@@ -211,5 +215,26 @@ export class ReceiptsService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     await this.audit.record({ organizationId, userId, action: "RECEIPT_CANCELLED", entityType: "Receipt", entityId: id, oldValue: existing, newValue: toDto(row) });
     return toDto(row);
+  }
+
+  async getEligibleBills(organizationId: string, workId: string) {
+    const bills = await this.prisma.receivable.findMany({
+      where: {
+        organizationId,
+        projectId: workId,
+        projectBill: { status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED"] } },
+      },
+      include: { projectBill: { select: { status: true } } },
+      orderBy: { billDate: "desc" },
+    });
+    return bills
+      .filter((b) => b.projectBill && b.amount.gt(b.receivedAmount))
+      .map((b) => ({
+        id: b.id,
+        billNo: b.billNo,
+        netCertified: b.amount.toFixed(2),
+        alreadyReceived: b.receivedAmount.toFixed(2),
+        outstanding: b.amount.sub(b.receivedAmount).toFixed(2),
+      }));
   }
 }

@@ -6,6 +6,7 @@ import { ResponseMessage } from "../../common/decorators/response-message.decora
 import { QueryProjectExpenseDto } from "./dto/query-project-expense.dto";
 import { SaveProjectExpenseDto } from "./dto/save-project-expense.dto";
 import { UpdateProjectExpenseDto } from "./dto/update-project-expense.dto";
+import { SaveExpenseHeadDto } from "./dto/save-expense-head.dto";
 import { ProjectExpensesService } from "./project-expenses.service";
 
 @Controller("project-expenses")
@@ -17,6 +18,15 @@ export class ProjectExpensesController {
 
   @Get("expense-heads") @RequirePermissions("project_expense.read")
   heads(@CurrentUser() user: AuthUser) { return this.service.heads(user.organizationId); }
+
+  @Get("expense-heads/manage") @RequirePermissions("project_expense.read")
+  manageHeads(@CurrentUser() user: AuthUser) { return this.service.manageHeads(user.organizationId); }
+
+  @Post("expense-heads") @RequirePermissions("project_expense.create")
+  createHead(@Body() dto: SaveExpenseHeadDto, @CurrentUser() user: AuthUser) { return this.service.createHead(user.organizationId, user.id, dto); }
+
+  @Patch("expense-heads/:headId") @RequirePermissions("project_expense.update")
+  updateHead(@Param("headId") headId: string, @Body() dto: SaveExpenseHeadDto, @CurrentUser() user: AuthUser) { return this.service.updateHead(user.organizationId, user.id, headId, dto); }
 
   @Get("people") @RequirePermissions("project_expense.read")
   people(@CurrentUser() user: AuthUser) { return this.service.people(user.organizationId); }

@@ -58,6 +58,12 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
       dlpDays: contract?.dlpDays ?? undefined,
       retentionPct: contract?.retentionPct ? Number(contract.retentionPct) : undefined,
       securityDepositPct: contract?.securityDepositPct ? Number(contract.securityDepositPct) : undefined,
+      vatPct: contract?.vatPct ? Number(contract.vatPct) : undefined,
+      taxPct: contract?.taxPct ? Number(contract.taxPct) : undefined,
+      securityDepositMethod: (contract?.securityDepositMethod ?? "") as CreateContractFormValues["securityDepositMethod"],
+      securityDepositStatus: (contract?.securityDepositStatus ?? "") as CreateContractFormValues["securityDepositStatus"],
+      securityDepositReleasedAmount: contract?.securityDepositReleasedAmount ? Number(contract.securityDepositReleasedAmount) : undefined,
+      securityDepositReleasedDate: contract?.securityDepositReleasedDate?.slice(0, 10) ?? "",
       clientContactName: contract?.clientContactName ?? "",
       responsiblePerson: contract?.responsiblePerson ?? "",
       scopeOfWork: contract?.scopeOfWork ?? "",
@@ -99,6 +105,12 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
       dlpDays: values.dlpDays,
       retentionPct: values.retentionPct,
       securityDepositPct: values.securityDepositPct,
+      vatPct: values.vatPct,
+      taxPct: values.taxPct,
+      securityDepositMethod: values.securityDepositMethod || undefined,
+      securityDepositStatus: values.securityDepositStatus || undefined,
+      securityDepositReleasedAmount: values.securityDepositReleasedAmount,
+      securityDepositReleasedDate: values.securityDepositReleasedDate || undefined,
       clientContactName: values.clientContactName || undefined,
       responsiblePerson: values.responsiblePerson || undefined,
       scopeOfWork: values.scopeOfWork || undefined,
@@ -225,6 +237,30 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
 
           <FormField label="Security Deposit %" error={errors.securityDepositPct?.message}>
             <TextInput type="number" step="0.01" placeholder="Optional" {...register("securityDepositPct")} />
+          </FormField>
+
+          <FormField label="VAT %" error={errors.vatPct?.message}>
+            <TextInput type="number" step="0.01" placeholder="Optional" {...register("vatPct")} />
+          </FormField>
+
+          <FormField label="Tax %" error={errors.taxPct?.message}>
+            <TextInput type="number" step="0.01" placeholder="Optional" {...register("taxPct")} />
+          </FormField>
+
+          <FormField label="Security Deposit Method" error={errors.securityDepositMethod?.message}>
+            <Controller control={control} name="securityDepositMethod" render={({ field }) => <SelectInput options={[{ value: "", label: "Not configured" }, { value: "SD_DEDUCTED_FROM_BILL", label: "SD Deducted from Bill" }, { value: "PG_RETAINED_AS_SECURITY", label: "PG Retained as Security" }]} {...field} />} />
+          </FormField>
+
+          <FormField label="Security Deposit Status" error={errors.securityDepositStatus?.message}>
+            <Controller control={control} name="securityDepositStatus" render={({ field }) => <SelectInput options={[{ value: "", label: "Not configured" }, { value: "HELD", label: "Held" }, { value: "PARTIALLY_RELEASED", label: "Partially Released" }, { value: "RELEASED", label: "Released" }]} {...field} />} />
+          </FormField>
+
+          <FormField label="SD Released Amount" error={errors.securityDepositReleasedAmount?.message}>
+            <CurrencyInput placeholder="Optional" {...register("securityDepositReleasedAmount")} />
+          </FormField>
+
+          <FormField label="SD Released Date" error={errors.securityDepositReleasedDate?.message}>
+            <Controller control={control} name="securityDepositReleasedDate" render={({ field }) => <DateInput {...field} />} />
           </FormField>
 
           <FormField label="Client Contact / PE" error={errors.clientContactName?.message}>

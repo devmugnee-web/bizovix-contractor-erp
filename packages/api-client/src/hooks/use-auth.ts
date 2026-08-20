@@ -17,6 +17,17 @@ export function useLogin() {
   });
 }
 
+export function useDevLogin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiRequest<LoginResult>("/auth/dev-login", { method: "POST", skipAuth: true }),
+    onSuccess: (result) => {
+      tokenStorage.setTokens(result.accessToken, result.refreshToken);
+      queryClient.setQueryData(queryKeys.me, result.user);
+    },
+  });
+}
+
 export function useLogout() {
   const queryClient = useQueryClient();
 

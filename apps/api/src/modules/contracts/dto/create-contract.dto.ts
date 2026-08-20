@@ -91,6 +91,24 @@ export class CreateContractDto {
   @Max(100)
   securityDepositPct?: number;
 
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(100)
+  vatPct?: number;
+
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(100)
+  taxPct?: number;
+
+  @IsOptional() @IsString()
+  securityDepositMethod?: string;
+
+  @IsOptional() @IsString()
+  securityDepositStatus?: string;
+
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
+  securityDepositReleasedAmount?: number;
+
+  @IsOptional() @IsDateString()
+  securityDepositReleasedDate?: string;
+
   @IsOptional()
   @IsString()
   clientContactName?: string;

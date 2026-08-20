@@ -1,6 +1,14 @@
 export interface ExpenseHeadOption {
   id: string;
   name: string;
+  budgetCategory?: string | null;
+  isActive?: boolean;
+}
+
+export interface SaveExpenseHeadInput {
+  name: string;
+  budgetCategory?: string | null;
+  isActive?: boolean;
 }
 
 export interface ExpensePersonOption {

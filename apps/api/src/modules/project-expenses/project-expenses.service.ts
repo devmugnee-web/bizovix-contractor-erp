@@ -10,6 +10,7 @@ import { ProjectLifecycleGuardService } from "../prisma/project-lifecycle-guard.
 import { QueryProjectExpenseDto } from "./dto/query-project-expense.dto";
 import { SaveProjectExpenseDto } from "./dto/save-project-expense.dto";
 import { UpdateProjectExpenseDto } from "./dto/update-project-expense.dto";
+import { SaveExpenseHeadDto } from "./dto/save-expense-head.dto";
 
 const includeRelations = {
   expenseHead: { select: { id: true, name: true } },
@@ -20,6 +21,7 @@ const includeRelations = {
 type ExpenseRecord = Prisma.ExpenseGetPayload<{ include: typeof includeRelations }>;
 
 function toDto(record: ExpenseRecord) {
+  const expenseByValue = record.expenseBy?.name ?? (record.expenseById?.startsWith("CUSTOM:") ? record.expenseById.substring(7) : record.expenseById ?? "Unknown");
   return {
     id: record.id,
     referenceNo: record.referenceNo,
@@ -33,7 +35,7 @@ function toDto(record: ExpenseRecord) {
     cancelledById: record.cancelledById,
     cancellationReason: record.cancellationReason,
     expenseHead: record.expenseHead!,
-    expenseBy: record.expenseBy!,
+    expenseBy: { id: record.expenseById ?? "", name: expenseByValue },
     paidFromAccount: record.paidFromAccount!,
   };
 }
@@ -47,6 +49,7 @@ export class ProjectExpensesService {
       organizationId,
       workId: query.workId,
       expenseHeadId: { not: null },
+      status: { notIn: ["CANCELLED", "AMENDED"] },
       ...(query.expenseHeadId ? { expenseHeadId: query.expenseHeadId } : {}),
       ...(query.expenseById ? { expenseById: query.expenseById } : {}),
       ...(query.paidFromAccountId ? { paidFromAccountId: query.paidFromAccountId } : {}),
@@ -70,15 +73,14 @@ export class ProjectExpensesService {
   }
 
   private async assertReferences(organizationId: string, dto: SaveProjectExpenseDto) {
-    const [work, head, person, account] = await Promise.all([
+    const [work, head, account] = await Promise.all([
       this.assertWork(organizationId, dto.workId),
       this.prisma.expenseHead.findFirst({ where: { id: dto.expenseHeadId, organizationId, isActive: true } }),
-      this.prisma.organizationUser.findFirst({ where: { organizationId, userId: dto.expenseById, user: { isActive: true } } }),
       this.prisma.bankAccount.findFirst({ where: { id: dto.paidFromAccountId, organizationId } }),
     ]);
     if (!head) throw new NotFoundException("Expense head not found");
-    if (!person) throw new NotFoundException("Expense person not found");
     if (!account) throw new NotFoundException("Payment account not found");
+    const person = await this.prisma.organizationUser.findFirst({ where: { organizationId, userId: dto.expenseById, user: { isActive: true } } });
     return { work, head, person, account };
   }
 
@@ -102,6 +104,44 @@ export class ProjectExpensesService {
 
   heads(organizationId: string) {
     return this.prisma.expenseHead.findMany({ where: { organizationId, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  }
+
+  manageHeads(organizationId: string) {
+    return this.prisma.expenseHead.findMany({
+      where: { organizationId },
+      select: { id: true, name: true, budgetCategory: true, isActive: true },
+      orderBy: { name: "asc" },
+    });
+  }
+
+  async createHead(organizationId: string, userId: string, dto: SaveExpenseHeadDto) {
+    const record = await this.prisma.expenseHead.create({
+      data: {
+        organizationId,
+        name: dto.name.trim(),
+        budgetCategory: dto.budgetCategory?.trim() || null,
+        isActive: dto.isActive ?? true,
+      },
+      select: { id: true, name: true, budgetCategory: true, isActive: true },
+    });
+    await this.auditLogService.record({ organizationId, userId, action: "create", entityType: "ExpenseHead", entityId: record.id, newValue: record });
+    return record;
+  }
+
+  async updateHead(organizationId: string, userId: string, id: string, dto: SaveExpenseHeadDto) {
+    const existing = await this.prisma.expenseHead.findFirst({ where: { id, organizationId } });
+    if (!existing) throw new NotFoundException("Expense head not found");
+    const record = await this.prisma.expenseHead.update({
+      where: { id },
+      data: {
+        name: dto.name.trim(),
+        budgetCategory: dto.budgetCategory?.trim() || null,
+        ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }),
+      },
+      select: { id: true, name: true, budgetCategory: true, isActive: true },
+    });
+    await this.auditLogService.record({ organizationId, userId, action: "update", entityType: "ExpenseHead", entityId: id, oldValue: existing, newValue: record });
+    return record;
   }
 
   async people(organizationId: string) {

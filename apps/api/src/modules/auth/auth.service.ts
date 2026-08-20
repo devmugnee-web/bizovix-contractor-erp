@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "crypto";
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
@@ -127,6 +127,24 @@ export class AuthService {
       ipAddress,
     });
 
+    const authUser = await this.loadAuthUser(user.id, orgUser.organizationId);
+    return { user: authUser!, ...tokens };
+  }
+
+  async devLogin(ipAddress?: string): Promise<LoginResult> {
+    const appEnv = this.configService.get<string>("app.appEnv") ?? "development";
+    if (appEnv === "production" || process.env.DEV_AUTH_BYPASS !== "true") {
+      throw new ForbiddenException("Development login bypass is disabled");
+    }
+
+    const email = process.env.DEV_AUTH_BYPASS_EMAIL ?? "admin@bizovix.com";
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || !user.isActive) throw new UnauthorizedException("Development admin is unavailable");
+    const orgUser = await this.findOrgUser(user.id);
+    if (!orgUser) throw new UnauthorizedException("Development admin has no organization access");
+
+    const tokens = await this.issueTokens(user.id, orgUser.organizationId, user.email, orgUser.roleId);
+    await this.auditLogService.record({ organizationId: orgUser.organizationId, userId: user.id, action: "dev_login", entityType: "User", entityId: user.id, ipAddress });
     const authUser = await this.loadAuthUser(user.id, orgUser.organizationId);
     return { user: authUser!, ...tokens };
   }

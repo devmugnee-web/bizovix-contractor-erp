@@ -6,6 +6,7 @@ import { ResponseMessage } from "../../common/decorators/response-message.decora
 import { CmsWorksService } from "./cms-works.service";
 import { CreateCmsWorkDto } from "./dto/create-cms-work.dto";
 import { QueryCmsWorkDto } from "./dto/query-cms-work.dto";
+import { CreateWorkContactDto } from "./dto/create-work-contact.dto";
 
 @Controller("cms/works")
 export class CmsWorksController {
@@ -22,6 +23,14 @@ export class CmsWorksController {
 
   @Get("export") @RequirePermissions("cms.work.export")
   exportCsv(@Query() query: QueryCmsWorkDto, @CurrentUser() user: AuthUser) { return this.service.exportCsv(user.organizationId, query); }
+
+  @Get(":id/overview") @RequirePermissions("cms.work.read")
+  overview(@Param("id") id: string, @CurrentUser() user: AuthUser) { return this.service.overview(user.organizationId, id); }
+
+  @Post(":id/contacts") @RequirePermissions("cms.work.update") @ResponseMessage("Contact added successfully")
+  addContact(@Param("id") id: string, @Body() dto: CreateWorkContactDto, @CurrentUser() user: AuthUser) {
+    return this.service.addContact(user.organizationId, id, dto);
+  }
 
   @Get(":id") @RequirePermissions("cms.work.read")
   findOne(@Param("id") id: string, @CurrentUser() user: AuthUser) { return this.service.findOne(user.organizationId, id); }

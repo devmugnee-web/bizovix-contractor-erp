@@ -20,6 +20,13 @@ export class AuthController {
   }
 
   @Public()
+  @Post("dev-login")
+  @ResponseMessage("Development login successful")
+  devLogin(@Req() req: Request) {
+    return this.authService.devLogin(req.ip);
+  }
+
+  @Public()
   @Post("refresh")
   @ResponseMessage("Token refreshed")
   refresh(@Body() dto: RefreshTokenDto) {

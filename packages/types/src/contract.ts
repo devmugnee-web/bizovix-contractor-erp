@@ -23,6 +23,12 @@ export interface ContractRecord {
   dlpDays: number | null;
   retentionPct: string | null;
   securityDepositPct: string | null;
+  vatPct: string | null;
+  taxPct: string | null;
+  securityDepositMethod: string | null;
+  securityDepositStatus: string | null;
+  securityDepositReleasedAmount: string | null;
+  securityDepositReleasedDate: string | null;
   clientContactName: string | null;
   responsiblePerson: string | null;
   scopeOfWork: string | null;
@@ -62,6 +68,12 @@ export interface CreateContractInput {
   dlpDays?: number;
   retentionPct?: number;
   securityDepositPct?: number;
+  vatPct?: number;
+  taxPct?: number;
+  securityDepositMethod?: string;
+  securityDepositStatus?: string;
+  securityDepositReleasedAmount?: number;
+  securityDepositReleasedDate?: string;
   clientContactName?: string;
   responsiblePerson?: string;
   scopeOfWork?: string;
