@@ -13,11 +13,24 @@ const includePendingRelations = {
   organizationMaster: { select: { id: true, shortName: true, fullName: true } },
 } satisfies Prisma.DocumentPurchaseInclude;
 
+const includeRunningTenderRelations = {
+  organizationMaster: { select: { id: true, shortName: true, fullName: true } },
+  documentPurchases: {
+    select: {
+      id: true,
+      purchaseDate: true,
+      estimatedTenderAmount: true,
+      tenderSecurityStatus: true,
+    },
+    orderBy: { purchaseDate: "desc" as const },
+  },
+} satisfies Prisma.TenderInclude;
+
 const includeTenderSecurityRelations = {
   items: true,
 } satisfies Prisma.TenderSecurityInclude;
 
-type PendingRecord = Prisma.DocumentPurchaseGetPayload<{ include: typeof includePendingRelations }>;
+type RunningTenderRecord = Prisma.TenderGetPayload<{ include: typeof includeRunningTenderRelations }>;
 type TenderSecurityRecord = Prisma.TenderSecurityGetPayload<{ include: typeof includeTenderSecurityRelations }>;
 
 /**
@@ -26,20 +39,52 @@ type TenderSecurityRecord = Prisma.TenderSecurityGetPayload<{ include: typeof in
  * purchase has no estimated tender amount on file, this honestly resolves to 0 rather
  * than fabricating a figure — the amount is still editable by the user before saving.
  */
-function securityAmountFor(record: PendingRecord, tsDefaultSecurityPct: PrismaNamespace.Decimal): PrismaNamespace.Decimal {
-  return record.estimatedTenderAmount.mul(tsDefaultSecurityPct).div(100);
-}
+const ACTIVE_TENDER_STATUSES = [
+  "DRAFT",
+  "PUBLISHED",
+  "DOCUMENT_PURCHASED",
+  "PREPARING",
+  "SUBMITTED",
+  "OPENED",
+  "UNDER_PROCESS",
+  "NOA",
+] as const;
 
-function pendingToDto(record: PendingRecord, tsDefaultSecurityPct: PrismaNamespace.Decimal) {
+function runningTenderToDto(record: RunningTenderRecord, tsDefaultSecurityPct: PrismaNamespace.Decimal) {
+  const pendingPurchase = record.documentPurchases.find((purchase) => purchase.tenderSecurityStatus === "PENDING");
+  const createdPurchase = record.documentPurchases.find((purchase) => purchase.tenderSecurityStatus === "CREATED");
+  const notRequiredPurchase = record.documentPurchases.find((purchase) => purchase.tenderSecurityStatus === "NOT_REQUIRED");
+  const selectedPurchase = createdPurchase ?? pendingPurchase ?? notRequiredPurchase ?? record.documentPurchases[0] ?? null;
+  const securityStatus = createdPurchase
+    ? "CREATED"
+    : pendingPurchase
+      ? "PENDING"
+      : notRequiredPurchase
+        ? "NOT_REQUIRED"
+        : "NO_DOCUMENT_PURCHASE";
+  const securityAmount = record.estimatedTenderSecurityAmount
+    ?? (selectedPurchase ? selectedPurchase.estimatedTenderAmount.mul(tsDefaultSecurityPct).div(100) : new PrismaNamespace.Decimal(0));
+
   return {
     id: record.id,
+    tenderRecordId: record.id,
+    documentPurchaseId: securityStatus === "PENDING" ? pendingPurchase?.id ?? null : null,
     tenderId: record.egpTenderId,
     organizationMasterId: record.organizationMasterId,
     organizationMaster: record.organizationMaster,
-    tenderWorkName: record.tenderWorkName,
-    purchaseDate: record.purchaseDate,
-    securityAmount: securityAmountFor(record, tsDefaultSecurityPct).toFixed(2),
-    status: "Security Not Given" as const,
+    tenderWorkName: record.workName,
+    purchaseDate: selectedPurchase?.purchaseDate ?? null,
+    tenderStatus: record.status,
+    securityAmount: securityAmount.toFixed(2),
+    securityStatus,
+    eligible: securityStatus === "PENDING",
+    ineligibleReason: securityStatus === "CREATED"
+      ? "Tender security already created"
+      : securityStatus === "NOT_REQUIRED"
+        ? "Tender security marked as not required"
+        : securityStatus === "NO_DOCUMENT_PURCHASE"
+          ? "Document Purchase is required first"
+          : null,
   };
 }
 
@@ -71,25 +116,36 @@ export class TenderSecuritiesService {
   async pending(
     organizationId: string,
     query: QueryPendingTenderSecurityDto,
-  ): Promise<{ items: ReturnType<typeof pendingToDto>[]; meta: PaginationMeta }> {
+  ): Promise<{ items: ReturnType<typeof runningTenderToDto>[]; meta: PaginationMeta }> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 5;
     const settings = await this.tenderBankSettings.get(organizationId);
-    const where: Prisma.DocumentPurchaseWhereInput = {
+    const securityWhere: Prisma.TenderWhereInput = query.securityStatus === "PENDING"
+      ? { documentPurchases: { some: { tenderSecurityStatus: "PENDING" }, none: { tenderSecurityStatus: "CREATED" } } }
+      : query.securityStatus === "CREATED"
+        ? { documentPurchases: { some: { tenderSecurityStatus: "CREATED" } } }
+        : query.securityStatus === "NOT_REQUIRED"
+          ? { documentPurchases: { some: { tenderSecurityStatus: "NOT_REQUIRED" }, none: { tenderSecurityStatus: { in: ["PENDING", "CREATED"] } } } }
+          : query.securityStatus === "NO_DOCUMENT_PURCHASE"
+            ? { documentPurchases: { none: {} } }
+            : {};
+    const where: Prisma.TenderWhereInput = {
       organizationId,
-      tenderSecurityStatus: "PENDING",
+      status: query.tenderStatus ?? { in: [...ACTIVE_TENDER_STATUSES] },
+      ...securityWhere,
       ...(query.organizationId ? { organizationMasterId: query.organizationId } : {}),
       ...(query.search
         ? {
             OR: [
-              { tenderWorkName: { contains: query.search, mode: "insensitive" } },
+              { workName: { contains: query.search, mode: "insensitive" } },
               { egpTenderId: { contains: query.search, mode: "insensitive" } },
+              { organizationMaster: { shortName: { contains: query.search, mode: "insensitive" } } },
             ],
           }
         : {}),
       ...(query.fromDate || query.toDate
         ? {
-            purchaseDate: {
+            submissionDeadline: {
               ...(query.fromDate ? { gte: new Date(query.fromDate) } : {}),
               ...(query.toDate ? { lte: new Date(query.toDate) } : {}),
             },
@@ -98,18 +154,18 @@ export class TenderSecuritiesService {
     };
 
     const [items, total] = await Promise.all([
-      this.prisma.documentPurchase.findMany({
+      this.prisma.tender.findMany({
         where,
-        include: includePendingRelations,
-        orderBy: { purchaseDate: "desc" },
+        include: includeRunningTenderRelations,
+        orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.documentPurchase.count({ where }),
+      this.prisma.tender.count({ where }),
     ]);
 
     return {
-      items: items.map((item) => pendingToDto(item, settings.tsDefaultSecurityPct)),
+      items: items.map((item) => runningTenderToDto(item, settings.tsDefaultSecurityPct)),
       meta: buildPaginationMeta(total, page, limit),
     };
   }

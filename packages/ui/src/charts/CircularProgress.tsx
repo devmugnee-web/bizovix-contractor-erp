@@ -7,6 +7,7 @@ export interface CircularProgressProps {
   size?: number;
   label: string;
   sublabel?: string;
+  responsive?: boolean;
 }
 
 export function CircularProgress({
@@ -16,11 +17,19 @@ export function CircularProgress({
   size = 160,
   label,
   sublabel,
+  responsive = false,
 }: CircularProgressProps) {
   const data = [{ value: percentage }];
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div
+      className={responsive ? "h-[72px] w-[72px] xl:h-[104px] xl:w-[104px]" : ""}
+      style={responsive ? undefined : { width: size, height: size }}
+    >
+      <div
+        className={`relative origin-top-left ${responsive ? "scale-[0.6923] xl:scale-100" : ""}`}
+        style={{ width: size, height: size }}
+      >
       <RadialBarChart
         width={size}
         height={size}
@@ -37,8 +46,9 @@ export function CircularProgress({
         <RadialBar dataKey="value" cornerRadius={10} fill={color} background={{ fill: trackColor }} />
       </RadialBarChart>
       <div className="absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
-        <span className="text-[18px] font-bold leading-tight text-biz-text">{label}</span>
-        {sublabel && <span className="mt-0.5 text-[10px] leading-tight text-biz-muted">{sublabel}</span>}
+        <span className="text-[11px] font-bold leading-tight text-biz-text sm:text-[12px]">{label}</span>
+        {sublabel && <span className="mt-0.5 text-[6px] leading-tight text-biz-muted sm:text-[7px]">{sublabel}</span>}
+      </div>
       </div>
     </div>
   );

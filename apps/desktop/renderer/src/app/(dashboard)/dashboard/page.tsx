@@ -13,7 +13,7 @@ export default function DashboardPage() {
   const dashboard = useDashboard();
 
   return (
-    <div className="flex min-h-0 flex-col gap-3 lg:h-full">
+    <div className="mx-auto grid h-full min-h-0 w-full max-w-[1680px] grid-rows-[auto_minmax(0,0.9fr)_minmax(0,1.1fr)] gap-2 overflow-hidden">
       {dashboard.isLoading && <p className="text-[13px] text-biz-muted">Loading dashboard...</p>}
       {dashboard.isError && <p className="text-[13px] text-biz-danger">Failed to load dashboard data.</p>}
 
@@ -21,13 +21,13 @@ export default function DashboardPage() {
         <>
           <DashboardKpiRow kpis={dashboard.data.kpis} />
 
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[0.9fr_0.9fr_1.25fr]">
+          <div className="grid min-h-0 grid-cols-3 gap-2 xl:grid-cols-[0.92fr_0.92fr_1.35fr]">
             <TargetVsAchievementCard data={dashboard.data.targetVsAchievement} />
             <TenderPerformanceCard data={dashboard.data.tenderPerformance} />
             <BusinessByCategoryCard data={dashboard.data.businessByCategory} />
           </div>
 
-          <div className="grid grid-cols-1 gap-3 lg:min-h-0 lg:flex-1 lg:grid-cols-3">
+          <div className="grid min-h-0 grid-cols-3 gap-2">
             <UpcomingRemindersCard items={dashboard.data.upcomingReminders} />
             <RecentTransactionsCard items={dashboard.data.recentTransactions} />
             <TopProjectsCard items={dashboard.data.topProjects} />

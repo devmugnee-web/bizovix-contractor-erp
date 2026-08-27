@@ -74,7 +74,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           onMobileClose={() => setMobileSidebarOpen(false)}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <main className={`min-h-0 flex-1 bg-biz-bg p-3 sm:p-4 ${pathname === "/dashboard" ? "overflow-y-auto lg:overflow-hidden" : "overflow-y-auto"}`}>{children}</main>
+          <main className={`min-h-0 flex-1 overflow-y-auto bg-biz-bg p-2 sm:p-3 ${pathname === "/dashboard" || pathname === "/bank-instruments/document-purchase" ? "md:overflow-hidden" : ""}`}>{children}</main>
         </div>
       </div>
     </div>

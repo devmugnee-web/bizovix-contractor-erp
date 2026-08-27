@@ -164,6 +164,7 @@ export const MasterCategoryType = {
   VENDOR: "VENDOR",
   MATERIAL: "MATERIAL",
   SUBCONTRACTOR_TRADE: "SUBCONTRACTOR_TRADE",
+  DOCUMENT_PURCHASE: "DOCUMENT_PURCHASE",
 } as const;
 export type MasterCategoryType = (typeof MasterCategoryType)[keyof typeof MasterCategoryType];
 

@@ -113,7 +113,7 @@ function Field({
 }
 const blank = (): SaveReminderInput => ({
   title: "",
-  type: "Manual Reminder",
+  type: "Tender Security",
   description: "",
   dueDate: "",
   dueTime: "",

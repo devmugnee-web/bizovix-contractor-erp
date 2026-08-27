@@ -3,9 +3,9 @@ import type { TenderPerformance } from "@bizovix/types";
 
 function Tile({ label, value, colorClassName }: { label: string; value: string | number; colorClassName: string }) {
   return (
-    <div>
-      <p className="text-[11px] font-medium text-biz-muted">{label}</p>
-      <p className={cn("text-[15px] font-bold leading-tight", colorClassName)}>{value}</p>
+    <div className="rounded-md bg-slate-50 px-1.5 py-1.5 ring-1 ring-inset ring-slate-100 sm:px-2 xl:px-3 xl:py-3">
+      <p className="text-[6px] font-semibold uppercase tracking-[0.04em] text-biz-muted sm:text-[8px] lg:text-[9px] xl:text-[10px]">{label}</p>
+      <p className={cn("text-[8px] font-bold leading-tight sm:text-[10px] lg:text-[12px] xl:text-[14px]", colorClassName)}>{value}</p>
     </div>
   );
 }
@@ -15,12 +15,11 @@ export function TenderPerformanceCard({ data }: { data: TenderPerformance }) {
     <SectionCard
       title="Tender Performance (This Year)"
       index={2}
-      headerRight={<span className="text-[11px] text-biz-muted">This Year</span>}
-      footer={{ label: "View details" }}
-      bodyClassName="p-3"
+      headerRight={<span className="text-[6px] text-biz-muted sm:text-[8px] lg:text-[10px]">This Year</span>}
+      bodyClassName="p-1.5 sm:p-2"
     >
-      <div className="grid items-center gap-2 xl:grid-cols-[1fr_auto]">
-        <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2">
+      <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 sm:gap-2">
+        <div className="grid min-w-0 grid-cols-2 gap-1">
           <Tile label="Submitted" value={data.submitted} colorClassName="text-biz-blue" />
           <Tile label="NOA / Awarded" value={data.noaAwarded} colorClassName="text-biz-success" />
           <Tile label="Success Rate" value={`${data.successRate}%`} colorClassName="text-biz-purple" />
@@ -33,6 +32,7 @@ export function TenderPerformanceCard({ data }: { data: TenderPerformance }) {
             label={`${data.successRate}%`}
             sublabel="Success Rate"
             size={104}
+            responsive
           />
         </div>
       </div>

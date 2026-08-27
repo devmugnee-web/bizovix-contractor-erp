@@ -11,13 +11,21 @@ export interface DonutChartProps {
   size?: number;
   centerLabel?: string;
   centerValue?: string;
+  responsive?: boolean;
 }
 
-export function DonutChart({ data, size = 160, centerLabel, centerValue }: DonutChartProps) {
+export function DonutChart({ data, size = 160, centerLabel, centerValue, responsive = false }: DonutChartProps) {
   const valueParts = centerValue?.match(/^(.+)\s+(\S+)$/);
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div
+      className={responsive ? "h-[76px] w-[76px] xl:h-[108px] xl:w-[108px]" : ""}
+      style={responsive ? undefined : { width: size, height: size }}
+    >
+      <div
+        className={`relative origin-top-left ${responsive ? "scale-[0.7037] xl:scale-100" : ""}`}
+        style={{ width: size, height: size }}
+      >
       <PieChart width={size} height={size}>
         <Pie
           data={data}
@@ -52,6 +60,7 @@ export function DonutChart({ data, size = 160, centerLabel, centerValue }: Donut
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

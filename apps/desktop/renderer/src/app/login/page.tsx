@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
@@ -15,6 +15,7 @@ export default function LoginPage() {
   const login = useLogin();
   const devLogin = useDevLogin();
   const [showPassword, setShowPassword] = useState(false);
+  const devLoginTriggered = useRef(false);
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS !== "true") return;
@@ -22,8 +23,11 @@ export default function LoginPage() {
       router.replace("/dashboard");
       return;
     }
+    if (devLoginTriggered.current) return;
+    devLoginTriggered.current = true;
     devLogin.mutate(undefined, { onSuccess: () => router.replace("/dashboard") });
-  }, [devLogin, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const {
     register,

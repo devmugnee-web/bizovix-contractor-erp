@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Download, Eye, FileText, Landmark, Layers, Plus, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Download, Eye, FileText, Landmark, Layers, Plus, RotateCcw, Search } from "lucide-react";
 import {
   useAllOrganizations,
   useBankAccounts,
@@ -44,49 +45,67 @@ const EMPTY_DRAFT: FilterDraft = {
   toDate: "",
 };
 
+const DEFAULT_LIMIT = 10;
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
+
 export default function DocumentPurchaseListPage() {
   useSetBreadcrumb([{ label: "Bank Instruments" }, { label: "Document Purchase" }]);
+  const router = useRouter();
 
   const [draft, setDraft] = React.useState<FilterDraft>(EMPTY_DRAFT);
-  const [query, setQuery] = React.useState<DocumentPurchaseQuery>({ page: 1, limit: 8 });
+  const [query, setQuery] = React.useState<DocumentPurchaseQuery>({ page: 1, limit: DEFAULT_LIMIT });
 
   const stats = useDocumentPurchaseStats();
   const organizations = useAllOrganizations();
   const bankAccounts = useBankAccounts();
   const documentPurchases = useDocumentPurchases(query);
 
-  function applyFilters() {
-    setQuery({
+  React.useEffect(() => {
+    setQuery((q) => ({
+      ...q,
       page: 1,
-      limit: 8,
       purchaseType: (draft.purchaseType as PurchaseType) || undefined,
       organizationMasterId: draft.organizationMasterId || undefined,
       paymentFromAccountId: draft.paymentFromAccountId || undefined,
-      search: draft.search || undefined,
       fromDate: draft.fromDate || undefined,
       toDate: draft.toDate || undefined,
-    });
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.purchaseType, draft.organizationMasterId, draft.paymentFromAccountId, draft.fromDate, draft.toDate]);
+
+  React.useEffect(() => {
+    const handle = setTimeout(() => {
+      setQuery((q) => ({ ...q, page: 1, search: draft.search || undefined }));
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [draft.search]);
+
+  function handleLimitChange(limit: number) {
+    setQuery((q) => ({ ...q, limit, page: 1 }));
+  }
+
+  function handleResetFilters() {
+    setDraft(EMPTY_DRAFT);
   }
 
   const items = documentPurchases.data?.items ?? [];
-  const meta = documentPurchases.data?.meta ?? { page: 1, limit: 8, total: 0, totalPages: 1 };
+  const meta = documentPurchases.data?.meta ?? { page: 1, limit: DEFAULT_LIMIT, total: 0, totalPages: 1 };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="flex flex-col gap-2 md:h-full md:min-h-0 md:overflow-hidden">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2.5">
         <div>
           <h1 className="text-page-title text-biz-text">Document Purchase</h1>
-          <p className="mt-1 text-[13px] text-biz-muted">Manage tender document purchases (e-GP &amp; Manual)</p>
         </div>
-        <Link href="/bank-instruments/document-purchase/create">
-          <PrimaryButton>
+        <Link href="/bank-instruments/document-purchase/create" className="w-full sm:w-auto">
+          <PrimaryButton className="w-full sm:w-auto">
             <Plus className="h-4 w-4" />
             Add Document Purchase
           </PrimaryButton>
         </Link>
       </div>
 
-      <div className="flex flex-wrap gap-4">
+      <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <ModuleStatCard
           icon={Layers}
           iconClassName="bg-biz-blue-soft text-biz-blue"
@@ -117,28 +136,28 @@ export default function DocumentPurchaseListPage() {
         />
       </div>
 
-      <FilterBar>
-        <div className="flex flex-col gap-1.5">
+      <FilterBar className="shrink-0 p-2.5">
+        <div className="flex w-full flex-col gap-1 sm:w-auto">
           <label className="text-[12px] font-medium text-biz-muted">Date Range</label>
           <div className="flex items-center gap-2">
             <DateInput
               value={draft.fromDate}
               onChange={(e) => setDraft((d) => ({ ...d, fromDate: e.target.value }))}
-              className="w-[150px]"
+              className="h-10 w-full sm:w-[130px]"
             />
-            <span className="text-biz-muted">–</span>
+            <span className="shrink-0 text-biz-muted">–</span>
             <DateInput
               value={draft.toDate}
               onChange={(e) => setDraft((d) => ({ ...d, toDate: e.target.value }))}
-              className="w-[150px]"
+              className="h-10 w-full sm:w-[130px]"
             />
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex w-full flex-col gap-1 sm:w-[135px]">
           <label className="text-[12px] font-medium text-biz-muted">Purchase Type</label>
           <SelectInput
-            className="w-[150px]"
+            className="h-10 w-full"
             placeholder="All"
             value={draft.purchaseType}
             onChange={(e) => setDraft((d) => ({ ...d, purchaseType: e.target.value }))}
@@ -149,10 +168,10 @@ export default function DocumentPurchaseListPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex w-full flex-col gap-1 sm:w-[150px]">
           <label className="text-[12px] font-medium text-biz-muted">Organization</label>
           <SelectInput
-            className="w-[170px]"
+            className="h-10 w-full"
             placeholder="All"
             value={draft.organizationMasterId}
             onChange={(e) => setDraft((d) => ({ ...d, organizationMasterId: e.target.value }))}
@@ -160,10 +179,10 @@ export default function DocumentPurchaseListPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex w-full flex-col gap-1 sm:w-[145px]">
           <label className="text-[12px] font-medium text-biz-muted">Payment From</label>
           <SelectInput
-            className="w-[160px]"
+            className="h-10 w-full"
             placeholder="All"
             value={draft.paymentFromAccountId}
             onChange={(e) => setDraft((d) => ({ ...d, paymentFromAccountId: e.target.value }))}
@@ -171,25 +190,30 @@ export default function DocumentPurchaseListPage() {
           />
         </div>
 
-        <div className="flex flex-1 flex-col gap-1.5">
+        <div className="flex w-full min-w-0 flex-1 flex-col gap-1 sm:min-w-[180px]">
           <label className="text-[12px] font-medium text-biz-muted">Search Tender ID / Work Name</label>
           <TextInput
             icon={Search}
             placeholder="Search..."
             value={draft.search}
             onChange={(e) => setDraft((d) => ({ ...d, search: e.target.value }))}
-            onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+            className="h-10"
           />
         </div>
 
-        <PrimaryButton onClick={applyFilters}>
-          <Search className="h-4 w-4" />
-          Search
-        </PrimaryButton>
+        <IconButton
+          type="button"
+          onClick={handleResetFilters}
+          aria-label="Reset filters"
+          title="Reset filters"
+          className="h-10 w-10 shrink-0"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </IconButton>
       </FilterBar>
 
-      <div className="rounded-lg border border-biz-border bg-biz-surface shadow-card">
-        <div className="flex items-center justify-between border-b border-biz-border px-4 py-3">
+      <div className="flex flex-col rounded-lg border border-biz-border bg-biz-surface shadow-card md:min-h-0 md:flex-1 md:overflow-hidden">
+        <div className="flex shrink-0 items-center justify-between border-b border-biz-border px-4 py-2.5">
           <h3 className="text-[15px] font-semibold text-biz-text">Purchase List</h3>
           <SecondaryButton>
             <Download className="h-4 w-4" />
@@ -201,6 +225,9 @@ export default function DocumentPurchaseListPage() {
           isLoading={documentPurchases.isLoading}
           data={items}
           rowKey={(row) => row.id}
+          onRowClick={(row) => router.push(`/bank-instruments/document-purchase/${row.id}`)}
+          containerClassName="md:min-h-0 md:flex-1 md:overflow-y-auto"
+          stickyHeader
           columns={[
             {
               key: "sl",
@@ -237,13 +264,17 @@ export default function DocumentPurchaseListPage() {
           ]}
         />
 
-        <Pagination
-          page={meta.page}
-          limit={meta.limit}
-          total={meta.total}
-          totalPages={meta.totalPages}
-          onPageChange={(page) => setQuery((q) => ({ ...q, page }))}
-        />
+        <div className="shrink-0 border-t border-biz-border">
+          <Pagination
+            page={meta.page}
+            limit={meta.limit}
+            total={meta.total}
+            totalPages={meta.totalPages}
+            onPageChange={(page) => setQuery((q) => ({ ...q, page }))}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onLimitChange={handleLimitChange}
+          />
+        </div>
       </div>
     </div>
   );

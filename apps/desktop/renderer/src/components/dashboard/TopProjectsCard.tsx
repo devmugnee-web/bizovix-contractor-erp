@@ -4,9 +4,9 @@ import type { TopProject } from "@bizovix/types";
 
 export function TopProjectsCard({ items }: { items: TopProject[] }) {
   return (
-    <SectionCard title="Top Projects by Value" index={6} footer={{ label: "View all", href: "/cms/ongoing-works" }} className="lg:h-full lg:min-h-0" bodyClassName="scrollbar-hidden p-3 lg:overflow-y-auto">
-      <div className="flex flex-col gap-2">
-        <div className="grid grid-cols-[1fr_auto_5.25rem] gap-2 text-[11px] font-semibold text-biz-muted">
+    <SectionCard title="Top Projects by Value" index={6} footer={{ label: "View all", href: "/cms/ongoing-works" }} className="h-full min-h-0" bodyClassName="scrollbar-hidden overflow-y-auto p-1 sm:p-1.5">
+      <div className="flex h-full min-h-0 flex-col gap-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_2.5rem] gap-1 px-1 text-[5px] font-semibold uppercase tracking-[0.03em] text-biz-muted sm:text-[7px]">
           <span>Project Name</span>
           <span>Contract Value</span>
           <span>Progress</span>
@@ -14,19 +14,19 @@ export function TopProjectsCard({ items }: { items: TopProject[] }) {
         {items.map((item) => (
           <div
             key={item.id}
-            className="grid grid-cols-[1fr_auto_5.25rem] items-center gap-2 border-t border-biz-border pt-2 text-[13px]"
+            className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto_2.5rem] items-center gap-1 rounded-md border border-slate-100 bg-slate-50/60 p-1 text-[6px] sm:text-[8px] lg:text-[9px]"
           >
             <span className="truncate font-medium text-biz-text">{item.name}</span>
             <span className="whitespace-nowrap font-medium text-biz-muted">{formatBDTCompact(item.contractValue)}</span>
             <div className="flex items-center gap-1.5">
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-biz-border">
-                <div className="h-full rounded-full bg-biz-blue" style={{ width: `${item.progressPercentage}%` }} />
+              <div className="h-1 flex-1 overflow-hidden rounded-full bg-blue-100/80">
+                <div className="h-full rounded-full bg-gradient-to-r from-biz-blue to-cyan-400" style={{ width: `${item.progressPercentage}%` }} />
               </div>
-              <span className="w-7 shrink-0 text-right font-medium text-biz-text">{item.progressPercentage}%</span>
+              <span className="w-4 shrink-0 text-right text-[5px] font-medium text-biz-text sm:text-[7px]">{item.progressPercentage}%</span>
             </div>
           </div>
         ))}
-        {items.length === 0 && <p className="text-[13px] text-biz-muted">No ongoing projects.</p>}
+        {items.length === 0 && <p className="rounded-md border border-dashed border-slate-200 bg-slate-50/70 px-1 py-3 text-center text-[7px] text-biz-muted sm:text-[9px]">No ongoing projects.</p>}
       </div>
     </SectionCard>
   );

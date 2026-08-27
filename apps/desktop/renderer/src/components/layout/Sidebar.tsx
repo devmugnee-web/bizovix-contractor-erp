@@ -8,8 +8,10 @@ import { SidebarItem } from "./SidebarItem";
 import { SidebarSubmenu } from "./SidebarSubmenu";
 
 function findActiveGroup(pathname: string): string | null {
-  const group = [...NAV_ITEMS, ...NAV_ITEMS_LOWER].find((item) =>
-    item.children?.some((child) => isNavRouteActive(pathname, child.href)),
+  const group = [...NAV_ITEMS, ...NAV_ITEMS_LOWER].find(
+    (item) =>
+      (!!item.href && isNavRouteActive(pathname, item.href)) ||
+      item.children?.some((child) => !!child.href && isNavRouteActive(pathname, child.href)),
   );
   return group?.label ?? null;
 }
@@ -52,12 +54,23 @@ export function Sidebar({
           <SidebarItem
             icon={item.icon}
             label={item.label}
+            href={item.href}
             expandable
             expanded={expanded}
             active={activeGroup === item.label}
             onToggle={() => setMenuState({ pathname, openGroup: expanded ? null : item.label })}
           />
-          {expanded && <SidebarSubmenu items={item.children} activeHref={pathname} />}
+          <div
+            className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
+              expanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+            }`}
+            aria-hidden={!expanded}
+            inert={!expanded ? true : undefined}
+          >
+            <div className="overflow-hidden">
+              <SidebarSubmenu items={item.children} activeHref={pathname} />
+            </div>
+          </div>
         </li>
       );
     }
@@ -87,9 +100,9 @@ export function Sidebar({
         />
       )}
       <aside
-        className={`${mobileOpen ? "fixed bottom-0 left-0 top-14 z-40 flex" : "hidden"} ${collapsed ? "md:hidden" : "md:static md:flex"} h-[calc(100vh-3.5rem)] w-[236px] shrink-0 flex-col bg-biz-navy md:h-full`}
+        className={`${mobileOpen ? "fixed bottom-0 left-0 top-7 z-40 flex" : "hidden"} ${collapsed ? "md:hidden" : "md:static md:flex"} h-[calc(100vh-1.75rem)] w-[236px] shrink-0 flex-col bg-biz-navy md:h-full`}
       >
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">{NAV_ITEMS.map(renderItem)}</ul>
           <div className="my-3 border-t border-white/10" />
           <ul className="flex flex-col gap-1">{NAV_ITEMS_LOWER.map(renderItem)}</ul>

@@ -37,8 +37,10 @@ export default function ContractDetailPage() {
     { label: contract.data?.contractNo ?? "Contract Details" },
   ]);
 
-  if (contract.isLoading) return <div className="p-12 text-center text-biz-muted">Loading contract...</div>;
-  if (!contract.data) return <div className="p-12 text-center text-biz-muted">Contract not found.</div>;
+  if (contract.isLoading)
+    return <div className="p-12 text-center text-biz-muted">Loading contract...</div>;
+  if (!contract.data)
+    return <div className="p-12 text-center text-biz-muted">Contract not found.</div>;
 
   const c = contract.data;
   const statusMeta = CONTRACT_STATUS_META[c.status];
@@ -52,7 +54,8 @@ export default function ContractDetailPage() {
             <StatusBadge label={statusMeta.label} tone={statusMeta.tone} />
           </div>
           <p className="mt-1 text-[13px] text-biz-muted">
-            {c.cmsWork.workName} · {c.organizationMaster.shortName} · {CONTRACT_TYPE_META[c.contractType]}
+            {c.cmsWork.workName} · {c.organizationMaster.shortName} ·{" "}
+            {CONTRACT_TYPE_META[c.contractType]}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -93,12 +96,35 @@ export default function ContractDetailPage() {
           <h2 className="mb-1 mt-3 text-[14px] font-semibold text-biz-text">Contract Details</h2>
           <DetailRow label="Contract Type" value={CONTRACT_TYPE_META[c.contractType]} />
           <DetailRow label="Issue Date" value={formatDate(c.issueDate)} />
-          <DetailRow label="Contract Date" value={c.contractDate ? formatDate(c.contractDate) : "Not set"} />
+          <DetailRow
+            label="Contract Date"
+            value={c.contractDate ? formatDate(c.contractDate) : "Not set"}
+          />
           <DetailRow label="Linked Tender" value={c.tender ? c.tender.workName : "Not linked"} />
-          <DetailRow label="Original Completion Date" value={formatDate(c.originalCompletionDate)} />
-          <DetailRow label="Defect Liability Period" value={c.dlpDays ? `${c.dlpDays} days` : "Not set"} />
-          <DetailRow label="Retention %" value={c.retentionPct ? `${c.retentionPct}%` : "Not set"} />
-          <DetailRow label="Security Deposit %" value={c.securityDepositPct ? `${c.securityDepositPct}%` : "Not set"} />
+          <DetailRow
+            label="Original Completion Date"
+            value={formatDate(c.originalCompletionDate)}
+          />
+          <DetailRow
+            label="Defect Liability Period"
+            value={c.dlpDays ? `${c.dlpDays} days` : "Not set"}
+          />
+          <DetailRow
+            label="Retention %"
+            value={c.retentionPct ? `${c.retentionPct}%` : "Not set"}
+          />
+          <DetailRow
+            label="Security Deposit %"
+            value={c.securityDepositPct ? `${c.securityDepositPct}%` : "Not set"}
+          />
+          <DetailRow
+            label="SD Release Due Date"
+            value={
+              c.securityDepositReleaseDueDate
+                ? formatDate(c.securityDepositReleaseDueDate)
+                : "Not set"
+            }
+          />
           <DetailRow label="Client Contact / PE" value={c.clientContactName ?? "Not set"} />
           <DetailRow label="Responsible Person" value={c.responsiblePerson ?? "Not set"} />
         </section>
@@ -112,7 +138,10 @@ export default function ContractDetailPage() {
                 {c.linked.documents.length}
               </span>
             </div>
-            <Link href="/documents/projects" className="text-[11px] font-medium text-biz-blue hover:underline">
+            <Link
+              href="/documents/projects"
+              className="text-[11px] font-medium text-biz-blue hover:underline"
+            >
               View
             </Link>
           </div>
@@ -123,7 +152,9 @@ export default function ContractDetailPage() {
               {c.linked.documents.map((d) => (
                 <div key={d.id} className="flex items-center justify-between text-[12px]">
                   <span className="text-biz-text">{d.name}</span>
-                  <span className="text-biz-muted">{d.expiryDate ? formatDate(d.expiryDate) : "No expiry"}</span>
+                  <span className="text-biz-muted">
+                    {d.expiryDate ? formatDate(d.expiryDate) : "No expiry"}
+                  </span>
                 </div>
               ))}
             </div>

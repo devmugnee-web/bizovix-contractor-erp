@@ -8,8 +8,10 @@ import { Controller, useForm } from "react-hook-form";
 import { Building2, FileText, Info, Landmark, Monitor, Plus, Save } from "lucide-react";
 import {
   useBankAccounts,
+  useCreateMasterCategory,
   useCreateDocumentPurchase,
   useCreateOrganizationMaster,
+  useMasterCategories,
   useOrganizations,
   useTender,
 } from "@bizovix/api-client";
@@ -31,7 +33,7 @@ import {
   SelectInput,
   TextInput,
 } from "@bizovix/ui";
-import { PurchaseType } from "@bizovix/types";
+import { MasterCategoryType, PurchaseType } from "@bizovix/types";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { Modal } from "@/components/layout/Modal";
 
@@ -55,6 +57,7 @@ function AddDocumentPurchaseForm() {
   const tenderId = searchParams.get("tenderId") ?? undefined;
   const linkedTender = useTender(tenderId);
   const bankAccounts = useBankAccounts();
+  const categories = useMasterCategories(MasterCategoryType.DOCUMENT_PURCHASE);
   const createMutation = useCreateDocumentPurchase();
 
   const {
@@ -88,6 +91,7 @@ function AddDocumentPurchaseForm() {
   const organizations = useOrganizations(orgQuery);
 
   const [addOrgOpen, setAddOrgOpen] = React.useState(false);
+  const [addCategoryOpen, setAddCategoryOpen] = React.useState(false);
 
   const prefilledFromTender = React.useRef(false);
   React.useEffect(() => {
@@ -239,7 +243,26 @@ function AddDocumentPurchaseForm() {
           </FormField>
 
           <FormField label="8. Category" error={errors.category?.message}>
-            <TextInput placeholder="e.g. Civil, Electrical" {...register("category")} />
+            <div className="flex items-start gap-3">
+              <Controller
+                control={control}
+                name="category"
+                render={({ field }) => (
+                  <SelectInput
+                    className="flex-1"
+                    placeholder={categories.isLoading ? "Loading categories..." : "Select category"}
+                    options={(categories.data ?? [])
+                      .filter((category) => category.isActive)
+                      .map((category) => ({ label: category.name, value: category.name }))}
+                    {...field}
+                  />
+                )}
+              />
+              <SecondaryButton type="button" onClick={() => setAddCategoryOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Add New Category
+              </SecondaryButton>
+            </div>
           </FormField>
 
           <FormField label="9. Submission Date" error={errors.submissionDate?.message}>
@@ -277,7 +300,79 @@ function AddDocumentPurchaseForm() {
           setAddOrgOpen(false);
         }}
       />
+      <AddCategoryModal
+        open={addCategoryOpen}
+        onClose={() => setAddCategoryOpen(false)}
+        onCreated={(category) => {
+          setValue("category", category.name, { shouldDirty: true, shouldValidate: true });
+          setAddCategoryOpen(false);
+        }}
+      />
     </div>
+  );
+}
+
+function AddCategoryModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (category: { name: string }) => void;
+}) {
+  const createCategory = useCreateMasterCategory();
+  const [name, setName] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+
+  function close() {
+    setName("");
+    setError(null);
+    onClose();
+  }
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const categoryName = name.trim();
+    if (!categoryName) {
+      setError("Category name is required.");
+      return;
+    }
+
+    setError(null);
+    try {
+      const category = await createCategory.mutateAsync({
+        type: MasterCategoryType.DOCUMENT_PURCHASE,
+        name: categoryName,
+      });
+      setName("");
+      onCreated(category);
+    } catch {
+      setError("Failed to add category. The category name may already exist.");
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={close} title="Add New Category">
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <FormField label="Category Name" required error={error ?? undefined}>
+          <TextInput
+            autoFocus
+            placeholder="e.g. Civil, Electrical"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </FormField>
+        <div className="mt-2 flex justify-end gap-3">
+          <SecondaryButton type="button" onClick={close}>
+            Cancel
+          </SecondaryButton>
+          <PrimaryButton type="submit" disabled={!name.trim() || createCategory.isPending}>
+            {createCategory.isPending ? "Saving..." : "Save Category"}
+          </PrimaryButton>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

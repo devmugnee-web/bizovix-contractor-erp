@@ -7,7 +7,13 @@ export interface ContractRecord {
   tenderId: string | null;
   tender: { id: string; workName: string; egpTenderId: string | null } | null;
   cmsWorkId: string;
-  cmsWork: { id: string; workName: string; workCategory: string; status: string; contractValue: string };
+  cmsWork: {
+    id: string;
+    workName: string;
+    workCategory: string;
+    status: string;
+    contractValue: string;
+  };
   pgBgWorkflowId: string | null;
   contractNo: string;
   contractType: ContractType;
@@ -28,6 +34,7 @@ export interface ContractRecord {
   securityDepositMethod: string | null;
   securityDepositStatus: string | null;
   securityDepositReleasedAmount: string | null;
+  securityDepositReleaseDueDate: string | null;
   securityDepositReleasedDate: string | null;
   clientContactName: string | null;
   responsiblePerson: string | null;
@@ -73,6 +80,7 @@ export interface CreateContractInput {
   securityDepositMethod?: string;
   securityDepositStatus?: string;
   securityDepositReleasedAmount?: number;
+  securityDepositReleaseDueDate?: string;
   securityDepositReleasedDate?: string;
   clientContactName?: string;
   responsiblePerson?: string;

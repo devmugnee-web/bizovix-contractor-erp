@@ -22,27 +22,27 @@ function statusTone(status: string): StatusBadgeTone {
 
 export function RecentTransactionsCard({ items }: { items: RecentTransaction[] }) {
   return (
-    <SectionCard title="Recent Transactions" index={5} footer={{ label: "View all", href: "/receipts" }} className="lg:h-full lg:min-h-0" bodyClassName="scrollbar-hidden p-3 lg:overflow-y-auto">
-      <ul className="flex flex-col gap-2">
+    <SectionCard title="Recent Transactions" index={5} footer={{ label: "View all", href: "/receipts" }} className="h-full min-h-0" bodyClassName="scrollbar-hidden overflow-y-auto p-1 sm:p-1.5">
+      <ul className="flex h-full min-h-0 flex-col gap-1">
         {items.map((item) => {
           const { icon: Icon, className } = TRANSACTION_ICONS[item.type] ?? DEFAULT_ICON;
           return (
-            <li key={item.id} className="flex items-center gap-2.5 border-b border-biz-border pb-2 last:border-0 last:pb-0">
-              <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md", className)}>
-                <Icon className="h-3.5 w-3.5" />
+            <li key={item.id} className="flex min-h-0 flex-1 items-center gap-1 rounded-md border border-slate-100 bg-slate-50/60 p-1">
+              <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-md ring-1 ring-inset ring-black/[0.03]", className)}>
+                <Icon className="h-2.5 w-2.5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-semibold leading-tight text-biz-text">{item.title}</p>
-                <p className="truncate text-[11px] font-medium leading-tight text-biz-muted">{item.reference}</p>
+                <p className="text-[6px] font-semibold leading-tight text-biz-text sm:text-[8px] lg:text-[9px]">{item.title}</p>
+                <p className="truncate text-[5px] font-medium leading-tight text-biz-muted sm:text-[7px]">{item.reference}</p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-0.5">
-                <span className="text-[12px] font-bold leading-tight text-biz-text">{formatBDT(item.amount)}</span>
+                <span className="text-[5px] font-bold leading-tight text-biz-text sm:text-[7px]">{formatBDT(item.amount)}</span>
                 <StatusBadge label={item.status} tone={statusTone(item.status)} />
               </div>
             </li>
           );
         })}
-        {items.length === 0 && <p className="text-[13px] text-biz-muted">No recent transactions.</p>}
+        {items.length === 0 && <p className="rounded-md border border-dashed border-slate-200 bg-slate-50/70 px-1 py-3 text-center text-[7px] text-biz-muted sm:text-[9px]">No recent transactions.</p>}
       </ul>
     </SectionCard>
   );

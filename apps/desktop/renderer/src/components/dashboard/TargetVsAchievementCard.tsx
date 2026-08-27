@@ -7,23 +7,22 @@ export function TargetVsAchievementCard({ data }: { data: TargetVsAchievement })
     <SectionCard
       title="Target vs Achievement (This Month)"
       index={1}
-      headerRight={<span className="text-[11px] text-biz-muted">This Month</span>}
-      footer={{ label: "View details" }}
-      bodyClassName="p-3"
+      headerRight={<span className="text-[6px] text-biz-muted sm:text-[8px] lg:text-[10px]">This Month</span>}
+      bodyClassName="p-1.5 sm:p-2"
     >
-      <div className="grid items-center gap-2 xl:grid-cols-[1fr_auto]">
-        <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-3 xl:grid-cols-1 xl:gap-2">
-          <div>
-            <p className="text-[11px] font-medium text-biz-muted">Target</p>
-            <p className="text-[15px] font-bold leading-tight text-biz-text">{formatBDTCompact(data.target)}</p>
+      <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 sm:gap-2">
+        <div className="grid min-w-0 grid-cols-1 gap-1">
+          <div className="rounded-md bg-slate-50 px-1.5 py-1 ring-1 ring-inset ring-slate-100 sm:px-2 xl:px-3 xl:py-2">
+            <p className="text-[6px] font-semibold uppercase tracking-[0.04em] text-biz-muted sm:text-[8px] lg:text-[9px] xl:text-[10px]">Target</p>
+            <p className="text-[8px] font-bold leading-tight text-biz-text sm:text-[10px] lg:text-[12px] xl:text-[14px]">{formatBDTCompact(data.target)}</p>
           </div>
-          <div className="border-t border-biz-border pt-1.5 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0 xl:border-l-0 xl:border-t xl:pl-0 xl:pt-2">
-            <p className="text-[11px] font-medium text-biz-muted">Achievement</p>
-            <p className="text-[15px] font-bold leading-tight text-biz-text">{formatBDTCompact(data.achievement)}</p>
+          <div className="rounded-md bg-blue-50/60 px-1.5 py-1 ring-1 ring-inset ring-blue-100/70 sm:px-2 xl:px-3 xl:py-2">
+            <p className="text-[6px] font-semibold uppercase tracking-[0.04em] text-biz-muted sm:text-[8px] lg:text-[9px] xl:text-[10px]">Achievement</p>
+            <p className="text-[8px] font-bold leading-tight text-biz-text sm:text-[10px] lg:text-[12px] xl:text-[14px]">{formatBDTCompact(data.achievement)}</p>
           </div>
-          <div className="border-t border-biz-border pt-1.5 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0 xl:border-l-0 xl:border-t xl:pl-0 xl:pt-2">
-            <p className="text-[11px] font-medium text-biz-muted">Achievement Rate</p>
-            <p className="text-[15px] font-bold leading-tight text-biz-success">{data.achievementRate}%</p>
+          <div className="rounded-md bg-emerald-50/60 px-1.5 py-1 ring-1 ring-inset ring-emerald-100/70 sm:px-2 xl:px-3 xl:py-2">
+            <p className="text-[6px] font-semibold uppercase tracking-[0.04em] text-biz-muted sm:text-[8px] lg:text-[9px] xl:text-[10px]">Achievement Rate</p>
+            <p className="text-[8px] font-bold leading-tight text-biz-success sm:text-[10px] lg:text-[12px] xl:text-[14px]">{data.achievementRate}%</p>
           </div>
         </div>
         <div className="justify-self-center">
@@ -33,6 +32,7 @@ export function TargetVsAchievementCard({ data }: { data: TargetVsAchievement })
             label={`${data.achievementRate}%`}
             sublabel="Achieved"
             size={104}
+            responsive
           />
         </div>
       </div>

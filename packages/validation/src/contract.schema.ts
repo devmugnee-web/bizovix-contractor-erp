@@ -5,7 +5,13 @@ export const createContractSchema = z
     cmsWorkId: z.string().min(1, "Linked Project / Work is required"),
     tenderId: z.string().optional().or(z.literal("")),
     pgBgWorkflowId: z.string().optional().or(z.literal("")),
-    contractType: z.enum(["WORK_ORDER", "CONTRACT_AGREEMENT", "PURCHASE_ORDER", "SERVICE_CONTRACT", "OTHER"]),
+    contractType: z.enum([
+      "WORK_ORDER",
+      "CONTRACT_AGREEMENT",
+      "PURCHASE_ORDER",
+      "SERVICE_CONTRACT",
+      "OTHER",
+    ]),
     contractNo: z.string().min(1, "Contract / Work Order No. is required"),
     issueDate: z.string().min(1, "Issue date is required"),
     contractDate: z.string().optional().or(z.literal("")),
@@ -21,9 +27,16 @@ export const createContractSchema = z
     securityDepositPct: z.coerce.number().min(0).max(100).optional(),
     vatPct: z.coerce.number().min(0).max(100).optional(),
     taxPct: z.coerce.number().min(0).max(100).optional(),
-    securityDepositMethod: z.enum(["SD_DEDUCTED_FROM_BILL", "PG_RETAINED_AS_SECURITY"]).optional().or(z.literal("")),
-    securityDepositStatus: z.enum(["HELD", "PARTIALLY_RELEASED", "RELEASED"]).optional().or(z.literal("")),
+    securityDepositMethod: z
+      .enum(["SD_DEDUCTED_FROM_BILL", "PG_RETAINED_AS_SECURITY"])
+      .optional()
+      .or(z.literal("")),
+    securityDepositStatus: z
+      .enum(["HELD", "PARTIALLY_RELEASED", "RELEASED"])
+      .optional()
+      .or(z.literal("")),
     securityDepositReleasedAmount: z.coerce.number().min(0).optional(),
+    securityDepositReleaseDueDate: z.string().optional().or(z.literal("")),
     securityDepositReleasedDate: z.string().optional().or(z.literal("")),
     clientContactName: z.string().optional().or(z.literal("")),
     responsiblePerson: z.string().optional().or(z.literal("")),

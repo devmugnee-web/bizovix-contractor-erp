@@ -10,7 +10,9 @@ import { UpdateContractDto } from "./dto/update-contract.dto";
 import { QueryContractDto } from "./dto/query-contract.dto";
 
 const includeRelations = {
-  cmsWork: { select: { id: true, workName: true, workCategory: true, status: true, contractValue: true } },
+  cmsWork: {
+    select: { id: true, workName: true, workCategory: true, status: true, contractValue: true },
+  },
   organizationMaster: { select: { id: true, shortName: true, fullName: true } },
   tender: { select: { id: true, workName: true, egpTenderId: true } },
 } satisfies Prisma.ProjectContractInclude;
@@ -39,6 +41,7 @@ function toDto(record: ContractRecord) {
     vatPct: record.vatPct?.toFixed(2) ?? null,
     taxPct: record.taxPct?.toFixed(2) ?? null,
     securityDepositReleasedAmount: record.securityDepositReleasedAmount?.toFixed(2) ?? null,
+    securityDepositReleaseDueDate: record.securityDepositReleaseDueDate?.toISOString() ?? null,
     cmsWork: { ...record.cmsWork, contractValue: record.cmsWork.contractValue.toFixed(2) },
     scheduleProgressPct: scheduleProgressPct(record),
   };
@@ -74,7 +77,9 @@ export class ContractsService {
             OR: [
               { contractNo: { contains: query.search, mode: "insensitive" } },
               { cmsWork: { workName: { contains: query.search, mode: "insensitive" } } },
-              { organizationMaster: { shortName: { contains: query.search, mode: "insensitive" } } },
+              {
+                organizationMaster: { shortName: { contains: query.search, mode: "insensitive" } },
+              },
             ],
           }
         : {}),
@@ -113,7 +118,11 @@ export class ContractsService {
         _sum: { currentContractValue: true },
       }),
       this.prisma.projectContract.count({
-        where: { organizationId, status: "ACTIVE", currentCompletionDate: { lte: soon, gte: new Date() } },
+        where: {
+          organizationId,
+          status: "ACTIVE",
+          currentCompletionDate: { lte: soon, gte: new Date() },
+        },
       }),
     ]);
     return {
@@ -150,9 +159,14 @@ export class ContractsService {
     return { ...toDto(record), linked: { documents } };
   }
 
-  private async assertRelations(organizationId: string, dto: { cmsWorkId?: string; tenderId?: string; pgBgWorkflowId?: string }) {
+  private async assertRelations(
+    organizationId: string,
+    dto: { cmsWorkId?: string; tenderId?: string; pgBgWorkflowId?: string },
+  ) {
     if (dto.cmsWorkId) {
-      const work = await this.prisma.cmsWork.findFirst({ where: { id: dto.cmsWorkId, organizationId } });
+      const work = await this.prisma.cmsWork.findFirst({
+        where: { id: dto.cmsWorkId, organizationId },
+      });
       if (!work) throw new NotFoundException("Project / Work not found");
       return work;
     }
@@ -162,24 +176,35 @@ export class ContractsService {
   async create(organizationId: string, userId: string, dto: CreateContractDto) {
     const work = await this.assertRelations(organizationId, dto);
     if (!work) throw new BadRequestException("Linked Project / Work is required");
-    await this.lifecycle.assertOperationalMutationAllowed(organizationId, work.id, "creating a contract");
+    await this.lifecycle.assertOperationalMutationAllowed(
+      organizationId,
+      work.id,
+      "creating a contract",
+    );
 
     if (dto.tenderId) {
-      const tender = await this.prisma.tender.findFirst({ where: { id: dto.tenderId, organizationId } });
+      const tender = await this.prisma.tender.findFirst({
+        where: { id: dto.tenderId, organizationId },
+      });
       if (!tender) throw new NotFoundException("Linked Tender not found");
     }
     if (dto.pgBgWorkflowId) {
-      const workflow = await this.prisma.pgBgWorkflow.findFirst({ where: { id: dto.pgBgWorkflowId, organizationId } });
+      const workflow = await this.prisma.pgBgWorkflow.findFirst({
+        where: { id: dto.pgBgWorkflowId, organizationId },
+      });
       if (!workflow) throw new NotFoundException("Linked PG/BG not found");
     }
 
     const commencementDate = new Date(dto.commencementDate);
     const originalCompletionDate = new Date(dto.originalCompletionDate);
     if (originalCompletionDate < commencementDate) {
-      throw new BadRequestException("Original Completion Date must be on or after the Commencement Date");
+      throw new BadRequestException(
+        "Original Completion Date must be on or after the Commencement Date",
+      );
     }
     const durationDays =
-      dto.durationDays ?? Math.round((originalCompletionDate.getTime() - commencementDate.getTime()) / 86_400_000);
+      dto.durationDays ??
+      Math.round((originalCompletionDate.getTime() - commencementDate.getTime()) / 86_400_000);
 
     const record = await this.prisma.projectContract.create({
       data: {
@@ -197,7 +222,9 @@ export class ContractsService {
         currency: dto.currency ?? "BDT",
         commencementDate,
         originalCompletionDate,
-        currentCompletionDate: dto.currentCompletionDate ? new Date(dto.currentCompletionDate) : originalCompletionDate,
+        currentCompletionDate: dto.currentCompletionDate
+          ? new Date(dto.currentCompletionDate)
+          : originalCompletionDate,
         durationDays,
         dlpDays: dto.dlpDays,
         retentionPct: dto.retentionPct,
@@ -207,7 +234,12 @@ export class ContractsService {
         securityDepositMethod: dto.securityDepositMethod,
         securityDepositStatus: dto.securityDepositStatus,
         securityDepositReleasedAmount: dto.securityDepositReleasedAmount,
-        securityDepositReleasedDate: dto.securityDepositReleasedDate ? new Date(dto.securityDepositReleasedDate) : null,
+        securityDepositReleaseDueDate: dto.securityDepositReleaseDueDate
+          ? new Date(dto.securityDepositReleaseDueDate)
+          : null,
+        securityDepositReleasedDate: dto.securityDepositReleasedDate
+          ? new Date(dto.securityDepositReleasedDate)
+          : null,
         clientContactName: dto.clientContactName,
         responsiblePerson: dto.responsiblePerson,
         scopeOfWork: dto.scopeOfWork,
@@ -232,26 +264,41 @@ export class ContractsService {
   }
 
   async update(organizationId: string, userId: string, id: string, dto: UpdateContractDto) {
-    const existing = await this.prisma.projectContract.findFirst({ where: { id, organizationId }, include: includeRelations });
+    const existing = await this.prisma.projectContract.findFirst({
+      where: { id, organizationId },
+      include: includeRelations,
+    });
     if (!existing) throw new NotFoundException("Contract not found");
-    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "updating a contract");
+    await this.lifecycle.assertOperationalMutationAllowed(
+      organizationId,
+      existing.cmsWorkId,
+      "updating a contract",
+    );
 
     if (dto.cmsWorkId) await this.assertRelations(organizationId, dto);
     if (dto.tenderId) {
-      const tender = await this.prisma.tender.findFirst({ where: { id: dto.tenderId, organizationId } });
+      const tender = await this.prisma.tender.findFirst({
+        where: { id: dto.tenderId, organizationId },
+      });
       if (!tender) throw new NotFoundException("Linked Tender not found");
     }
     if (dto.pgBgWorkflowId) {
-      const workflow = await this.prisma.pgBgWorkflow.findFirst({ where: { id: dto.pgBgWorkflowId, organizationId } });
+      const workflow = await this.prisma.pgBgWorkflow.findFirst({
+        where: { id: dto.pgBgWorkflowId, organizationId },
+      });
       if (!workflow) throw new NotFoundException("Linked PG/BG not found");
     }
 
-    const commencementDate = dto.commencementDate ? new Date(dto.commencementDate) : existing.commencementDate;
+    const commencementDate = dto.commencementDate
+      ? new Date(dto.commencementDate)
+      : existing.commencementDate;
     const originalCompletionDate = dto.originalCompletionDate
       ? new Date(dto.originalCompletionDate)
       : existing.originalCompletionDate;
     if (originalCompletionDate < commencementDate) {
-      throw new BadRequestException("Original Completion Date must be on or after the Commencement Date");
+      throw new BadRequestException(
+        "Original Completion Date must be on or after the Commencement Date",
+      );
     }
 
     const record = await this.prisma.projectContract.update({
@@ -263,25 +310,58 @@ export class ContractsService {
         ...(dto.contractType ? { contractType: dto.contractType } : {}),
         ...(dto.contractNo ? { contractNo: dto.contractNo } : {}),
         ...(dto.issueDate ? { issueDate: new Date(dto.issueDate) } : {}),
-        ...(dto.contractDate !== undefined ? { contractDate: dto.contractDate ? new Date(dto.contractDate) : null } : {}),
-        ...(dto.originalContractValue !== undefined ? { originalContractValue: dto.originalContractValue } : {}),
-        ...(dto.currentContractValue !== undefined ? { currentContractValue: dto.currentContractValue } : {}),
+        ...(dto.contractDate !== undefined
+          ? { contractDate: dto.contractDate ? new Date(dto.contractDate) : null }
+          : {}),
+        ...(dto.originalContractValue !== undefined
+          ? { originalContractValue: dto.originalContractValue }
+          : {}),
+        ...(dto.currentContractValue !== undefined
+          ? { currentContractValue: dto.currentContractValue }
+          : {}),
         ...(dto.currency ? { currency: dto.currency } : {}),
         ...(dto.commencementDate ? { commencementDate } : {}),
         ...(dto.originalCompletionDate ? { originalCompletionDate } : {}),
-        ...(dto.currentCompletionDate ? { currentCompletionDate: new Date(dto.currentCompletionDate) } : {}),
+        ...(dto.currentCompletionDate
+          ? { currentCompletionDate: new Date(dto.currentCompletionDate) }
+          : {}),
         ...(dto.durationDays !== undefined ? { durationDays: dto.durationDays } : {}),
         ...(dto.dlpDays !== undefined ? { dlpDays: dto.dlpDays } : {}),
         ...(dto.retentionPct !== undefined ? { retentionPct: dto.retentionPct } : {}),
-        ...(dto.securityDepositPct !== undefined ? { securityDepositPct: dto.securityDepositPct } : {}),
+        ...(dto.securityDepositPct !== undefined
+          ? { securityDepositPct: dto.securityDepositPct }
+          : {}),
         ...(dto.vatPct !== undefined ? { vatPct: dto.vatPct } : {}),
         ...(dto.taxPct !== undefined ? { taxPct: dto.taxPct } : {}),
-        ...(dto.securityDepositMethod !== undefined ? { securityDepositMethod: dto.securityDepositMethod || null } : {}),
-        ...(dto.securityDepositStatus !== undefined ? { securityDepositStatus: dto.securityDepositStatus || null } : {}),
-        ...(dto.securityDepositReleasedAmount !== undefined ? { securityDepositReleasedAmount: dto.securityDepositReleasedAmount } : {}),
-        ...(dto.securityDepositReleasedDate !== undefined ? { securityDepositReleasedDate: dto.securityDepositReleasedDate ? new Date(dto.securityDepositReleasedDate) : null } : {}),
-        ...(dto.clientContactName !== undefined ? { clientContactName: dto.clientContactName } : {}),
-        ...(dto.responsiblePerson !== undefined ? { responsiblePerson: dto.responsiblePerson } : {}),
+        ...(dto.securityDepositMethod !== undefined
+          ? { securityDepositMethod: dto.securityDepositMethod || null }
+          : {}),
+        ...(dto.securityDepositStatus !== undefined
+          ? { securityDepositStatus: dto.securityDepositStatus || null }
+          : {}),
+        ...(dto.securityDepositReleasedAmount !== undefined
+          ? { securityDepositReleasedAmount: dto.securityDepositReleasedAmount }
+          : {}),
+        ...(dto.securityDepositReleaseDueDate !== undefined
+          ? {
+              securityDepositReleaseDueDate: dto.securityDepositReleaseDueDate
+                ? new Date(dto.securityDepositReleaseDueDate)
+                : null,
+            }
+          : {}),
+        ...(dto.securityDepositReleasedDate !== undefined
+          ? {
+              securityDepositReleasedDate: dto.securityDepositReleasedDate
+                ? new Date(dto.securityDepositReleasedDate)
+                : null,
+            }
+          : {}),
+        ...(dto.clientContactName !== undefined
+          ? { clientContactName: dto.clientContactName }
+          : {}),
+        ...(dto.responsiblePerson !== undefined
+          ? { responsiblePerson: dto.responsiblePerson }
+          : {}),
         ...(dto.scopeOfWork !== undefined ? { scopeOfWork: dto.scopeOfWork } : {}),
         ...(dto.remarks !== undefined ? { remarks: dto.remarks } : {}),
         ...(dto.status ? { status: dto.status } : {}),
@@ -306,7 +386,11 @@ export class ContractsService {
   async activate(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectContract.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Contract not found");
-    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "activating a contract");
+    await this.lifecycle.assertOperationalMutationAllowed(
+      organizationId,
+      existing.cmsWorkId,
+      "activating a contract",
+    );
     if (existing.status !== "DRAFT") {
       throw new BadRequestException("Only a Draft contract can be activated");
     }

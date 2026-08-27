@@ -1,14 +1,21 @@
-import type { FundingType, SecurityType } from "./enums";
+import type { FundingType, SecurityType, TenderStatus } from "./enums";
+
+export type TenderSecurityEligibilityStatus = "PENDING" | "CREATED" | "NOT_REQUIRED" | "NO_DOCUMENT_PURCHASE";
 
 export interface PendingTenderSecurity {
   id: string;
+  tenderRecordId: string;
+  documentPurchaseId: string | null;
   tenderId: string | null;
   organizationMasterId: string;
   organizationMaster: { id: string; shortName: string; fullName: string };
   tenderWorkName: string;
-  purchaseDate: string;
+  purchaseDate: string | null;
+  tenderStatus: TenderStatus;
   securityAmount: string;
-  status: "Security Not Given";
+  securityStatus: TenderSecurityEligibilityStatus;
+  eligible: boolean;
+  ineligibleReason: string | null;
 }
 
 export interface TenderSecurityPendingQuery {
@@ -16,7 +23,8 @@ export interface TenderSecurityPendingQuery {
   limit?: number;
   search?: string;
   organizationId?: string;
-  status?: string;
+  tenderStatus?: TenderStatus;
+  securityStatus?: TenderSecurityEligibilityStatus;
   fromDate?: string;
   toDate?: string;
 }

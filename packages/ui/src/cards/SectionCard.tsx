@@ -22,33 +22,33 @@ export function SectionCard({
   children,
 }: SectionCardProps) {
   return (
-    <div className={cn("flex flex-col rounded-lg border border-biz-border bg-biz-surface shadow-card", className)}>
-      <div className="flex items-start justify-between gap-3 border-b border-biz-border px-4 py-2.5">
-        <h3 className="min-w-0 text-[13px] font-semibold leading-tight text-biz-text sm:text-[14px] lg:text-[15px]">
-          {index !== undefined && <span className="text-biz-muted">{index}. </span>}
+    <div className={cn("flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-[0_6px_20px_rgba(15,23,42,0.05)]", className)}>
+      <div className="flex min-h-8 items-center justify-between gap-1 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 via-white to-white px-2 py-1.5 sm:min-h-9 sm:px-3">
+        <h3 className="min-w-0 text-[8px] font-bold leading-tight tracking-[-0.01em] text-biz-text sm:text-[10px] lg:text-[12px]">
+          {index !== undefined && <span className="mr-1 text-biz-blue/70">{index}.</span>}
           {title}
         </h3>
         {headerRight && <div className="shrink-0">{headerRight}</div>}
       </div>
-      <div className={cn("min-h-0 flex-1 p-4", bodyClassName)}>{children}</div>
+      <div className={cn("min-h-0 flex-1 p-2 sm:p-3", bodyClassName)}>{children}</div>
       {footer && (
-        <div className="border-t border-biz-border px-4 py-2">
+        <div className="border-t border-slate-100 bg-slate-50/45 px-2 py-1 sm:px-3">
           {footer.href ? (
             <a
               href={footer.href}
-              className="flex w-full items-center justify-between text-[13px] font-medium text-biz-blue hover:text-biz-blue-hover"
+              className="group/link flex w-full items-center justify-between text-[7px] font-semibold text-biz-blue transition-colors hover:text-biz-blue-hover sm:text-[9px] lg:text-[11px]"
             >
               {footer.label}
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3 w-3 transition-transform group-hover/link:translate-x-0.5" />
             </a>
           ) : (
             <button
               type="button"
               onClick={footer.onClick}
-              className="flex w-full items-center justify-between text-[13px] font-medium text-biz-blue hover:text-biz-blue-hover"
+              className="group/link flex w-full items-center justify-between text-[7px] font-semibold text-biz-blue transition-colors hover:text-biz-blue-hover sm:text-[9px] lg:text-[11px]"
             >
               {footer.label}
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3 w-3 transition-transform group-hover/link:translate-x-0.5" />
             </button>
           )}
         </div>

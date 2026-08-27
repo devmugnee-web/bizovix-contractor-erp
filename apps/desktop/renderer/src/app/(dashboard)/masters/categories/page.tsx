@@ -11,6 +11,7 @@ const TABS: { label: string; value: MasterCategoryType }[] = [
   { label: "Vendor Category", value: "VENDOR" },
   { label: "Material Category", value: "MATERIAL" },
   { label: "Subcontractor Trade Category", value: "SUBCONTRACTOR_TRADE" },
+  { label: "Document Purchase Category", value: "DOCUMENT_PURCHASE" },
 ];
 
 export default function CategoriesPage() {

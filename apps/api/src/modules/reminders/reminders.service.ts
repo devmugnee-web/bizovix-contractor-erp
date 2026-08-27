@@ -14,6 +14,7 @@ import type {
 const AUTO_SOURCE_MODULES = [
   "TENDER_SECURITY",
   "PG_BG",
+  "SECURITY_DEPOSIT",
   "PAYABLE",
   "CHEQUE",
   "DOCUMENT",
@@ -46,10 +47,49 @@ export class RemindersService {
    * Reused by both the request-triggered path (list/stats/quick) and the scheduler. */
   async syncOrganization(org: string): Promise<void> {
     await this.syncSources(org);
+    await this.resolveLegacyAliases(org);
     await this.syncCloseoutReadiness(org);
     await this.autoResolveStaleReminders(org);
     await this.refreshStatuses(org);
     await this.notifications.generateForOrg(org);
+  }
+
+  private async resolveLegacyAliases(org: string) {
+    const aliases = [
+      { sourceModule: "TENDER_SECURITY", oldType: "Tender Security Expiry", newType: "Tender Security" },
+      { sourceModule: "PG_BG", oldType: "PG/BG Expiry", newType: "PG/BG" },
+      { sourceModule: "PAYABLE", oldType: "Payable Due", newType: "Bill Maturity" },
+      { sourceModule: "RECEIVABLE", oldType: "Receivable Due", newType: "Bill Maturity" },
+    ];
+    for (const alias of aliases) {
+      const legacy = await this.prisma.reminder.findMany({
+        where: {
+          organizationId: org,
+          sourceModule: alias.sourceModule,
+          type: alias.oldType,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+        },
+        select: { id: true, sourceId: true, dueDate: true },
+      });
+      for (const row of legacy) {
+        const replacement = await this.prisma.reminder.findFirst({
+          where: {
+            organizationId: org,
+            sourceModule: alias.sourceModule,
+            sourceId: row.sourceId,
+            dueDate: row.dueDate,
+            type: alias.newType,
+          },
+          select: { id: true },
+        });
+        if (!replacement) continue;
+        await this.prisma.reminder.update({
+          where: { id: row.id },
+          data: { status: "COMPLETED", isResolved: true, completedAt: new Date() },
+        });
+        await this.notifications.resolveForReminder(org, row.id);
+      }
+    }
   }
 
   private async syncCloseoutReadiness(org: string) {
@@ -65,15 +105,53 @@ export class RemindersService {
       const dueDate = new Date();
       dueDate.setUTCHours(0, 0, 0, 0);
       await this.prisma.reminder.upsert({
-        where: { organizationId_sourceModule_sourceId_type_dueDate: { organizationId: org, sourceModule: "PROJECT_CLOSEOUT", sourceId: work.id, type: "Project Ready to Close", dueDate } },
-        update: { status: "UPCOMING", isResolved: false, title: `Project ready to close: ${work.workName}` },
-        create: { organizationId: org, type: "Project Ready to Close", title: `Project ready to close: ${work.workName}`, description: `/cms/ongoing-works/${work.id}?tab=Completion%20%26%20Closeout`, dueDate, priority: "HIGH", sourceModule: "PROJECT_CLOSEOUT", sourceType: "READY_TO_CLOSE", sourceId: work.id, relatedEntityType: "CmsWork", relatedEntityId: work.id, relatedEntityName: work.workName, notificationBefore: 0, assignedToName: "Unassigned" },
+        where: {
+          organizationId_sourceModule_sourceId_type_dueDate: {
+            organizationId: org,
+            sourceModule: "PROJECT_CLOSEOUT",
+            sourceId: work.id,
+            type: "Project Ready to Close",
+            dueDate,
+          },
+        },
+        update: {
+          status: "UPCOMING",
+          isResolved: false,
+          title: `Project ready to close: ${work.workName}`,
+        },
+        create: {
+          organizationId: org,
+          type: "Project Ready to Close",
+          title: `Project ready to close: ${work.workName}`,
+          description: `/cms/ongoing-works/${work.id}?tab=Completion%20%26%20Closeout`,
+          dueDate,
+          priority: "HIGH",
+          sourceModule: "PROJECT_CLOSEOUT",
+          sourceType: "READY_TO_CLOSE",
+          sourceId: work.id,
+          relatedEntityType: "CmsWork",
+          relatedEntityId: work.id,
+          relatedEntityName: work.workName,
+          notificationBefore: 0,
+          assignedToName: "Unassigned",
+        },
       });
     }
-    const stale = await this.prisma.reminder.findMany({ where: { organizationId: org, sourceModule: "PROJECT_CLOSEOUT", sourceId: { notIn: readyIds }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, select: { id: true } });
+    const stale = await this.prisma.reminder.findMany({
+      where: {
+        organizationId: org,
+        sourceModule: "PROJECT_CLOSEOUT",
+        sourceId: { notIn: readyIds },
+        status: { notIn: ["COMPLETED", "CANCELLED"] },
+      },
+      select: { id: true },
+    });
     if (stale.length) {
       const ids = stale.map((item) => item.id);
-      await this.prisma.reminder.updateMany({ where: { id: { in: ids }, organizationId: org }, data: { status: "COMPLETED", isResolved: true, completedAt: new Date() } });
+      await this.prisma.reminder.updateMany({
+        where: { id: { in: ids }, organizationId: org },
+        data: { status: "COMPLETED", isResolved: true, completedAt: new Date() },
+      });
       for (const id of ids) await this.notifications.resolveForReminder(org, id);
     }
   }
@@ -164,54 +242,103 @@ export class RemindersService {
     });
   }
   async syncSources(org: string) {
-    const [rules, security, guarantees, payables, cheques, documents, receivables, submittingTenders, openingTenders, activeContracts, retentionBills, dlps, defects, pendingCertificates, pendingHandovers] =
-      await Promise.all([
-        this.reminderRules.allRules(org),
-        this.prisma.tenderSecurity.findMany({
-          where: { organizationId: org, status: "ACTIVE" },
-          include: { tender: true, organizationMaster: true },
-        }),
-        this.prisma.performanceGuarantee.findMany({
-          where: { organizationId: org, status: "ACTIVE" },
-          include: { tender: true, organizationMaster: true },
-        }),
-        this.prisma.payable.findMany({
-          where: { organizationId: org, status: { not: "PAID" }, dueDate: { not: null } },
-        }),
-        this.prisma.cheque.findMany({
-          where: { organizationId: org, status: { in: ["PENDING", "DEPOSITED"] } },
-        }),
-        this.prisma.document.findMany({ where: { organizationId: org, expiryDate: { not: null } } }),
-        this.prisma.receipt.findMany({
-          where: { organizationId: org, status: "PENDING", dueDate: { not: null } },
-          include: { work: true },
-        }),
-        this.prisma.tender.findMany({
-          where: { organizationId: org, status: { in: [...TENDER_NOT_YET_SUBMITTED] }, submissionDeadline: { not: null } },
-          include: { organizationMaster: true },
-        }),
-        this.prisma.tender.findMany({
-          where: { organizationId: org, status: "SUBMITTED", openingDate: { not: null } },
-          include: { organizationMaster: true },
-        }),
-        this.prisma.projectContract.findMany({
-          where: { organizationId: org, status: "ACTIVE" },
-          include: { cmsWork: true },
-        }),
-        this.prisma.projectBill.findMany({
-          where: {
-            organizationId: org,
-            status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] },
-            retentionAmount: { gt: 0 },
-            retentionReleaseDueDate: { not: null },
-          },
-          include: { cmsWork: true },
-        }),
-        this.prisma.defectLiabilityPeriod.findMany({ where: { organizationId: org, status: { in: ["ACTIVE", "EXTENDED"] } }, include: { work: true } }),
-        this.prisma.dlpDefect.findMany({ where: { organizationId: org, status: { notIn: ["VERIFIED", "CLOSED"] }, targetRectificationDate: { not: null } }, include: { work: true } }),
-        this.prisma.completionCertificate.findMany({ where: { organizationId: org, status: { in: ["DRAFT", "SUBMITTED"] } }, include: { work: true } }),
-        this.prisma.projectHandover.findMany({ where: { organizationId: org, status: { in: ["DRAFT", "SUBMITTED"] } }, include: { work: true } }),
-      ]);
+    const [
+      rules,
+      security,
+      guarantees,
+      securityDeposits,
+      payables,
+      cheques,
+      documents,
+      receivables,
+      submittingTenders,
+      openingTenders,
+      activeContracts,
+      retentionBills,
+      dlps,
+      defects,
+      pendingCertificates,
+      pendingHandovers,
+    ] = await Promise.all([
+      this.reminderRules.allRules(org),
+      this.prisma.tenderSecurity.findMany({
+        where: { organizationId: org, status: "ACTIVE" },
+        include: { tender: true, organizationMaster: true },
+      }),
+      this.prisma.performanceGuarantee.findMany({
+        where: { organizationId: org, status: "ACTIVE" },
+        include: { tender: true, organizationMaster: true },
+      }),
+      this.prisma.projectContract.findMany({
+        where: {
+          organizationId: org,
+          securityDepositPct: { gt: 0 },
+          securityDepositReleaseDueDate: { not: null },
+          securityDepositStatus: { in: ["HELD", "PARTIALLY_RELEASED"] },
+        },
+        include: { cmsWork: true, organizationMaster: true },
+      }),
+      this.prisma.payable.findMany({
+        where: { organizationId: org, status: { not: "PAID" }, dueDate: { not: null } },
+      }),
+      this.prisma.cheque.findMany({
+        where: { organizationId: org, status: { in: ["PENDING", "DEPOSITED"] } },
+      }),
+      this.prisma.document.findMany({ where: { organizationId: org, expiryDate: { not: null } } }),
+      this.prisma.receivable.findMany({
+        where: {
+          organizationId: org,
+          status: { not: "RECEIVED" },
+          dueDate: { not: null },
+        },
+        include: { project: true },
+      }),
+      this.prisma.tender.findMany({
+        where: {
+          organizationId: org,
+          status: { in: [...TENDER_NOT_YET_SUBMITTED] },
+          submissionDeadline: { not: null },
+        },
+        include: { organizationMaster: true },
+      }),
+      this.prisma.tender.findMany({
+        where: { organizationId: org, status: "SUBMITTED", openingDate: { not: null } },
+        include: { organizationMaster: true },
+      }),
+      this.prisma.projectContract.findMany({
+        where: { organizationId: org, status: "ACTIVE" },
+        include: { cmsWork: true },
+      }),
+      this.prisma.projectBill.findMany({
+        where: {
+          organizationId: org,
+          status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] },
+          retentionAmount: { gt: 0 },
+          retentionReleaseDueDate: { not: null },
+        },
+        include: { cmsWork: true },
+      }),
+      this.prisma.defectLiabilityPeriod.findMany({
+        where: { organizationId: org, status: { in: ["ACTIVE", "EXTENDED"] } },
+        include: { work: true },
+      }),
+      this.prisma.dlpDefect.findMany({
+        where: {
+          organizationId: org,
+          status: { notIn: ["VERIFIED", "CLOSED"] },
+          targetRectificationDate: { not: null },
+        },
+        include: { work: true },
+      }),
+      this.prisma.completionCertificate.findMany({
+        where: { organizationId: org, status: { in: ["DRAFT", "SUBMITTED"] } },
+        include: { work: true },
+      }),
+      this.prisma.projectHandover.findMany({
+        where: { organizationId: org, status: { in: ["DRAFT", "SUBMITTED"] } },
+        include: { work: true },
+      }),
+    ]);
     /** Settings-driven priority/notification-window per reminder type, falling back to a
      * sane hardcoded default if the rule row is somehow missing (should not normally happen
      * since ReminderRuleService.allRules() ensures every known type has a default row). */
@@ -234,7 +361,7 @@ export class RemindersService {
         .filter(({ rule }) => rule.enabled)
         .map(({ x, rule }) =>
           this.source(org, {
-            type: "Tender Security Expiry",
+            type: "Tender Security",
             title: "Tender Security expiry approaching",
             dueDate: x.expiryDate,
             sourceModule: "TENDER_SECURITY",
@@ -247,11 +374,14 @@ export class RemindersService {
           }),
         ),
       ...guarantees
-        .map((x) => ({ x, rule: effective(x.type === "PG" ? "PG_EXPIRY" : "BG_EXPIRY", "CRITICAL", 30) }))
+        .map((x) => ({
+          x,
+          rule: effective(x.type === "PG" ? "PG_EXPIRY" : "BG_EXPIRY", "CRITICAL", 30),
+        }))
         .filter(({ rule }) => rule.enabled)
         .map(({ x, rule }) =>
           this.source(org, {
-            type: "PG/BG Expiry",
+            type: "PG/BG",
             title: "Performance Guarantee expiry approaching",
             dueDate: x.expiryDate,
             sourceModule: "PG_BG",
@@ -263,13 +393,30 @@ export class RemindersService {
             notificationBefore: rule.window,
           }),
         ),
-      ...payables
-        .map((x) => ({ x, rule: effective("PAYABLE_DUE", "HIGH", 7) }))
+      ...securityDeposits
+        .map((x) => ({ x, rule: effective("SECURITY_DEPOSIT_EXPIRY", "HIGH", 30) }))
         .filter(({ rule }) => rule.enabled)
         .map(({ x, rule }) =>
           this.source(org, {
-            type: "Payable Due",
-            title: `Payable due: ${x.partyName}`,
+            type: "SD",
+            title: `SD release due: ${x.cmsWork.workName}`,
+            dueDate: x.securityDepositReleaseDueDate!,
+            sourceModule: "SECURITY_DEPOSIT",
+            sourceId: x.id,
+            referenceNo: x.contractNo,
+            relatedEntityName: x.cmsWork.workName,
+            organizationName: x.organizationMaster.shortName,
+            priority: rule.priority,
+            notificationBefore: rule.window,
+          }),
+        ),
+      ...payables
+        .map((x) => ({ x, rule: effective("BILL_MATURITY", "HIGH", 7) }))
+        .filter(({ rule }) => rule.enabled)
+        .map(({ x, rule }) =>
+          this.source(org, {
+            type: "Bill Maturity",
+            title: `Bill maturity: ${x.partyName}`,
             dueDate: x.dueDate!,
             sourceModule: "PAYABLE",
             sourceId: x.id,
@@ -311,17 +458,18 @@ export class RemindersService {
           }),
         ),
       ...receivables
-        .map((x) => ({ x, rule: effective("RECEIVABLE_DUE", "HIGH", 7) }))
+        .filter((x) => x.amount.gt(x.receivedAmount))
+        .map((x) => ({ x, rule: effective("BILL_MATURITY", "HIGH", 7) }))
         .filter(({ rule }) => rule.enabled)
         .map(({ x, rule }) =>
           this.source(org, {
-            type: "Receivable Due",
-            title: "Project receivable due",
+            type: "Bill Maturity",
+            title: `Bill maturity: ${x.partyName}`,
             dueDate: x.dueDate!,
             sourceModule: "RECEIVABLE",
             sourceId: x.id,
-            referenceNo: x.receiptNo,
-            relatedEntityName: x.work?.workName ?? x.receivedFrom,
+            referenceNo: x.billNo,
+            relatedEntityName: x.project.workName,
             priority: rule.priority,
             notificationBefore: rule.window,
           }),
@@ -412,10 +560,57 @@ export class RemindersService {
             notificationBefore: rule.window,
           }),
         ),
-      ...dlps.map((x) => this.source(org, { type: "DLP Expiring", title: `DLP expiring: ${x.work.workName}`, dueDate: x.endDate, sourceModule: "DLP", sourceId: x.id, relatedEntityName: x.work.workName, priority: "HIGH", notificationBefore: 30 })),
-      ...defects.map((x) => this.source(org, { type: "Defect Rectification Due", title: `Defect due: ${x.defectNo}`, dueDate: x.targetRectificationDate!, sourceModule: "DLP_DEFECT", sourceId: x.id, referenceNo: x.defectNo, relatedEntityName: x.work.workName, priority: x.priority === "CRITICAL" ? "CRITICAL" : "HIGH", notificationBefore: 7 })),
-      ...pendingCertificates.map((x) => this.source(org, { type: "Completion Certificate Pending", title: `Completion Certificate pending: ${x.work.workName}`, dueDate: x.actualCompletionDate, sourceModule: "COMPLETION_CERTIFICATE", sourceId: x.id, referenceNo: x.certificateNo, relatedEntityName: x.work.workName, priority: "HIGH", notificationBefore: 0 })),
-      ...pendingHandovers.map((x) => this.source(org, { type: "Handover Pending", title: `Handover pending: ${x.work.workName}`, dueDate: x.handoverDate, sourceModule: "PROJECT_HANDOVER", sourceId: x.id, referenceNo: x.handoverNo, relatedEntityName: x.work.workName, priority: "HIGH", notificationBefore: 0 })),
+      ...dlps.map((x) =>
+        this.source(org, {
+          type: "DLP Expiring",
+          title: `DLP expiring: ${x.work.workName}`,
+          dueDate: x.endDate,
+          sourceModule: "DLP",
+          sourceId: x.id,
+          relatedEntityName: x.work.workName,
+          priority: "HIGH",
+          notificationBefore: 30,
+        }),
+      ),
+      ...defects.map((x) =>
+        this.source(org, {
+          type: "Defect Rectification Due",
+          title: `Defect due: ${x.defectNo}`,
+          dueDate: x.targetRectificationDate!,
+          sourceModule: "DLP_DEFECT",
+          sourceId: x.id,
+          referenceNo: x.defectNo,
+          relatedEntityName: x.work.workName,
+          priority: x.priority === "CRITICAL" ? "CRITICAL" : "HIGH",
+          notificationBefore: 7,
+        }),
+      ),
+      ...pendingCertificates.map((x) =>
+        this.source(org, {
+          type: "Completion Certificate Pending",
+          title: `Completion Certificate pending: ${x.work.workName}`,
+          dueDate: x.actualCompletionDate,
+          sourceModule: "COMPLETION_CERTIFICATE",
+          sourceId: x.id,
+          referenceNo: x.certificateNo,
+          relatedEntityName: x.work.workName,
+          priority: "HIGH",
+          notificationBefore: 0,
+        }),
+      ),
+      ...pendingHandovers.map((x) =>
+        this.source(org, {
+          type: "Handover Pending",
+          title: `Handover pending: ${x.work.workName}`,
+          dueDate: x.handoverDate,
+          sourceModule: "PROJECT_HANDOVER",
+          sourceId: x.id,
+          referenceNo: x.handoverNo,
+          relatedEntityName: x.work.workName,
+          priority: "HIGH",
+          notificationBefore: 0,
+        }),
+      ),
     ]);
   }
 
@@ -423,73 +618,112 @@ export class RemindersService {
    * released, renewed, or its date changed), auto-complete the reminder that was
    * generated for its previous state, instead of leaving it dangling forever. */
   private async autoResolveStaleReminders(org: string) {
-    const [security, guarantees, payables, cheques, documents, receivables, submittingTenders, openingTenders, activeContracts, retentionBills] =
-      await Promise.all([
-        this.prisma.tenderSecurity.findMany({
-          where: { organizationId: org, status: "ACTIVE" },
-          select: { id: true, expiryDate: true },
-        }),
-        this.prisma.performanceGuarantee.findMany({
-          where: { organizationId: org, status: "ACTIVE" },
-          select: { id: true, expiryDate: true },
-        }),
-        this.prisma.payable.findMany({
-          where: { organizationId: org, status: { not: "PAID" }, dueDate: { not: null } },
-          select: { id: true, dueDate: true },
-        }),
-        this.prisma.cheque.findMany({
-          where: { organizationId: org, status: { in: ["PENDING", "DEPOSITED"] } },
-          select: { id: true, chequeDate: true },
-        }),
-        this.prisma.document.findMany({
-          where: { organizationId: org, expiryDate: { not: null } },
-          select: { id: true, expiryDate: true },
-        }),
-        this.prisma.receipt.findMany({
-          where: { organizationId: org, status: "PENDING", dueDate: { not: null } },
-          select: { id: true, dueDate: true },
-        }),
-        this.prisma.tender.findMany({
-          where: { organizationId: org, status: { in: [...TENDER_NOT_YET_SUBMITTED] }, submissionDeadline: { not: null } },
-          select: { id: true, submissionDeadline: true },
-        }),
-        this.prisma.tender.findMany({
-          where: { organizationId: org, status: "SUBMITTED", openingDate: { not: null } },
-          select: { id: true, openingDate: true },
-        }),
-        this.prisma.projectContract.findMany({
-          where: { organizationId: org, status: "ACTIVE" },
-          select: { id: true, currentCompletionDate: true, dlpDays: true },
-        }),
-        this.prisma.projectBill.findMany({
-          where: {
-            organizationId: org,
-            status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] },
-            retentionAmount: { gt: 0 },
-            retentionReleaseDueDate: { not: null },
-          },
-          select: { id: true, retentionReleaseDueDate: true, retentionAmount: true, retentionReleasedAmount: true },
-        }),
-      ]);
+    const [
+      security,
+      guarantees,
+      securityDeposits,
+      payables,
+      cheques,
+      documents,
+      receivables,
+      submittingTenders,
+      openingTenders,
+      activeContracts,
+      retentionBills,
+    ] = await Promise.all([
+      this.prisma.tenderSecurity.findMany({
+        where: { organizationId: org, status: "ACTIVE" },
+        select: { id: true, expiryDate: true },
+      }),
+      this.prisma.performanceGuarantee.findMany({
+        where: { organizationId: org, status: "ACTIVE" },
+        select: { id: true, expiryDate: true },
+      }),
+      this.prisma.projectContract.findMany({
+        where: {
+          organizationId: org,
+          securityDepositPct: { gt: 0 },
+          securityDepositReleaseDueDate: { not: null },
+          securityDepositStatus: { in: ["HELD", "PARTIALLY_RELEASED"] },
+        },
+        select: { id: true, securityDepositReleaseDueDate: true },
+      }),
+      this.prisma.payable.findMany({
+        where: { organizationId: org, status: { not: "PAID" }, dueDate: { not: null } },
+        select: { id: true, dueDate: true },
+      }),
+      this.prisma.cheque.findMany({
+        where: { organizationId: org, status: { in: ["PENDING", "DEPOSITED"] } },
+        select: { id: true, chequeDate: true },
+      }),
+      this.prisma.document.findMany({
+        where: { organizationId: org, expiryDate: { not: null } },
+        select: { id: true, expiryDate: true },
+      }),
+      this.prisma.receivable.findMany({
+        where: { organizationId: org, status: { not: "RECEIVED" }, dueDate: { not: null } },
+        select: { id: true, dueDate: true, amount: true, receivedAmount: true },
+      }),
+      this.prisma.tender.findMany({
+        where: {
+          organizationId: org,
+          status: { in: [...TENDER_NOT_YET_SUBMITTED] },
+          submissionDeadline: { not: null },
+        },
+        select: { id: true, submissionDeadline: true },
+      }),
+      this.prisma.tender.findMany({
+        where: { organizationId: org, status: "SUBMITTED", openingDate: { not: null } },
+        select: { id: true, openingDate: true },
+      }),
+      this.prisma.projectContract.findMany({
+        where: { organizationId: org, status: "ACTIVE" },
+        select: { id: true, currentCompletionDate: true, dlpDays: true },
+      }),
+      this.prisma.projectBill.findMany({
+        where: {
+          organizationId: org,
+          status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] },
+          retentionAmount: { gt: 0 },
+          retentionReleaseDueDate: { not: null },
+        },
+        select: {
+          id: true,
+          retentionReleaseDueDate: true,
+          retentionAmount: true,
+          retentionReleasedAmount: true,
+        },
+      }),
+    ]);
 
-    const keyOf = (id: string, date: Date | null | undefined) => `${id}:${date ? date.getTime() : ""}`;
+    const keyOf = (id: string, date: Date | null | undefined) =>
+      `${id}:${date ? date.getTime() : ""}`;
     const activeKeys: Record<(typeof AUTO_SOURCE_MODULES)[number], Set<string>> = {
       TENDER_SECURITY: new Set(security.map((x) => keyOf(x.id, x.expiryDate))),
       PG_BG: new Set(guarantees.map((x) => keyOf(x.id, x.expiryDate))),
+      SECURITY_DEPOSIT: new Set(
+        securityDeposits.map((x) => keyOf(x.id, x.securityDepositReleaseDueDate)),
+      ),
       PAYABLE: new Set(payables.map((x) => keyOf(x.id, x.dueDate))),
       CHEQUE: new Set(cheques.map((x) => keyOf(x.id, x.chequeDate))),
       DOCUMENT: new Set(documents.map((x) => keyOf(x.id, x.expiryDate))),
-      RECEIVABLE: new Set(receivables.map((x) => keyOf(x.id, x.dueDate))),
+      RECEIVABLE: new Set(
+        receivables.filter((x) => x.amount.gt(x.receivedAmount)).map((x) => keyOf(x.id, x.dueDate)),
+      ),
       TENDER_SUBMISSION: new Set(submittingTenders.map((x) => keyOf(x.id, x.submissionDeadline))),
       TENDER_OPENING: new Set(openingTenders.map((x) => keyOf(x.id, x.openingDate))),
       CONTRACT: new Set(
         activeContracts.flatMap((x) => [
           keyOf(x.id, x.currentCompletionDate),
-          ...(x.dlpDays ? [keyOf(x.id, new Date(x.currentCompletionDate.getTime() + x.dlpDays * 86_400_000))] : []),
+          ...(x.dlpDays
+            ? [keyOf(x.id, new Date(x.currentCompletionDate.getTime() + x.dlpDays * 86_400_000))]
+            : []),
         ]),
       ),
       PROJECT_BILL: new Set(
-        retentionBills.filter((b) => b.retentionAmount.gt(b.retentionReleasedAmount)).map((b) => keyOf(b.id, b.retentionReleaseDueDate)),
+        retentionBills
+          .filter((b) => b.retentionAmount.gt(b.retentionReleasedAmount))
+          .map((b) => keyOf(b.id, b.retentionReleaseDueDate)),
       ),
     };
 

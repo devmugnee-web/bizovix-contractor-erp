@@ -953,6 +953,7 @@ model ProjectContract {
   securityDepositMethod       String?
   securityDepositStatus       String?
   securityDepositReleasedAmount Decimal? @db.Decimal(18, 2)
+  securityDepositReleaseDueDate DateTime?
   securityDepositReleasedDate DateTime?
 
   clientContactName String?
@@ -984,6 +985,7 @@ model ProjectContract {
   @@index([organizationId, status])
   @@index([organizationId, currentCompletionDate])
   @@index([organizationId, cmsWorkId])
+  @@index([organizationId, securityDepositReleaseDueDate])
   @@map("project_contracts")
 }
 
@@ -2510,6 +2512,7 @@ enum MasterCategoryType {
   VENDOR
   MATERIAL
   SUBCONTRACTOR_TRADE
+  DOCUMENT_PURCHASE
 }
 
 enum ItemType {

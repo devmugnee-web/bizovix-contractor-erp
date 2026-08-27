@@ -9,12 +9,12 @@ import {
   Wallet,
 } from "lucide-react";
 import { DashboardKpiCard } from "@bizovix/ui";
-import { formatBDTCompact, formatDate } from "@bizovix/utils";
+import { formatBDTLakh, formatDate } from "@bizovix/utils";
 import type { DashboardKpis } from "@bizovix/types";
 
 export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
   return (
-    <div className="grid grid-cols-8 gap-1.5 sm:gap-2 lg:gap-3">
+    <div className="grid grid-cols-4 gap-1.5 sm:gap-2 xl:grid-cols-8">
       <DashboardKpiCard
         index={1}
         title="Ongoing Works"
@@ -24,7 +24,7 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
       >
         Contract Value
         <br />
-        {formatBDTCompact(kpis.ongoingWorks.contractValue)}
+        {formatBDTLakh(kpis.ongoingWorks.contractValue)}
       </DashboardKpiCard>
 
       <DashboardKpiCard
@@ -32,7 +32,7 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="Tender Security"
         icon={ShieldCheck}
         iconClassName="bg-biz-purple-soft text-biz-purple"
-        value={formatBDTCompact(kpis.tenderSecurity.amount)}
+        value={formatBDTLakh(kpis.tenderSecurity.amount)}
       >
         Instruments: {kpis.tenderSecurity.instruments}
       </DashboardKpiCard>
@@ -42,7 +42,7 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="PG / BG"
         icon={Building2}
         iconClassName="bg-biz-orange-soft text-biz-orange"
-        value={formatBDTCompact(kpis.pgBg.amount)}
+        value={formatBDTLakh(kpis.pgBg.amount)}
       >
         Instruments: {kpis.pgBg.instruments}
       </DashboardKpiCard>
@@ -52,7 +52,7 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="Security Deposit (SD)"
         icon={Lock}
         iconClassName="bg-biz-teal-soft text-biz-teal"
-        value={kpis.securityDeposit.available ? formatBDTCompact(kpis.securityDeposit.amount) : "Not Available"}
+        value={kpis.securityDeposit.available ? formatBDTLakh(kpis.securityDeposit.amount) : "Not Available"}
       >
         {kpis.securityDeposit.available ? `Projects: ${kpis.securityDeposit.projects}` : "No authoritative source yet"}
       </DashboardKpiCard>
@@ -62,9 +62,9 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="Receivables"
         icon={Wallet}
         iconClassName="bg-biz-success-soft text-biz-success"
-        value={formatBDTCompact(kpis.receivables.amount)}
+        value={formatBDTLakh(kpis.receivables.amount)}
       >
-        Overdue: <span className="font-medium text-biz-danger">{formatBDTCompact(kpis.receivables.overdue)}</span>
+        Overdue: <span className="font-medium text-biz-danger">{formatBDTLakh(kpis.receivables.overdue)}</span>
       </DashboardKpiCard>
 
       <DashboardKpiCard
@@ -72,9 +72,9 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="Payables"
         icon={CreditCard}
         iconClassName="bg-biz-danger-soft text-biz-danger"
-        value={formatBDTCompact(kpis.payables.amount)}
+        value={formatBDTLakh(kpis.payables.amount)}
       >
-        Due Soon: <span className="font-medium text-biz-orange">{formatBDTCompact(kpis.payables.dueSoon)}</span>
+        Due Soon: <span className="font-medium text-biz-orange">{formatBDTLakh(kpis.payables.dueSoon)}</span>
       </DashboardKpiCard>
 
       <DashboardKpiCard
@@ -82,7 +82,7 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="Bank & Cash"
         icon={Landmark}
         iconClassName="bg-biz-blue-soft text-biz-blue"
-        value={formatBDTCompact(kpis.bankAndCash.amount)}
+        value={formatBDTLakh(kpis.bankAndCash.amount)}
       >
         Total Balance
       </DashboardKpiCard>
@@ -92,7 +92,7 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="Loans & EMI"
         icon={CircleDollarSign}
         iconClassName="bg-biz-purple-soft text-biz-purple"
-        value={kpis.loansAndEmi.configured ? formatBDTCompact(kpis.loansAndEmi.amount) : "Not Configured"}
+        value={kpis.loansAndEmi.configured ? formatBDTLakh(kpis.loansAndEmi.amount) : "Not Configured"}
       >
         {kpis.loansAndEmi.configured ? (
           <>
