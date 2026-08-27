@@ -98,7 +98,7 @@ export default function CreditCommitmentPage() {
   const meta = pendingQuery.data?.meta ?? { page: query.page ?? 1, limit: 5, total: 0, totalPages: 1 };
   const primeBank = bankAccounts.data?.find((account) => account.bankName?.toLowerCase().includes("prime"));
   const defaultBank = primeBank ?? bankAccounts.data?.find((account) => account.accountType === "BANK") ?? bankAccounts.data?.[0];
-  const initialRows = pendingItems.slice(0, 3);
+  const initialRows = pendingItems;
   const selectedIds = selectedState ?? new Set(initialRows.map((row) => row.id));
   const chargeRows = chargeRowsState ?? initialRows.map((row) => ({
     ...row,
