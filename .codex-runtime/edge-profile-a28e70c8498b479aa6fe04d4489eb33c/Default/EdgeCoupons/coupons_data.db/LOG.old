@@ -1,0 +1,6 @@
+2026/08/27-19:41:25.298 3ca0 Reusing MANIFEST D:\bizovix-contractor-erp\.codex-runtime\edge-profile-a28e70c8498b479aa6fe04d4489eb33c\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/08/27-19:41:25.298 3ca0 Recovering log #7
+2026/08/27-19:41:25.299 3ca0 Reusing old log D:\bizovix-contractor-erp\.codex-runtime\edge-profile-a28e70c8498b479aa6fe04d4489eb33c\Default\EdgeCoupons/coupons_data.db/000007.log 
+2026/08/27-19:41:27.223 80 Level-0 table #11: started
+2026/08/27-19:41:27.483 80 Level-0 table #11: 683444 bytes OK
+2026/08/27-19:41:27.486 80 Delete type=0 #7

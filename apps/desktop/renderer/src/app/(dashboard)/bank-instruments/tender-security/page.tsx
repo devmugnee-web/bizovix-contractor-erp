@@ -438,7 +438,7 @@ export default function TenderSecurityPage() {
                 <th className="px-3 py-2 text-left">Organization</th>
                 <th className="px-3 py-2 text-left">Work / Tender Name</th>
                 <th className="px-3 py-2 text-left">Tender Status</th>
-                <th className="px-3 py-2 text-left">Document Purchase Date</th>
+                <th className="px-3 py-2 text-left">Submission Deadline</th>
                 <th className="px-3 py-2 text-right">Security Amount (৳)</th>
                 <th className="px-3 py-2 text-left">Status</th>
                 <th className="px-4 py-2 text-center">Action</th>
@@ -465,7 +465,7 @@ export default function TenderSecurityPage() {
                     <td className="px-3 py-2 font-semibold">{row.organizationMaster.shortName}</td>
                     <td className="px-3 py-2">{row.tenderWorkName}</td>
                     <td className="px-3 py-2"><span className="rounded-md bg-biz-blue-soft px-2 py-1 text-[11px] font-medium text-biz-blue">{TENDER_STATUS_LABELS[row.tenderStatus] ?? row.tenderStatus}</span></td>
-                    <td className="px-3 py-2">{row.purchaseDate ? displayDate(row.purchaseDate) : "—"}</td>
+                    <td className="px-3 py-2">{row.submissionDeadline ? displayDate(row.submissionDeadline) : "—"}</td>
                     <td className="px-3 py-2 text-right font-semibold">{money(row.securityAmount)}</td>
                     <td className="px-3 py-2">
                       <span className={cn("rounded-md px-2 py-1 text-[11px] font-medium", SECURITY_STATUS_META[row.securityStatus].className)}>

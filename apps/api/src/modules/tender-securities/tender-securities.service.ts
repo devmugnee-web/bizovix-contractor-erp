@@ -73,7 +73,7 @@ function runningTenderToDto(record: RunningTenderRecord, tsDefaultSecurityPct: P
     organizationMasterId: record.organizationMasterId,
     organizationMaster: record.organizationMaster,
     tenderWorkName: record.workName,
-    purchaseDate: selectedPurchase?.purchaseDate ?? null,
+    submissionDeadline: record.submissionDeadline ?? null,
     tenderStatus: record.status,
     securityAmount: securityAmount.toFixed(2),
     securityStatus,

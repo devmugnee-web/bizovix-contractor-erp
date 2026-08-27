@@ -20,12 +20,15 @@ export default function LoginPage() {
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS !== "true") return;
     if (tokenStorage.getAccessToken()) {
-      router.replace("/dashboard");
+      window.location.replace("/dashboard");
       return;
     }
     if (devLoginTriggered.current) return;
     devLoginTriggered.current = true;
-    devLogin.mutate(undefined, { onSuccess: () => router.replace("/dashboard") });
+    void devLogin
+      .mutateAsync()
+      .then(() => window.location.replace("/dashboard"))
+      .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -36,6 +39,27 @@ export default function LoginPage() {
   } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
 
   if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true") {
+    if (devLogin.isError) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-biz-bg px-4 text-center">
+          <p className="text-[13px] font-semibold text-biz-danger">Could not connect to the ERP server.</p>
+          <button
+            type="button"
+            onClick={() => {
+              devLogin.reset();
+              void devLogin
+                .mutateAsync()
+                .then(() => window.location.replace("/dashboard"))
+                .catch(() => undefined);
+            }}
+            className="h-9 rounded-md bg-biz-blue px-4 text-[12px] font-semibold text-white hover:bg-biz-blue-hover"
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
     return <div className="flex min-h-screen items-center justify-center bg-biz-bg text-[13px] text-biz-muted">Opening dashboard...</div>;
   }
 

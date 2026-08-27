@@ -23,8 +23,8 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const appConfig = configService.get<AppConfig>("app")!;
 
-  await app.listen(appConfig.port);
-  console.log(`${appConfig.appName} API running on http://localhost:${appConfig.port}/api/v1`);
+  await app.listen(appConfig.port, "0.0.0.0");
+  console.log(`${appConfig.appName} API running on http://0.0.0.0:${appConfig.port}/api/v1`);
 }
 
 bootstrap();

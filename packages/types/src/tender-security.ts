@@ -10,7 +10,7 @@ export interface PendingTenderSecurity {
   organizationMasterId: string;
   organizationMaster: { id: string; shortName: string; fullName: string };
   tenderWorkName: string;
-  purchaseDate: string | null;
+  submissionDeadline: string | null;
   tenderStatus: TenderStatus;
   securityAmount: string;
   securityStatus: TenderSecurityEligibilityStatus;

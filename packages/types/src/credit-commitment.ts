@@ -3,7 +3,7 @@ export interface PendingCreditCommitmentTender {
   tenderId: string | null;
   organizationMaster: { id: string; shortName: string; fullName: string };
   tenderWorkName: string;
-  purchaseDate: string;
+  submissionDeadline: string | null;
   estimatedTenderAmount: string;
 }
 
