@@ -5,6 +5,7 @@ import { RequirePermissions } from "../../common/decorators/require-permissions.
 import { ResponseMessage } from "../../common/decorators/response-message.decorator";
 import { QueryProjectExpenseDto } from "./dto/query-project-expense.dto";
 import { SaveProjectExpenseDto } from "./dto/save-project-expense.dto";
+import { CreateProjectExpensesBatchDto } from "./dto/create-project-expenses-batch.dto";
 import { UpdateProjectExpenseDto } from "./dto/update-project-expense.dto";
 import { SaveExpenseHeadDto } from "./dto/save-expense-head.dto";
 import { ProjectExpensesService } from "./project-expenses.service";
@@ -33,6 +34,9 @@ export class ProjectExpensesController {
 
   @Get("export") @RequirePermissions("project_expense.export")
   exportCsv(@Query() query: QueryProjectExpenseDto, @CurrentUser() user: AuthUser) { return this.service.exportCsv(user.organizationId, user.id, query); }
+
+  @Post("batch") @RequirePermissions("project_expense.create") @ResponseMessage("Project expenses saved successfully")
+  createBatch(@Body() dto: CreateProjectExpensesBatchDto, @CurrentUser() user: AuthUser) { return this.service.createBatch(user.organizationId, user.id, dto); }
 
   @Get(":id") @RequirePermissions("project_expense.read")
   findOne(@Param("id") id: string, @CurrentUser() user: AuthUser) { return this.service.findOne(user.organizationId, id); }

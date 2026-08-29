@@ -7,6 +7,7 @@ import { AccountingService } from "../accounting/accounting.service";
 import { NumberingService } from "../settings-numbering/numbering.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ProjectLifecycleGuardService } from "../prisma/project-lifecycle-guard.service";
+import { CreateProjectExpensesBatchDto } from "./dto/create-project-expenses-batch.dto";
 import { QueryProjectExpenseDto } from "./dto/query-project-expense.dto";
 import { SaveProjectExpenseDto } from "./dto/save-project-expense.dto";
 import { UpdateProjectExpenseDto } from "./dto/update-project-expense.dto";
@@ -19,6 +20,7 @@ const includeRelations = {
 } satisfies Prisma.ExpenseInclude;
 
 type ExpenseRecord = Prisma.ExpenseGetPayload<{ include: typeof includeRelations }>;
+type DbClient = PrismaService | Prisma.TransactionClient;
 
 function toDto(record: ExpenseRecord) {
   const expenseByValue = record.expenseBy?.name ?? (record.expenseById?.startsWith("CUSTOM:") ? record.expenseById.substring(7) : record.expenseById ?? "Unknown");
@@ -66,22 +68,54 @@ export class ProjectExpensesService {
     };
   }
 
-  private async assertWork(organizationId: string, workId: string) {
-    const work = await this.prisma.cmsWork.findFirst({ where: { id: workId, organizationId, status: "ONGOING" } });
+  private async assertWork(organizationId: string, workId: string, client: DbClient = this.prisma) {
+    const work = await client.cmsWork.findFirst({ where: { id: workId, organizationId, status: "ONGOING" } });
     if (!work) throw new NotFoundException("Ongoing project not found");
     return work;
   }
 
-  private async assertReferences(organizationId: string, dto: SaveProjectExpenseDto) {
+  private async assertReferences(organizationId: string, dto: SaveProjectExpenseDto, client: DbClient = this.prisma) {
     const [work, head, account] = await Promise.all([
-      this.assertWork(organizationId, dto.workId),
-      this.prisma.expenseHead.findFirst({ where: { id: dto.expenseHeadId, organizationId, isActive: true } }),
-      this.prisma.bankAccount.findFirst({ where: { id: dto.paidFromAccountId, organizationId } }),
+      this.assertWork(organizationId, dto.workId, client),
+      client.expenseHead.findFirst({ where: { id: dto.expenseHeadId, organizationId, isActive: true } }),
+      client.bankAccount.findFirst({ where: { id: dto.paidFromAccountId, organizationId, isActive: true } }),
     ]);
     if (!head) throw new NotFoundException("Expense head not found");
     if (!account) throw new NotFoundException("Payment account not found");
-    const person = await this.prisma.organizationUser.findFirst({ where: { organizationId, userId: dto.expenseById, user: { isActive: true } } });
+    const person = await client.organizationUser.findFirst({ where: { organizationId, userId: dto.expenseById, user: { isActive: true } } });
+    if (!person) throw new NotFoundException("Expense person not found");
     return { work, head, person, account };
+  }
+
+  private async createRecord(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    dto: SaveProjectExpenseDto,
+    headName: string,
+  ) {
+    const referenceNo = await this.numbering.next(organizationId, "EXPENSE", tx);
+    const expense = await tx.expense.create({
+      data: {
+        organizationId,
+        workId: dto.workId,
+        expenseHeadId: dto.expenseHeadId,
+        expenseById: dto.expenseById,
+        paidFromAccountId: dto.paidFromAccountId,
+        category: headName,
+        description: dto.description?.trim() || null,
+        amount: dto.amount,
+        expenseDate: new Date(dto.expenseDate),
+        status: "APPROVED",
+        referenceNo,
+        createdById: userId,
+      },
+      include: includeRelations,
+    });
+    const description = dto.description?.trim() || headName;
+    await this.cashBank.post(tx, { organizationId, accountId: dto.paidFromAccountId, direction: "OUT", amount: dto.amount, sourceModule: "PROJECT_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, referenceNo, description, transactionDate: expense.expenseDate, createdById: userId });
+    await this.accounting.post(tx, { organizationId, userId, journalDate: expense.expenseDate, referenceNo, description, sourceModule: "PROJECT_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, lines: [{ systemKey: "PROJECT_EXPENSE", projectId: dto.workId, debit: dto.amount, credit: 0 }, { bankAccountId: dto.paidFromAccountId, projectId: dto.workId, debit: 0, credit: dto.amount }] });
+    return expense;
   }
 
   async findAll(organizationId: string, query: QueryProjectExpenseDto) {
@@ -152,31 +186,29 @@ export class ProjectExpensesService {
   async create(organizationId: string, userId: string, dto: SaveProjectExpenseDto) {
     await this.lifecycle.assertOperationalMutationAllowed(organizationId, dto.workId, "recording a normal project expense");
     const { head } = await this.assertReferences(organizationId, dto);
-    const record = await this.prisma.$transaction(async (tx) => {
-      const referenceNo = await this.numbering.next(organizationId, "EXPENSE", tx);
-      const expense = await tx.expense.create({
-        data: {
-        organizationId,
-        workId: dto.workId,
-        expenseHeadId: dto.expenseHeadId,
-        expenseById: dto.expenseById,
-        paidFromAccountId: dto.paidFromAccountId,
-        category: head.name,
-        description: dto.description?.trim() || null,
-        amount: dto.amount,
-        expenseDate: new Date(dto.expenseDate),
-        status: "APPROVED",
-        referenceNo,
-        createdById: userId,
-        },
-        include: includeRelations,
-      });
-      await this.cashBank.post(tx, { organizationId, accountId: dto.paidFromAccountId, direction: "OUT", amount: dto.amount, sourceModule: "PROJECT_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, referenceNo, description: dto.description?.trim() || head.name, transactionDate: expense.expenseDate, createdById: userId });
-      await this.accounting.post(tx, { organizationId, userId, journalDate: expense.expenseDate, referenceNo, description: dto.description?.trim() || head.name, sourceModule: "PROJECT_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, lines: [{ systemKey: "PROJECT_EXPENSE", projectId: dto.workId, debit: dto.amount, credit: 0 }, { bankAccountId: dto.paidFromAccountId, projectId: dto.workId, debit: 0, credit: dto.amount }] });
-      return expense;
-    });
+    const record = await this.prisma.$transaction((tx) => this.createRecord(tx, organizationId, userId, dto, head.name));
     await this.auditLogService.record({ organizationId, userId, action: "create", entityType: "ProjectExpense", entityId: record.id, newValue: toDto(record) });
     return toDto(record);
+  }
+
+  async createBatch(organizationId: string, userId: string, dto: CreateProjectExpensesBatchDto) {
+    const records = await this.prisma.$transaction(async (tx) => {
+      const headNames: string[] = [];
+      for (const expense of dto.expenses) {
+        await this.lifecycle.assertOperationalMutationAllowed(organizationId, expense.workId, "recording a normal project expense", tx);
+        const { head } = await this.assertReferences(organizationId, expense, tx);
+        headNames.push(head.name);
+      }
+
+      const created: ExpenseRecord[] = [];
+      for (const [index, expense] of dto.expenses.entries()) {
+        const record = await this.createRecord(tx, organizationId, userId, expense, headNames[index]!);
+        await this.auditLogService.record({ organizationId, userId, action: "create", entityType: "ProjectExpense", entityId: record.id, newValue: toDto(record) }, tx);
+        created.push(record);
+      }
+      return created;
+    }, { timeout: 30_000 });
+    return records.map(toDto);
   }
 
   async update(organizationId: string, userId: string, id: string, dto: UpdateProjectExpenseDto) {

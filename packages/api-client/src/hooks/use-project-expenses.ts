@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  CreateProjectExpensesBatchInput,
   ExpenseHeadOption,
   ExpensePersonOption,
   ProjectExpense,
@@ -61,6 +62,14 @@ function useInvalidateProjectExpenses() {
 export function useCreateProjectExpense() {
   const invalidate = useInvalidateProjectExpenses();
   return useMutation({ mutationFn: (payload: SaveProjectExpenseInput) => apiRequest<ProjectExpense>("/project-expenses", { method: "POST", body: payload }), onSuccess: invalidate });
+}
+
+export function useCreateProjectExpensesBatch() {
+  const invalidate = useInvalidateProjectExpenses();
+  return useMutation({
+    mutationFn: (payload: CreateProjectExpensesBatchInput) => apiRequest<ProjectExpense[]>("/project-expenses/batch", { method: "POST", body: payload }),
+    onSuccess: invalidate,
+  });
 }
 
 export function useUpdateProjectExpense() {

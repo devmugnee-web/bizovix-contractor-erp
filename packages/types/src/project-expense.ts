@@ -50,6 +50,10 @@ export interface SaveProjectExpenseInput {
   description?: string;
 }
 
+export interface CreateProjectExpensesBatchInput {
+  expenses: SaveProjectExpenseInput[];
+}
+
 export interface ProjectExpenseExport {
   filename: string;
   content: string;

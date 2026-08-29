@@ -121,4 +121,80 @@ describe("Project Expense edit + delete over HTTP", () => {
     expect(await glNet()).toBeCloseTo(0, 2);
     expect(await bankNet()).toBeCloseTo(0, 2);
   });
+
+  it("creates every batch row with separate financial postings and audit logs", async () => {
+    const f = await createOrganizationFixture(prisma, "PEXB");
+    const login = await request(app.getHttpServer()).post("/api/v1/auth/login").send({ email: f.user.email, password: f.password }).expect(201);
+    const auth = { Authorization: `Bearer ${login.body.data.accessToken as string}` };
+
+    const response = await request(app.getHttpServer())
+      .post("/api/v1/project-expenses/batch")
+      .set(auth)
+      .send({
+        expenses: [
+          {
+            workId: f.work.id,
+            expenseDate: "2026-05-02",
+            expenseHeadId: f.expenseHead.id,
+            amount: 12000,
+            expenseById: f.user.id,
+            paidFromAccountId: f.bank.id,
+            description: "First batch expense",
+          },
+          {
+            workId: f.work.id,
+            expenseDate: "2026-05-02",
+            expenseHeadId: f.expenseHead.id,
+            amount: 8000,
+            expenseById: f.user.id,
+            paidFromAccountId: f.bank.id,
+            description: "Second batch expense",
+          },
+        ],
+      })
+      .expect(201);
+
+    expect(response.body.data).toHaveLength(2);
+    expect(new Set(response.body.data.map((item: { referenceNo: string }) => item.referenceNo)).size).toBe(2);
+    expect(await prisma.expense.count({ where: { organizationId: f.organization.id, workId: f.work.id, status: "APPROVED" } })).toBe(2);
+    expect(await prisma.financialTransaction.count({ where: { organizationId: f.organization.id, sourceModule: "PROJECT_EXPENSE" } })).toBe(2);
+    expect(await prisma.journalEntry.count({ where: { organizationId: f.organization.id, sourceModule: "PROJECT_EXPENSE", status: "POSTED" } })).toBe(2);
+    expect(await prisma.auditLog.count({ where: { organizationId: f.organization.id, entityType: "ProjectExpense", action: "create" } })).toBe(2);
+  });
+
+  it("rolls back the whole batch when any row has an invalid tenant-scoped reference", async () => {
+    const f = await createOrganizationFixture(prisma, "PEXR");
+    const login = await request(app.getHttpServer()).post("/api/v1/auth/login").send({ email: f.user.email, password: f.password }).expect(201);
+    const auth = { Authorization: `Bearer ${login.body.data.accessToken as string}` };
+
+    await request(app.getHttpServer())
+      .post("/api/v1/project-expenses/batch")
+      .set(auth)
+      .send({
+        expenses: [
+          {
+            workId: f.work.id,
+            expenseDate: "2026-05-03",
+            expenseHeadId: f.expenseHead.id,
+            amount: 5000,
+            expenseById: f.user.id,
+            paidFromAccountId: f.bank.id,
+          },
+          {
+            workId: f.work.id,
+            expenseDate: "2026-05-03",
+            expenseHeadId: "not-a-valid-expense-head",
+            amount: 7000,
+            expenseById: f.user.id,
+            paidFromAccountId: f.bank.id,
+          },
+        ],
+      })
+      .expect(404);
+
+    expect(await prisma.expense.count({ where: { organizationId: f.organization.id } })).toBe(0);
+    expect(await prisma.financialTransaction.count({ where: { organizationId: f.organization.id, sourceModule: "PROJECT_EXPENSE" } })).toBe(0);
+    expect(await prisma.journalEntry.count({ where: { organizationId: f.organization.id, sourceModule: "PROJECT_EXPENSE" } })).toBe(0);
+    expect(await prisma.auditLog.count({ where: { organizationId: f.organization.id, entityType: "ProjectExpense", action: "create" } })).toBe(0);
+  });
 });
