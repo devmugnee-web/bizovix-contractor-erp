@@ -66,6 +66,11 @@ export const PERMISSIONS = [
   "challan_submission.release_payment",
   "challan_submission.cancel",
 
+  "vat_tax_certificate.read",
+  "vat_tax_certificate.create",
+  "vat_tax_certificate.update",
+  "vat_tax_certificate.export",
+
   "retention.read",
   "retention.release",
 

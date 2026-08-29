@@ -1,3 +1,8 @@
+import type {
+  WorkCompletionCertificateEgpStatus,
+  WorkCompletionCertificateSource,
+} from "./work-completion-certificate";
+
 export interface CloseoutItem {
   key: string;
   label: string;
@@ -24,13 +29,19 @@ export interface ProjectClosingOverview {
   certificates: Array<{
     id: string;
     certificateNo: string;
+    source: WorkCompletionCertificateSource;
+    egpStatus: WorkCompletionCertificateEgpStatus;
     status: string;
+    applicationDate: string;
     actualCompletionDate: string;
     certifiedCompletionDate?: string | null;
     certificateDate?: string | null;
+    egpAppliedOn?: string | null;
+    egpObtainedOn?: string | null;
     contractId: string;
     issuingAuthority?: string | null;
     remarks?: string | null;
+    updatedAt: string;
   }>;
   dlps: Array<{
     id: string;

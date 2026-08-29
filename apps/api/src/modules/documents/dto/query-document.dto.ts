@@ -32,6 +32,14 @@ export class QueryDocumentDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsString()
+  vatTaxCertificateId?: string;
+
+  @IsOptional()
+  @IsString()
+  completionCertificateId?: string;
+
+  @IsOptional()
+  @IsString()
   variationOrderId?: string;
 
   @IsOptional()

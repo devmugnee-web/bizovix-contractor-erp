@@ -26,6 +26,7 @@ export function useCloseProject(workId: string) {
       Promise.all([
         client.invalidateQueries({ queryKey: ["project-closing", workId] }),
         client.invalidateQueries({ queryKey: ["cms-works"] }),
+        client.invalidateQueries({ queryKey: ["work-completion-certificates"] }),
       ]),
   });
 }
@@ -34,13 +35,39 @@ function useClosingMutation<T>(workId: string, path: string, method: "POST" | "P
   const client = useQueryClient();
   return useMutation({
     mutationFn: (payload: T) => apiRequest(`/project-closing/${path}`, { method, body: payload }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["project-closing", workId] }),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ["project-closing", workId] }),
+        client.invalidateQueries({ queryKey: ["work-completion-certificates"] }),
+      ]),
   });
 }
 
 export const useCreateCompletionCertificate = (workId: string) => useClosingMutation<Record<string, unknown>>(workId, `${workId}/certificates`);
 export const useUpdateCompletionCertificate = (workId: string, id: string) => useClosingMutation<Record<string, unknown>>(workId, `certificates/${id}`, "PATCH");
-export const useCompletionCertificateStatus = (workId: string, id: string) => useClosingMutation<{ status: string; remarks?: string }>(workId, `certificates/${id}/status`, "PATCH");
+export function useCompletionCertificateStatus(workId: string, id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { status: string; remarks?: string }) =>
+      apiRequest(
+        payload.status === "SUBMITTED"
+          ? `/project-closing/certificates/${id}/submit`
+          : `/project-closing/certificates/${id}/status`,
+        {
+          method: "PATCH",
+          body:
+            payload.status === "SUBMITTED"
+              ? { remarks: payload.remarks }
+              : payload,
+        },
+      ),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ["project-closing", workId] }),
+        client.invalidateQueries({ queryKey: ["work-completion-certificates"] }),
+      ]),
+  });
+}
 export const useCreateDlp = (workId: string) => useClosingMutation<Record<string, unknown>>(workId, `${workId}/dlp`);
 export const useExtendDlp = (workId: string, id: string) => useClosingMutation<{ extensionDays: number; reason: string }>(workId, `dlp/${id}/extend`);
 export const useCompleteDlp = (workId: string, id: string) => useClosingMutation<Record<string, never>>(workId, `dlp/${id}/complete`);

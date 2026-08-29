@@ -17,8 +17,20 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useChallanSubmissions, useChallanSubmissionStats, useCmsWorks } from "@bizovix/api-client";
-import type { ChallanSubmissionRecord, ChallanSubmissionStatus } from "@bizovix/types";
+import {
+  useChallanSubmissions,
+  useChallanSubmissionStats,
+  useCmsWorks,
+  useMe,
+  useVatTaxCertificates,
+  useVatTaxCertificateStats,
+} from "@bizovix/api-client";
+import type {
+  ChallanSubmissionRecord,
+  ChallanSubmissionStatus,
+  VatTaxCertificateRecord,
+  VatTaxCertificateStatus,
+} from "@bizovix/types";
 import {
   DataTable,
   IconButton,
@@ -36,12 +48,9 @@ import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import {
   BILL_SUBMISSION_ROWS,
   DOCUMENT_KPI_TOTALS,
-  VAT_TAX_CERTIFICATE_ROWS,
   WORK_COMPLETION_CERT_ROWS,
   type BillStatus,
   type BillSubmissionRow,
-  type CertificateStatus,
-  type VatTaxCertificateRow,
   type WccSource,
   type WccStatus,
   type WorkCompletionCertRow,
@@ -60,9 +69,13 @@ const CHALLAN_STATUS_TONE: Record<ChallanSubmissionStatus, StatusBadgeTone> = {
   REJECTED: "danger",
   CANCELLED: "neutral",
 };
-const CERT_STATUS_TONE: Record<CertificateStatus, StatusBadgeTone> = {
-  Valid: "success",
-  Upcoming: "warning",
+const CERT_STATUS_TONE: Record<VatTaxCertificateStatus, StatusBadgeTone> = {
+  ISSUED: "success",
+  UNDER_PROCESSING: "info",
+  PENDING: "warning",
+  NOT_ISSUED: "neutral",
+  REJECTED: "danger",
+  RETURNED: "danger",
 };
 const WCC_STATUS_TONE: Record<WccStatus, StatusBadgeTone> = {
   Issued: "success",
@@ -71,6 +84,14 @@ const WCC_STATUS_TONE: Record<WccStatus, StatusBadgeTone> = {
 const WCC_SOURCE_TONE: Record<WccSource, StatusBadgeTone> = { "e-GP": "success", Manual: "info" };
 
 function challanStatusLabel(status: ChallanSubmissionStatus) {
+  return status
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function certificateStatusLabel(status: VatTaxCertificateStatus) {
   return status
     .toLowerCase()
     .split("_")
@@ -200,8 +221,12 @@ function actionColumn<T>(onView: (row: T) => void): DataTableColumn<T> {
 export default function ProjectDocumentationPage() {
   useSetBreadcrumb([{ label: "Projects", href: "/cms" }, { label: "Project Documentation" }]);
   const router = useRouter();
+  const me = useMe();
+  const permissions = me.data?.permissions ?? [];
+  const canReadVatTax = permissions.includes("vat_tax_certificate.read");
+  const canCreateVatTax = permissions.includes("vat_tax_certificate.create");
 
-  const projects = useCmsWorks({ limit: 100 });
+  const projects = useCmsWorks({ limit: 100, includeClosed: true });
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | null>(null);
   const [projectPickerOpen, setProjectPickerOpen] = React.useState(false);
 
@@ -230,6 +255,25 @@ export default function ProjectDocumentationPage() {
     dateTo: toDate || undefined,
   });
   const challanStats = useChallanSubmissionStats(selectedProject?.id);
+  const vatTaxCertificates = useVatTaxCertificates(
+    {
+      limit: 100,
+      cmsWorkId: selectedProject?.id,
+      search: vatTaxSearch.trim() || tid.trim() || undefined,
+      dateFrom: fromDate || undefined,
+      dateTo: toDate || undefined,
+    },
+    Boolean(selectedProject?.id) && canReadVatTax,
+  );
+  const vatTaxStats = useVatTaxCertificateStats(
+    {
+      cmsWorkId: selectedProject?.id,
+      search: tid.trim() || undefined,
+      dateFrom: fromDate || undefined,
+      dateTo: toDate || undefined,
+    },
+    Boolean(selectedProject?.id) && canReadVatTax,
+  );
 
   const matchesGlobal = React.useCallback(
     (rowTid: string, dateField: string) => {
@@ -279,16 +323,17 @@ export default function ProjectDocumentationPage() {
       );
     });
   }, [challans.data?.items, matchesGlobal, challanSearch]);
-  const vatTaxRows = React.useMemo(
-    () =>
-      VAT_TAX_CERTIFICATE_ROWS.filter(
-        (row) =>
-          matchesGlobal(row.tid, row.issueDate) &&
-          (!vatTaxSearch.trim() ||
-            row.tid.toLowerCase().includes(vatTaxSearch.trim().toLowerCase())),
-      ),
-    [matchesGlobal, vatTaxSearch],
-  );
+  const vatTaxRows = React.useMemo(() => {
+    const term = vatTaxSearch.trim().toLowerCase();
+    return (vatTaxCertificates.data?.items ?? []).filter((row) => {
+      if (!term) return true;
+      return [
+        row.tender?.egpTenderId ?? "",
+        row.cmsWork.workName,
+        row.certificateNo ?? "",
+      ].some((value) => value.toLowerCase().includes(term));
+    });
+  }, [vatTaxCertificates.data?.items, vatTaxSearch]);
   // Source Type below the table is the source for a *new* WCC entry, not a
   // filter on the existing rows — the reference shows both e-GP and Manual
   // rows displayed together while "e-GP" is selected.
@@ -304,7 +349,11 @@ export default function ProjectDocumentationPage() {
 
   const showBill = !docType || docType === "bill";
   const showChallan = !docType || docType === "challan";
-  const showVatTax = !docType || docType === "vat-tax";
+  const showVatTax = (!docType || docType === "vat-tax") && canReadVatTax;
+  const vatTaxHref = selectedProject
+    ? `/cms/documentation/vat-tax-certificate?workId=${encodeURIComponent(selectedProject.id)}`
+    : "/cms/documentation/vat-tax-certificate";
+  const vatTaxCreateHref = `${vatTaxHref}${vatTaxHref.includes("?") ? "&" : "?"}create=1`;
   const showWcc = !docType || docType === "wcc";
 
   const billColumns: DataTableColumn<BillSubmissionRow>[] = [
@@ -357,26 +406,48 @@ export default function ProjectDocumentationPage() {
     ),
   ];
 
-  const vatTaxColumns: DataTableColumn<VatTaxCertificateRow>[] = [
-    { key: "tid", header: "TID", render: (row) => row.tid },
-    { key: "certificateNo", header: "Certificate No", render: (row) => row.certificateNo },
-    { key: "issueDate", header: "Issue Date", render: (row) => formatDate(row.issueDate) },
-    { key: "validTill", header: "Valid Till", render: (row) => formatDate(row.validTill) },
-    { key: "type", header: "Type", render: (row) => row.type },
+  const vatTaxColumns: DataTableColumn<VatTaxCertificateRecord>[] = [
+    {
+      key: "tid",
+      header: "TID",
+      render: (row) => row.tender?.egpTenderId ?? "—",
+    },
+    {
+      key: "certificateNo",
+      header: "Certificate No",
+      render: (row) => row.certificateNo ?? "—",
+    },
+    {
+      key: "issueDate",
+      header: "Issue Date",
+      render: (row) => (row.issueDate ? formatDate(row.issueDate) : "—"),
+    },
+    {
+      key: "validTill",
+      header: "Valid Till",
+      render: (row) => (row.validTill ? formatDate(row.validTill) : "—"),
+    },
+    { key: "type", header: "Type", render: (row) => row.certificateType },
     {
       key: "status",
       header: "Status",
-      render: (row) => <StatusBadge label={row.status} tone={CERT_STATUS_TONE[row.status]} />,
+      render: (row) => (
+        <StatusBadge
+          label={certificateStatusLabel(row.status)}
+          tone={CERT_STATUS_TONE[row.status]}
+        />
+      ),
     },
-    actionColumn<VatTaxCertificateRow>((row) =>
+    actionColumn<VatTaxCertificateRecord>((row) =>
       setViewing({
-        title: row.tid,
+        title: row.tender?.egpTenderId ?? row.cmsWork.workName,
         fields: [
-          ["Certificate No", row.certificateNo],
-          ["Issue Date", formatDate(row.issueDate)],
-          ["Valid Till", formatDate(row.validTill)],
-          ["Type", row.type],
-          ["Status", row.status],
+          ["Project", row.cmsWork.workName],
+          ["Certificate No", row.certificateNo ?? "—"],
+          ["Issue Date", row.issueDate ? formatDate(row.issueDate) : "—"],
+          ["Valid Till", row.validTill ? formatDate(row.validTill) : "—"],
+          ["Type", row.certificateType],
+          ["Status", certificateStatusLabel(row.status)],
         ],
       }),
     ),
@@ -496,7 +567,7 @@ export default function ProjectDocumentationPage() {
           value={String(
             DOCUMENT_KPI_TOTALS.billSubmissions +
               (challanStats.data?.total ?? 0) +
-              DOCUMENT_KPI_TOTALS.vatTaxCertificates +
+              (canReadVatTax ? (vatTaxStats.data?.total ?? 0) : 0) +
               DOCUMENT_KPI_TOTALS.workCompletionCert,
           )}
           helper="All types"
@@ -519,8 +590,14 @@ export default function ProjectDocumentationPage() {
           icon={Award}
           iconClassName="bg-biz-orange-soft text-biz-orange"
           label="VAT-Tax Certificates"
-          value={String(DOCUMENT_KPI_TOTALS.vatTaxCertificates)}
-          helper="Issued"
+          value={
+            !canReadVatTax
+              ? "—"
+              : vatTaxStats.isLoading
+                ? "..."
+                : String(vatTaxStats.data?.total ?? 0)
+          }
+          helper={canReadVatTax ? "This Project" : "No access"}
         />
         <ModuleStatCard
           icon={ShieldCheck}
@@ -661,7 +738,7 @@ export default function ProjectDocumentationPage() {
         )}
 
         {showVatTax && (
-          <DocumentPanel<VatTaxCertificateRow>
+          <DocumentPanel<VatTaxCertificateRecord>
             icon={Award}
             iconClassName="bg-biz-purple-soft text-biz-purple"
             title="VAT-Tax Certificates"
@@ -670,12 +747,12 @@ export default function ProjectDocumentationPage() {
             onSearchChange={setVatTaxSearch}
             addLabel="New VAT-Tax Certificate"
             addButtonClassName="bg-biz-purple hover:brightness-95"
-            onAdd={() => router.push("/cms/documentation/vat-tax-certificate")}
+            onAdd={canCreateVatTax ? () => router.push(vatTaxCreateHref) : undefined}
             data={vatTaxRows}
             rowKey={(row) => row.id}
             columns={vatTaxColumns}
             footerLabel="View All VAT-Tax Certificates"
-            onFooterClick={() => router.push("/cms/documentation/vat-tax-certificate")}
+            onFooterClick={() => router.push(vatTaxHref)}
           />
         )}
 
@@ -689,10 +766,24 @@ export default function ProjectDocumentationPage() {
             onSearchChange={setWccSearch}
             addLabel="New WCC"
             addButtonClassName="bg-biz-success hover:brightness-95"
+            onAdd={() =>
+              router.push(
+                selectedProject
+                  ? `/cms/documentation/work-completion-certificate?workId=${encodeURIComponent(selectedProject.id)}&create=1`
+                  : "/cms/documentation/work-completion-certificate?create=1",
+              )
+            }
             data={wccRows}
             rowKey={(row) => row.id}
             columns={wccColumns}
             footerLabel="View All Work Completion Certificates"
+            onFooterClick={() =>
+              router.push(
+                selectedProject
+                  ? `/cms/documentation/work-completion-certificate?workId=${encodeURIComponent(selectedProject.id)}`
+                  : "/cms/documentation/work-completion-certificate",
+              )
+            }
             extraContent={
               <div className="border-t border-biz-border px-4 py-2.5">
                 <p className="mb-1.5 text-[11.5px] font-medium text-biz-muted">Source Type</p>

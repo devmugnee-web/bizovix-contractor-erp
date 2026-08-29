@@ -3,10 +3,17 @@ import type { CmsWork, CmsWorkExport, CmsWorkOverview, CmsWorkQuery, CmsWorkStat
 import { apiRequest, apiRequestPaginated } from "../http-client";
 import { queryKeys } from "./query-keys";
 
+function cmsWorkParams(query: CmsWorkQuery) {
+  return {
+    ...query,
+    includeClosed: query.includeClosed ? "true" : undefined,
+  };
+}
+
 export function useCmsWorks(query: CmsWorkQuery) {
   return useQuery({
     queryKey: queryKeys.cmsWorks(query),
-    queryFn: () => apiRequestPaginated<CmsWork>("/cms/works", { params: { ...query } }),
+    queryFn: () => apiRequestPaginated<CmsWork>("/cms/works", { params: cmsWorkParams(query) }),
     placeholderData: (previous) => previous,
   });
 }
@@ -78,6 +85,6 @@ export function useRestoreCmsWork() {
 
 export function useExportCmsWorks() {
   return useMutation({
-    mutationFn: (query: CmsWorkQuery) => apiRequest<CmsWorkExport>("/cms/works/export", { params: { ...query } }),
+    mutationFn: (query: CmsWorkQuery) => apiRequest<CmsWorkExport>("/cms/works/export", { params: cmsWorkParams(query) }),
   });
 }

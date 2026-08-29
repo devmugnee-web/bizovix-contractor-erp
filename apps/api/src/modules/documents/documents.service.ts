@@ -31,6 +31,12 @@ const CHALLAN_DOCUMENT_TYPES = new Set([
 ]);
 const CHALLAN_FILE_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const CHALLAN_FILE_MAX_SIZE = 10 * 1024 * 1024;
+const VAT_TAX_CERTIFICATE_FILE_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+]);
+const VAT_TAX_CERTIFICATE_FILE_MAX_SIZE = 10 * 1024 * 1024;
 const MUTABLE_CHALLAN_STATUSES = new Set(["DRAFT", "REJECTED"]);
 
 export function hasValidChallanFileSignature(mimeType: string, buffer: Buffer) {
@@ -46,9 +52,10 @@ export function hasValidChallanFileSignature(mimeType: string, buffer: Buffer) {
 
 type DocumentLinkInput = Omit<
   Partial<CreateDocumentDto>,
-  "challanSubmissionId" | "workId" | "contractId"
+  "challanSubmissionId" | "vatTaxCertificateId" | "workId" | "contractId"
 > & {
   challanSubmissionId?: string | null;
+  vatTaxCertificateId?: string | null;
   workId?: string | null;
   contractId?: string | null;
 };
@@ -59,6 +66,23 @@ type LockedChallan = {
   contractId: string | null;
   status: string;
   cmsWorkStatus: string;
+};
+
+type LockedVatTaxCertificate = {
+  id: string;
+  cmsWorkId: string;
+  contractId: string | null;
+  certificateType: "VAT" | "TAX";
+  certificateNo: string | null;
+  amount: Prisma.Decimal | null;
+  issueDate: Date | null;
+  validTill: Date | null;
+  issuingAuthority: string | null;
+  tenderId: string | null;
+  tenderReference: string | null;
+  workName: string;
+  cmsWorkStatus: string;
+  contractStatus: string | null;
 };
 
 const includeRelations = {
@@ -89,6 +113,12 @@ export class DocumentsService {
       ...(query.contractId ? { contractId: query.contractId } : {}),
       ...(query.projectBillId ? { projectBillId: query.projectBillId } : {}),
       ...(query.challanSubmissionId ? { challanSubmissionId: query.challanSubmissionId } : {}),
+      ...(query.vatTaxCertificateId
+        ? { vatTaxCertificateId: query.vatTaxCertificateId }
+        : {}),
+      ...(query.completionCertificateId
+        ? { completionCertificateId: query.completionCertificateId }
+        : {}),
       ...(query.variationOrderId ? { variationOrderId: query.variationOrderId } : {}),
       ...(query.timeExtensionId ? { timeExtensionId: query.timeExtensionId } : {}),
       ...(query.partyId ? { partyId: query.partyId } : {}),
@@ -190,6 +220,35 @@ export class DocumentsService {
     }
   }
 
+  private vatTaxCertificateDocumentType(certificateType: "VAT" | "TAX") {
+    return `${certificateType}_CERTIFICATE`;
+  }
+
+  private assertVatTaxCertificateDocumentType(
+    documentType?: string | null,
+    certificateType?: "VAT" | "TAX",
+  ) {
+    const expected = certificateType
+      ? this.vatTaxCertificateDocumentType(certificateType)
+      : null;
+    if (!documentType?.trim() || (expected && documentType !== expected)) {
+      throw new BadRequestException(
+        expected
+          ? `Document Type must be ${expected} for this VAT-Tax Certificate`
+          : "Document Type is required when linking a VAT-Tax Certificate document",
+      );
+    }
+  }
+
+  private activeDocumentConflictMessage(link: {
+    challanSubmissionId?: string | null;
+    vatTaxCertificateId?: string | null;
+  }) {
+    return link.vatTaxCertificateId
+      ? "An active document already exists for this VAT-Tax Certificate document type; add a new version instead"
+      : "An active document already exists for this challan document type; add a new version instead";
+  }
+
   private assertChallanFile(
     fileType: string | null | undefined,
     fileSize: number | null | undefined,
@@ -212,6 +271,34 @@ export class DocumentsService {
     }
   }
 
+  private assertVatTaxCertificateFile(
+    fileType: string | null | undefined,
+    fileSize: number | null | undefined,
+  ) {
+    if (!fileType || !VAT_TAX_CERTIFICATE_FILE_MIME_TYPES.has(fileType)) {
+      throw new BadRequestException(
+        "VAT-Tax Certificate documents must be PDF, JPEG, or PNG files",
+      );
+    }
+    if (
+      fileSize === null ||
+      fileSize === undefined ||
+      fileSize > VAT_TAX_CERTIFICATE_FILE_MAX_SIZE
+    ) {
+      throw new BadRequestException("VAT-Tax Certificate document files cannot exceed 10 MB");
+    }
+  }
+
+  private assertUploadedVatTaxCertificateFile(file: UploadedDocumentFile) {
+    this.assertVatTaxCertificateFile(file.mimetype, file.size);
+    this.assertVatTaxCertificateFile(file.mimetype, file.buffer.byteLength);
+    if (!hasValidChallanFileSignature(file.mimetype, file.buffer)) {
+      throw new BadRequestException(
+        "VAT-Tax Certificate document content does not match its declared PDF, JPEG, or PNG file type",
+      );
+    }
+  }
+
   private assertExistingChallanFiles(record: {
     fileUrl: string | null;
     fileName: string | null;
@@ -224,6 +311,22 @@ export class DocumentsService {
       this.assertChallanFile(record.fileType, record.fileSize);
     for (const version of record.versions)
       this.assertChallanFile(version.fileType, version.fileSize);
+  }
+
+  private assertExistingVatTaxCertificateFiles(record: {
+    fileUrl: string | null;
+    fileName: string | null;
+    fileType: string | null;
+    fileSize: number | null;
+    storageKey: string | null;
+    versions: Array<{ fileType: string; fileSize: number }>;
+  }) {
+    if (record.fileUrl || record.fileName || record.storageKey) {
+      this.assertVatTaxCertificateFile(record.fileType, record.fileSize);
+    }
+    for (const version of record.versions) {
+      this.assertVatTaxCertificateFile(version.fileType, version.fileSize);
+    }
   }
 
   private assertChallanMutableState(challan: Pick<LockedChallan, "status" | "cmsWorkStatus">) {
@@ -285,6 +388,83 @@ export class DocumentsService {
     return locked;
   }
 
+  private assertVatTaxCertificateMutableState(
+    certificate: Pick<LockedVatTaxCertificate, "cmsWorkStatus" | "contractStatus">,
+  ) {
+    if (certificate.cmsWorkStatus === "CANCELLED") {
+      throw new BadRequestException(
+        "Documents cannot be changed for a cancelled VAT-Tax Certificate project",
+      );
+    }
+    if (certificate.contractStatus === "CANCELLED") {
+      throw new BadRequestException(
+        "Documents cannot be changed for a cancelled VAT-Tax Certificate contract",
+      );
+    }
+  }
+
+  private assertVatTaxCertificateLinks(
+    certificate: Pick<LockedVatTaxCertificate, "cmsWorkId" | "contractId" | "tenderId">,
+    workId: string | null | undefined,
+    contractId: string | null | undefined,
+    tenderId?: string | null,
+  ) {
+    if (workId !== certificate.cmsWorkId) {
+      throw new BadRequestException(
+        "Linked VAT-Tax Certificate must belong to the selected project",
+      );
+    }
+    if (contractId !== certificate.contractId) {
+      throw new BadRequestException(
+        "Linked VAT-Tax Certificate must belong to the selected contract",
+      );
+    }
+    if (tenderId !== undefined && tenderId !== certificate.tenderId) {
+      throw new BadRequestException(
+        "Linked VAT-Tax Certificate must belong to the selected tender",
+      );
+    }
+  }
+
+  private async lockVatTaxCertificate(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    vatTaxCertificateId: string,
+  ) {
+    const rows = await tx.$queryRaw<LockedVatTaxCertificate[]>`
+      SELECT
+        c."id",
+        c."cmsWorkId",
+        c."contractId",
+        c."certificateType"::text AS "certificateType",
+        c."certificateNo",
+        c."amount",
+        c."issueDate",
+        c."validTill",
+        c."issuingAuthority",
+        w."tenderId",
+        t."egpTenderId" AS "tenderReference",
+        w."workName",
+        w."status"::text AS "cmsWorkStatus",
+        pc."status"::text AS "contractStatus"
+      FROM "vat_tax_certificates" c
+      INNER JOIN "cms_works" w
+        ON w."id" = c."cmsWorkId" AND w."organizationId" = c."organizationId"
+      LEFT JOIN "tenders" t
+        ON t."id" = w."tenderId" AND t."organizationId" = c."organizationId"
+      LEFT JOIN "project_contracts" pc
+        ON pc."id" = c."contractId" AND pc."organizationId" = c."organizationId"
+      WHERE c."id" = ${vatTaxCertificateId} AND c."organizationId" = ${organizationId}
+      FOR UPDATE OF c
+    `;
+    const certificate = rows[0];
+    if (!certificate) {
+      throw new NotFoundException("VAT-Tax Certificate not found in this organization");
+    }
+    this.assertVatTaxCertificateMutableState(certificate);
+    return certificate;
+  }
+
   private async lockDocument(tx: Prisma.TransactionClient, organizationId: string, id: string) {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id"
@@ -304,6 +484,11 @@ export class DocumentsService {
   }
 
   private async assertLinkedEntities(organizationId: string, dto: DocumentLinkInput) {
+    if (dto.challanSubmissionId && dto.vatTaxCertificateId) {
+      throw new BadRequestException(
+        "A document cannot be linked to both a Challan Submission and a VAT-Tax Certificate",
+      );
+    }
     if (
       dto.challanSubmissionId !== null &&
       dto.challanSubmissionId !== undefined &&
@@ -313,6 +498,15 @@ export class DocumentsService {
         "Challan Submission is required when linking a challan document",
       );
     }
+    if (
+      dto.vatTaxCertificateId !== null &&
+      dto.vatTaxCertificateId !== undefined &&
+      !dto.vatTaxCertificateId.trim()
+    ) {
+      throw new BadRequestException(
+        "VAT-Tax Certificate is required when linking a certificate document",
+      );
+    }
 
     const [
       tender,
@@ -320,6 +514,7 @@ export class DocumentsService {
       contract,
       bill,
       challan,
+      vatTaxCertificate,
       variation,
       eot,
       master,
@@ -371,6 +566,19 @@ export class DocumentsService {
               contractId: true,
               status: true,
               cmsWork: { select: { status: true } },
+            },
+          })
+        : null,
+      dto.vatTaxCertificateId
+        ? this.prisma.vatTaxCertificate.findFirst({
+            where: { id: dto.vatTaxCertificateId, organizationId },
+            select: {
+              id: true,
+              cmsWorkId: true,
+              contractId: true,
+              certificateType: true,
+              cmsWork: { select: { tenderId: true, status: true } },
+              contract: { select: { status: true } },
             },
           })
         : null,
@@ -483,6 +691,7 @@ export class DocumentsService {
       [contract, dto.contractId, "Contract"],
       [bill, dto.projectBillId, "Project bill"],
       [challan, dto.challanSubmissionId, "Challan Submission"],
+      [vatTaxCertificate, dto.vatTaxCertificateId, "VAT-Tax Certificate"],
       [variation, dto.variationOrderId, "Variation"],
       [eot, dto.timeExtensionId, "Time extension"],
       [master, dto.organizationMasterId, "Organization master"],
@@ -510,16 +719,42 @@ export class DocumentsService {
         cmsWorkStatus: challan.cmsWork.status,
       });
     }
-    const expectedWorkId = challan && dto.workId === undefined ? challan.cmsWorkId : dto.workId;
+    if (vatTaxCertificate) {
+      this.assertVatTaxCertificateMutableState({
+        cmsWorkStatus: vatTaxCertificate.cmsWork.status,
+        contractStatus: vatTaxCertificate.contract?.status ?? null,
+      });
+    }
+    const canonicalWorkId = challan?.cmsWorkId ?? vatTaxCertificate?.cmsWorkId;
+    const canonicalContractId = challan?.contractId ?? vatTaxCertificate?.contractId;
+    const canonicalTenderId = vatTaxCertificate?.cmsWork.tenderId;
+    const expectedWorkId =
+      canonicalWorkId && dto.workId === undefined ? canonicalWorkId : dto.workId;
     const expectedContractId =
-      challan && dto.contractId === undefined ? challan.contractId : dto.contractId;
+      (challan || vatTaxCertificate) && dto.contractId === undefined
+        ? canonicalContractId
+        : dto.contractId;
     if (challan && expectedWorkId !== challan.cmsWorkId)
       throw new BadRequestException("Linked challan must belong to the selected project");
     if (challan && expectedContractId !== challan.contractId)
       throw new BadRequestException("Linked challan must belong to the selected contract");
+    if (vatTaxCertificate && expectedWorkId !== vatTaxCertificate.cmsWorkId)
+      throw new BadRequestException("Linked VAT-Tax Certificate must belong to the selected project");
+    if (vatTaxCertificate && expectedContractId !== vatTaxCertificate.contractId)
+      throw new BadRequestException("Linked VAT-Tax Certificate must belong to the selected contract");
+    if (
+      vatTaxCertificate &&
+      dto.tenderId !== undefined &&
+      dto.tenderId !== canonicalTenderId
+    ) {
+      throw new BadRequestException(
+        "Linked VAT-Tax Certificate must belong to the selected tender",
+      );
+    }
     for (const linked of [
       contract,
       bill,
+      vatTaxCertificate,
       variation,
       eot,
       certificate,
@@ -543,14 +778,26 @@ export class DocumentsService {
     if (expectedWorkId && defect && defect.dlp.workId !== expectedWorkId)
       throw new BadRequestException("Defect does not belong to the selected project");
     if (expectedContractId)
-      for (const linked of [bill, variation, eot, certificate, dlp, retention, handover])
+      for (const linked of [
+        bill,
+        vatTaxCertificate,
+        variation,
+        eot,
+        certificate,
+        dlp,
+        retention,
+        handover,
+      ])
         if (linked && linked.contractId !== expectedContractId)
           throw new BadRequestException("Linked records must belong to the selected contract");
 
     return {
       challanSubmissionId: dto.challanSubmissionId,
+      vatTaxCertificateId: dto.vatTaxCertificateId,
       workId: expectedWorkId,
       contractId: expectedContractId,
+      tenderId: vatTaxCertificate ? canonicalTenderId : dto.tenderId,
+      vatTaxCertificateType: vatTaxCertificate?.certificateType,
     };
   }
 
@@ -581,6 +828,32 @@ export class DocumentsService {
         );
       }
     }
+    if (links.vatTaxCertificateId) {
+      this.assertVatTaxCertificateDocumentType(
+        dto.documentType,
+        links.vatTaxCertificateType,
+      );
+      if (!file) {
+        throw new BadRequestException(
+          "A file is required when linking a VAT-Tax Certificate document",
+        );
+      }
+      this.assertUploadedVatTaxCertificateFile(file);
+      const duplicate = await this.prisma.document.findFirst({
+        where: {
+          organizationId,
+          vatTaxCertificateId: links.vatTaxCertificateId,
+          documentType: this.vatTaxCertificateDocumentType(
+            links.vatTaxCertificateType!,
+          ),
+          status: { not: "ARCHIVED" },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw new ConflictException(this.activeDocumentConflictMessage(links));
+      }
+    }
     let fileMeta: { fileName?: string; fileType?: string; fileSize?: number; storageKey?: string } =
       {};
     if (file) {
@@ -595,6 +868,7 @@ export class DocumentsService {
 
     const record = await this.prisma
       .$transaction(async (tx) => {
+        let lockedVatTaxCertificate: LockedVatTaxCertificate | null = null;
         if (links.challanSubmissionId) {
           const challan = await this.lockMutableChallan(
             tx,
@@ -617,20 +891,69 @@ export class DocumentsService {
             );
           }
         }
+        if (links.vatTaxCertificateId) {
+          lockedVatTaxCertificate = await this.lockVatTaxCertificate(
+            tx,
+            organizationId,
+            links.vatTaxCertificateId,
+          );
+          this.assertVatTaxCertificateLinks(
+            lockedVatTaxCertificate,
+            links.workId,
+            links.contractId,
+            dto.tenderId,
+          );
+          this.assertVatTaxCertificateDocumentType(
+            dto.documentType,
+            lockedVatTaxCertificate.certificateType,
+          );
+          const documentType = this.vatTaxCertificateDocumentType(
+            lockedVatTaxCertificate.certificateType,
+          );
+          const duplicate = await tx.document.findFirst({
+            where: {
+              organizationId,
+              vatTaxCertificateId: links.vatTaxCertificateId,
+              documentType,
+              status: { not: "ARCHIVED" },
+            },
+            select: { id: true },
+          });
+          if (duplicate) {
+            throw new ConflictException(this.activeDocumentConflictMessage(links));
+          }
+        }
         const doc = await tx.document.create({
           data: {
             organizationId,
             name: dto.name,
             category: dto.category,
-            documentType: dto.documentType,
-            relatedModule: dto.relatedModule,
-            relatedEntityId: dto.relatedEntityId,
-            relatedEntityName: dto.relatedEntityName,
-            tenderId: dto.tenderId,
-            workId: links.workId,
-            contractId: links.contractId,
+            documentType: lockedVatTaxCertificate
+              ? this.vatTaxCertificateDocumentType(
+                  lockedVatTaxCertificate.certificateType,
+                )
+              : dto.documentType,
+            relatedModule: lockedVatTaxCertificate
+              ? "VAT_TAX_CERTIFICATE"
+              : dto.relatedModule,
+            relatedEntityId: lockedVatTaxCertificate
+              ? lockedVatTaxCertificate.id
+              : dto.relatedEntityId,
+            relatedEntityName: lockedVatTaxCertificate
+              ? (lockedVatTaxCertificate.certificateNo ?? lockedVatTaxCertificate.workName)
+              : dto.relatedEntityName,
+            tenderId: lockedVatTaxCertificate
+              ? lockedVatTaxCertificate.tenderId
+              : dto.tenderId,
+            workId: lockedVatTaxCertificate
+              ? lockedVatTaxCertificate.cmsWorkId
+              : links.workId,
+            contractId: lockedVatTaxCertificate
+              ? lockedVatTaxCertificate.contractId
+              : links.contractId,
             projectBillId: dto.projectBillId,
             challanSubmissionId: links.challanSubmissionId,
+            vatTaxCertificateId: links.vatTaxCertificateId,
             variationOrderId: dto.variationOrderId,
             timeExtensionId: dto.timeExtensionId,
             completionCertificateId: dto.completionCertificateId,
@@ -648,13 +971,29 @@ export class DocumentsService {
             goodsReceiptNoteId: dto.goodsReceiptNoteId,
             supplierBillId: dto.supplierBillId,
             supplierPaymentId: dto.supplierPaymentId,
-            referenceNumber: dto.referenceNumber,
-            certificateNumber: dto.certificateNumber,
-            issuingAuthority: dto.issuingAuthority,
+            referenceNumber: lockedVatTaxCertificate
+              ? lockedVatTaxCertificate.tenderReference
+              : dto.referenceNumber,
+            certificateNumber: lockedVatTaxCertificate
+              ? lockedVatTaxCertificate.certificateNo
+              : dto.certificateNumber,
+            issuingAuthority: lockedVatTaxCertificate
+              ? lockedVatTaxCertificate.issuingAuthority
+              : dto.issuingAuthority,
             account: dto.account,
-            amount: dto.amount,
-            issueDate: dto.issueDate ? new Date(dto.issueDate) : null,
-            expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null,
+            amount: lockedVatTaxCertificate
+              ? lockedVatTaxCertificate.amount
+              : dto.amount,
+            issueDate: lockedVatTaxCertificate
+              ? lockedVatTaxCertificate.issueDate
+              : dto.issueDate
+                ? new Date(dto.issueDate)
+                : null,
+            expiryDate: lockedVatTaxCertificate
+              ? lockedVatTaxCertificate.validTill
+              : dto.expiryDate
+                ? new Date(dto.expiryDate)
+                : null,
             reminderDays: dto.reminderDays,
             responsiblePerson: dto.responsiblePerson,
             description: dto.description,
@@ -689,7 +1028,7 @@ export class DocumentsService {
           await this.storage.delete(fileMeta.storageKey).catch(() => undefined);
         this.rethrowPrismaConflict(
           error,
-          "An active document already exists for this challan document type; add a new version instead",
+          this.activeDocumentConflictMessage(links),
         );
       });
 
@@ -708,23 +1047,36 @@ export class DocumentsService {
   async update(organizationId: string, userId: string, id: string, dto: UpdateDocumentDto) {
     const existing = await this.prisma.document.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Document not found");
+    if (
+      dto.vatTaxCertificateId !== undefined &&
+      dto.vatTaxCertificateId !== existing.vatTaxCertificateId
+    ) {
+      throw new BadRequestException(
+        "VAT-Tax Certificate document links cannot be changed after upload",
+      );
+    }
     const nextChallanSubmissionId =
       dto.challanSubmissionId === undefined
         ? existing.challanSubmissionId
         : dto.challanSubmissionId;
-    const hasChallanLink =
-      nextChallanSubmissionId !== null && nextChallanSubmissionId !== undefined;
+    const nextVatTaxCertificateId =
+      dto.vatTaxCertificateId === undefined
+        ? existing.vatTaxCertificateId
+        : dto.vatTaxCertificateId;
+    const hasCanonicalProjectLink = Boolean(
+      nextChallanSubmissionId || nextVatTaxCertificateId,
+    );
     const links = await this.assertLinkedEntities(organizationId, {
       tenderId:
         dto.tenderId === undefined ? (existing.tenderId ?? undefined) : (dto.tenderId ?? undefined),
       workId:
-        hasChallanLink && dto.workId === undefined
+        hasCanonicalProjectLink && dto.workId === undefined
           ? undefined
           : dto.workId === undefined
             ? (existing.workId ?? undefined)
             : (dto.workId ?? undefined),
       contractId:
-        hasChallanLink && dto.contractId === undefined
+        hasCanonicalProjectLink && dto.contractId === undefined
           ? undefined
           : dto.contractId === undefined
             ? (existing.contractId ?? undefined)
@@ -734,6 +1086,7 @@ export class DocumentsService {
           ? (existing.projectBillId ?? undefined)
           : (dto.projectBillId ?? undefined),
       challanSubmissionId: nextChallanSubmissionId,
+      vatTaxCertificateId: nextVatTaxCertificateId,
       variationOrderId:
         dto.variationOrderId === undefined
           ? (existing.variationOrderId ?? undefined)
@@ -805,14 +1158,31 @@ export class DocumentsService {
       });
       this.assertExistingChallanFiles({ ...existing, versions });
     }
+    if (links.vatTaxCertificateId) {
+      this.assertVatTaxCertificateDocumentType(
+        dto.documentType === undefined ? existing.documentType : dto.documentType,
+        links.vatTaxCertificateType,
+      );
+    }
 
     const mutation = await this.prisma
       .$transaction(async (tx) => {
+        const lockedVatTaxCertificate = existing.vatTaxCertificateId
+          ? await this.lockVatTaxCertificate(
+              tx,
+              organizationId,
+              existing.vatTaxCertificateId,
+            )
+          : null;
         const current = await this.lockDocument(tx, organizationId, id);
         const currentChallanSubmissionId =
           dto.challanSubmissionId === undefined
             ? current.challanSubmissionId
             : dto.challanSubmissionId;
+        const currentVatTaxCertificateId =
+          dto.vatTaxCertificateId === undefined
+            ? current.vatTaxCertificateId
+            : dto.vatTaxCertificateId;
         const locked = await this.lockMutableChallans(tx, organizationId, [
           current.challanSubmissionId,
           currentChallanSubmissionId,
@@ -851,19 +1221,81 @@ export class DocumentsService {
             }
           }
         }
+        if (currentVatTaxCertificateId) {
+          if (!lockedVatTaxCertificate) {
+            throw new NotFoundException(
+              "VAT-Tax Certificate not found in this organization",
+            );
+          }
+          if (dto.workId === undefined) currentWorkId = lockedVatTaxCertificate.cmsWorkId;
+          if (dto.contractId === undefined)
+            currentContractId = lockedVatTaxCertificate.contractId;
+          this.assertVatTaxCertificateLinks(
+            lockedVatTaxCertificate,
+            currentWorkId,
+            currentContractId,
+            dto.tenderId === undefined ? current.tenderId : dto.tenderId,
+          );
+          this.assertVatTaxCertificateDocumentType(
+            dto.documentType === undefined ? current.documentType : dto.documentType,
+            lockedVatTaxCertificate.certificateType,
+          );
+          if (current.status !== "ARCHIVED") {
+            const documentType = this.vatTaxCertificateDocumentType(
+              lockedVatTaxCertificate.certificateType,
+            );
+            const duplicate = await tx.document.findFirst({
+              where: {
+                id: { not: id },
+                organizationId,
+                vatTaxCertificateId: currentVatTaxCertificateId,
+                documentType,
+                status: { not: "ARCHIVED" },
+              },
+              select: { id: true },
+            });
+            if (duplicate) {
+              throw new ConflictException(
+                this.activeDocumentConflictMessage({
+                  vatTaxCertificateId: currentVatTaxCertificateId,
+                }),
+              );
+            }
+          }
+        }
         const record = await tx.document.update({
           where: { id, organizationId },
           data: {
             ...(dto.name ? { name: dto.name } : {}),
             ...(dto.category !== undefined ? { category: dto.category } : {}),
-            ...(dto.documentType !== undefined ? { documentType: dto.documentType } : {}),
-            ...(dto.relatedModule !== undefined ? { relatedModule: dto.relatedModule } : {}),
-            ...(dto.relatedEntityId !== undefined ? { relatedEntityId: dto.relatedEntityId } : {}),
-            ...(dto.relatedEntityName !== undefined
-              ? { relatedEntityName: dto.relatedEntityName }
-              : {}),
-            ...(dto.tenderId !== undefined ? { tenderId: dto.tenderId } : {}),
-            ...(currentChallanSubmissionId
+            ...(lockedVatTaxCertificate
+              ? {
+                  documentType: this.vatTaxCertificateDocumentType(
+                    lockedVatTaxCertificate.certificateType,
+                  ),
+                  relatedModule: "VAT_TAX_CERTIFICATE",
+                  relatedEntityId: lockedVatTaxCertificate.id,
+                  relatedEntityName:
+                    lockedVatTaxCertificate.certificateNo ??
+                    lockedVatTaxCertificate.workName,
+                  tenderId: lockedVatTaxCertificate.tenderId,
+                }
+              : {
+                  ...(dto.documentType !== undefined
+                    ? { documentType: dto.documentType }
+                    : {}),
+                  ...(dto.relatedModule !== undefined
+                    ? { relatedModule: dto.relatedModule }
+                    : {}),
+                  ...(dto.relatedEntityId !== undefined
+                    ? { relatedEntityId: dto.relatedEntityId }
+                    : {}),
+                  ...(dto.relatedEntityName !== undefined
+                    ? { relatedEntityName: dto.relatedEntityName }
+                    : {}),
+                  ...(dto.tenderId !== undefined ? { tenderId: dto.tenderId } : {}),
+                }),
+            ...(currentChallanSubmissionId || currentVatTaxCertificateId
               ? { workId: currentWorkId, contractId: currentContractId }
               : {
                   ...(dto.workId !== undefined ? { workId: dto.workId } : {}),
@@ -872,6 +1304,9 @@ export class DocumentsService {
             ...(dto.projectBillId !== undefined ? { projectBillId: dto.projectBillId } : {}),
             ...(dto.challanSubmissionId !== undefined
               ? { challanSubmissionId: dto.challanSubmissionId }
+              : {}),
+            ...(dto.vatTaxCertificateId !== undefined
+              ? { vatTaxCertificateId: dto.vatTaxCertificateId }
               : {}),
             ...(dto.variationOrderId !== undefined
               ? { variationOrderId: dto.variationOrderId }
@@ -910,21 +1345,39 @@ export class DocumentsService {
             ...(dto.supplierPaymentId !== undefined
               ? { supplierPaymentId: dto.supplierPaymentId }
               : {}),
-            ...(dto.referenceNumber !== undefined ? { referenceNumber: dto.referenceNumber } : {}),
-            ...(dto.certificateNumber !== undefined
-              ? { certificateNumber: dto.certificateNumber }
-              : {}),
-            ...(dto.issuingAuthority !== undefined
-              ? { issuingAuthority: dto.issuingAuthority }
-              : {}),
+            ...(lockedVatTaxCertificate
+              ? {
+                  referenceNumber: lockedVatTaxCertificate.tenderReference,
+                  certificateNumber: lockedVatTaxCertificate.certificateNo,
+                  issuingAuthority: lockedVatTaxCertificate.issuingAuthority,
+                }
+              : {
+                  ...(dto.referenceNumber !== undefined
+                    ? { referenceNumber: dto.referenceNumber }
+                    : {}),
+                  ...(dto.certificateNumber !== undefined
+                    ? { certificateNumber: dto.certificateNumber }
+                    : {}),
+                  ...(dto.issuingAuthority !== undefined
+                    ? { issuingAuthority: dto.issuingAuthority }
+                    : {}),
+                }),
             ...(dto.account !== undefined ? { account: dto.account } : {}),
-            ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
-            ...(dto.issueDate !== undefined
-              ? { issueDate: dto.issueDate ? new Date(dto.issueDate) : null }
-              : {}),
-            ...(dto.expiryDate !== undefined
-              ? { expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null }
-              : {}),
+            ...(lockedVatTaxCertificate
+              ? {
+                  amount: lockedVatTaxCertificate.amount,
+                  issueDate: lockedVatTaxCertificate.issueDate,
+                  expiryDate: lockedVatTaxCertificate.validTill,
+                }
+              : {
+                  ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
+                  ...(dto.issueDate !== undefined
+                    ? { issueDate: dto.issueDate ? new Date(dto.issueDate) : null }
+                    : {}),
+                  ...(dto.expiryDate !== undefined
+                    ? { expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null }
+                    : {}),
+                }),
             ...(dto.reminderDays !== undefined ? { reminderDays: dto.reminderDays } : {}),
             ...(dto.responsiblePerson !== undefined
               ? { responsiblePerson: dto.responsiblePerson }
@@ -938,7 +1391,10 @@ export class DocumentsService {
       .catch((error: unknown) =>
         this.rethrowPrismaConflict(
           error,
-          "An active document already exists for this challan document type; add a new version instead",
+          this.activeDocumentConflictMessage({
+            challanSubmissionId: nextChallanSubmissionId,
+            vatTaxCertificateId: nextVatTaxCertificateId,
+          }),
         ),
       );
     const record = mutation.record;
@@ -975,10 +1431,29 @@ export class DocumentsService {
       this.assertChallanDocumentType(existing.documentType);
       this.assertUploadedChallanFile(file);
     }
+    if (existing.vatTaxCertificateId) {
+      const links = await this.assertLinkedEntities(organizationId, {
+        vatTaxCertificateId: existing.vatTaxCertificateId,
+        workId: existing.workId,
+        contractId: existing.contractId,
+      });
+      this.assertVatTaxCertificateDocumentType(
+        existing.documentType,
+        links.vatTaxCertificateType,
+      );
+      this.assertUploadedVatTaxCertificateFile(file);
+    }
 
     const storageKey = await this.storage.save(organizationId, file.buffer, file.originalname);
     const versionResult = await this.prisma
       .$transaction(async (tx) => {
+        const lockedVatTaxCertificate = existing.vatTaxCertificateId
+          ? await this.lockVatTaxCertificate(
+              tx,
+              organizationId,
+              existing.vatTaxCertificateId,
+            )
+          : null;
         const current = await this.lockDocument(tx, organizationId, id);
         if (current.challanSubmissionId) {
           const challan = await this.lockMutableChallan(
@@ -989,6 +1464,22 @@ export class DocumentsService {
           this.assertChallanLinks(challan, current.workId, current.contractId);
           this.assertChallanDocumentType(current.documentType);
           this.assertUploadedChallanFile(file);
+        }
+        if (current.vatTaxCertificateId) {
+          if (!lockedVatTaxCertificate) {
+            throw new NotFoundException("VAT-Tax Certificate not found in this organization");
+          }
+          this.assertVatTaxCertificateLinks(
+            lockedVatTaxCertificate,
+            current.workId,
+            current.contractId,
+            current.tenderId,
+          );
+          this.assertVatTaxCertificateDocumentType(
+            current.documentType,
+            lockedVatTaxCertificate.certificateType,
+          );
+          this.assertUploadedVatTaxCertificateFile(file);
         }
         const updated = await tx.document.update({
           where: { id, organizationId },
@@ -1090,6 +1581,13 @@ export class DocumentsService {
 
     const mutation = await this.prisma
       .$transaction(async (tx) => {
+        const lockedVatTaxCertificate = existing.vatTaxCertificateId
+          ? await this.lockVatTaxCertificate(
+              tx,
+              organizationId,
+              existing.vatTaxCertificateId,
+            )
+          : null;
         const current = await this.lockDocument(tx, organizationId, id);
         if (current.challanSubmissionId) {
           const challan = await this.lockMutableChallan(
@@ -1120,6 +1618,42 @@ export class DocumentsService {
             );
           }
         }
+        if (current.vatTaxCertificateId) {
+          if (!lockedVatTaxCertificate) {
+            throw new NotFoundException("VAT-Tax Certificate not found in this organization");
+          }
+          this.assertVatTaxCertificateLinks(
+            lockedVatTaxCertificate,
+            current.workId,
+            current.contractId,
+            current.tenderId,
+          );
+          const documentType = this.vatTaxCertificateDocumentType(
+            lockedVatTaxCertificate.certificateType,
+          );
+          const versions = await tx.documentVersion.findMany({
+            where: { documentId: id },
+            select: { fileType: true, fileSize: true },
+          });
+          this.assertExistingVatTaxCertificateFiles({ ...current, versions });
+          const duplicate = await tx.document.findFirst({
+            where: {
+              id: { not: id },
+              organizationId,
+              vatTaxCertificateId: current.vatTaxCertificateId,
+              documentType,
+              status: { not: "ARCHIVED" },
+            },
+            select: { id: true },
+          });
+          if (duplicate) {
+            throw new ConflictException(
+              this.activeDocumentConflictMessage({
+                vatTaxCertificateId: current.vatTaxCertificateId,
+              }),
+            );
+          }
+        }
         const record = await tx.document.update({
           where: { id, organizationId },
           data: {
@@ -1128,6 +1662,27 @@ export class DocumentsService {
             archivedById: null,
             archivedByName: null,
             archiveReason: null,
+            ...(lockedVatTaxCertificate
+              ? {
+                  documentType: this.vatTaxCertificateDocumentType(
+                    lockedVatTaxCertificate.certificateType,
+                  ),
+                  relatedModule: "VAT_TAX_CERTIFICATE",
+                  relatedEntityId: lockedVatTaxCertificate.id,
+                  relatedEntityName:
+                    lockedVatTaxCertificate.certificateNo ??
+                    lockedVatTaxCertificate.workName,
+                  tenderId: lockedVatTaxCertificate.tenderId,
+                  workId: lockedVatTaxCertificate.cmsWorkId,
+                  contractId: lockedVatTaxCertificate.contractId,
+                  referenceNumber: lockedVatTaxCertificate.tenderReference,
+                  certificateNumber: lockedVatTaxCertificate.certificateNo,
+                  issuingAuthority: lockedVatTaxCertificate.issuingAuthority,
+                  amount: lockedVatTaxCertificate.amount,
+                  issueDate: lockedVatTaxCertificate.issueDate,
+                  expiryDate: lockedVatTaxCertificate.validTill,
+                }
+              : {}),
           },
         });
         return { previous: current, record };
@@ -1135,7 +1690,7 @@ export class DocumentsService {
       .catch((error: unknown) =>
         this.rethrowPrismaConflict(
           error,
-          "An active document already exists for this challan document type; add a new version instead",
+          this.activeDocumentConflictMessage(existing),
         ),
       );
     const record = mutation.record;

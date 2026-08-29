@@ -48,6 +48,10 @@ export class CreateDocumentDto {
 
   @IsOptional()
   @IsString()
+  vatTaxCertificateId?: string | null;
+
+  @IsOptional()
+  @IsString()
   variationOrderId?: string;
 
   @IsOptional()

@@ -1,15 +1,12 @@
-// Project Documentation has no backend of its own yet. "Select Project" is
-// real (backed by the actual CmsWork/Project records), but Bill Submission,
-// VAT-Tax Certificates and Work Completion Certificate
-// have no matching backend model — the closest real feature (project RA
+// Bill Submission and Work Completion Certificate still use reference data.
+// "Select Project", Challan Submission and VAT-Tax Certificates use real
+// backend records. Project RA
 // bills, see use-project-bills.ts) has a different shape (no Tender ID,
 // a richer status lifecycle) and doesn't map cleanly onto this hub's
-// TID-keyed document rows, so those three panels below are mock data, same
+// TID-keyed document rows, so those panels below are mock data, same
 // as Tender Costing / Item Price History.
 
 export type BillStatus = "Approved" | "Under Review";
-export type CertificateType = "VAT" | "Tax";
-export type CertificateStatus = "Valid" | "Upcoming";
 export type WccSource = "e-GP" | "Manual";
 export type WccStatus = "Issued" | "In Progress";
 
@@ -21,16 +18,6 @@ export interface BillSubmissionRow {
   workDescription: string;
   billAmount: number;
   status: BillStatus;
-}
-
-export interface VatTaxCertificateRow {
-  id: string;
-  tid: string;
-  certificateNo: string;
-  issueDate: string;
-  validTill: string;
-  type: CertificateType;
-  status: CertificateStatus;
 }
 
 export interface WorkCompletionCertRow {
@@ -73,36 +60,6 @@ export const BILL_SUBMISSION_ROWS: BillSubmissionRow[] = [
   },
 ];
 
-export const VAT_TAX_CERTIFICATE_ROWS: VatTaxCertificateRow[] = [
-  {
-    id: "1",
-    tid: "TID-2024-1258",
-    certificateNo: "VAT-2024-001",
-    issueDate: "2024-05-15",
-    validTill: "2025-05-14",
-    type: "VAT",
-    status: "Valid",
-  },
-  {
-    id: "2",
-    tid: "TID-2024-1257",
-    certificateNo: "TAX-2024-002",
-    issueDate: "2024-06-15",
-    validTill: "2025-06-14",
-    type: "Tax",
-    status: "Valid",
-  },
-  {
-    id: "3",
-    tid: "TID-2024-1256",
-    certificateNo: "VAT-2024-003",
-    issueDate: "2024-07-15",
-    validTill: "2025-07-14",
-    type: "VAT",
-    status: "Upcoming",
-  },
-];
-
 export const WORK_COMPLETION_CERT_ROWS: WorkCompletionCertRow[] = [
   {
     id: "1",
@@ -127,6 +84,5 @@ export const WORK_COMPLETION_CERT_ROWS: WorkCompletionCertRow[] = [
 export const DOCUMENT_KPI_TOTALS = {
   totalDocuments: 56,
   billSubmissions: 18,
-  vatTaxCertificates: 8,
   workCompletionCert: 2,
 };

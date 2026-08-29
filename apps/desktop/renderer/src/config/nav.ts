@@ -146,7 +146,11 @@ export const NAV_ITEMS: NavItem[] = [
             href: "/cms/documentation/vat-tax-certificate",
             icon: FileBadge2,
           },
-          { label: "Work Completion Certificate", icon: Award, disabled: true },
+          {
+            label: "Work Completion Certificate",
+            href: "/cms/documentation/work-completion-certificate",
+            icon: Award,
+          },
         ],
       },
     ],

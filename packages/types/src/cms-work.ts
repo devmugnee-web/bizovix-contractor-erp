@@ -1,4 +1,11 @@
-export type CmsWorkStatus = "ONGOING" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
+export type CmsWorkStatus =
+  | "ONGOING"
+  | "COMPLETION_PENDING"
+  | "DLP"
+  | "CLOSEOUT_PENDING"
+  | "COMPLETED"
+  | "ARCHIVED"
+  | "CANCELLED";
 
 export interface CmsWork {
   id: string;
@@ -16,6 +23,8 @@ export interface CmsWorkQuery {
   page?: number;
   limit?: number;
   status?: CmsWorkStatus;
+  /** Include every non-cancelled project lifecycle state instead of defaulting to ongoing only. */
+  includeClosed?: boolean;
   search?: string;
   organizationMasterId?: string;
   workCategory?: string;

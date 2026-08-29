@@ -11,10 +11,17 @@ import {
   IsString,
   Min,
 } from "class-validator";
-import { CompletionCertificateStatus, DefectStatus, HandoverType } from "@bizovix/database";
+import {
+  CompletionCertificateEgpStatus,
+  CompletionCertificateSource,
+  CompletionCertificateStatus,
+  DefectStatus,
+  HandoverType,
+} from "@bizovix/database";
 
 export class SaveCompletionCertificateDto {
   @IsString() contractId!: string;
+  @IsOptional() @IsEnum(CompletionCertificateSource) source?: CompletionCertificateSource;
   @IsDateString() applicationDate!: string;
   @IsDateString() actualCompletionDate!: string;
   @IsOptional() @IsDateString() certifiedCompletionDate?: string;
@@ -25,6 +32,7 @@ export class SaveCompletionCertificateDto {
 }
 
 export class UpdateCompletionCertificateDto {
+  @IsOptional() @IsEnum(CompletionCertificateSource) source?: CompletionCertificateSource;
   @IsOptional() @IsDateString() applicationDate?: string;
   @IsOptional() @IsDateString() actualCompletionDate?: string;
   @IsOptional() @IsDateString() certifiedCompletionDate?: string;
@@ -36,6 +44,34 @@ export class UpdateCompletionCertificateDto {
 export class CertificateStatusDto {
   @IsEnum(CompletionCertificateStatus) status!: CompletionCertificateStatus;
   @IsOptional() @IsString() remarks?: string;
+}
+
+export class SubmitCompletionCertificateDto {
+  @IsOptional() @IsString() remarks?: string;
+}
+
+export class CompletionCertificateDecisionDto {
+  @IsIn(["APPROVED", "REJECTED", "CANCELLED"])
+  status!: Extract<CompletionCertificateStatus, "APPROVED" | "REJECTED" | "CANCELLED">;
+
+  @IsOptional() @IsString() remarks?: string;
+}
+
+export class UpdateCompletionCertificateEgpDto {
+  @IsEnum(CompletionCertificateEgpStatus)
+  egpStatus!: CompletionCertificateEgpStatus;
+
+  @IsOptional()
+  @IsDateString()
+  egpAppliedOn?: string;
+
+  @IsOptional()
+  @IsDateString()
+  egpObtainedOn?: string;
+
+  @IsOptional()
+  @IsString()
+  remarks?: string;
 }
 
 export class CreateDlpDto {

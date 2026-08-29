@@ -22,7 +22,7 @@ export class CmsWorksService {
   private where(organizationId: string, query: QueryCmsWorkDto): Prisma.CmsWorkWhereInput {
     return {
       organizationId,
-      status: query.status ?? "ONGOING",
+      status: query.status ?? (query.includeClosed ? { not: "CANCELLED" } : "ONGOING"),
       ...(query.organizationMasterId ? { organizationMasterId: query.organizationMasterId } : {}),
       ...(query.workCategory ? { workCategory: query.workCategory } : {}),
       ...(query.completionDateFrom || query.completionDateTo ? { completionDate: {

@@ -4,7 +4,6 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequirePermissions } from "../../common/decorators/require-permissions.decorator";
 import { ProjectClosingService } from "./project-closing.service";
 import {
-  CertificateStatusDto,
   CloseProjectDto,
   CreateDefectDto,
   CreateDlpDto,
@@ -16,6 +15,8 @@ import {
   SaveCompletionCertificateDto,
   UpdateCompletionCertificateDto,
   ArchiveProjectDto,
+  CompletionCertificateDecisionDto,
+  SubmitCompletionCertificateDto,
 } from "./dto/project-closing.dto";
 
 @Controller("project-closing")
@@ -65,10 +66,23 @@ export class ProjectClosingController {
   @RequirePermissions("completion_certificate.approve")
   certificateStatus(
     @Param("id") id: string,
-    @Body() dto: CertificateStatusDto,
+    @Body() dto: CompletionCertificateDecisionDto,
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.certificateStatus(user.organizationId, user.id, id, dto);
+  }
+
+  @Patch("certificates/:id/submit")
+  @RequirePermissions("completion_certificate.submit")
+  submitCertificate(
+    @Param("id") id: string,
+    @Body() dto: SubmitCompletionCertificateDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.certificateStatus(user.organizationId, user.id, id, {
+      status: "SUBMITTED",
+      remarks: dto.remarks,
+    });
   }
 
   @Post(":workId/dlp") @RequirePermissions("dlp.manage") dlp(

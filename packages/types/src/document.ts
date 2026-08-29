@@ -21,6 +21,8 @@ export interface DocumentRecord {
   tenderId: string | null;
   workId: string | null;
   challanSubmissionId: string | null;
+  vatTaxCertificateId: string | null;
+  completionCertificateId: string | null;
   organizationMasterId: string | null;
   referenceNumber: string | null;
   certificateNumber: string | null;
@@ -60,6 +62,8 @@ export interface CreateDocumentInput {
   workId?: string;
   contractId?: string;
   challanSubmissionId?: string;
+  vatTaxCertificateId?: string;
+  completionCertificateId?: string;
   organizationMasterId?: string;
   referenceNumber?: string;
   certificateNumber?: string;
@@ -87,6 +91,8 @@ export interface DocumentQuery {
   contractId?: string;
   projectBillId?: string;
   challanSubmissionId?: string;
+  vatTaxCertificateId?: string;
+  completionCertificateId?: string;
   variationOrderId?: string;
   timeExtensionId?: string;
   partyId?: string;

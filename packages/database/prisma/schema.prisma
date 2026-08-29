@@ -102,6 +102,21 @@ enum CompletionCertificateStatus {
   CANCELLED
 }
 
+enum CompletionCertificateSource {
+  UNSPECIFIED
+  EGP
+  MANUAL
+}
+
+enum CompletionCertificateEgpStatus {
+  UNSPECIFIED
+  NOT_APPLICABLE
+  NOT_APPLIED
+  PENDING
+  UNDER_PROCESS
+  OBTAINED
+}
+
 enum DlpStatus {
   NOT_STARTED
   ACTIVE
@@ -171,92 +186,93 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users                         OrganizationUser[]
-  roles                         Role[]
-  subscription                  Subscription?
-  licenses                      License[]
-  organizationMasters           OrganizationMaster[]
-  bankAccounts                  BankAccount[]
-  tenders                       Tender[]
-  documentPurchases             DocumentPurchase[]
-  tenderSecurities              TenderSecurity[]
-  creditCommitments             CreditCommitment[]
-  pgBgWorkflows                 PgBgWorkflow[]
-  organizationContacts          OrganizationContact[]
-  cmsWorks                      CmsWork[]
-  performanceGuarantees         PerformanceGuarantee[]
-  expenses                      Expense[]
-  expenseAttachments            ExpenseAttachment[]
-  expenseHeads                  ExpenseHead[]
-  receipts                      Receipt[]
-  receiptSequences              ReceiptSequence[]
-  reminders                     Reminder[]
-  notifications                 Notification[]
-  documents                     Document[]
-  auditLogs                     AuditLog[]
-  appSettings                   AppSetting[]
-  monthlyTargets                MonthlyTarget[]
-  ledgerAccounts                LedgerAccount[]
-  journalEntries                JournalEntry[]
-  payables                      Payable[]
-  financialTransactions         FinancialTransaction[]
-  fundTransfers                 FundTransfer[]
-  bankReconciliations           BankReconciliation[]
-  cheques                       Cheque[]
-  generalSetting                GeneralSetting?
-  companyProfile                CompanyProfile?
-  tenderBankSetting             TenderBankSetting?
-  financeSetting                FinanceSetting?
-  accountingPeriods             AccountingPeriod[]
-  numberSequences               NumberSequence[]
-  reminderRuleSettings          ReminderRuleSetting[]
-  documentSetting               DocumentSetting?
-  approvalRules                 ApprovalRule[]
-  securitySetting               SecuritySetting?
-  systemSetting                 SystemSetting?
-  billingProfile                BillingProfile?
-  invoices                      Invoice[]
-  projectContracts              ProjectContract[]
-  projectBudgets                ProjectBudget[]
-  boqSections                   BoqSection[]
-  boqItems                      BoqItem[]
-  projectBills                  ProjectBill[]
-  challanSubmissions            ChallanSubmission[]
-  challanSubmissionItems        ChallanSubmissionItem[]
+  users                          OrganizationUser[]
+  roles                          Role[]
+  subscription                   Subscription?
+  licenses                       License[]
+  organizationMasters            OrganizationMaster[]
+  bankAccounts                   BankAccount[]
+  tenders                        Tender[]
+  documentPurchases              DocumentPurchase[]
+  tenderSecurities               TenderSecurity[]
+  creditCommitments              CreditCommitment[]
+  pgBgWorkflows                  PgBgWorkflow[]
+  organizationContacts           OrganizationContact[]
+  cmsWorks                       CmsWork[]
+  performanceGuarantees          PerformanceGuarantee[]
+  expenses                       Expense[]
+  expenseAttachments             ExpenseAttachment[]
+  expenseHeads                   ExpenseHead[]
+  receipts                       Receipt[]
+  receiptSequences               ReceiptSequence[]
+  reminders                      Reminder[]
+  notifications                  Notification[]
+  documents                      Document[]
+  auditLogs                      AuditLog[]
+  appSettings                    AppSetting[]
+  monthlyTargets                 MonthlyTarget[]
+  ledgerAccounts                 LedgerAccount[]
+  journalEntries                 JournalEntry[]
+  payables                       Payable[]
+  financialTransactions          FinancialTransaction[]
+  fundTransfers                  FundTransfer[]
+  bankReconciliations            BankReconciliation[]
+  cheques                        Cheque[]
+  generalSetting                 GeneralSetting?
+  companyProfile                 CompanyProfile?
+  tenderBankSetting              TenderBankSetting?
+  financeSetting                 FinanceSetting?
+  accountingPeriods              AccountingPeriod[]
+  numberSequences                NumberSequence[]
+  reminderRuleSettings           ReminderRuleSetting[]
+  documentSetting                DocumentSetting?
+  approvalRules                  ApprovalRule[]
+  securitySetting                SecuritySetting?
+  systemSetting                  SystemSetting?
+  billingProfile                 BillingProfile?
+  invoices                       Invoice[]
+  projectContracts               ProjectContract[]
+  projectBudgets                 ProjectBudget[]
+  boqSections                    BoqSection[]
+  boqItems                       BoqItem[]
+  projectBills                   ProjectBill[]
+  challanSubmissions             ChallanSubmission[]
+  challanSubmissionItems         ChallanSubmissionItem[]
   challanSubmissionStatusHistory ChallanSubmissionStatusHistory[]
-  receivables                   Receivable[]
-  variationOrders               VariationOrder[]
-  timeExtensions                TimeExtension[]
-  deductionConfigs              DeductionConfig[]
-  completionCertificates        CompletionCertificate[]
-  defectLiabilityPeriods        DefectLiabilityPeriod[]
-  defects                       DlpDefect[]
-  retentionReleases             RetentionRelease[]
-  projectHandovers              ProjectHandover[]
-  projectClosureEvents          ProjectClosureEvent[]
-  parties                       Party[]
-  masterCategories              MasterCategory[]
-  unitsOfMeasurement            UnitOfMeasurement[]
-  paymentTerms                  PaymentTerm[]
-  items                         Item[]
-  subcontractorProfiles         SubcontractorProfile[]
-  purchaseRequisitions          PurchaseRequisition[]
-  purchaseRequisitionItems      PurchaseRequisitionItem[]
-  requestForQuotations          RequestForQuotation[]
-  rfqSuppliers                  RfqSupplier[]
-  rfqItems                      RfqItem[]
-  supplierQuotations            SupplierQuotation[]
-  supplierQuotationItems        SupplierQuotationItem[]
-  comparativeStatements         ComparativeStatement[]
-  comparativeStatementSuppliers ComparativeStatementSupplier[]
-  purchaseOrders                PurchaseOrder[]
-  purchaseOrderItems            PurchaseOrderItem[]
-  goodsReceiptNotes             GoodsReceiptNote[]
-  grnItems                      GrnItem[]
-  supplierBills                 SupplierBill[]
-  supplierBillItems             SupplierBillItem[]
-  supplierBillDeductions        SupplierBillDeduction[]
-  supplierPayments              SupplierPayment[]
+  vatTaxCertificates             VatTaxCertificate[]
+  receivables                    Receivable[]
+  variationOrders                VariationOrder[]
+  timeExtensions                 TimeExtension[]
+  deductionConfigs               DeductionConfig[]
+  completionCertificates         CompletionCertificate[]
+  defectLiabilityPeriods         DefectLiabilityPeriod[]
+  defects                        DlpDefect[]
+  retentionReleases              RetentionRelease[]
+  projectHandovers               ProjectHandover[]
+  projectClosureEvents           ProjectClosureEvent[]
+  parties                        Party[]
+  masterCategories               MasterCategory[]
+  unitsOfMeasurement             UnitOfMeasurement[]
+  paymentTerms                   PaymentTerm[]
+  items                          Item[]
+  subcontractorProfiles          SubcontractorProfile[]
+  purchaseRequisitions           PurchaseRequisition[]
+  purchaseRequisitionItems       PurchaseRequisitionItem[]
+  requestForQuotations           RequestForQuotation[]
+  rfqSuppliers                   RfqSupplier[]
+  rfqItems                       RfqItem[]
+  supplierQuotations             SupplierQuotation[]
+  supplierQuotationItems         SupplierQuotationItem[]
+  comparativeStatements          ComparativeStatement[]
+  comparativeStatementSuppliers  ComparativeStatementSupplier[]
+  purchaseOrders                 PurchaseOrder[]
+  purchaseOrderItems             PurchaseOrderItem[]
+  goodsReceiptNotes              GoodsReceiptNote[]
+  grnItems                       GrnItem[]
+  supplierBills                  SupplierBill[]
+  supplierBillItems              SupplierBillItem[]
+  supplierBillDeductions         SupplierBillDeduction[]
+  supplierPayments               SupplierPayment[]
 
   @@map("organizations")
 }
@@ -518,6 +534,20 @@ enum ChallanSubmissionStatus {
   PAYMENT_RELEASED
   REJECTED
   CANCELLED
+}
+
+enum VatTaxCertificateType {
+  VAT
+  TAX
+}
+
+enum VatTaxCertificateStatus {
+  PENDING
+  UNDER_PROCESSING
+  ISSUED
+  NOT_ISSUED
+  REJECTED
+  RETURNED
 }
 
 enum DeductionCalcType {
@@ -910,6 +940,7 @@ model CmsWork {
   boqItems               BoqItem[]
   bills                  ProjectBill[]
   challanSubmissions     ChallanSubmission[]
+  vatTaxCertificates     VatTaxCertificate[]
   variationOrders        VariationOrder[]
   timeExtensions         TimeExtension[]
   receivables            Receivable[]
@@ -959,16 +990,16 @@ model ProjectContract {
   currentCompletionDate  DateTime
   durationDays           Int?
 
-  dlpDays            Int?
-  retentionPct       Decimal? @db.Decimal(5, 2)
-  securityDepositPct Decimal? @db.Decimal(5, 2)
-  vatPct                      Decimal? @db.Decimal(5, 2)
-  taxPct                      Decimal? @db.Decimal(5, 2)
-  securityDepositMethod       String?
-  securityDepositStatus       String?
-  securityDepositReleasedAmount Decimal? @db.Decimal(18, 2)
+  dlpDays                       Int?
+  retentionPct                  Decimal?  @db.Decimal(5, 2)
+  securityDepositPct            Decimal?  @db.Decimal(5, 2)
+  vatPct                        Decimal?  @db.Decimal(5, 2)
+  taxPct                        Decimal?  @db.Decimal(5, 2)
+  securityDepositMethod         String?
+  securityDepositStatus         String?
+  securityDepositReleasedAmount Decimal?  @db.Decimal(18, 2)
   securityDepositReleaseDueDate DateTime?
-  securityDepositReleasedDate DateTime?
+  securityDepositReleasedDate   DateTime?
 
   clientContactName String?
   responsiblePerson String?
@@ -988,6 +1019,7 @@ model ProjectContract {
   documents              Document[]
   bills                  ProjectBill[]
   challanSubmissions     ChallanSubmission[]
+  vatTaxCertificates     VatTaxCertificate[]
   variationOrders        VariationOrder[]
   timeExtensions         TimeExtension[]
   receivables            Receivable[]
@@ -1198,7 +1230,7 @@ model ProjectBillItem {
 }
 
 model ChallanSubmission {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   organizationId String
   cmsWorkId      String
   contractId     String?
@@ -1217,9 +1249,9 @@ model ChallanSubmission {
   paymentFrom String
   remarks     String?
 
-  totalAmount     Decimal                    @default(0) @db.Decimal(18, 2)
-  approvedAmount  Decimal?                   @db.Decimal(18, 2)
-  status          ChallanSubmissionStatus    @default(DRAFT)
+  totalAmount    Decimal                 @default(0) @db.Decimal(18, 2)
+  approvedAmount Decimal?                @db.Decimal(18, 2)
+  status         ChallanSubmissionStatus @default(DRAFT)
 
   createdById         String?
   submittedAt         DateTime?
@@ -1236,12 +1268,12 @@ model ChallanSubmission {
   cancelledAt         DateTime?
   cancelledById       String?
   cancellationReason  String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  organization  Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  cmsWork       CmsWork                            @relation(fields: [cmsWorkId], references: [id])
-  contract      ProjectContract?                   @relation(fields: [contractId], references: [id])
+  organization  Organization                     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork       CmsWork                          @relation(fields: [cmsWorkId], references: [id])
+  contract      ProjectContract?                 @relation(fields: [contractId], references: [id])
   items         ChallanSubmissionItem[]
   statusHistory ChallanSubmissionStatusHistory[]
   documents     Document[]
@@ -1256,15 +1288,15 @@ model ChallanSubmissionItem {
   id                  String   @id @default(cuid())
   organizationId      String
   challanSubmissionId String
-  itemCode             String?
-  description          String
-  unit                 String
-  quantity             Decimal  @db.Decimal(18, 3)
-  rate                 Decimal  @db.Decimal(18, 2)
-  amount               Decimal  @db.Decimal(18, 2)
-  sortOrder             Int      @default(0)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  itemCode            String?
+  description         String
+  unit                String
+  quantity            Decimal  @db.Decimal(18, 3)
+  rate                Decimal  @db.Decimal(18, 2)
+  amount              Decimal  @db.Decimal(18, 2)
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   challanSubmission ChallanSubmission @relation(fields: [challanSubmissionId], references: [id], onDelete: Cascade)
@@ -1274,7 +1306,7 @@ model ChallanSubmissionItem {
 }
 
 model ChallanSubmissionStatusHistory {
-  id                  String                     @id @default(cuid())
+  id                  String                   @id @default(cuid())
   organizationId      String
   challanSubmissionId String
   fromStatus          ChallanSubmissionStatus?
@@ -1282,13 +1314,48 @@ model ChallanSubmissionStatusHistory {
   action              String
   note                String?
   actedById           String?
-  createdAt           DateTime                   @default(now())
+  createdAt           DateTime                 @default(now())
 
   organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   challanSubmission ChallanSubmission @relation(fields: [challanSubmissionId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, challanSubmissionId, createdAt])
   @@map("challan_submission_status_history")
+}
+
+model VatTaxCertificate {
+  id               String                  @id @default(cuid())
+  organizationId   String
+  cmsWorkId        String
+  contractId       String?
+  certificateType  VatTaxCertificateType
+  applicationDate  DateTime                @default(now())
+  certificateNo    String?
+  issueDate        DateTime?
+  validTill        DateTime?
+  amount           Decimal?                @db.Decimal(18, 2)
+  issuingAuthority String?
+  status           VatTaxCertificateStatus @default(PENDING)
+  remarks          String?
+  createdById      String?
+  updatedById      String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork      CmsWork          @relation(fields: [cmsWorkId], references: [id])
+  contract     ProjectContract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  documents    Document[]
+
+  // Case-insensitive uniqueness for non-null certificate numbers is enforced in SQL.
+  @@index([organizationId, certificateType, certificateNo], map: "vat_tax_cert_org_type_no_idx")
+  @@index([organizationId, cmsWorkId, status])
+  @@index([organizationId, contractId])
+  @@index([organizationId, certificateType, status])
+  @@index([organizationId, applicationDate])
+  @@index([organizationId, issueDate])
+  @@index([organizationId, updatedAt])
+  @@map("vat_tax_certificates")
 }
 
 model BillAdjustment {
@@ -1441,24 +1508,28 @@ model TimeExtension {
 }
 
 model CompletionCertificate {
-  id                      String                      @id @default(cuid())
+  id                      String                         @id @default(cuid())
   organizationId          String
   workId                  String
   contractId              String
   certificateNo           String
-  completionType          String                      @default("FINAL")
+  completionType          String                         @default("FINAL")
+  source                  CompletionCertificateSource    @default(UNSPECIFIED)
+  egpStatus               CompletionCertificateEgpStatus @default(UNSPECIFIED)
+  egpAppliedOn            DateTime?
+  egpObtainedOn           DateTime?
   applicationDate         DateTime
   actualCompletionDate    DateTime
   certifiedCompletionDate DateTime?
   issuingAuthority        String?
   certificateDate         DateTime?
   remarks                 String?
-  status                  CompletionCertificateStatus @default(DRAFT)
+  status                  CompletionCertificateStatus    @default(DRAFT)
   createdById             String?
   approvedById            String?
   approvedAt              DateTime?
-  createdAt               DateTime                    @default(now())
-  updatedAt               DateTime                    @updatedAt
+  createdAt               DateTime                       @default(now())
+  updatedAt               DateTime                       @updatedAt
 
   organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   work         CmsWork                @relation(fields: [workId], references: [id])
@@ -1469,6 +1540,8 @@ model CompletionCertificate {
 
   @@unique([organizationId, certificateNo])
   @@index([organizationId, workId, status])
+  @@index([organizationId, source, egpStatus])
+  // A partial unique index allows only one non-cancelled FINAL certificate per project.
   @@map("completion_certificates")
 }
 
@@ -2099,6 +2172,7 @@ model Document {
   contractId              String?
   projectBillId           String?
   challanSubmissionId     String?
+  vatTaxCertificateId     String?
   variationOrderId        String?
   timeExtensionId         String?
   completionCertificateId String?
@@ -2152,6 +2226,7 @@ model Document {
   contract              ProjectContract?       @relation(fields: [contractId], references: [id])
   projectBill           ProjectBill?           @relation(fields: [projectBillId], references: [id])
   challanSubmission     ChallanSubmission?     @relation(fields: [challanSubmissionId], references: [id])
+  vatTaxCertificate     VatTaxCertificate?     @relation(fields: [vatTaxCertificateId], references: [id])
   variationOrder        VariationOrder?        @relation(fields: [variationOrderId], references: [id])
   timeExtension         TimeExtension?         @relation(fields: [timeExtensionId], references: [id])
   completionCertificate CompletionCertificate? @relation(fields: [completionCertificateId], references: [id])
@@ -2176,6 +2251,8 @@ model Document {
   @@index([organizationId, expiryDate])
   // A partial unique index for active challanSubmissionId + documentType is enforced in SQL.
   @@index([challanSubmissionId])
+  // A partial unique index for active vatTaxCertificateId + documentType is enforced in SQL.
+  @@index([vatTaxCertificateId])
   @@map("documents")
 }
 

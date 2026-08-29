@@ -1,5 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@bizovix/database";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { CompletionCertificateSource, Prisma } from "@bizovix/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { ProjectLifecycleGuardService } from "../prisma/project-lifecycle-guard.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
@@ -53,6 +58,33 @@ export class ProjectClosingService {
     });
     if (!row) throw new NotFoundException("Contract not found on this project");
     return row;
+  }
+
+  private certificateSourceTracking(
+    source: CompletionCertificateSource = CompletionCertificateSource.UNSPECIFIED,
+  ) {
+    if (source === CompletionCertificateSource.EGP) {
+      return {
+        source,
+        egpStatus: "NOT_APPLICABLE" as const,
+        egpAppliedOn: null,
+        egpObtainedOn: null,
+      };
+    }
+    if (source === CompletionCertificateSource.MANUAL) {
+      return {
+        source,
+        egpStatus: "NOT_APPLIED" as const,
+        egpAppliedOn: null,
+        egpObtainedOn: null,
+      };
+    }
+    return {
+      source: CompletionCertificateSource.UNSPECIFIED,
+      egpStatus: "UNSPECIFIED" as const,
+      egpAppliedOn: null,
+      egpObtainedOn: null,
+    };
   }
 
   async overview(org: string, workId: string) {
@@ -131,25 +163,58 @@ export class ProjectClosingService {
     );
     await this.work(org, workId);
     await this.contract(org, workId, dto.contractId);
+    const completionType = dto.completionType?.trim().toUpperCase() || "FINAL";
+    if (completionType === "FINAL") {
+      const existingFinal = await this.prisma.completionCertificate.findFirst({
+        where: {
+          organizationId: org,
+          workId,
+          completionType: { equals: "FINAL", mode: "insensitive" },
+          status: { not: "CANCELLED" },
+        },
+        select: { id: true },
+      });
+      if (existingFinal) {
+        throw new ConflictException(
+          "This project already has an active Final Work Completion Certificate",
+        );
+      }
+    }
     const certificateNo = await this.numbering.next(org, "COMPLETION_CERTIFICATE");
-    const row = await this.prisma.completionCertificate.create({
-      data: {
-        organizationId: org,
-        workId,
-        contractId: dto.contractId,
-        certificateNo,
-        completionType: dto.completionType ?? "FINAL",
-        applicationDate: new Date(dto.applicationDate),
-        actualCompletionDate: new Date(dto.actualCompletionDate),
-        certifiedCompletionDate: dto.certifiedCompletionDate
-          ? new Date(dto.certifiedCompletionDate)
-          : null,
-        certificateDate: dto.certificateDate ? new Date(dto.certificateDate) : null,
-        issuingAuthority: dto.issuingAuthority,
-        remarks: dto.remarks,
-        createdById: userId,
-      },
-    });
+    const row = await this.prisma.completionCertificate
+      .create({
+        data: {
+          organizationId: org,
+          workId,
+          contractId: dto.contractId,
+          certificateNo,
+          completionType,
+          ...this.certificateSourceTracking(dto.source),
+          applicationDate: new Date(dto.applicationDate),
+          actualCompletionDate: new Date(dto.actualCompletionDate),
+          certifiedCompletionDate: dto.certifiedCompletionDate
+            ? new Date(dto.certifiedCompletionDate)
+            : null,
+          certificateDate: dto.certificateDate ? new Date(dto.certificateDate) : null,
+          issuingAuthority: dto.issuingAuthority,
+          remarks: dto.remarks,
+          createdById: userId,
+        },
+      })
+      .catch((error: unknown) => {
+        if (
+          completionType === "FINAL" &&
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "P2002"
+        ) {
+          throw new ConflictException(
+            "This project already has an active Final Work Completion Certificate",
+          );
+        }
+        throw error;
+      });
     await this.audit.record({
       organizationId: org,
       userId,
@@ -176,11 +241,26 @@ export class ProjectClosingService {
       old.workId,
       "changing completion records",
     );
-    if (old.status !== "DRAFT" && old.status !== "REJECTED")
+    const suppliedFields = Object.keys(dto).filter(
+      (key) => dto[key as keyof UpdateCompletionCertificateDto] !== undefined,
+    );
+    const classifyingApprovedLegacyCertificate =
+      old.status === "APPROVED" &&
+      old.source === "UNSPECIFIED" &&
+      (dto.source === CompletionCertificateSource.EGP ||
+        dto.source === CompletionCertificateSource.MANUAL) &&
+      suppliedFields.length === 1 &&
+      suppliedFields[0] === "source";
+    if (
+      old.status !== "DRAFT" &&
+      old.status !== "REJECTED" &&
+      !classifyingApprovedLegacyCertificate
+    )
       throw new BadRequestException("Only a draft or rejected certificate can be edited");
     const row = await this.prisma.completionCertificate.update({
       where: { id, organizationId: org },
       data: {
+        ...(dto.source !== undefined ? this.certificateSourceTracking(dto.source) : {}),
         ...(dto.applicationDate ? { applicationDate: new Date(dto.applicationDate) } : {}),
         ...(dto.actualCompletionDate
           ? { actualCompletionDate: new Date(dto.actualCompletionDate) }
