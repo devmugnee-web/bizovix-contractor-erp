@@ -1,5 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { EligiblePgBgTender, FinalizePgBgInput, PgBgEligibleQuery, PgBgWorkflow, SavePgBgWorkflowInput } from "@bizovix/types";
+import type {
+  EligiblePgBgTender,
+  FinalizePgBgInput,
+  FinalizePgBgResult,
+  PgBgDecisionResult,
+  PgBgEligibleQuery,
+  PgBgWorkflow,
+  SavePgBgWorkflowInput,
+} from "@bizovix/types";
 import { apiRequest, apiRequestPaginated } from "../http-client";
 import { queryKeys } from "./query-keys";
 
@@ -43,15 +51,25 @@ export function useAcceptNoa() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ id, acceptNoa, pgBgRequired }: { id: string; acceptNoa: boolean; pgBgRequired: boolean }) =>
-      apiRequest<PgBgWorkflow>(`/pg-bg/workflows/${id}/accept-noa`, { method: "POST", body: { acceptNoa, pgBgRequired } }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["pg-bg"] }),
+      apiRequest<PgBgDecisionResult>(`/pg-bg/workflows/${id}/accept-noa`, { method: "POST", body: { acceptNoa, pgBgRequired } }),
+    onSuccess: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["pg-bg"] }),
+        client.invalidateQueries({ queryKey: ["cms-works"] }),
+      ]);
+    },
   });
 }
 
 export function useFinalizePgBg() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: FinalizePgBgInput }) => apiRequest<{ id: string; amount: string }>(`/pg-bg/workflows/${id}/finalize`, { method: "POST", body: payload }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["pg-bg"] }),
+    mutationFn: ({ id, payload }: { id: string; payload: FinalizePgBgInput }) => apiRequest<FinalizePgBgResult>(`/pg-bg/workflows/${id}/finalize`, { method: "POST", body: payload }),
+    onSuccess: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["pg-bg"] }),
+        client.invalidateQueries({ queryKey: ["cms-works"] }),
+      ]);
+    },
   });
 }

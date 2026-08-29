@@ -30,6 +30,7 @@ import {
 } from "@bizovix/validation";
 import { cn } from "@bizovix/ui";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
+import { SuccessPopup } from "@/components/layout/SuccessPopup";
 
 type ChargeRow = PendingCreditCommitmentTender & {
   bankAccountId: string;
@@ -221,6 +222,11 @@ export default function CreditCommitmentPage() {
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-3 overflow-x-hidden text-biz-text">
+      <SuccessPopup
+        open={message?.type === "success"}
+        message={message?.text ?? ""}
+        onClose={() => setMessage(null)}
+      />
       <div>
         <h1 className="text-[23px] font-bold leading-7 text-biz-navy">Credit Commitment Charge</h1>
         <p className="mt-0.5 whitespace-normal break-words text-[12px] text-biz-muted">Select tenders, then review the charge and payment details before saving.</p>
@@ -238,8 +244,10 @@ export default function CreditCommitmentPage() {
         ))}
       </div>
 
-      {message && (
-        <div className={cn("rounded-md border px-3 py-2 text-[12px] font-medium", message.type === "success" ? "border-biz-success/20 bg-biz-success-soft text-biz-success" : "border-biz-danger/20 bg-biz-danger-soft text-biz-danger")}>{message.text}</div>
+      {message?.type === "error" && (
+        <div className="rounded-md border border-biz-danger/20 bg-biz-danger-soft px-3 py-2 text-[12px] font-medium text-biz-danger">
+          {message.text}
+        </div>
       )}
 
       <section className="overflow-hidden rounded-md border border-biz-border bg-white shadow-card">

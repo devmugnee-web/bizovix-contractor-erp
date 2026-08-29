@@ -207,15 +207,31 @@ export function ApprovedWorkDetails({
             </Link>
           )}
           <Link
-            href={project.contractId ? `/cms/contracts/${project.contractId}/edit` : "#"}
-            aria-disabled={!project.contractId}
+            href={
+              project.contractId
+                ? `/cms/contracts/${project.contractId}/edit`
+                : archived
+                  ? "#"
+                  : `/cms/contracts/create?cmsWorkId=${id}`
+            }
+            aria-disabled={archived && !project.contractId}
             className={cn(
               "flex h-9 items-center gap-2 rounded-md border border-biz-border bg-white px-4 text-[11px] font-semibold",
-              !project.contractId && "pointer-events-none opacity-50",
+              archived && !project.contractId && "pointer-events-none opacity-50",
             )}
           >
-            <FilePenLine className="h-4 w-4" />
-            {archived ? "Archive Info" : "Edit"}
+            {project.contractId ? (
+              <FilePenLine className="h-4 w-4" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            {project.contractId
+              ? archived
+                ? "Archive Info"
+                : "Edit"
+              : archived
+                ? "Contract Unavailable"
+                : "Add Contract"}
           </Link>
           {!archived && (
             <button

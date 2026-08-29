@@ -4,6 +4,7 @@ export interface EligiblePgBgTender {
   id: string;
   tenderId: string | null;
   tenderWorkName: string;
+  category: string | null;
   organizationMaster: { id: string; shortName: string; fullName: string };
 }
 
@@ -45,6 +46,10 @@ export interface PgBgWorkflow {
   contact: ({ id: string } & Required<Omit<OrganizationContactInput, "email">> & { email: string | null }) | null;
 }
 
+export interface PgBgDecisionResult extends PgBgWorkflow {
+  cmsWorkId: string | null;
+}
+
 export interface FinalizePgBgInput {
   type: "PG" | "BG";
   bankAccountId: string;
@@ -52,4 +57,10 @@ export interface FinalizePgBgInput {
   amount: number;
   issueDate: string;
   expiryDate: string;
+}
+
+export interface FinalizePgBgResult {
+  id: string;
+  amount: string;
+  cmsWorkId: string;
 }

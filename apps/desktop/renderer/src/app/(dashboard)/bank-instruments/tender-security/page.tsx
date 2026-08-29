@@ -28,6 +28,7 @@ import {
 import type { FundingType, PendingTenderSecurity, SecurityType, TenderSecurityPendingQuery, TenderStatus } from "@bizovix/types";
 import { Button, DateInput, IconButton, SelectInput, TextInput, cn } from "@bizovix/ui";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
+import { SuccessPopup } from "@/components/layout/SuccessPopup";
 
 type SelectedTender = PendingTenderSecurity & {
   securityAmount: string;
@@ -325,6 +326,11 @@ export default function TenderSecurityPage() {
 
   return (
     <div className="flex flex-col gap-3 text-biz-text">
+      <SuccessPopup
+        open={message?.type === "success"}
+        message={message?.text ?? ""}
+        onClose={() => setMessage(null)}
+      />
       <div>
         <h1 className="text-[22px] font-bold leading-7 text-biz-navy">Tender Security</h1>
         <p className="text-[13px] text-biz-muted">
@@ -332,15 +338,8 @@ export default function TenderSecurityPage() {
         </p>
       </div>
 
-      {message && (
-        <div
-          className={cn(
-            "rounded-md border px-3 py-2 text-[12px] font-medium",
-            message.type === "success"
-              ? "border-biz-success/20 bg-biz-success-soft text-biz-success"
-              : "border-biz-danger/20 bg-biz-danger-soft text-biz-danger",
-          )}
-        >
+      {message?.type === "error" && (
+        <div className="rounded-md border border-biz-danger/20 bg-biz-danger-soft px-3 py-2 text-[12px] font-medium text-biz-danger">
           {message.text}
         </div>
       )}

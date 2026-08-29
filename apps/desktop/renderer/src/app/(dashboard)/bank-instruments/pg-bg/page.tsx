@@ -1,16 +1,16 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import {
+  ArrowLeft,
   ArrowRight,
   CalendarDays,
   Check,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
   FileText,
   Info,
   Lightbulb,
@@ -24,33 +24,62 @@ import {
   useOrganizationContacts,
   usePgBgWorkflowByDocument,
   useSavePgBgDraft,
-  useWorkCategories,
 } from "@bizovix/api-client";
-import type { EligiblePgBgTender, PgBgEligibleQuery, SavePgBgWorkflowInput } from "@bizovix/types";
+import type {
+  EligiblePgBgTender,
+  PgBgEligibleQuery,
+  SavePgBgWorkflowInput,
+} from "@bizovix/types";
 import { pgBgWorkflowSchema, type PgBgWorkflowFormValues } from "@bizovix/validation";
 import { cn } from "@bizovix/ui";
+import { SuccessPopup } from "@/components/layout/SuccessPopup";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
+
+type UiStep = 1 | 2 | 3;
+
+type CompletionState = {
+  title: string;
+  message: string;
+  cmsWorkId: string | null;
+};
+
+type GuaranteeDraft = {
+  type: "PG" | "BG";
+  bankAccountId: string;
+  instrumentNo: string;
+  amount: string;
+  issueDate: string;
+  expiryDate: string;
+};
 
 const DEFAULT_QUERY: PgBgEligibleQuery = { page: 1, limit: 5 };
 const STEPS = [
-  ["Select Tender", "Required"],
-  ["NOA Information", "Enter NOA details"],
-  ["Accept NOA", "Confirm & proceed"],
-  ["PG/BG Details", "Setup guarantee"],
-  ["Review & Save", "Finalize"],
+  ["Select Tender", "Choose one tender"],
+  ["NOA & Decision", "Enter NOA and contact details"],
+  ["PG/BG & Finish", "Review and create the work"],
 ] as const;
 
 function money(value: number | string | undefined) {
-  return Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Number(value || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function displayDate(value?: string) {
   if (!value) return "-";
-  return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(value).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function isoDateInput(value: Date) {
-  return value.toISOString().slice(0, 10);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function addMonths(date: Date, months: number) {
@@ -59,17 +88,108 @@ function addMonths(date: Date, months: number) {
   return next;
 }
 
-function Field({ label, error, children }: { label: React.ReactNode; error?: string; children: React.ReactNode }) {
-  return <label className="block min-w-0"><span className="mb-1 block text-[12px] font-semibold leading-4 text-biz-navy">{label}</span>{children}{error && <span className="mt-1 block text-[11px] font-medium text-biz-danger">{error}</span>}</label>;
+function initialGuarantee(): GuaranteeDraft {
+  return {
+    type: "PG",
+    bankAccountId: "",
+    instrumentNo: "",
+    amount: "",
+    issueDate: isoDateInput(new Date()),
+    expiryDate: isoDateInput(addMonths(new Date(), 12)),
+  };
 }
 
-const inputClass = "h-9 w-full rounded-md border border-biz-border bg-white px-2.5 text-[12px] font-medium text-biz-navy outline-none placeholder:font-normal placeholder:text-biz-muted focus:border-biz-blue";
+function initialForm(tender?: EligiblePgBgTender | null): PgBgWorkflowFormValues {
+  return {
+    documentPurchaseId: tender?.id ?? "",
+    noaDate: "",
+    noaAmount: 0,
+    workCategory: tender?.category ?? "",
+    contact: { name: "", designation: "", mobile: "", email: "", address: "" },
+    acceptNoa: true,
+    pgBgRequired: true,
+    currentStep: 1,
+  };
+}
 
-function ChoiceCard({ selected, label, onClick }: { selected: boolean; label: string; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={cn("flex min-h-9 items-center gap-2 rounded-md border px-3 py-1.5 text-left text-[11px] font-semibold leading-4", selected ? "border-biz-blue bg-biz-blue-soft text-biz-blue" : "border-biz-border bg-white text-biz-navy")}><span className={cn("flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border", selected ? "border-biz-blue" : "border-[#B8C3D6]")}>{selected && <span className="h-1.5 w-1.5 rounded-full bg-biz-blue" />}</span>{label}</button>;
+function paginationWindow(currentPage: number, totalPages: number) {
+  const size = Math.min(5, totalPages);
+  const maximumStart = Math.max(1, totalPages - size + 1);
+  const start = Math.min(Math.max(1, currentPage - 2), maximumStart);
+  return Array.from({ length: size }, (_, index) => start + index);
+}
+
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: React.ReactNode;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1 block text-[12px] font-semibold leading-4 text-biz-navy">
+        {label}
+      </span>
+      {children}
+      {error && <span className="mt-1 block text-[11px] font-medium text-biz-danger">{error}</span>}
+    </label>
+  );
+}
+
+const inputClass =
+  "h-9 w-full rounded-md border border-biz-border bg-white px-2.5 text-[12px] font-medium text-biz-navy outline-none placeholder:font-normal placeholder:text-biz-muted focus:border-biz-blue";
+
+function ChoiceCard({
+  selected,
+  label,
+  onClick,
+  disabled = false,
+}: {
+  selected: boolean;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={cn(
+        "flex min-h-10 items-center gap-2 rounded-md border px-3 py-1.5 text-left text-[11px] font-semibold leading-4 disabled:cursor-not-allowed disabled:opacity-45",
+        selected
+          ? "border-biz-blue bg-biz-blue-soft text-biz-blue"
+          : "border-biz-border bg-white text-biz-navy",
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border",
+          selected ? "border-biz-blue" : "border-[#B8C3D6]",
+        )}
+      >
+        {selected && <span className="h-1.5 w-1.5 rounded-full bg-biz-blue" />}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[0.85fr_1.15fr] gap-2 border-t border-biz-border py-2 text-[10px]">
+      <span className="text-biz-muted">{label}</span>
+      <span className="break-words text-right font-semibold text-biz-navy">{value || "-"}</span>
+    </div>
+  );
 }
 
 export default function PgBgPage() {
+  const router = useRouter();
   useSetBreadcrumb([
     { label: "Bank Instruments" },
     { label: "PG/BG Management", href: "/bank-instruments/pg-bg" },
@@ -78,162 +198,1032 @@ export default function PgBgPage() {
 
   const [query, setQuery] = React.useState<PgBgEligibleQuery>(DEFAULT_QUERY);
   const eligible = useEligiblePgBgTenders(query);
-  const [selectedState, setSelectedState] = React.useState<EligiblePgBgTender | null>(null);
-  const selected = selectedState ?? eligible.data?.items[0] ?? null;
+  const [selected, setSelected] = React.useState<EligiblePgBgTender | null>(null);
+  const [uiStep, setUiStep] = React.useState<UiStep>(1);
+  const [message, setMessage] = React.useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [completion, setCompletion] = React.useState<CompletionState | null>(null);
+  const [guarantee, setGuarantee] = React.useState<GuaranteeDraft>(initialGuarantee);
+
   const workflowQuery = usePgBgWorkflowByDocument(selected?.id ?? "");
-  const categories = useWorkCategories();
   const contacts = useOrganizationContacts(selected?.organizationMaster.id);
   const bankAccounts = useBankAccounts();
   const saveDraftMutation = useSavePgBgDraft();
   const acceptNoaMutation = useAcceptNoa();
   const finalizeMutation = useFinalizePgBg();
-  const [currentStep, setCurrentStep] = React.useState(1);
-  const [pgDetailsOpen, setPgDetailsOpen] = React.useState(false);
-  const [reviewOpen, setReviewOpen] = React.useState(false);
-  const [workflowId, setWorkflowId] = React.useState("");
-  const [message, setMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [guarantee, setGuarantee] = React.useState({
-    type: "PG" as "PG" | "BG",
-    bankAccountId: "",
-    instrumentNo: "",
-    amount: "",
-    issueDate: isoDateInput(new Date()),
-    expiryDate: isoDateInput(addMonths(new Date(), 12)),
-  });
 
-  const { control, register, handleSubmit, setValue, getValues, reset, formState: { errors } } = useForm<PgBgWorkflowFormValues>({
+  const {
+    control,
+    register,
+    handleSubmit,
+    setValue,
+    getValues,
+    reset,
+    formState: { errors },
+  } = useForm<PgBgWorkflowFormValues>({
     resolver: zodResolver(pgBgWorkflowSchema),
-    defaultValues: {
-      documentPurchaseId: "",
-      noaDate: "",
-      noaAmount: 0,
-      workCategory: "",
-      contact: { name: "", designation: "", mobile: "", email: "", address: "" },
-      acceptNoa: true,
-      pgBgRequired: true,
-      currentStep: 1,
-    },
+    defaultValues: initialForm(),
   });
   const values = useWatch({ control });
-
-  React.useEffect(() => {
-    if (!selected) return;
-    setValue("documentPurchaseId", selected.id);
-  }, [selected, setValue]);
+  const contactNameField = register("contact.name");
 
   React.useEffect(() => {
     const draft = workflowQuery.data;
-    if (!draft) return;
+    if (!selected || !draft || draft.documentPurchaseId !== selected.id) return;
+
     const timer = window.setTimeout(() => {
-      setWorkflowId(draft.id);
-      setCurrentStep(draft.currentStep);
       reset({
         documentPurchaseId: draft.documentPurchaseId,
         noaDate: draft.noaDate?.slice(0, 10) ?? "",
         noaAmount: Number(draft.noaAmount ?? 0),
-        workCategory: draft.workCategory ?? "",
-        contact: draft.contact ? { name: draft.contact.name, designation: draft.contact.designation, mobile: draft.contact.mobile, email: draft.contact.email ?? "", address: draft.contact.address } : { name: "", designation: "", mobile: "", email: "", address: "" },
+        workCategory: selected.category ?? "",
+        contact: draft.contact
+          ? {
+              name: draft.contact.name,
+              designation: draft.contact.designation,
+              mobile: draft.contact.mobile,
+              email: draft.contact.email ?? "",
+              address: draft.contact.address,
+            }
+          : { name: "", designation: "", mobile: "", email: "", address: "" },
         acceptNoa: draft.acceptNoa ?? true,
         pgBgRequired: draft.pgBgRequired ?? true,
         currentStep: draft.currentStep,
       });
+
+      if (draft.status === "NOA_ACCEPTED" && draft.pgBgRequired) setUiStep(3);
+      else if (draft.currentStep >= 2) setUiStep(2);
     }, 0);
+
     return () => window.clearTimeout(timer);
-  }, [workflowQuery.data, reset]);
-
-  function payload(step = currentStep): SavePgBgWorkflowInput {
-    const form = getValues();
-    return { ...form, documentPurchaseId: selected?.id ?? form.documentPurchaseId, currentStep: step };
-  }
-
-  async function saveDraft() {
-    if (!selected) return setMessage({ type: "error", text: "Select a tender first." });
-    try {
-      const draft = await saveDraftMutation.mutateAsync(payload());
-      setWorkflowId(draft.id);
-      setMessage({ type: "success", text: "Draft saved successfully." });
-    } catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to save draft." }); }
-  }
-
-  const proceed = handleSubmit(async (form) => {
-    if (!selected) return;
-    try {
-      const nextStep = form.acceptNoa ? (form.pgBgRequired ? 4 : 5) : 3;
-      const draft = await saveDraftMutation.mutateAsync({ ...form, documentPurchaseId: selected.id, currentStep: nextStep });
-      const decided = await acceptNoaMutation.mutateAsync({ id: draft.id, acceptNoa: form.acceptNoa, pgBgRequired: form.pgBgRequired });
-      setWorkflowId(decided.id);
-      setCurrentStep(nextStep);
-      setValue("currentStep", nextStep);
-      if (form.acceptNoa && form.pgBgRequired) setPgDetailsOpen(true);
-      setMessage({ type: "success", text: form.acceptNoa ? (form.pgBgRequired ? "NOA accepted. Complete PG/BG details." : "NOA accepted and work moved to ongoing works.") : "NOA rejection saved." });
-    } catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "Could not continue workflow." }); }
-  });
-
-  async function finalize() {
-    if (!workflowId) return setMessage({ type: "error", text: "Accept the NOA before finalizing PG/BG." });
-    try {
-      await finalizeMutation.mutateAsync({ id: workflowId, payload: { ...guarantee, amount: Number(guarantee.amount) } });
-      setCurrentStep(5); setReviewOpen(true); setMessage({ type: "success", text: "PG/BG created and work finalized successfully." });
-    } catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to finalize PG/BG." }); }
-  }
+  }, [reset, selected, workflowQuery.data]);
 
   const meta = eligible.data?.meta ?? { page: 1, limit: 5, total: 0, totalPages: 1 };
   const pageItems = eligible.data?.items ?? [];
-  const timelineStep = Math.max(1, Math.min(currentStep, 5));
+  const visiblePages = paginationWindow(meta.page, meta.totalPages);
+  const isDraftLookupPending = Boolean(selected) &&
+    (workflowQuery.isLoading || workflowQuery.isFetching);
+  const isWorking =
+    saveDraftMutation.isPending || acceptNoaMutation.isPending || finalizeMutation.isPending;
 
-  return <div id="pg-bg-page" className="flex flex-col gap-3 text-biz-text antialiased">
-    <style jsx global>{`
-      #pg-bg-page { text-rendering: optimizeLegibility; }
-      #pg-bg-page .text-\\[8px\\] { font-size: 10px; line-height: 14px; }
-      #pg-bg-page .text-\\[9px\\] { font-size: 11px; line-height: 16px; }
-      #pg-bg-page .text-\\[10px\\] { font-size: 11px; line-height: 16px; }
-      #pg-bg-page .text-\\[11px\\] { font-size: 12px; line-height: 17px; }
-      #pg-bg-page .text-\\[12px\\] { font-size: 13px; line-height: 18px; }
-      #pg-bg-page .text-biz-muted { font-weight: 500; }
-      #pg-bg-page input, #pg-bg-page select, #pg-bg-page button { letter-spacing: 0; }
-    `}</style>
-    <div><h1 className="text-[23px] font-bold leading-7 text-biz-navy">Accept NOA &amp; Create PG/BG</h1><p className="text-[12px] text-biz-muted">Select an existing tender, accept NOA and setup PG/BG details.</p></div>
-    {message && <div className={cn("rounded-md border px-3 py-2 text-[11px] font-medium", message.type === "success" ? "border-biz-success/20 bg-biz-success-soft text-biz-success" : "border-biz-danger/20 bg-biz-danger-soft text-biz-danger")}>{message.text}</div>}
+  function selectTender(row: EligiblePgBgTender) {
+    if (selected?.id === row.id) return;
+    setSelected(row);
+    setUiStep(1);
+    setMessage(null);
+    setCompletion(null);
+    setGuarantee(initialGuarantee());
+    reset(initialForm(row));
+  }
 
-    <div className="rounded-md border border-biz-border bg-white px-4 py-3 shadow-card">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-5 sm:gap-0">{STEPS.map(([title, subtitle], index) => { const step = index + 1; const active = step === timelineStep; const complete = step < timelineStep; return <div key={title} className="relative flex items-center gap-2 sm:pr-3"><span className={cn("relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold", active || complete ? "border-biz-blue bg-biz-blue text-white" : "border-[#A9B7CC] bg-white text-biz-navy")}>{complete ? <Check className="h-3.5 w-3.5" /> : step}</span><span className="min-w-0"><span className={cn("block truncate text-[10px] font-bold", active ? "text-biz-blue" : "text-biz-navy")}>{title}</span><span className={cn("block truncate text-[8px]", active ? "text-biz-blue" : "text-biz-muted")}>{subtitle}</span></span>{index < 4 && <span className="absolute left-[calc(100%-10px)] top-3.5 hidden h-px w-5 bg-[#CCD7E7] sm:block" />}</div>; })}</div>
-    </div>
+  function resetFlow() {
+    setSelected(null);
+    setUiStep(1);
+    setMessage(null);
+    setCompletion(null);
+    setGuarantee(initialGuarantee());
+    setQuery(DEFAULT_QUERY);
+    reset(initialForm());
+  }
 
-    <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,4.2fr)_minmax(220px,1fr)]">
-      <div className="min-w-0 space-y-3">
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.45fr)]">
-          <section className="overflow-hidden rounded-md border border-biz-border bg-white shadow-card">
-            <div className="px-4 py-3"><h2 className="text-[13px] font-bold text-biz-navy">1. Select Tender <span className="ml-1 text-[10px] text-biz-blue">Required</span></h2><p className="mt-0.5 text-[9px] text-biz-muted">Select a tender from Document Purchase list.</p><label className="relative mt-2 block"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" /><input value={query.search ?? ""} onChange={(event) => setQuery({ ...query, page: 1, search: event.target.value })} placeholder="Search by Tender ID or Work Name..." className={`${inputClass} pl-9`} /></label></div>
-            <div className="overflow-x-auto border-y border-biz-border"><table className="w-full min-w-[520px] text-[9px]"><thead className="bg-[#F7FAFF] font-semibold text-biz-navy"><tr><th className="w-7 px-2 py-2" /><th className="px-2 py-2 text-left">Tender ID</th><th className="px-2 py-2 text-left">Work / Project Name</th><th className="px-2 py-2 text-left">Organization</th><th className="px-2 py-2 text-center">Action</th></tr></thead><tbody>{eligible.isLoading ? <tr><td colSpan={5} className="px-3 py-8 text-center text-biz-muted">Loading eligible tenders...</td></tr> : pageItems.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-biz-muted">No eligible tenders found.</td></tr> : pageItems.map((row) => { const active = selected?.id === row.id; return <tr key={row.id} className="border-t border-biz-border"><td className="px-2 py-2"><button type="button" onClick={() => { setSelectedState(row); setWorkflowId(""); setCurrentStep(1); }} className={cn("flex h-3.5 w-3.5 items-center justify-center rounded-full border", active ? "border-biz-blue" : "border-[#B8C3D6]")}>{active && <span className="h-1.5 w-1.5 rounded-full bg-biz-blue" />}</button></td><td className="px-2 py-2 font-semibold text-biz-navy">{row.tenderId}</td><td className="max-w-[145px] truncate px-2 py-2">{row.tenderWorkName}</td><td className="px-2 py-2 font-semibold">{row.organizationMaster.shortName}</td><td className="px-2 py-2 text-center"><button type="button" onClick={() => setSelectedState(row)} className={cn("rounded border px-2 py-1 font-semibold", active ? "border-biz-success/30 bg-biz-success-soft text-biz-success" : "border-biz-blue text-biz-blue")}>{active ? "Selected" : "Select"}</button></td></tr>; })}</tbody></table></div>
-            <div className="flex items-center justify-between gap-2 px-3 py-2 text-[9px]"><span className="text-biz-muted">Showing {meta.total ? (meta.page - 1) * meta.limit + 1 : 0} to {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} entries</span><div className="flex gap-1"><button disabled={meta.page <= 1} onClick={() => setQuery({ ...query, page: meta.page - 1 })} className="flex h-6 w-6 items-center justify-center rounded border border-biz-border"><ChevronLeft className="h-3 w-3" /></button>{Array.from({ length: Math.min(5, meta.totalPages) }, (_, i) => i + 1).map((page) => <button key={page} onClick={() => setQuery({ ...query, page })} className={cn("h-6 min-w-6 rounded border px-1", page === meta.page ? "border-biz-blue bg-biz-blue text-white" : "border-biz-border")}>{page}</button>)}<button disabled={meta.page >= meta.totalPages} onClick={() => setQuery({ ...query, page: meta.page + 1 })} className="flex h-6 w-6 items-center justify-center rounded border border-biz-border"><ChevronRight className="h-3 w-3" /></button></div></div>
-            <div className="mx-3 mb-3 flex items-start gap-2 rounded-md border border-biz-blue/20 bg-biz-blue-soft px-3 py-2 text-[9px] text-biz-blue"><Info className="h-3.5 w-3.5 shrink-0" /><span>If you don&apos;t find the tender here, please purchase the document first from Document Purchase.</span></div>
-          </section>
+  function changeTender() {
+    setSelected(null);
+    setUiStep(1);
+    setMessage(null);
+    setCompletion(null);
+    setGuarantee(initialGuarantee());
+    reset(initialForm());
+  }
 
-          <section className="rounded-md border border-biz-border bg-white p-4 shadow-card">
-            <h2 className="mb-3 text-[13px] font-bold text-biz-navy">2. NOA Information</h2>
-            <div className="grid grid-cols-[1.6fr_0.8fr] gap-2"><Field label="Tender / Work Name"><input readOnly value={selected?.tenderWorkName ?? ""} className={`${inputClass} bg-biz-bg`} /></Field><Field label="Organization"><input readOnly value={selected?.organizationMaster.shortName ?? ""} className={`${inputClass} bg-biz-bg`} /></Field></div>
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3"><Field label="Tender ID (Optional)"><input readOnly value={selected?.tenderId ?? ""} className={`${inputClass} bg-biz-bg`} /></Field><Field label={<>NOA Date <span className="text-biz-danger">*</span></>} error={errors.noaDate?.message}><span className="relative block"><CalendarDays className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" /><input type="date" {...register("noaDate")} className={`${inputClass} pl-8`} /></span></Field><Field label={<>NOA Amount (BDT) <span className="text-biz-danger">*</span></>} error={errors.noaAmount?.message}><input type="number" {...register("noaAmount", { valueAsNumber: true })} className={`${inputClass} text-right`} /></Field></div>
-            <div className="mt-2 w-full sm:w-[240px]"><Field label={<>Work Category <span className="text-biz-danger">*</span></>} error={errors.workCategory?.message}><select {...register("workCategory")} className={inputClass}>{(["LED Display", ...(categories.data ?? [])].filter((item, index, all) => all.indexOf(item) === index)).map((item) => <option key={item}>{item}</option>)}</select></Field></div>
-            <div className="my-3 border-t border-biz-border" /><h3 className="mb-2 text-[11px] font-bold text-biz-blue">PE / Contact Person</h3>
-            <div className="grid grid-cols-2 gap-2 xl:grid-cols-4"><Field label={<>PE Name <span className="text-biz-danger">*</span></>} error={errors.contact?.name?.message}><input list="contact-names" {...register("contact.name")} className={inputClass} /><datalist id="contact-names">{contacts.data?.map((contact) => <option key={contact.id} value={contact.name} />)}</datalist></Field><Field label={<>Designation <span className="text-biz-danger">*</span></>} error={errors.contact?.designation?.message}><input {...register("contact.designation")} className={inputClass} /></Field><Field label={<>Mobile Number <span className="text-biz-danger">*</span></>} error={errors.contact?.mobile?.message}><input {...register("contact.mobile")} className={inputClass} /></Field><Field label="Email (Optional)" error={errors.contact?.email?.message}><input type="email" {...register("contact.email")} className={inputClass} /></Field></div>
-            <div className="mt-2"><Field label={<>Address <span className="text-biz-danger">*</span></>} error={errors.contact?.address?.message}><input {...register("contact.address")} className={inputClass} /></Field></div>
-            <div className="mt-2 flex items-center gap-2 rounded-md bg-biz-success-soft px-3 py-2 text-[9px] font-medium text-biz-success"><Check className="h-3.5 w-3.5" />PE / Contact information will be saved in {selected?.organizationMaster.shortName ?? "organization"} contact list.</div>
-            <div className="mt-3 grid grid-cols-1 gap-4 border-t border-biz-border pt-3 sm:grid-cols-2"><div><h3 className="text-[11px] font-bold text-biz-navy">3. Accept NOA</h3><p className="mb-2 mt-1 text-[9px] text-biz-muted">Do you want to accept this NOA?</p><div className="grid grid-cols-2 gap-2"><ChoiceCard selected={values.acceptNoa === true} label="Yes, Accept NOA" onClick={() => setValue("acceptNoa", true)} /><ChoiceCard selected={values.acceptNoa === false} label="No, Do not accept" onClick={() => setValue("acceptNoa", false)} /></div></div><div><h3 className="text-[11px] font-bold text-biz-navy">4. PG/BG Required?</h3><p className="mb-2 mt-1 text-[9px] text-biz-muted">Is PG or BG required for this work?</p><div className="grid grid-cols-2 gap-2"><ChoiceCard selected={values.pgBgRequired === true} label="Yes, PG/BG is required" onClick={() => setValue("pgBgRequired", true)} /><ChoiceCard selected={values.pgBgRequired === false} label="No, not required" onClick={() => setValue("pgBgRequired", false)} /></div></div></div>
-            <div className="mt-3 flex items-start gap-2 rounded-md bg-biz-blue-soft px-3 py-2 text-[9px] text-biz-blue"><Info className="h-3.5 w-3.5 shrink-0" />Most tender/work requires PG or BG. If not required, the work will be moved to Ongoing Works (CMS) after saving.</div>
-          </section>
-        </div>
+  function draftPayload(step: number): SavePgBgWorkflowInput {
+    const form = getValues();
+    return {
+      ...form,
+      documentPurchaseId: selected?.id ?? form.documentPurchaseId,
+      currentStep: step,
+    };
+  }
 
-        <section className="rounded-md border border-biz-border bg-white shadow-card"><button type="button" onClick={() => setPgDetailsOpen((open) => !open)} className="flex w-full items-center gap-3 px-4 py-3 text-left"><span className="text-[12px] font-bold text-biz-navy">5. PG/BG Details</span><span className="flex-1 text-[10px] text-biz-muted">Enter PG/BG information, bank, loan/cash, margin, interest etc.</span>{pgDetailsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>{pgDetailsOpen && <div className="grid grid-cols-2 gap-3 border-t border-biz-border p-4 lg:grid-cols-6"><Field label="Type"><select value={guarantee.type} onChange={(e) => setGuarantee({ ...guarantee, type: e.target.value as "PG" | "BG" })} className={inputClass}><option value="PG">PG</option><option value="BG">BG</option></select></Field><Field label="Bank"><select value={guarantee.bankAccountId} onChange={(e) => setGuarantee({ ...guarantee, bankAccountId: e.target.value })} className={inputClass}><option value="">Select bank</option>{bankAccounts.data?.filter((a) => a.accountType === "BANK").map((a) => <option key={a.id} value={a.id}>{a.bankName}</option>)}</select></Field><Field label="Instrument No."><input value={guarantee.instrumentNo} onChange={(e) => setGuarantee({ ...guarantee, instrumentNo: e.target.value })} className={inputClass} /></Field><Field label="Amount"><input type="number" value={guarantee.amount} onChange={(e) => setGuarantee({ ...guarantee, amount: e.target.value })} className={inputClass} /></Field><Field label="Issue Date"><input type="date" value={guarantee.issueDate} onChange={(e) => setGuarantee({ ...guarantee, issueDate: e.target.value })} className={inputClass} /></Field><Field label="Expiry Date"><input type="date" value={guarantee.expiryDate} onChange={(e) => setGuarantee({ ...guarantee, expiryDate: e.target.value })} className={inputClass} /></Field><div className="col-span-full flex justify-end"><button type="button" onClick={finalize} disabled={finalizeMutation.isPending} className="h-8 rounded-md bg-biz-blue px-4 text-[10px] font-semibold text-white">{finalizeMutation.isPending ? "Saving..." : "Create PG/BG"}</button></div></div>}</section>
-        <section className="rounded-md border border-biz-border bg-white shadow-card"><button type="button" onClick={() => setReviewOpen((open) => !open)} className="flex w-full items-center gap-3 px-4 py-3 text-left"><span className="text-[12px] font-bold text-biz-navy">6. Review &amp; Save</span><span className="flex-1 text-[10px] text-biz-muted">Review all information and save.</span>{reviewOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>{reviewOpen && <div className="border-t border-biz-border px-4 py-3 text-[10px] text-biz-success">Workflow information is ready for final review.</div>}</section>
+  async function saveDraft() {
+    if (!selected) {
+      setMessage({ type: "error", text: "Select a tender first." });
+      return;
+    }
+    if (workflowQuery.isError) {
+      setMessage({ type: "error", text: "Could not check the saved workflow. Retry first." });
+      return;
+    }
+
+    setMessage(null);
+    try {
+      await saveDraftMutation.mutateAsync(draftPayload(2));
+      setMessage({ type: "success", text: "Draft saved successfully." });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Failed to save draft.",
+      });
+    }
+  }
+
+  const continueFromNoa = handleSubmit(async (form) => {
+    if (!selected) return;
+    setMessage(null);
+
+    if (form.acceptNoa && form.pgBgRequired) {
+      try {
+        await saveDraftMutation.mutateAsync({
+          ...form,
+          documentPurchaseId: selected.id,
+          currentStep: 2,
+        });
+        setUiStep(3);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (error) {
+        setMessage({
+          type: "error",
+          text: error instanceof Error ? error.message : "Could not save the NOA information.",
+        });
+      }
+      return;
+    }
+
+    try {
+      const draft = await saveDraftMutation.mutateAsync({
+        ...form,
+        documentPurchaseId: selected.id,
+        currentStep: 2,
+      });
+      const decided = await acceptNoaMutation.mutateAsync({
+        id: draft.id,
+        acceptNoa: form.acceptNoa,
+        pgBgRequired: form.pgBgRequired,
+      });
+
+      setCompletion(
+        form.acceptNoa
+          ? {
+              title: "Work Created Successfully",
+              message: `NOA accepted successfully and “${selected.tenderWorkName}” has been moved to Ongoing Works.`,
+              cmsWorkId: decided.cmsWorkId,
+            }
+          : {
+              title: "NOA Decision Saved",
+              message: `The NOA rejection for “${selected.tenderWorkName}” has been saved successfully.`,
+              cmsWorkId: null,
+            },
+      );
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Could not complete the NOA decision.",
+      });
+    }
+  });
+
+  const finalizeWorkflow = handleSubmit(async (form) => {
+    if (!selected) return;
+    setMessage(null);
+
+    const guaranteeAmount = Number(guarantee.amount);
+    if (!guarantee.bankAccountId) {
+      setMessage({ type: "error", text: "Select a bank account for the PG/BG." });
+      return;
+    }
+    if (!Number.isFinite(guaranteeAmount) || guaranteeAmount <= 0) {
+      setMessage({ type: "error", text: "Enter a valid PG/BG amount greater than 0." });
+      return;
+    }
+    if (!guarantee.issueDate || !guarantee.expiryDate) {
+      setMessage({ type: "error", text: "Issue date and expiry date are required." });
+      return;
+    }
+    if (guarantee.expiryDate <= guarantee.issueDate) {
+      setMessage({ type: "error", text: "Expiry date must be after the issue date." });
+      return;
+    }
+
+    try {
+      const draft = await saveDraftMutation.mutateAsync({
+        ...form,
+        documentPurchaseId: selected.id,
+        currentStep: 4,
+      });
+      if (draft.status !== "NOA_ACCEPTED") {
+        await acceptNoaMutation.mutateAsync({
+          id: draft.id,
+          acceptNoa: true,
+          pgBgRequired: true,
+        });
+      }
+      const finalized = await finalizeMutation.mutateAsync({
+        id: draft.id,
+        payload: { ...guarantee, amount: guaranteeAmount },
+      });
+
+      setCompletion({
+        title: "Work Created Successfully",
+        message: `PG/BG created successfully and “${selected.tenderWorkName}” has been moved to Ongoing Works.`,
+        cmsWorkId: finalized.cmsWorkId,
+      });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Failed to create PG/BG and ongoing work.",
+      });
+    }
+  });
+
+  function openCreatedWork() {
+    const workId = completion?.cmsWorkId;
+    setCompletion(null);
+    router.push(workId ? `/cms/ongoing-works/${workId}` : "/cms/ongoing-works");
+  }
+
+  return (
+    <div id="pg-bg-page" className="flex flex-col gap-3 text-biz-text antialiased">
+      <style jsx global>{`
+        #pg-bg-page { text-rendering: optimizeLegibility; }
+        #pg-bg-page .text-\\[9px\\] { font-size: 10px; line-height: 14px; }
+        #pg-bg-page .text-\\[10px\\] { font-size: 11px; line-height: 16px; }
+        #pg-bg-page .text-\\[11px\\] { font-size: 12px; line-height: 17px; }
+        #pg-bg-page .text-\\[12px\\] { font-size: 13px; line-height: 18px; }
+        #pg-bg-page .text-biz-muted { font-weight: 500; }
+        #pg-bg-page input, #pg-bg-page select, #pg-bg-page button { letter-spacing: 0; }
+      `}</style>
+
+      <SuccessPopup
+        open={completion !== null}
+        title={completion?.title}
+        message={completion?.message ?? ""}
+        onClose={resetFlow}
+        primaryLabel={completion?.cmsWorkId ? "View Ongoing Work" : "Back to Tender Selection"}
+        onPrimary={completion?.cmsWorkId ? openCreatedWork : resetFlow}
+        secondaryLabel={completion?.cmsWorkId ? "Back to Tender Selection" : undefined}
+        onSecondary={resetFlow}
+        dismissOnBackdrop={false}
+        dismissOnEscape={false}
+      />
+
+      <div>
+        <h1 className="text-[23px] font-bold leading-7 text-biz-navy">
+          Accept NOA &amp; Create PG/BG
+        </h1>
+        <p className="text-[12px] text-biz-muted">
+          Complete the guided steps to create PG/BG and move the awarded work to Ongoing Works.
+        </p>
       </div>
 
-      <aside className="space-y-3">
-        <section className="rounded-md border border-biz-border bg-white p-3 shadow-card"><h2 className="mb-2 text-[12px] font-bold text-biz-navy">Work Summary</h2>{[["Organization", selected?.organizationMaster.shortName], ["Tender / Work", selected?.tenderWorkName], ["Tender ID", selected?.tenderId], ["NOA Date", displayDate(values.noaDate)], ["NOA Amount (BDT)", money(values.noaAmount)], ["Work Category", values.workCategory], ["PE Name", values.contact?.name]].map(([label, value]) => <div key={label} className="grid grid-cols-[0.85fr_1.15fr] gap-2 border-t border-biz-border py-2 text-[9px]"><span className="text-biz-muted">{label}</span><span className="break-words text-right font-semibold text-biz-navy">{value || "-"}</span></div>)}</section>
-        <section className="rounded-md border border-biz-border bg-white p-3 shadow-card"><h2 className="mb-3 text-[12px] font-bold text-biz-navy">Process Timeline</h2><div>{STEPS.map(([title], index) => { const step = index + 1; const active = step === timelineStep; const complete = step < timelineStep; return <div key={title} className="relative flex gap-2 pb-3 last:pb-0"><span className={cn("relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold", active || complete ? "border-biz-blue bg-biz-blue text-white" : "border-[#B8C3D6] bg-white text-biz-muted")}>{complete ? <Check className="h-3 w-3" /> : step}</span>{step < 5 && <span className="absolute left-[11px] top-6 h-[calc(100%-18px)] w-px bg-biz-border" />}<div className={cn("flex-1 rounded px-2 py-1", active && "bg-biz-blue-soft")}><p className={cn("text-[9px] font-semibold", active ? "text-biz-blue" : "text-biz-navy")}>{title}</p><p className={cn("text-[8px]", active ? "text-biz-blue" : complete ? "text-biz-success" : "text-biz-muted")}>{active ? "In Progress" : complete ? "Completed" : "Pending"}</p></div></div>; })}</div></section>
-        <section className="rounded-md border border-biz-warning/30 bg-biz-warning-soft p-3"><h2 className="mb-2 flex items-center gap-2 text-[11px] font-bold text-biz-navy"><Lightbulb className="h-4 w-4 text-biz-warning" />Important Notes</h2><ul className="space-y-2 text-[9px] leading-4 text-biz-navy"><li>• You must select a tender from Document Purchase list.</li><li>• After accepting NOA, PG/BG can be created if required.</li><li>• All steps will be logged in the system.</li></ul></section>
-      </aside>
-    </div>
+      {message && (
+        <div
+          role={message.type === "error" ? "alert" : "status"}
+          className={cn(
+            "rounded-md border px-3 py-2 text-[11px] font-medium",
+            message.type === "success"
+              ? "border-biz-success/20 bg-biz-success-soft text-biz-success"
+              : "border-biz-danger/20 bg-biz-danger-soft text-biz-danger",
+          )}
+        >
+          {message.text}
+        </div>
+      )}
 
-    <div className="flex flex-wrap items-center justify-between gap-2 pb-2"><button type="button" className="h-9 rounded-md border border-biz-border bg-white px-5 text-[11px] font-semibold text-biz-navy">Cancel</button><div className="flex gap-2"><button type="button" onClick={saveDraft} disabled={saveDraftMutation.isPending} className="flex h-9 items-center gap-2 rounded-md border border-biz-blue bg-white px-4 text-[11px] font-semibold text-biz-blue"><FileText className="h-3.5 w-3.5" />{saveDraftMutation.isPending ? "Saving..." : "Save as Draft"}</button><button type="button" onClick={proceed} disabled={acceptNoaMutation.isPending} className="flex h-9 items-center gap-2 rounded-md bg-biz-blue px-5 text-[11px] font-semibold text-white">Next: PG/BG Details <ArrowRight className="h-3.5 w-3.5" /></button></div></div>
-  </div>;
+      <div className="rounded-md border border-biz-border bg-white px-4 py-3 shadow-card">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-0">
+          {STEPS.map(([title, subtitle], index) => {
+            const step = (index + 1) as UiStep;
+            const active = step === uiStep;
+            const complete = step < uiStep;
+            return (
+              <div key={title} className="relative flex items-center gap-2 sm:pr-4">
+                <span
+                  className={cn(
+                    "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold",
+                    active || complete
+                      ? "border-biz-blue bg-biz-blue text-white"
+                      : "border-[#A9B7CC] bg-white text-biz-navy",
+                  )}
+                >
+                  {complete ? <Check className="h-4 w-4" /> : step}
+                </span>
+                <span className="min-w-0">
+                  <span
+                    className={cn(
+                      "block truncate text-[11px] font-bold",
+                      active ? "text-biz-blue" : "text-biz-navy",
+                    )}
+                  >
+                    {title}
+                  </span>
+                  <span className="block truncate text-[9px] text-biz-muted">{subtitle}</span>
+                </span>
+                {index < STEPS.length - 1 && (
+                  <span className="absolute left-[calc(100%-14px)] top-4 hidden h-px w-7 bg-[#CCD7E7] sm:block" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="min-w-0 space-y-3">
+          {uiStep === 1 && (
+            <section className="overflow-hidden rounded-md border border-biz-border bg-white shadow-card">
+              <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-[14px] font-bold text-biz-navy">
+                    1. Select Tender <span className="ml-1 text-[10px] text-biz-blue">Required</span>
+                  </h2>
+                  <p className="mt-0.5 text-[10px] text-biz-muted">
+                    Choose the awarded tender you want to process. Nothing is selected automatically.
+                  </p>
+                </div>
+                <label className="relative block w-full sm:w-[330px]">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" />
+                  <input
+                    aria-label="Search eligible tenders"
+                    value={query.search ?? ""}
+                    onChange={(event) =>
+                      setQuery({ ...query, page: 1, search: event.target.value })
+                    }
+                    placeholder="Search by Tender ID or Work Name..."
+                    className={`${inputClass} pl-9`}
+                  />
+                </label>
+              </div>
+
+              <div className="overflow-x-auto border-y border-biz-border">
+                <table className="w-full min-w-[720px] text-[10px]">
+                  <thead className="bg-[#F7FAFF] font-semibold text-biz-navy">
+                    <tr>
+                      <th className="w-9 px-3 py-2" />
+                      <th className="px-3 py-2 text-left">Tender ID</th>
+                      <th className="px-3 py-2 text-left">Work / Project Name</th>
+                      <th className="px-3 py-2 text-left">Organization</th>
+                      <th className="px-3 py-2 text-left">Category</th>
+                      <th className="px-3 py-2 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {eligible.isLoading ? (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-10 text-center text-biz-muted">
+                          Loading eligible tenders...
+                        </td>
+                      </tr>
+                    ) : eligible.isError ? (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-10 text-center text-biz-danger">
+                          <p className="font-semibold">Could not load eligible tenders.</p>
+                          <button
+                            type="button"
+                            onClick={() => void eligible.refetch()}
+                            className="mt-2 rounded border border-biz-danger/30 px-3 py-1 font-semibold"
+                          >
+                            Retry
+                          </button>
+                        </td>
+                      </tr>
+                    ) : pageItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-10 text-center text-biz-muted">
+                          No eligible tenders found.
+                        </td>
+                      </tr>
+                    ) : (
+                      pageItems.map((row) => {
+                        const active = selected?.id === row.id;
+                        const hasCategory = Boolean(row.category?.trim());
+                        return (
+                          <tr
+                            key={row.id}
+                            onClick={() => {
+                              if (hasCategory) selectTender(row);
+                            }}
+                            className={cn(
+                              "border-t border-biz-border transition-colors",
+                              hasCategory
+                                ? "cursor-pointer hover:bg-biz-blue-soft/30"
+                                : "cursor-not-allowed bg-biz-bg/60 text-biz-muted",
+                              active && "bg-biz-blue-soft/40",
+                            )}
+                          >
+                            <td className="px-3 py-2.5">
+                              <span
+                                className={cn(
+                                  "flex h-4 w-4 items-center justify-center rounded-full border",
+                                  active ? "border-biz-blue" : "border-[#B8C3D6]",
+                                )}
+                              >
+                                {active && <span className="h-2 w-2 rounded-full bg-biz-blue" />}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 font-semibold text-biz-navy">
+                              {row.tenderId ?? "Manual"}
+                            </td>
+                            <td className="px-3 py-2.5">{row.tenderWorkName}</td>
+                            <td className="px-3 py-2.5 font-semibold">
+                              {row.organizationMaster.shortName}
+                            </td>
+                            <td className="px-3 py-2.5">{row.category ?? "Not set"}</td>
+                            <td className="px-3 py-2.5 text-center">
+                              <button
+                                type="button"
+                                aria-pressed={active}
+                                disabled={active || !hasCategory}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  selectTender(row);
+                                }}
+                                className={cn(
+                                  "rounded border px-3 py-1 font-semibold",
+                                  active
+                                    ? "border-biz-success/30 bg-biz-success-soft text-biz-success"
+                                    : "border-biz-blue text-biz-blue",
+                                )}
+                              >
+                                {active ? "Selected" : hasCategory ? "Select" : "Add Category First"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-col gap-2 px-3 py-2 text-[10px] sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-biz-muted">
+                  Showing {meta.total ? (meta.page - 1) * meta.limit + 1 : 0} to{" "}
+                  {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} entries
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    aria-label="Previous page"
+                    disabled={meta.page <= 1}
+                    onClick={() => setQuery({ ...query, page: meta.page - 1 })}
+                    className="flex h-7 w-7 items-center justify-center rounded border border-biz-border disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  {visiblePages.map((page) => (
+                    <button
+                      type="button"
+                      key={page}
+                      aria-label={`Go to page ${page}`}
+                      aria-current={page === meta.page ? "page" : undefined}
+                      onClick={() => setQuery({ ...query, page })}
+                      className={cn(
+                        "h-7 min-w-7 rounded border px-1",
+                        page === meta.page
+                          ? "border-biz-blue bg-biz-blue text-white"
+                          : "border-biz-border",
+                      )}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    aria-label="Next page"
+                    disabled={meta.page >= meta.totalPages}
+                    onClick={() => setQuery({ ...query, page: meta.page + 1 })}
+                    className="flex h-7 w-7 items-center justify-center rounded border border-biz-border disabled:opacity-40"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {selected && (isDraftLookupPending || workflowQuery.isError) && (
+                <div
+                  role={workflowQuery.isError ? "alert" : "status"}
+                  className={cn(
+                    "mx-3 mb-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-[10px]",
+                    workflowQuery.isError
+                      ? "border-biz-danger/20 bg-biz-danger-soft text-biz-danger"
+                      : "border-biz-blue/20 bg-biz-blue-soft text-biz-blue",
+                  )}
+                >
+                  <span>
+                    {workflowQuery.isError
+                      ? "Could not check whether this tender has a saved workflow."
+                      : "Checking for saved NOA information..."}
+                  </span>
+                  {workflowQuery.isError && (
+                    <button
+                      type="button"
+                      onClick={() => void workflowQuery.refetch()}
+                      className="shrink-0 rounded border border-current/30 px-3 py-1 font-semibold"
+                    >
+                      Retry
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="mx-3 mb-3 flex items-start gap-2 rounded-md border border-biz-blue/20 bg-biz-blue-soft px-3 py-2 text-[10px] text-biz-blue">
+                <Info className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  If a tender is missing, purchase its document first from Document Purchase.
+                  Completed PG/BG workflows are not shown here.
+                </span>
+              </div>
+            </section>
+          )}
+
+          {uiStep > 1 && selected && (
+            <section className="flex flex-col gap-3 rounded-md border border-biz-border bg-white px-4 py-3 shadow-card sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-biz-muted">
+                  Selected Tender
+                </p>
+                <p className="mt-1 text-[13px] font-bold text-biz-navy">
+                  {selected.tenderId ?? "Manual"} · {selected.tenderWorkName}
+                </p>
+                <p className="mt-0.5 text-[10px] text-biz-muted">
+                  {selected.organizationMaster.shortName} · {selected.category ?? "Category not set"}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isWorking}
+                onClick={changeTender}
+                className="h-8 rounded-md border border-biz-border bg-white px-3 text-[10px] font-semibold text-biz-blue disabled:opacity-50"
+              >
+                Change Tender
+              </button>
+            </section>
+          )}
+
+          {uiStep === 2 && selected && (
+            <section className="rounded-md border border-biz-border bg-white p-4 shadow-card">
+              <div className="mb-4">
+                <h2 className="text-[14px] font-bold text-biz-navy">2. NOA &amp; Decision</h2>
+                <p className="mt-0.5 text-[10px] text-biz-muted">
+                  Enter the NOA, contact and acceptance decision for the selected tender.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Field label="Tender / Work Name">
+                  <input
+                    readOnly
+                    value={selected.tenderWorkName}
+                    className={`${inputClass} bg-biz-bg`}
+                  />
+                </Field>
+                <Field label="Organization">
+                  <input
+                    readOnly
+                    value={selected.organizationMaster.shortName}
+                    className={`${inputClass} bg-biz-bg`}
+                  />
+                </Field>
+                <Field
+                  label={
+                    <>
+                      NOA Date <span className="text-biz-danger">*</span>
+                    </>
+                  }
+                  error={errors.noaDate?.message}
+                >
+                  <span className="relative block">
+                    <CalendarDays className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" />
+                    <input
+                      type="date"
+                      {...register("noaDate")}
+                      className={`${inputClass} pl-8`}
+                    />
+                  </span>
+                </Field>
+                <Field
+                  label={
+                    <>
+                      NOA Amount (BDT) <span className="text-biz-danger">*</span>
+                    </>
+                  }
+                  error={errors.noaAmount?.message}
+                >
+                  <input
+                    type="number"
+                    {...register("noaAmount", { valueAsNumber: true })}
+                    className={`${inputClass} text-right`}
+                  />
+                </Field>
+              </div>
+
+              <div className="mt-3 max-w-sm">
+                <Field
+                  label="Work Category (From Document Purchase)"
+                  error={errors.workCategory?.message}
+                >
+                  <input
+                    readOnly
+                    value={values.workCategory ?? ""}
+                    placeholder="No category set in Document Purchase"
+                    className={`${inputClass} cursor-default bg-biz-bg`}
+                  />
+                </Field>
+                <p className="mt-1 text-[9px] font-medium text-biz-muted">
+                  Automatically taken from the selected Document Purchase.
+                </p>
+              </div>
+
+              <div className="my-4 border-t border-biz-border" />
+              <h3 className="mb-2 text-[12px] font-bold text-biz-blue">PE / Contact Person</h3>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <Field
+                  label={
+                    <>
+                      PE Name <span className="text-biz-danger">*</span>
+                    </>
+                  }
+                  error={errors.contact?.name?.message}
+                >
+                  <input
+                    list="contact-names"
+                    {...contactNameField}
+                    onChange={(event) => {
+                      contactNameField.onChange(event);
+                      const matched = contacts.data?.find(
+                        (contact) => contact.name === event.target.value,
+                      );
+                      if (!matched) return;
+                      setValue("contact.designation", matched.designation, { shouldValidate: true });
+                      setValue("contact.mobile", matched.mobile, { shouldValidate: true });
+                      setValue("contact.email", matched.email ?? "", { shouldValidate: true });
+                      setValue("contact.address", matched.address, { shouldValidate: true });
+                    }}
+                    className={inputClass}
+                  />
+                  <datalist id="contact-names">
+                    {contacts.data?.map((contact) => (
+                      <option key={contact.id} value={contact.name} />
+                    ))}
+                  </datalist>
+                </Field>
+                <Field
+                  label={
+                    <>
+                      Designation <span className="text-biz-danger">*</span>
+                    </>
+                  }
+                  error={errors.contact?.designation?.message}
+                >
+                  <input {...register("contact.designation")} className={inputClass} />
+                </Field>
+                <Field
+                  label={
+                    <>
+                      Mobile Number <span className="text-biz-danger">*</span>
+                    </>
+                  }
+                  error={errors.contact?.mobile?.message}
+                >
+                  <input {...register("contact.mobile")} className={inputClass} />
+                </Field>
+                <Field label="Email (Optional)" error={errors.contact?.email?.message}>
+                  <input type="email" {...register("contact.email")} className={inputClass} />
+                </Field>
+              </div>
+              <div className="mt-3">
+                <Field
+                  label={
+                    <>
+                      Address <span className="text-biz-danger">*</span>
+                    </>
+                  }
+                  error={errors.contact?.address?.message}
+                >
+                  <input {...register("contact.address")} className={inputClass} />
+                </Field>
+              </div>
+              <div className="mt-3 flex items-center gap-2 rounded-md bg-biz-success-soft px-3 py-2 text-[10px] font-medium text-biz-success">
+                <Check className="h-3.5 w-3.5" />
+                PE / Contact information will be saved in {selected.organizationMaster.shortName}
+                contact list.
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-4 border-t border-biz-border pt-4 lg:grid-cols-2">
+                <div>
+                  <h3 className="text-[12px] font-bold text-biz-navy">Accept NOA?</h3>
+                  <p className="mb-2 mt-1 text-[10px] text-biz-muted">
+                    Confirm whether the awarded NOA will be accepted.
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <ChoiceCard
+                      selected={values.acceptNoa === true}
+                      label="Yes, Accept NOA"
+                      onClick={() => setValue("acceptNoa", true, { shouldValidate: true })}
+                    />
+                    <ChoiceCard
+                      selected={values.acceptNoa === false}
+                      label="No, Reject NOA"
+                      onClick={() => {
+                        setValue("acceptNoa", false, { shouldValidate: true });
+                        setValue("pgBgRequired", false, { shouldValidate: true });
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-[12px] font-bold text-biz-navy">PG/BG Required?</h3>
+                  <p className="mb-2 mt-1 text-[10px] text-biz-muted">
+                    This choice is available only when the NOA is accepted.
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <ChoiceCard
+                      selected={values.pgBgRequired === true}
+                      label="Yes, PG/BG Required"
+                      disabled={values.acceptNoa === false}
+                      onClick={() => setValue("pgBgRequired", true, { shouldValidate: true })}
+                    />
+                    <ChoiceCard
+                      selected={values.pgBgRequired === false}
+                      label="No, Not Required"
+                      disabled={values.acceptNoa === false}
+                      onClick={() => setValue("pgBgRequired", false, { shouldValidate: true })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-start gap-2 rounded-md bg-biz-blue-soft px-3 py-2 text-[10px] text-biz-blue">
+                <Info className="h-3.5 w-3.5 shrink-0" />
+                {values.acceptNoa === false
+                  ? "Rejecting the NOA will save the decision without creating an Ongoing Work."
+                  : values.pgBgRequired
+                    ? "Continue to enter PG/BG details, then finalize the complete workflow once."
+                    : "The work will move directly to Ongoing Works after this decision is saved."}
+              </div>
+            </section>
+          )}
+
+          {uiStep === 3 && selected && (
+            <section className="rounded-md border border-biz-border bg-white p-4 shadow-card">
+              <div className="mb-4">
+                <h2 className="text-[14px] font-bold text-biz-navy">3. PG/BG Details &amp; Final Review</h2>
+                <p className="mt-0.5 text-[10px] text-biz-muted">
+                  Enter the guarantee details and review everything before creating the ongoing work.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                <Field label="Type *">
+                  <select
+                    value={guarantee.type}
+                    onChange={(event) =>
+                      setGuarantee({ ...guarantee, type: event.target.value as "PG" | "BG" })
+                    }
+                    className={inputClass}
+                  >
+                    <option value="PG">Performance Guarantee (PG)</option>
+                    <option value="BG">Bank Guarantee (BG)</option>
+                  </select>
+                </Field>
+                <Field label="Bank Account *">
+                  <select
+                    value={guarantee.bankAccountId}
+                    onChange={(event) =>
+                      setGuarantee({ ...guarantee, bankAccountId: event.target.value })
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">Select bank account</option>
+                    {bankAccounts.data
+                      ?.filter((account) => account.accountType === "BANK" && account.isActive)
+                      .map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.bankName ?? account.accountName}
+                          {account.accountNumber ? ` — ${account.accountNumber}` : ""}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+                <Field label="Instrument No. (Optional)">
+                  <input
+                    value={guarantee.instrumentNo}
+                    onChange={(event) =>
+                      setGuarantee({ ...guarantee, instrumentNo: event.target.value })
+                    }
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Guarantee Amount (BDT) *">
+                  <input
+                    type="number"
+                    min="0"
+                    value={guarantee.amount}
+                    onChange={(event) =>
+                      setGuarantee({ ...guarantee, amount: event.target.value })
+                    }
+                    className={`${inputClass} text-right`}
+                  />
+                </Field>
+                <Field label="Issue Date *">
+                  <input
+                    type="date"
+                    value={guarantee.issueDate}
+                    onChange={(event) =>
+                      setGuarantee({ ...guarantee, issueDate: event.target.value })
+                    }
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Expiry Date *">
+                  <input
+                    type="date"
+                    value={guarantee.expiryDate}
+                    onChange={(event) =>
+                      setGuarantee({ ...guarantee, expiryDate: event.target.value })
+                    }
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+
+              <div className="mt-5 rounded-md border border-biz-border bg-[#F8FAFD] p-4">
+                <h3 className="text-[12px] font-bold text-biz-navy">Final Review</h3>
+                <div className="mt-2 grid grid-cols-1 gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
+                  <SummaryRow label="Tender" value={selected.tenderId ?? "Manual"} />
+                  <SummaryRow label="Organization" value={selected.organizationMaster.shortName} />
+                  <SummaryRow label="Work" value={selected.tenderWorkName} />
+                  <SummaryRow label="NOA Date" value={displayDate(values.noaDate)} />
+                  <SummaryRow label="NOA Amount" value={`BDT ${money(values.noaAmount)}`} />
+                  <SummaryRow label="Category" value={values.workCategory} />
+                  <SummaryRow label="PE / Contact" value={values.contact?.name} />
+                  <SummaryRow label="Guarantee Type" value={guarantee.type} />
+                  <SummaryRow
+                    label="Guarantee Amount"
+                    value={`BDT ${money(guarantee.amount)}`}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-start gap-2 rounded-md border border-biz-warning/30 bg-biz-warning-soft px-3 py-2 text-[10px] text-biz-navy">
+                <Info className="h-3.5 w-3.5 shrink-0 text-biz-warning" />
+                Finalizing will save the PG/BG and move this tender to Ongoing Works. If the final
+                request is interrupted, you can select the tender again and retry safely.
+              </div>
+            </section>
+          )}
+        </div>
+
+        <aside className="space-y-3">
+          <section className="rounded-md border border-biz-border bg-white p-3 shadow-card">
+            <h2 className="mb-2 text-[12px] font-bold text-biz-navy">Work Summary</h2>
+            <SummaryRow label="Organization" value={selected?.organizationMaster.shortName} />
+            <SummaryRow label="Tender / Work" value={selected?.tenderWorkName} />
+            <SummaryRow label="Tender ID" value={selected?.tenderId} />
+            <SummaryRow label="NOA Date" value={displayDate(values.noaDate)} />
+            <SummaryRow label="NOA Amount" value={money(values.noaAmount)} />
+            <SummaryRow label="Work Category" value={values.workCategory} />
+            <SummaryRow label="PE Name" value={values.contact?.name} />
+          </section>
+
+          <section className="rounded-md border border-biz-border bg-white p-3 shadow-card">
+            <h2 className="mb-3 text-[12px] font-bold text-biz-navy">Process Timeline</h2>
+            <div>
+              {STEPS.map(([title], index) => {
+                const step = (index + 1) as UiStep;
+                const active = step === uiStep;
+                const complete = step < uiStep;
+                return (
+                  <div key={title} className="relative flex gap-2 pb-3 last:pb-0">
+                    <span
+                      className={cn(
+                        "relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold",
+                        active || complete
+                          ? "border-biz-blue bg-biz-blue text-white"
+                          : "border-[#B8C3D6] bg-white text-biz-muted",
+                      )}
+                    >
+                      {complete ? <Check className="h-3 w-3" /> : step}
+                    </span>
+                    {step < 3 && (
+                      <span className="absolute left-[11px] top-6 h-[calc(100%-18px)] w-px bg-biz-border" />
+                    )}
+                    <div className={cn("flex-1 rounded px-2 py-1", active && "bg-biz-blue-soft")}>
+                      <p
+                        className={cn(
+                          "text-[10px] font-semibold",
+                          active ? "text-biz-blue" : "text-biz-navy",
+                        )}
+                      >
+                        {title}
+                      </p>
+                      <p
+                        className={cn(
+                          "text-[9px]",
+                          active
+                            ? "text-biz-blue"
+                            : complete
+                              ? "text-biz-success"
+                              : "text-biz-muted",
+                        )}
+                      >
+                        {active ? "In Progress" : complete ? "Completed" : "Pending"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="rounded-md border border-biz-warning/30 bg-biz-warning-soft p-3">
+            <h2 className="mb-2 flex items-center gap-2 text-[11px] font-bold text-biz-navy">
+              <Lightbulb className="h-4 w-4 text-biz-warning" />
+              Important Notes
+            </h2>
+            <ul className="space-y-2 text-[9px] leading-4 text-biz-navy">
+              <li>• Select the intended tender yourself; no tender is preselected.</li>
+              <li>• Work Category always comes from Document Purchase.</li>
+              <li>• Final submission creates the Ongoing Work only after successful completion.</li>
+            </ul>
+          </section>
+        </aside>
+      </div>
+
+      <div className="sticky bottom-0 z-20 flex flex-col gap-2 rounded-md border border-biz-border bg-white/95 px-4 py-3 shadow-card backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+        {(uiStep > 1 || selected) && (
+          <button
+            type="button"
+            disabled={isWorking}
+            onClick={uiStep === 1 ? changeTender : () => setUiStep((uiStep - 1) as UiStep)}
+            className="flex h-9 items-center justify-center gap-2 rounded-md border border-biz-border bg-white px-5 text-[11px] font-semibold text-biz-navy disabled:opacity-50"
+          >
+            {uiStep > 1 && <ArrowLeft className="h-3.5 w-3.5" />}
+            {uiStep === 1 ? "Clear Selection" : "Back"}
+          </button>
+        )}
+
+        <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row">
+          {uiStep === 2 && (
+            <button
+              type="button"
+              onClick={saveDraft}
+              disabled={isWorking}
+              className="flex h-9 items-center justify-center gap-2 rounded-md border border-biz-blue bg-white px-4 text-[11px] font-semibold text-biz-blue disabled:opacity-50"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {saveDraftMutation.isPending ? "Saving..." : "Save as Draft"}
+            </button>
+          )}
+
+          {uiStep === 1 && (
+            <button
+              type="button"
+              disabled={!selected || isDraftLookupPending || workflowQuery.isError}
+              onClick={() => {
+                setMessage(null);
+                setUiStep(2);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className="flex h-9 items-center justify-center gap-2 rounded-md bg-biz-blue px-5 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {isDraftLookupPending ? "Checking Saved Workflow..." : "Continue to NOA Information"}
+              {!isDraftLookupPending && <ArrowRight className="h-3.5 w-3.5" />}
+            </button>
+          )}
+
+          {uiStep === 2 && (
+            <button
+              type="button"
+              onClick={continueFromNoa}
+              disabled={isWorking}
+              className="flex h-9 items-center justify-center gap-2 rounded-md bg-biz-blue px-5 text-[11px] font-semibold text-white disabled:opacity-50"
+            >
+              {isWorking
+                ? "Processing..."
+                : values.acceptNoa === false
+                  ? "Save NOA Rejection"
+                  : values.pgBgRequired
+                    ? "Continue to PG/BG & Review"
+                    : "Accept NOA & Create Ongoing Work"}
+              {!isWorking && <ArrowRight className="h-3.5 w-3.5" />}
+            </button>
+          )}
+
+          {uiStep === 3 && (
+            <button
+              type="button"
+              onClick={finalizeWorkflow}
+              disabled={isWorking}
+              className="flex h-9 items-center justify-center gap-2 rounded-md bg-biz-blue px-5 text-[11px] font-semibold text-white disabled:opacity-50"
+            >
+              {isWorking ? "Creating PG/BG..." : "Create PG/BG & Move to Ongoing Works"}
+              {!isWorking && <ArrowRight className="h-3.5 w-3.5" />}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }

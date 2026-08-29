@@ -32,14 +32,25 @@ export class PgBgService {
     const where: Prisma.DocumentPurchaseWhereInput = {
       organizationId,
       purchaseType: "EGP",
-      ...(query.search
-        ? {
-            OR: [
-              { egpTenderId: { contains: query.search, mode: "insensitive" } },
-              { tenderWorkName: { contains: query.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
+      AND: [
+        { cmsWork: { is: null } },
+        {
+          OR: [
+            { pgBgWorkflow: { is: null } },
+            { pgBgWorkflow: { is: { status: { in: ["DRAFT", "NOA_ACCEPTED"] } } } },
+          ],
+        },
+        ...(query.search
+          ? [
+              {
+                OR: [
+                  { egpTenderId: { contains: query.search, mode: "insensitive" as const } },
+                  { tenderWorkName: { contains: query.search, mode: "insensitive" as const } },
+                ],
+              },
+            ]
+          : []),
+      ],
     };
     const relation = {
       organizationMaster: { select: { id: true, shortName: true, fullName: true } },
@@ -58,6 +69,7 @@ export class PgBgService {
       id: item.id,
       tenderId: item.egpTenderId,
       tenderWorkName: item.tenderWorkName,
+      category: item.category,
       organizationMaster: item.organizationMaster,
     }));
     return {
@@ -86,8 +98,31 @@ export class PgBgService {
   async saveDraft(organizationId: string, userId: string, dto: SavePgBgWorkflowDto) {
     const purchase = await this.prisma.documentPurchase.findFirst({
       where: { id: dto.documentPurchaseId, organizationId },
+      include: { cmsWork: { select: { id: true } } },
     });
     if (!purchase) throw new NotFoundException("Eligible tender not found");
+    if (purchase.purchaseType !== "EGP") {
+      throw new BadRequestException("Only e-GP document purchases can use the PG/BG workflow");
+    }
+    if (purchase.cmsWork) {
+      throw new BadRequestException("This tender has already been moved to Ongoing Works");
+    }
+    const existingWorkflow = await this.prisma.pgBgWorkflow.findFirst({
+      where: { documentPurchaseId: purchase.id, organizationId },
+      select: { status: true },
+    });
+    if (
+      existingWorkflow?.status === "FINALIZED" ||
+      existingWorkflow?.status === "NOA_REJECTED"
+    ) {
+      throw new BadRequestException("This PG/BG workflow is already completed and cannot be edited");
+    }
+    const workCategory = purchase.category?.trim();
+    if (!workCategory) {
+      throw new BadRequestException(
+        "Add a category to the Document Purchase before continuing PG/BG",
+      );
+    }
     const record = await this.prisma.$transaction(async (tx) => {
       let contactId: string | undefined;
       if (
@@ -128,7 +163,7 @@ export class PgBgService {
         update: {
           ...(dto.noaDate ? { noaDate: new Date(dto.noaDate) } : {}),
           ...(dto.noaAmount !== undefined ? { noaAmount: dto.noaAmount } : {}),
-          ...(dto.workCategory !== undefined ? { workCategory: dto.workCategory || null } : {}),
+          workCategory,
           ...(dto.acceptNoa !== undefined ? { acceptNoa: dto.acceptNoa } : {}),
           ...(dto.pgBgRequired !== undefined ? { pgBgRequired: dto.pgBgRequired } : {}),
           ...(dto.currentStep !== undefined ? { currentStep: dto.currentStep } : {}),
@@ -140,7 +175,7 @@ export class PgBgService {
           organizationMasterId: purchase.organizationMasterId,
           noaDate: dto.noaDate ? new Date(dto.noaDate) : null,
           noaAmount: dto.noaAmount,
-          workCategory: dto.workCategory,
+          workCategory,
           acceptNoa: dto.acceptNoa,
           pgBgRequired: dto.pgBgRequired,
           currentStep: dto.currentStep ?? 1,
@@ -165,14 +200,30 @@ export class PgBgService {
   async acceptNoa(organizationId: string, userId: string, id: string, dto: AcceptNoaDto) {
     const existing = await this.prisma.pgBgWorkflow.findFirst({
       where: { id, organizationId },
-      include: workflowInclude,
+      include: { contact: true, cmsWork: { select: { id: true } } },
     });
     if (!existing) throw new NotFoundException("PG/BG workflow not found");
     if (!existing.noaDate || !existing.noaAmount || !existing.workCategory || !existing.contactId) {
       throw new BadRequestException("Complete NOA and PE contact information before proceeding");
     }
+    if (existing.status === "FINALIZED") {
+      throw new BadRequestException("This PG/BG workflow has already been finalized");
+    }
+    if (existing.status === "NOA_REJECTED") {
+      if (!dto.acceptNoa) {
+        return { ...workflowToDto(existing), cmsWorkId: null };
+      }
+      throw new BadRequestException("A rejected NOA decision cannot be changed");
+    }
+    if (existing.status === "NOA_ACCEPTED") {
+      if (dto.acceptNoa && existing.pgBgRequired === dto.pgBgRequired) {
+        return { ...workflowToDto(existing), cmsWorkId: existing.cmsWork?.id ?? null };
+      }
+      throw new BadRequestException("An accepted NOA decision cannot be changed");
+    }
 
-    const record = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
+      let cmsWorkId: string | null = null;
       const updated = await tx.pgBgWorkflow.update({
         where: { id, organizationId },
         data: {
@@ -185,12 +236,12 @@ export class PgBgService {
         },
         include: workflowInclude,
       });
-      const purchase = await tx.documentPurchase.findUnique({
-        where: { id: existing.documentPurchaseId },
+      const purchase = await tx.documentPurchase.findFirst({
+        where: { id: existing.documentPurchaseId, organizationId },
       });
       if (purchase?.linkedTenderId) {
         await tx.tender.update({
-          where: { id: purchase.linkedTenderId },
+          where: { id: purchase.linkedTenderId, organizationId },
           data: {
             status: dto.acceptNoa ? (dto.pgBgRequired ? "NOA" : "ONGOING") : "REJECTED",
             ...(dto.acceptNoa ? { awardedAt: new Date() } : {}),
@@ -204,7 +255,7 @@ export class PgBgService {
         existing.noaAmount &&
         existing.workCategory
       ) {
-        await tx.cmsWork.upsert({
+        const work = await tx.cmsWork.upsert({
           where: { documentPurchaseId: purchase.id },
           update: {
             status: "ONGOING",
@@ -225,8 +276,9 @@ export class PgBgService {
             createdById: userId,
           },
         });
+        cmsWorkId = work.id;
       }
-      return updated;
+      return { record: updated, cmsWorkId };
     });
     await this.auditLogService.record({
       organizationId,
@@ -234,9 +286,9 @@ export class PgBgService {
       action: dto.acceptNoa ? "accept_noa" : "reject_noa",
       entityType: "PgBgWorkflow",
       entityId: id,
-      newValue: workflowToDto(record),
+      newValue: workflowToDto(result.record),
     });
-    return workflowToDto(record);
+    return { ...workflowToDto(result.record), cmsWorkId: result.cmsWorkId };
   }
 
   async workCategories(organizationId: string) {
@@ -257,41 +309,63 @@ export class PgBgService {
   }
 
   async finalize(organizationId: string, userId: string, id: string, dto: FinalizePgBgDto) {
-    const [workflow, bank] = await Promise.all([
-      this.prisma.pgBgWorkflow.findFirst({
-        where: { id, organizationId },
-        include: { documentPurchase: true },
-      }),
-      this.prisma.bankAccount.findFirst({ where: { id: dto.bankAccountId, organizationId } }),
-    ]);
+    const workflow = await this.prisma.pgBgWorkflow.findFirst({
+      where: { id, organizationId },
+      include: { documentPurchase: true, performanceGuarantee: true, cmsWork: true },
+    });
     if (!workflow) throw new NotFoundException("PG/BG workflow not found");
-    if (!bank) throw new NotFoundException("Bank account not found");
+    if (workflow.status === "FINALIZED") {
+      if (!workflow.performanceGuarantee || !workflow.cmsWork) {
+        throw new BadRequestException("The finalized PG/BG workflow is incomplete");
+      }
+      return {
+        ...workflow.performanceGuarantee,
+        amount: workflow.performanceGuarantee.amount.toFixed(2),
+        cmsWorkId: workflow.cmsWork.id,
+      };
+    }
     if (workflow.status !== "NOA_ACCEPTED" || !workflow.pgBgRequired) {
       throw new BadRequestException(
         "An accepted NOA requiring PG/BG is needed before finalization",
       );
     }
+    const bank = await this.prisma.bankAccount.findFirst({
+      where: {
+        id: dto.bankAccountId,
+        organizationId,
+        accountType: "BANK",
+        isActive: true,
+      },
+    });
+    if (!bank) throw new NotFoundException("Active bank account not found");
+    const issueDate = new Date(dto.issueDate);
+    const expiryDate = new Date(dto.expiryDate);
+    if (expiryDate <= issueDate) {
+      throw new BadRequestException("PG/BG expiry date must be after the issue date");
+    }
     const result = await this.prisma.$transaction(async (tx) => {
       const guarantee = await tx.performanceGuarantee.upsert({
         where: { pgBgWorkflowId: id },
         update: {
+          tenderId: workflow.documentPurchase.linkedTenderId,
           type: dto.type,
           bankAccountId: dto.bankAccountId,
           instrumentNo: dto.instrumentNo,
           amount: dto.amount,
-          issueDate: new Date(dto.issueDate),
-          expiryDate: new Date(dto.expiryDate),
+          issueDate,
+          expiryDate,
         },
         create: {
           organizationId,
+          tenderId: workflow.documentPurchase.linkedTenderId,
           organizationMasterId: workflow.organizationMasterId,
           pgBgWorkflowId: id,
           type: dto.type,
           bankAccountId: dto.bankAccountId,
           instrumentNo: dto.instrumentNo,
           amount: dto.amount,
-          issueDate: new Date(dto.issueDate),
-          expiryDate: new Date(dto.expiryDate),
+          issueDate,
+          expiryDate,
           createdById: userId,
         },
       });
@@ -301,13 +375,13 @@ export class PgBgService {
       });
       if (workflow.documentPurchase.linkedTenderId) {
         await tx.tender.update({
-          where: { id: workflow.documentPurchase.linkedTenderId },
+          where: { id: workflow.documentPurchase.linkedTenderId, organizationId },
           data: { status: "ONGOING", awardedAt: new Date() },
         });
       }
       if (!workflow.noaAmount || !workflow.workCategory)
         throw new BadRequestException("NOA amount and work category are required");
-      await tx.cmsWork.upsert({
+      const work = await tx.cmsWork.upsert({
         where: { pgBgWorkflowId: id },
         update: {
           status: "ONGOING",
@@ -328,17 +402,25 @@ export class PgBgService {
           createdById: userId,
         },
       });
-      return guarantee;
+      return { guarantee, cmsWorkId: work.id };
     });
     await this.auditLogService.record({
       organizationId,
       userId,
       action: "create",
       entityType: "PerformanceGuarantee",
-      entityId: result.id,
-      newValue: { ...result, amount: result.amount.toFixed(2) },
+      entityId: result.guarantee.id,
+      newValue: {
+        ...result.guarantee,
+        amount: result.guarantee.amount.toFixed(2),
+        cmsWorkId: result.cmsWorkId,
+      },
     });
-    return { ...result, amount: result.amount.toFixed(2) };
+    return {
+      ...result.guarantee,
+      amount: result.guarantee.amount.toFixed(2),
+      cmsWorkId: result.cmsWorkId,
+    };
   }
 
   async requestRelease(

@@ -43,11 +43,17 @@ describe("Full service-driven Tender to Project Close lifecycle", () => {
     const f = await createIdentityFixture(prisma, "E2E");
     const tender = await tenders.create(f.organization.id, f.user.id, { organizationMasterId: f.master.id, egpTenderId: "E2E-001", workName: "Service-driven closeout", category: "Civil Works", contractValue: 1_000_000, status: "DRAFT", submissionDeadline: "2026-01-10" });
     await tenders.submit(f.organization.id, f.user.id, tender.id, { submissionDate: "2026-01-09", submissionMethod: "e-GP", quotedAmount: 1_000_000, submittedByName: f.user.name, submissionReference: "SUB-E2E" });
-    const purchase = await purchases.create(f.organization.id, f.user.id, { purchaseType: "EGP", tenderId: "E2E-001", linkedTenderId: tender.id, organizationMasterId: f.master.id, tenderWorkName: tender.workName, purchaseDate: "2026-01-02", documentPrice: 1, paymentFromAccountId: f.bank.id });
-    const workflow = await pgBg.saveDraft(f.organization.id, f.user.id, { documentPurchaseId: purchase.id, noaDate: "2026-01-15", noaAmount: 1_000_000, workCategory: "Civil Works", pgBgRequired: true, contact: { name: "Project Director", designation: "PD", mobile: "01700000000", address: "Dhaka" } });
-    await pgBg.acceptNoa(f.organization.id, f.user.id, workflow.id, { acceptNoa: true, pgBgRequired: true });
+    const purchase = await purchases.create(f.organization.id, f.user.id, { purchaseType: "EGP", tenderId: "E2E-001", linkedTenderId: tender.id, organizationMasterId: f.master.id, tenderWorkName: tender.workName, purchaseDate: "2026-01-02", documentPrice: 1, paymentFromAccountId: f.bank.id, category: "Civil Works" });
+    const workflow = await pgBg.saveDraft(f.organization.id, f.user.id, { documentPurchaseId: purchase.id, noaDate: "2026-01-15", noaAmount: 1_000_000, pgBgRequired: true, contact: { name: "Project Director", designation: "PD", mobile: "01700000000", address: "Dhaka" } });
+    expect(workflow.workCategory).toBe("Civil Works");
+    const accepted = await pgBg.acceptNoa(f.organization.id, f.user.id, workflow.id, { acceptNoa: true, pgBgRequired: true });
+    expect(accepted.cmsWorkId).toBeNull();
     const guarantee = await pgBg.finalize(f.organization.id, f.user.id, workflow.id, { type: "PG", bankAccountId: f.bank.id, instrumentNo: "PG-E2E-001", amount: 100_000, issueDate: "2026-01-16", expiryDate: "2027-12-31" });
     const work = await prisma.cmsWork.findFirstOrThrow({ where: { organizationId: f.organization.id, pgBgWorkflowId: workflow.id } });
+    expect(guarantee.cmsWorkId).toBe(work.id);
+    const repeatedFinalize = await pgBg.finalize(f.organization.id, f.user.id, workflow.id, { type: "PG", bankAccountId: f.bank.id, instrumentNo: "PG-E2E-001", amount: 100_000, issueDate: "2026-01-16", expiryDate: "2027-12-31" });
+    expect(repeatedFinalize.id).toBe(guarantee.id);
+    expect(repeatedFinalize.cmsWorkId).toBe(work.id);
     const contract = await contracts.create(f.organization.id, f.user.id, { cmsWorkId: work.id, tenderId: tender.id, pgBgWorkflowId: workflow.id, contractNo: "CON-E2E-001", issueDate: "2026-01-16", contractDate: "2026-01-16", originalContractValue: 1_000_000, commencementDate: "2026-01-20", originalCompletionDate: "2026-12-31", dlpDays: 30, retentionPct: 10, status: "DRAFT" });
     await contracts.activate(f.organization.id, f.user.id, contract.id);
     const budget = await budgets.saveDraft(f.organization.id, f.user.id, work.id, { lines: [{ category: "Execution", description: "Approved execution budget", amount: 800_000 }] });
@@ -106,5 +112,101 @@ describe("Full service-driven Tender to Project Close lifecycle", () => {
     expect((await prisma.defectLiabilityPeriod.findUniqueOrThrow({ where: { id: dlp.id } })).status).toBe("COMPLETED");
     const duplicateSources = await prisma.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM (SELECT "sourceModule", "sourceType", "sourceId", COUNT(*) FROM "journal_entries" WHERE "organizationId" = ${f.organization.id} GROUP BY 1,2,3 HAVING COUNT(*) > 1) duplicates`;
     expect(Number(duplicateSources[0]?.count ?? 0)).toBe(0);
+  });
+
+  it("keeps no-PG work creation and rejected NOA decisions terminal and idempotent", async () => {
+    const f = await createIdentityFixture(prisma, "PG-BG-STATES");
+    const createWorkflow = async (suffix: string) => {
+      const tender = await tenders.create(f.organization.id, f.user.id, {
+        organizationMasterId: f.master.id,
+        egpTenderId: `PG-BG-${suffix}`,
+        workName: `PG/BG state ${suffix}`,
+        category: "Electrical Works",
+        contractValue: 250_000,
+        status: "DRAFT",
+        submissionDeadline: "2026-03-10",
+      });
+      const purchase = await purchases.create(f.organization.id, f.user.id, {
+        purchaseType: "EGP",
+        tenderId: `PG-BG-${suffix}`,
+        linkedTenderId: tender.id,
+        organizationMasterId: f.master.id,
+        tenderWorkName: tender.workName,
+        purchaseDate: "2026-03-01",
+        documentPrice: 1,
+        paymentFromAccountId: f.bank.id,
+        category: "Electrical Works",
+      });
+      const workflow = await pgBg.saveDraft(f.organization.id, f.user.id, {
+        documentPurchaseId: purchase.id,
+        noaDate: "2026-03-12",
+        noaAmount: 250_000,
+        contact: {
+          name: "Project Engineer",
+          designation: "PE",
+          mobile: `01700000${suffix}`,
+          address: "Dhaka",
+        },
+      });
+      return { purchase, workflow };
+    };
+
+    const direct = await createWorkflow("101");
+    const created = await pgBg.acceptNoa(
+      f.organization.id,
+      f.user.id,
+      direct.workflow.id,
+      { acceptNoa: true, pgBgRequired: false },
+    );
+    expect(created.cmsWorkId).not.toBeNull();
+    const retried = await pgBg.acceptNoa(
+      f.organization.id,
+      f.user.id,
+      direct.workflow.id,
+      { acceptNoa: true, pgBgRequired: false },
+    );
+    expect(retried.cmsWorkId).toBe(created.cmsWorkId);
+    expect(
+      await prisma.cmsWork.count({
+        where: { organizationId: f.organization.id, documentPurchaseId: direct.purchase.id },
+      }),
+    ).toBe(1);
+    await expect(
+      pgBg.saveDraft(f.organization.id, f.user.id, {
+        documentPurchaseId: direct.purchase.id,
+        noaAmount: 260_000,
+      }),
+    ).rejects.toThrow("already been moved to Ongoing Works");
+
+    const rejected = await createWorkflow("102");
+    const rejectedDecision = await pgBg.acceptNoa(
+      f.organization.id,
+      f.user.id,
+      rejected.workflow.id,
+      { acceptNoa: false, pgBgRequired: false },
+    );
+    expect(rejectedDecision.cmsWorkId).toBeNull();
+    const repeatedRejection = await pgBg.acceptNoa(
+      f.organization.id,
+      f.user.id,
+      rejected.workflow.id,
+      { acceptNoa: false, pgBgRequired: false },
+    );
+    expect(repeatedRejection.cmsWorkId).toBeNull();
+    await expect(
+      pgBg.acceptNoa(f.organization.id, f.user.id, rejected.workflow.id, {
+        acceptNoa: true,
+        pgBgRequired: false,
+      }),
+    ).rejects.toThrow("cannot be changed");
+    expect(
+      await prisma.cmsWork.count({
+        where: { organizationId: f.organization.id, documentPurchaseId: rejected.purchase.id },
+      }),
+    ).toBe(0);
+
+    const eligible = await pgBg.eligibleTenders(f.organization.id, { page: 1, limit: 10 });
+    expect(eligible.items.map((item) => item.id)).not.toContain(direct.purchase.id);
+    expect(eligible.items.map((item) => item.id)).not.toContain(rejected.purchase.id);
   });
 });
