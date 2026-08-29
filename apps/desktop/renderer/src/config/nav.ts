@@ -140,8 +140,12 @@ export const NAV_ITEMS: NavItem[] = [
         icon: FolderKanban,
         children: [
           { label: "Bill Submission", href: "/cms/documentation/bill-submission", icon: FileCheck2 },
-          { label: "Challan Submission", icon: PackageCheck, disabled: true },
-          { label: "VAT-Tax Certificate", icon: FileBadge2, disabled: true },
+          { label: "Challan Submission", href: "/cms/documentation/challan-submission", icon: PackageCheck },
+          {
+            label: "VAT-Tax Certificate",
+            href: "/cms/documentation/vat-tax-certificate",
+            icon: FileBadge2,
+          },
           { label: "Work Completion Certificate", icon: Award, disabled: true },
         ],
       },

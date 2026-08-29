@@ -20,6 +20,7 @@ export interface DocumentRecord {
   relatedEntityName: string | null;
   tenderId: string | null;
   workId: string | null;
+  challanSubmissionId: string | null;
   organizationMasterId: string | null;
   referenceNumber: string | null;
   certificateNumber: string | null;
@@ -57,6 +58,8 @@ export interface CreateDocumentInput {
   relatedEntityName?: string;
   tenderId?: string;
   workId?: string;
+  contractId?: string;
+  challanSubmissionId?: string;
   organizationMasterId?: string;
   referenceNumber?: string;
   certificateNumber?: string;
@@ -83,6 +86,7 @@ export interface DocumentQuery {
   workId?: string;
   contractId?: string;
   projectBillId?: string;
+  challanSubmissionId?: string;
   variationOrderId?: string;
   timeExtensionId?: string;
   partyId?: string;

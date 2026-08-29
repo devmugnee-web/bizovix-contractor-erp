@@ -56,6 +56,16 @@ export const PERMISSIONS = [
   "project_bill.certify",
   "project_bill.cancel",
 
+  "challan_submission.read",
+  "challan_submission.create",
+  "challan_submission.update",
+  "challan_submission.submit",
+  "challan_submission.review",
+  "challan_submission.approve",
+  "challan_submission.reject",
+  "challan_submission.release_payment",
+  "challan_submission.cancel",
+
   "retention.read",
   "retention.release",
 

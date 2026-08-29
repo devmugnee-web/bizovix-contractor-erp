@@ -44,6 +44,10 @@ export class CreateDocumentDto {
 
   @IsOptional()
   @IsString()
+  challanSubmissionId?: string | null;
+
+  @IsOptional()
+  @IsString()
   variationOrderId?: string;
 
   @IsOptional()

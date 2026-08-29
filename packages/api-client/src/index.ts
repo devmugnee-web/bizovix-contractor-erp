@@ -18,6 +18,7 @@ export * from "./hooks/use-contracts";
 export * from "./hooks/use-project-budgets";
 export * from "./hooks/use-boq";
 export * from "./hooks/use-project-bills";
+export * from "./hooks/use-challan-submissions";
 export * from "./hooks/use-project-closing";
 export * from "./hooks/use-variation-orders";
 export * from "./hooks/use-time-extensions";

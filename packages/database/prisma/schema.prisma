@@ -221,6 +221,9 @@ model Organization {
   boqSections                   BoqSection[]
   boqItems                      BoqItem[]
   projectBills                  ProjectBill[]
+  challanSubmissions            ChallanSubmission[]
+  challanSubmissionItems        ChallanSubmissionItem[]
+  challanSubmissionStatusHistory ChallanSubmissionStatusHistory[]
   receivables                   Receivable[]
   variationOrders               VariationOrder[]
   timeExtensions                TimeExtension[]
@@ -503,6 +506,16 @@ enum BillStatus {
   CERTIFIED
   PARTIALLY_RECEIVED
   RECEIVED
+  REJECTED
+  CANCELLED
+}
+
+enum ChallanSubmissionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  PAYMENT_RELEASED
   REJECTED
   CANCELLED
 }
@@ -896,6 +909,7 @@ model CmsWork {
   boqSections            BoqSection[]
   boqItems               BoqItem[]
   bills                  ProjectBill[]
+  challanSubmissions     ChallanSubmission[]
   variationOrders        VariationOrder[]
   timeExtensions         TimeExtension[]
   receivables            Receivable[]
@@ -973,6 +987,7 @@ model ProjectContract {
   organizationMaster     OrganizationMaster      @relation(fields: [organizationMasterId], references: [id])
   documents              Document[]
   bills                  ProjectBill[]
+  challanSubmissions     ChallanSubmission[]
   variationOrders        VariationOrder[]
   timeExtensions         TimeExtension[]
   receivables            Receivable[]
@@ -1180,6 +1195,100 @@ model ProjectBillItem {
   @@unique([billId, boqItemId])
   @@index([boqItemId])
   @@map("project_bill_items")
+}
+
+model ChallanSubmission {
+  id             String @id @default(cuid())
+  organizationId String
+  cmsWorkId      String
+  contractId     String?
+
+  challanNo    String
+  challanDate  DateTime
+  description  String
+  challanType  String
+  challanMonth DateTime
+  periodFrom   DateTime
+  periodTo     DateTime
+
+  receivedBy  String
+  receivedAt  String
+  submittedTo String
+  paymentFrom String
+  remarks     String?
+
+  totalAmount     Decimal                    @default(0) @db.Decimal(18, 2)
+  approvedAmount  Decimal?                   @db.Decimal(18, 2)
+  status          ChallanSubmissionStatus    @default(DRAFT)
+
+  createdById         String?
+  submittedAt         DateTime?
+  submittedById       String?
+  reviewStartedAt     DateTime?
+  reviewStartedById   String?
+  approvedAt          DateTime?
+  approvedById        String?
+  paymentReleasedAt   DateTime?
+  paymentReleasedById String?
+  rejectedAt          DateTime?
+  rejectedById        String?
+  rejectionReason     String?
+  cancelledAt         DateTime?
+  cancelledById       String?
+  cancellationReason  String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization  Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cmsWork       CmsWork                            @relation(fields: [cmsWorkId], references: [id])
+  contract      ProjectContract?                   @relation(fields: [contractId], references: [id])
+  items         ChallanSubmissionItem[]
+  statusHistory ChallanSubmissionStatusHistory[]
+  documents     Document[]
+
+  @@unique([organizationId, challanNo])
+  @@index([organizationId, cmsWorkId, status])
+  @@index([organizationId, status, challanDate])
+  @@map("challan_submissions")
+}
+
+model ChallanSubmissionItem {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  challanSubmissionId String
+  itemCode             String?
+  description          String
+  unit                 String
+  quantity             Decimal  @db.Decimal(18, 3)
+  rate                 Decimal  @db.Decimal(18, 2)
+  amount               Decimal  @db.Decimal(18, 2)
+  sortOrder             Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  challanSubmission ChallanSubmission @relation(fields: [challanSubmissionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, challanSubmissionId])
+  @@map("challan_submission_items")
+}
+
+model ChallanSubmissionStatusHistory {
+  id                  String                     @id @default(cuid())
+  organizationId      String
+  challanSubmissionId String
+  fromStatus          ChallanSubmissionStatus?
+  toStatus            ChallanSubmissionStatus
+  action              String
+  note                String?
+  actedById           String?
+  createdAt           DateTime                   @default(now())
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  challanSubmission ChallanSubmission @relation(fields: [challanSubmissionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, challanSubmissionId, createdAt])
+  @@map("challan_submission_status_history")
 }
 
 model BillAdjustment {
@@ -1989,6 +2098,7 @@ model Document {
   workId                  String?
   contractId              String?
   projectBillId           String?
+  challanSubmissionId     String?
   variationOrderId        String?
   timeExtensionId         String?
   completionCertificateId String?
@@ -2041,6 +2151,7 @@ model Document {
   work                  CmsWork?               @relation(fields: [workId], references: [id])
   contract              ProjectContract?       @relation(fields: [contractId], references: [id])
   projectBill           ProjectBill?           @relation(fields: [projectBillId], references: [id])
+  challanSubmission     ChallanSubmission?     @relation(fields: [challanSubmissionId], references: [id])
   variationOrder        VariationOrder?        @relation(fields: [variationOrderId], references: [id])
   timeExtension         TimeExtension?         @relation(fields: [timeExtensionId], references: [id])
   completionCertificate CompletionCertificate? @relation(fields: [completionCertificateId], references: [id])
@@ -2063,6 +2174,8 @@ model Document {
   @@index([organizationId, category])
   @@index([organizationId, status])
   @@index([organizationId, expiryDate])
+  // A partial unique index for active challanSubmissionId + documentType is enforced in SQL.
+  @@index([challanSubmissionId])
   @@map("documents")
 }
 
@@ -2081,6 +2194,7 @@ model DocumentVersion {
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
+  @@unique([documentId, version])
   @@index([documentId])
   @@map("document_versions")
 }

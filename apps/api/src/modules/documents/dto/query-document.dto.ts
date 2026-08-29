@@ -28,6 +28,10 @@ export class QueryDocumentDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsString()
+  challanSubmissionId?: string;
+
+  @IsOptional()
+  @IsString()
   variationOrderId?: string;
 
   @IsOptional()

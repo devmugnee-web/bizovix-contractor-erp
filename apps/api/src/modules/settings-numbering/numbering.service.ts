@@ -19,6 +19,7 @@ export const NUMBERING_MODULE_KEYS = [
   "CHEQUE",
   "INVOICE",
   "PROJECT_BILL",
+  "CHALLAN_SUBMISSION",
   "VARIATION_ORDER",
   "TIME_EXTENSION",
   "COMPLETION_CERTIFICATE",
@@ -53,6 +54,7 @@ const DEFAULT_PREFIX: Record<NumberingModuleKey, string> = {
   CHEQUE: "CHQ",
   INVOICE: "INV",
   PROJECT_BILL: "RB",
+  CHALLAN_SUBMISSION: "CH",
   VARIATION_ORDER: "VO",
   TIME_EXTENSION: "EOT",
   COMPLETION_CERTIFICATE: "CC",
@@ -166,7 +168,11 @@ export class NumberingService {
    * increment pattern) — safe for concurrent callers without an explicit transaction.
    * Resets to 1 on year rollover when the sequence includes the year in its format.
    */
-  async next(org: string, moduleKey: string, tx: Prisma.TransactionClient | PrismaService = this.prisma) {
+  async next(
+    org: string,
+    moduleKey: string,
+    tx: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
     await this.ensureDefaults(org);
     const year = new Date().getFullYear();
     const rows = await tx.$queryRaw<

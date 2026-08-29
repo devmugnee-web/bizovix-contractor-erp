@@ -17,7 +17,8 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useCmsWorks } from "@bizovix/api-client";
+import { useChallanSubmissions, useChallanSubmissionStats, useCmsWorks } from "@bizovix/api-client";
+import type { ChallanSubmissionRecord, ChallanSubmissionStatus } from "@bizovix/types";
 import {
   DataTable,
   IconButton,
@@ -34,26 +35,48 @@ import { formatBDT, formatDate } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import {
   BILL_SUBMISSION_ROWS,
-  CHALLAN_SUBMISSION_ROWS,
   DOCUMENT_KPI_TOTALS,
   VAT_TAX_CERTIFICATE_ROWS,
   WORK_COMPLETION_CERT_ROWS,
   type BillStatus,
   type BillSubmissionRow,
   type CertificateStatus,
-  type ChallanStatus,
-  type ChallanSubmissionRow,
   type VatTaxCertificateRow,
   type WccSource,
   type WccStatus,
   type WorkCompletionCertRow,
 } from "./mock-data";
 
-const BILL_STATUS_TONE: Record<BillStatus, StatusBadgeTone> = { Approved: "success", "Under Review": "warning" };
-const CHALLAN_STATUS_TONE: Record<ChallanStatus, StatusBadgeTone> = { Approved: "success", Submitted: "info" };
-const CERT_STATUS_TONE: Record<CertificateStatus, StatusBadgeTone> = { Valid: "success", Upcoming: "warning" };
-const WCC_STATUS_TONE: Record<WccStatus, StatusBadgeTone> = { Issued: "success", "In Progress": "info" };
+const BILL_STATUS_TONE: Record<BillStatus, StatusBadgeTone> = {
+  Approved: "success",
+  "Under Review": "warning",
+};
+const CHALLAN_STATUS_TONE: Record<ChallanSubmissionStatus, StatusBadgeTone> = {
+  DRAFT: "neutral",
+  SUBMITTED: "info",
+  UNDER_REVIEW: "warning",
+  APPROVED: "success",
+  PAYMENT_RELEASED: "success",
+  REJECTED: "danger",
+  CANCELLED: "neutral",
+};
+const CERT_STATUS_TONE: Record<CertificateStatus, StatusBadgeTone> = {
+  Valid: "success",
+  Upcoming: "warning",
+};
+const WCC_STATUS_TONE: Record<WccStatus, StatusBadgeTone> = {
+  Issued: "success",
+  "In Progress": "info",
+};
 const WCC_SOURCE_TONE: Record<WccSource, StatusBadgeTone> = { "e-GP": "success", Manual: "info" };
+
+function challanStatusLabel(status: ChallanSubmissionStatus) {
+  return status
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 const DOC_TYPE_OPTIONS = [
   { label: "Bill Submission", value: "bill" },
@@ -106,7 +129,12 @@ function DocumentPanel<T>({
     <div className="flex flex-col overflow-hidden rounded-xl border border-biz-border bg-biz-surface shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-biz-border px-4 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", iconClassName)}>
+          <span
+            className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+              iconClassName,
+            )}
+          >
             <Icon className="h-4 w-4" />
           </span>
           <div className="min-w-0">
@@ -178,7 +206,8 @@ export default function ProjectDocumentationPage() {
   const [projectPickerOpen, setProjectPickerOpen] = React.useState(false);
 
   const projectList = projects.data?.items ?? [];
-  const selectedProject = projectList.find((p) => p.id === selectedProjectId) ?? projectList[0] ?? null;
+  const selectedProject =
+    projectList.find((p) => p.id === selectedProjectId) ?? projectList[0] ?? null;
 
   const [tid, setTid] = React.useState("");
   const [fromDate, setFromDate] = React.useState("");
@@ -193,6 +222,14 @@ export default function ProjectDocumentationPage() {
   const [sourceType, setSourceType] = React.useState<"e-GP" | "Manual">("e-GP");
 
   const [viewing, setViewing] = React.useState<ViewingDetail>(null);
+  const challans = useChallanSubmissions({
+    limit: 100,
+    cmsWorkId: selectedProject?.id,
+    search: challanSearch.trim() || tid.trim() || undefined,
+    dateFrom: fromDate || undefined,
+    dateTo: toDate || undefined,
+  });
+  const challanStats = useChallanSubmissionStats(selectedProject?.id);
 
   const matchesGlobal = React.useCallback(
     (rowTid: string, dateField: string) => {
@@ -231,21 +268,24 @@ export default function ProjectDocumentationPage() {
       ),
     [matchesGlobal, billSearch],
   );
-  const challanRows = React.useMemo(
-    () =>
-      CHALLAN_SUBMISSION_ROWS.filter(
-        (row) =>
-          matchesGlobal(row.tid, row.challanDate) &&
-          (!challanSearch.trim() || row.tid.toLowerCase().includes(challanSearch.trim().toLowerCase())),
-      ),
-    [matchesGlobal, challanSearch],
-  );
+  const challanRows = React.useMemo(() => {
+    const cardTerm = challanSearch.trim().toLowerCase();
+    return (challans.data?.items ?? []).filter((row) => {
+      const rowTid = row.contract?.tender?.egpTenderId ?? row.contract?.contractNo ?? "";
+      if (!matchesGlobal(rowTid, row.challanDate.slice(0, 10))) return false;
+      if (!cardTerm) return true;
+      return [rowTid, row.challanNo, row.description, row.cmsWork.workName].some((value) =>
+        value.toLowerCase().includes(cardTerm),
+      );
+    });
+  }, [challans.data?.items, matchesGlobal, challanSearch]);
   const vatTaxRows = React.useMemo(
     () =>
       VAT_TAX_CERTIFICATE_ROWS.filter(
         (row) =>
           matchesGlobal(row.tid, row.issueDate) &&
-          (!vatTaxSearch.trim() || row.tid.toLowerCase().includes(vatTaxSearch.trim().toLowerCase())),
+          (!vatTaxSearch.trim() ||
+            row.tid.toLowerCase().includes(vatTaxSearch.trim().toLowerCase())),
       ),
     [matchesGlobal, vatTaxSearch],
   );
@@ -273,7 +313,11 @@ export default function ProjectDocumentationPage() {
     { key: "billDate", header: "Bill Date", render: (row) => formatDate(row.billDate) },
     { key: "workDescription", header: "Work Description", render: (row) => row.workDescription },
     { key: "billAmount", header: "Bill Amount (BDT)", render: (row) => formatBDT(row.billAmount) },
-    { key: "status", header: "Status", render: (row) => <StatusBadge label={row.status} tone={BILL_STATUS_TONE[row.status]} /> },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => <StatusBadge label={row.status} tone={BILL_STATUS_TONE[row.status]} />,
+    },
     actionColumn<BillSubmissionRow>((row) =>
       setViewing({
         title: row.tid,
@@ -288,28 +332,28 @@ export default function ProjectDocumentationPage() {
     ),
   ];
 
-  const challanColumns: DataTableColumn<ChallanSubmissionRow>[] = [
-    { key: "tid", header: "TID", render: (row) => row.tid },
+  const challanColumns: DataTableColumn<ChallanSubmissionRecord>[] = [
+    {
+      key: "tid",
+      header: "TID",
+      render: (row) => row.contract?.tender?.egpTenderId ?? row.contract?.contractNo ?? "—",
+    },
     { key: "challanNo", header: "Challan No", render: (row) => row.challanNo },
     { key: "challanDate", header: "Challan Date", render: (row) => formatDate(row.challanDate) },
     { key: "description", header: "Description", render: (row) => row.description },
-    { key: "amount", header: "Amount (BDT)", render: (row) => formatBDT(row.amount) },
+    { key: "amount", header: "Amount (BDT)", render: (row) => formatBDT(Number(row.totalAmount)) },
     {
       key: "status",
       header: "Status",
-      render: (row) => <StatusBadge label={row.status} tone={CHALLAN_STATUS_TONE[row.status]} />,
+      render: (row) => (
+        <StatusBadge
+          label={challanStatusLabel(row.status)}
+          tone={CHALLAN_STATUS_TONE[row.status]}
+        />
+      ),
     },
-    actionColumn<ChallanSubmissionRow>((row) =>
-      setViewing({
-        title: row.tid,
-        fields: [
-          ["Challan No", row.challanNo],
-          ["Challan Date", formatDate(row.challanDate)],
-          ["Description", row.description],
-          ["Amount (BDT)", formatBDT(row.amount)],
-          ["Status", row.status],
-        ],
-      }),
+    actionColumn<ChallanSubmissionRecord>((row) =>
+      router.push(`/cms/documentation/challan-submission?id=${encodeURIComponent(row.id)}`),
     ),
   ];
 
@@ -319,7 +363,11 @@ export default function ProjectDocumentationPage() {
     { key: "issueDate", header: "Issue Date", render: (row) => formatDate(row.issueDate) },
     { key: "validTill", header: "Valid Till", render: (row) => formatDate(row.validTill) },
     { key: "type", header: "Type", render: (row) => row.type },
-    { key: "status", header: "Status", render: (row) => <StatusBadge label={row.status} tone={CERT_STATUS_TONE[row.status]} /> },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => <StatusBadge label={row.status} tone={CERT_STATUS_TONE[row.status]} />,
+    },
     actionColumn<VatTaxCertificateRow>((row) =>
       setViewing({
         title: row.tid,
@@ -337,10 +385,22 @@ export default function ProjectDocumentationPage() {
   const wccColumns: DataTableColumn<WorkCompletionCertRow>[] = [
     { key: "tid", header: "TID", render: (row) => row.tid },
     { key: "wccNo", header: "WCC No", render: (row) => row.wccNo },
-    { key: "completionDate", header: "Completion Date", render: (row) => formatDate(row.completionDate) },
+    {
+      key: "completionDate",
+      header: "Completion Date",
+      render: (row) => formatDate(row.completionDate),
+    },
     { key: "issuedOn", header: "Issued On", render: (row) => formatDate(row.issuedOn) },
-    { key: "source", header: "Source", render: (row) => <StatusBadge label={row.source} tone={WCC_SOURCE_TONE[row.source]} /> },
-    { key: "status", header: "Status", render: (row) => <StatusBadge label={row.status} tone={WCC_STATUS_TONE[row.status]} /> },
+    {
+      key: "source",
+      header: "Source",
+      render: (row) => <StatusBadge label={row.source} tone={WCC_SOURCE_TONE[row.source]} />,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => <StatusBadge label={row.status} tone={WCC_STATUS_TONE[row.status]} />,
+    },
     actionColumn<WorkCompletionCertRow>((row) =>
       setViewing({
         title: row.tid,
@@ -365,7 +425,9 @@ export default function ProjectDocumentationPage() {
           </span>
           <div>
             <h1 className="text-page-title text-biz-text">Project Documentation</h1>
-            <p className="mt-0.5 text-[12.5px] text-biz-muted">Manage all project related documents in one place</p>
+            <p className="mt-0.5 text-[12.5px] text-biz-muted">
+              Manage all project related documents in one place
+            </p>
           </div>
         </div>
 
@@ -378,7 +440,9 @@ export default function ProjectDocumentationPage() {
             <div>
               <p className="text-[10.5px] text-biz-muted">Select Project</p>
               <p className="text-[13px] font-semibold text-biz-text">
-                {projects.isLoading ? "Loading..." : (selectedProject?.workName ?? "No projects found")}
+                {projects.isLoading
+                  ? "Loading..."
+                  : (selectedProject?.workName ?? "No projects found")}
               </p>
             </div>
             <ChevronDown className="h-4 w-4 shrink-0 text-biz-muted" />
@@ -408,8 +472,12 @@ export default function ProjectDocumentationPage() {
                         project.id === selectedProject?.id && "bg-biz-blue-soft",
                       )}
                     >
-                      <span className="text-[12.5px] font-medium text-biz-text">{project.workName}</span>
-                      <span className="text-[11px] text-biz-muted">{project.organizationMaster.shortName}</span>
+                      <span className="text-[12.5px] font-medium text-biz-text">
+                        {project.workName}
+                      </span>
+                      <span className="text-[11px] text-biz-muted">
+                        {project.organizationMaster.shortName}
+                      </span>
                     </button>
                   ))
                 )}
@@ -425,7 +493,12 @@ export default function ProjectDocumentationPage() {
           icon={FileText}
           iconClassName="bg-biz-blue-soft text-biz-blue"
           label="Total Documents"
-          value={String(DOCUMENT_KPI_TOTALS.totalDocuments)}
+          value={String(
+            DOCUMENT_KPI_TOTALS.billSubmissions +
+              (challanStats.data?.total ?? 0) +
+              DOCUMENT_KPI_TOTALS.vatTaxCertificates +
+              DOCUMENT_KPI_TOTALS.workCompletionCert,
+          )}
           helper="All types"
         />
         <ModuleStatCard
@@ -439,7 +512,7 @@ export default function ProjectDocumentationPage() {
           icon={FileBadge2}
           iconClassName="bg-biz-purple-soft text-biz-purple"
           label="Challan Submissions"
-          value={String(DOCUMENT_KPI_TOTALS.challanSubmissions)}
+          value={challanStats.isLoading ? "..." : String(challanStats.data?.total ?? 0)}
           helper="This Project"
         />
         <ModuleStatCard
@@ -482,7 +555,8 @@ export default function ProjectDocumentationPage() {
                 className="flex h-11 w-[220px] items-center justify-between rounded-sm border border-biz-border bg-biz-surface px-3 text-[12.5px] text-biz-text"
               >
                 <span className={cn(!fromDate && !toDate && "text-biz-muted")}>
-                  {fromDate ? formatDate(fromDate) : "Start Date"} to {toDate ? formatDate(toDate) : "End Date"}
+                  {fromDate ? formatDate(fromDate) : "Start Date"} to{" "}
+                  {toDate ? formatDate(toDate) : "End Date"}
                 </span>
                 <Calendar className="h-4 w-4 shrink-0 text-biz-muted" />
               </button>
@@ -568,7 +642,7 @@ export default function ProjectDocumentationPage() {
         )}
 
         {showChallan && (
-          <DocumentPanel<ChallanSubmissionRow>
+          <DocumentPanel<ChallanSubmissionRecord>
             icon={FileBadge2}
             iconClassName="bg-biz-purple-soft text-biz-purple"
             title="Challan Submission"
@@ -577,10 +651,12 @@ export default function ProjectDocumentationPage() {
             onSearchChange={setChallanSearch}
             addLabel="New Challan Submission"
             addButtonClassName="bg-biz-blue hover:bg-biz-blue-hover"
+            onAdd={() => router.push("/cms/documentation/challan-submission")}
             data={challanRows}
             rowKey={(row) => row.id}
             columns={challanColumns}
             footerLabel="View All Challan Submissions"
+            onFooterClick={() => router.push("/cms/documentation/challan-submission")}
           />
         )}
 
@@ -594,10 +670,12 @@ export default function ProjectDocumentationPage() {
             onSearchChange={setVatTaxSearch}
             addLabel="New VAT-Tax Certificate"
             addButtonClassName="bg-biz-purple hover:brightness-95"
+            onAdd={() => router.push("/cms/documentation/vat-tax-certificate")}
             data={vatTaxRows}
             rowKey={(row) => row.id}
             columns={vatTaxColumns}
             footerLabel="View All VAT-Tax Certificates"
+            onFooterClick={() => router.push("/cms/documentation/vat-tax-certificate")}
           />
         )}
 
@@ -620,7 +698,10 @@ export default function ProjectDocumentationPage() {
                 <p className="mb-1.5 text-[11.5px] font-medium text-biz-muted">Source Type</p>
                 <div className="flex items-center gap-4">
                   {(["e-GP", "Manual"] as const).map((option) => (
-                    <label key={option} className="flex items-center gap-1.5 text-[12.5px] text-biz-text">
+                    <label
+                      key={option}
+                      className="flex items-center gap-1.5 text-[12.5px] text-biz-text"
+                    >
                       <input
                         type="radio"
                         name="wcc-source-type"
@@ -641,7 +722,10 @@ export default function ProjectDocumentationPage() {
       {/* Bottom info bar */}
       <div className="flex items-center gap-2 rounded-lg border border-biz-blue/20 bg-biz-blue-soft px-4 py-2.5 text-[12.5px] text-biz-text">
         <Info className="h-4 w-4 shrink-0 text-biz-blue" />
-        <span>Search by TID to find all related documents. You can view, add and manage documents for each category.</span>
+        <span>
+          Search by TID to find all related documents. You can view, add and manage documents for
+          each category.
+        </span>
       </div>
 
       {viewing && (

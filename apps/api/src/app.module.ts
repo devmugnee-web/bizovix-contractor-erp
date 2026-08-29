@@ -25,6 +25,7 @@ import { ProjectBudgetsModule } from "./modules/project-budgets/project-budgets.
 import { BoqModule } from "./modules/boq/boq.module";
 import { DeductionConfigsModule } from "./modules/deduction-configs/deduction-configs.module";
 import { ProjectBillsModule } from "./modules/project-bills/project-bills.module";
+import { ChallanSubmissionsModule } from "./modules/challan-submissions/challan-submissions.module";
 import { VariationOrdersModule } from "./modules/variation-orders/variation-orders.module";
 import { TimeExtensionsModule } from "./modules/time-extensions/time-extensions.module";
 import { ProjectProgressModule } from "./modules/project-progress/project-progress.module";
@@ -87,6 +88,7 @@ import { VendorLicensingModule } from "./modules/vendor-licensing/vendor-licensi
     BoqModule,
     DeductionConfigsModule,
     ProjectBillsModule,
+    ChallanSubmissionsModule,
     VariationOrdersModule,
     TimeExtensionsModule,
     ProjectProgressModule,
