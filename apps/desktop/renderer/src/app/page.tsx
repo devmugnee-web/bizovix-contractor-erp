@@ -8,7 +8,8 @@ export default function RootPage() {
   const router = useRouter();
 
   React.useEffect(() => {
-    router.replace(tokenStorage.getAccessToken() ? "/dashboard" : "/login");
+    const devAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+    router.replace(devAuthBypass || tokenStorage.getAccessToken() ? "/dashboard" : "/login");
   }, [router]);
 
   return null;

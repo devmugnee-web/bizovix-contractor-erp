@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { tokenStorage, useDevLogin, useLogin } from "@bizovix/api-client";
+import { useLogin } from "@bizovix/api-client";
 import { loginSchema, type LoginFormValues } from "@bizovix/validation";
 import { PrimaryButton, TextInput } from "@bizovix/ui";
 import { ApiError } from "@bizovix/api-client";
@@ -13,24 +13,11 @@ import { ApiError } from "@bizovix/api-client";
 export default function LoginPage() {
   const router = useRouter();
   const login = useLogin();
-  const devLogin = useDevLogin();
   const [showPassword, setShowPassword] = useState(false);
-  const devLoginTriggered = useRef(false);
 
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS !== "true") return;
-    if (tokenStorage.getAccessToken()) {
-      window.location.replace("/dashboard");
-      return;
-    }
-    if (devLoginTriggered.current) return;
-    devLoginTriggered.current = true;
-    void devLogin
-      .mutateAsync()
-      .then(() => window.location.replace("/dashboard"))
-      .catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true") router.replace("/dashboard");
+  }, [router]);
 
   const {
     register,
@@ -39,28 +26,7 @@ export default function LoginPage() {
   } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
 
   if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true") {
-    if (devLogin.isError) {
-      return (
-        <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-biz-bg px-4 text-center">
-          <p className="text-[13px] font-semibold text-biz-danger">Could not connect to the ERP server.</p>
-          <button
-            type="button"
-            onClick={() => {
-              devLogin.reset();
-              void devLogin
-                .mutateAsync()
-                .then(() => window.location.replace("/dashboard"))
-                .catch(() => undefined);
-            }}
-            className="h-9 rounded-md bg-biz-blue px-4 text-[12px] font-semibold text-white hover:bg-biz-blue-hover"
-          >
-            Try Again
-          </button>
-        </div>
-      );
-    }
-
-    return <div className="flex min-h-screen items-center justify-center bg-biz-bg text-[13px] text-biz-muted">Opening dashboard...</div>;
+    return null;
   }
 
   const onSubmit = (values: LoginFormValues) => {

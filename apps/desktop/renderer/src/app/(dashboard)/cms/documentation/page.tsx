@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   Award,
   Calendar,
@@ -170,6 +171,7 @@ function actionColumn<T>(onView: (row: T) => void): DataTableColumn<T> {
 
 export default function ProjectDocumentationPage() {
   useSetBreadcrumb([{ label: "Projects", href: "/cms" }, { label: "Project Documentation" }]);
+  const router = useRouter();
 
   const projects = useCmsWorks({ limit: 100 });
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | null>(null);
@@ -556,10 +558,12 @@ export default function ProjectDocumentationPage() {
             onSearchChange={setBillSearch}
             addLabel="New Bill Submission"
             addButtonClassName="bg-biz-blue hover:bg-biz-blue-hover"
+            onAdd={() => router.push("/cms/documentation/bill-submission")}
             data={billRows}
             rowKey={(row) => row.id}
             columns={billColumns}
             footerLabel="View All Bill Submissions"
+            onFooterClick={() => router.push("/cms/documentation/bill-submission")}
           />
         )}
 

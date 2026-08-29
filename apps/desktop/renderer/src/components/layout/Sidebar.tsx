@@ -3,15 +3,23 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { TrialCard } from "@bizovix/ui";
-import { isNavRouteActive, NAV_ITEMS, NAV_ITEMS_LOWER, type NavItem } from "@/config/nav";
+import { isNavRouteActive, NAV_ITEMS, NAV_ITEMS_LOWER, type NavItem, type NavLeaf } from "@/config/nav";
 import { SidebarItem } from "./SidebarItem";
 import { SidebarSubmenu } from "./SidebarSubmenu";
+
+function containsActiveRoute(pathname: string, items: NavLeaf[]): boolean {
+  return items.some(
+    (item) =>
+      (!!item.href && isNavRouteActive(pathname, item.href)) ||
+      (item.children ? containsActiveRoute(pathname, item.children) : false),
+  );
+}
 
 function findActiveGroup(pathname: string): string | null {
   const group = [...NAV_ITEMS, ...NAV_ITEMS_LOWER].find(
     (item) =>
       (!!item.href && isNavRouteActive(pathname, item.href)) ||
-      item.children?.some((child) => !!child.href && isNavRouteActive(pathname, child.href)),
+      (item.children ? containsActiveRoute(pathname, item.children) : false),
   );
   return group?.label ?? null;
 }

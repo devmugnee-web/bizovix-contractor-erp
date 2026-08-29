@@ -68,6 +68,8 @@ export interface NavLeaf {
   disabled?: boolean;
   /** Renders this row one level deeper, for grouping under a preceding header row. */
   indent?: boolean;
+  /** Nested submenu items owned by this row. */
+  children?: NavLeaf[];
 }
 
 export interface NavItem {
@@ -132,11 +134,17 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Ongoing Works", href: "/cms/ongoing-works", icon: HardHat },
       { label: "Archived Works", href: "/cms/archived-works", icon: Archive },
-      { label: "Project Documentation", href: "/cms/documentation", icon: FolderKanban },
-      { label: "Bill Submission", icon: FileCheck2, disabled: true, indent: true },
-      { label: "Challan Submission", icon: PackageCheck, disabled: true, indent: true },
-      { label: "VAT-Tax Certificate", icon: FileBadge2, disabled: true, indent: true },
-      { label: "Work Completion Certificate", icon: Award, disabled: true, indent: true },
+      {
+        label: "Project Documentation",
+        href: "/cms/documentation",
+        icon: FolderKanban,
+        children: [
+          { label: "Bill Submission", href: "/cms/documentation/bill-submission", icon: FileCheck2 },
+          { label: "Challan Submission", icon: PackageCheck, disabled: true },
+          { label: "VAT-Tax Certificate", icon: FileBadge2, disabled: true },
+          { label: "Work Completion Certificate", icon: Award, disabled: true },
+        ],
+      },
     ],
   },
   {
