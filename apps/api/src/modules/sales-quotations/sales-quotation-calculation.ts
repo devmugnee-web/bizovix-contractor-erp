@@ -1,7 +1,14 @@
 import { Prisma } from "@bizovix/database";
 
 export interface CostingInput {
-  items: Array<{ description: string; quantity: string; unit: string; unitCost: string; taxPct?: string; unitPrice: string }>;
+  items: Array<{
+    description: string;
+    quantity: string;
+    unit: string;
+    unitCost: string;
+    taxPct?: string;
+    unitPrice: string;
+  }>;
   overheads?: Array<{ description: string; amount: string }>;
   vatApplicable?: boolean;
   vatRate?: string;
@@ -22,9 +29,25 @@ export function calculateSalesQuotationCosting(input: CostingInput) {
     const totalPrice = money(quantity.mul(unitPrice));
     const profit = money(totalPrice.sub(totalCost));
     const marginPct = totalPrice.isZero() ? ZERO : percent(profit.div(totalPrice).mul(100));
-    return { ...item, quantity, unitCost, taxPct, unitPrice, totalCost, taxAmount, totalPrice, profit, marginPct, sortOrder };
+    return {
+      ...item,
+      quantity,
+      unitCost,
+      taxPct,
+      unitPrice,
+      totalCost,
+      taxAmount,
+      totalPrice,
+      profit,
+      marginPct,
+      sortOrder,
+    };
   });
-  const overheads = (input.overheads ?? []).map((row, sortOrder) => ({ ...row, amount: money(new Prisma.Decimal(row.amount)), sortOrder }));
+  const overheads = (input.overheads ?? []).map((row, sortOrder) => ({
+    ...row,
+    amount: money(new Prisma.Decimal(row.amount)),
+    sortOrder,
+  }));
   const sum = (values: Prisma.Decimal[]) => values.reduce((total, value) => total.add(value), ZERO);
   const totalCost = money(sum(items.map((item) => item.totalCost)));
   const itemTaxTotal = money(sum(items.map((item) => item.taxAmount)));
@@ -35,5 +58,17 @@ export function calculateSalesQuotationCosting(input: CostingInput) {
   const vatRate = vatApplicable ? new Prisma.Decimal(input.vatRate ?? 0) : ZERO;
   const vatAmount = vatApplicable ? money(subtotalBeforeVat.mul(vatRate).div(100)) : ZERO;
   const grandTotal = money(subtotalBeforeVat.add(vatAmount));
-  return { items, overheads, totalCost, itemTaxTotal, totalSelling, overheadTotal, subtotalBeforeVat, vatApplicable, vatRate, vatAmount, grandTotal };
+  return {
+    items,
+    overheads,
+    totalCost,
+    itemTaxTotal,
+    totalSelling,
+    overheadTotal,
+    subtotalBeforeVat,
+    vatApplicable,
+    vatRate,
+    vatAmount,
+    grandTotal,
+  };
 }

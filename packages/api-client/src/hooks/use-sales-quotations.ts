@@ -2,20 +2,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateSalesQuotationFollowUpInput,
   CreateSalesQuotationInput,
-  SalesQuotationCostingRecord,
-  SalesQuotationDetailRecord,
   SalesQuotationExport,
   SalesQuotationFollowUpQuery,
   SalesQuotationFollowUpRecord,
   SalesQuotationOptions,
   SalesQuotationQuery,
-  SalesQuotationRecentRecord,
+  SalesQuotationListRecord,
   SalesQuotationRecord,
+  SalesQuotationResultRow,
   SalesQuotationResultQuery,
   SalesQuotationSummary,
   SaveSalesQuotationCostingInput,
-  SaveSalesQuotationResultInput,
-  SendSalesQuotationInput,
+  RecordSalesQuotationResultInput,
+  VersionedSalesQuotationActionInput,
   UpdateSalesQuotationInput,
 } from "@bizovix/types";
 import { apiRequest, apiRequestPaginated } from "../http-client";
@@ -36,7 +35,8 @@ function useInvalidateSalesQuotations() {
 export function useSalesQuotations(query: SalesQuotationQuery) {
   return useQuery({
     queryKey: queryKeys.salesQuotations(query),
-    queryFn: () => apiRequestPaginated<SalesQuotationRecord>("/sales-quotations", { params: { ...query } }),
+    queryFn: () =>
+      apiRequestPaginated<SalesQuotationListRecord>("/sales-quotations", { params: { ...query } }),
     placeholderData: (previous) => previous,
   });
 }
@@ -44,7 +44,7 @@ export function useSalesQuotations(query: SalesQuotationQuery) {
 export function useSalesQuotation(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.salesQuotation(id ?? ""),
-    queryFn: () => apiRequest<SalesQuotationDetailRecord>(`/sales-quotations/${id}`),
+    queryFn: () => apiRequest<SalesQuotationRecord>(`/sales-quotations/${id}`),
     enabled: !!id,
   });
 }
@@ -52,14 +52,16 @@ export function useSalesQuotation(id: string | undefined) {
 export function useSalesQuotationSummary(query: Omit<SalesQuotationQuery, "page" | "limit"> = {}) {
   return useQuery({
     queryKey: queryKeys.salesQuotationSummary(query),
-    queryFn: () => apiRequest<SalesQuotationSummary>("/sales-quotations/summary", { params: { ...query } }),
+    queryFn: () =>
+      apiRequest<SalesQuotationSummary>("/sales-quotations/summary", { params: { ...query } }),
   });
 }
 
 export function useSalesQuotationRecent(query: { limit?: number } = {}) {
   return useQuery({
     queryKey: queryKeys.salesQuotationRecent(query),
-    queryFn: () => apiRequest<SalesQuotationRecentRecord[]>("/sales-quotations/recent", { params: query }),
+    queryFn: () =>
+      apiRequest<SalesQuotationListRecord[]>("/sales-quotations/recent", { params: query }),
   });
 }
 
@@ -73,7 +75,7 @@ export function useSalesQuotationOptions() {
 export function useSalesQuotationCosting(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.salesQuotationCosting(id ?? ""),
-    queryFn: () => apiRequest<SalesQuotationCostingRecord>(`/sales-quotations/${id}/costing`),
+    queryFn: () => apiRequest<SalesQuotationRecord>(`/sales-quotations/${id}`),
     enabled: !!id,
   });
 }
@@ -81,22 +83,32 @@ export function useSalesQuotationCosting(id: string | undefined) {
 export function useSalesQuotationResults(query: SalesQuotationResultQuery) {
   return useQuery({
     queryKey: queryKeys.salesQuotationResults(query),
-    queryFn: () => apiRequestPaginated<SalesQuotationRecord>("/sales-quotations/results", { params: { ...query } }),
+    queryFn: () =>
+      apiRequestPaginated<SalesQuotationResultRow>("/sales-quotations", { params: { ...query } }),
     placeholderData: (previous) => previous,
   });
 }
 
-export function useSalesQuotationResultSummary(query: Omit<SalesQuotationResultQuery, "page" | "limit"> = {}) {
+export function useSalesQuotationResultSummary(
+  query: Omit<SalesQuotationResultQuery, "page" | "limit"> = {},
+) {
   return useQuery({
     queryKey: queryKeys.salesQuotationResultSummary(query),
-    queryFn: () => apiRequest<SalesQuotationSummary>("/sales-quotations/results/summary", { params: { ...query } }),
+    queryFn: () =>
+      apiRequest<SalesQuotationSummary>("/sales-quotations/summary", { params: { ...query } }),
   });
 }
 
-export function useSalesQuotationFollowUps(id: string | undefined, query: SalesQuotationFollowUpQuery = {}) {
+export function useSalesQuotationFollowUps(
+  id: string | undefined,
+  query: SalesQuotationFollowUpQuery = {},
+) {
   return useQuery({
     queryKey: queryKeys.salesQuotationFollowUps(id ?? "", query),
-    queryFn: () => apiRequestPaginated<SalesQuotationFollowUpRecord>(`/sales-quotations/${id}/follow-ups`, { params: { ...query } }),
+    queryFn: () =>
+      apiRequest<SalesQuotationFollowUpRecord[]>(`/sales-quotations/${id}/follow-ups`, {
+        params: { ...query },
+      }),
     enabled: !!id,
     placeholderData: (previous) => previous,
   });
@@ -104,38 +116,71 @@ export function useSalesQuotationFollowUps(id: string | undefined, query: SalesQ
 
 export function useCreateSalesQuotation() {
   const invalidate = useInvalidateSalesQuotations();
-  return useMutation({ mutationFn: (body: CreateSalesQuotationInput) => apiRequest<SalesQuotationDetailRecord>("/sales-quotations", { method: "POST", body }), onSuccess: invalidate });
+  return useMutation({
+    mutationFn: (body: CreateSalesQuotationInput) =>
+      apiRequest<SalesQuotationRecord>("/sales-quotations", { method: "POST", body }),
+    onSuccess: invalidate,
+  });
 }
 
 export function useUpdateSalesQuotation() {
   const invalidate = useInvalidateSalesQuotations();
-  return useMutation({ mutationFn: ({ id, body }: { id: string; body: UpdateSalesQuotationInput }) => apiRequest<SalesQuotationDetailRecord>(`/sales-quotations/${id}`, { method: "PATCH", body }), onSuccess: invalidate });
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateSalesQuotationInput }) =>
+      apiRequest<SalesQuotationRecord>(`/sales-quotations/${id}`, { method: "PATCH", body }),
+    onSuccess: invalidate,
+  });
 }
 
 export function useSendSalesQuotation() {
   const invalidate = useInvalidateSalesQuotations();
-  return useMutation({ mutationFn: ({ id, body }: { id: string; body: SendSalesQuotationInput }) => apiRequest<SalesQuotationDetailRecord>(`/sales-quotations/${id}/send`, { method: "POST", body }), onSuccess: invalidate });
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: VersionedSalesQuotationActionInput }) =>
+      apiRequest<SalesQuotationRecord>(`/sales-quotations/${id}/send`, { method: "POST", body }),
+    onSuccess: invalidate,
+  });
 }
 
 export function useSaveSalesQuotationCosting() {
   const invalidate = useInvalidateSalesQuotations();
-  return useMutation({ mutationFn: ({ id, body }: { id: string; body: SaveSalesQuotationCostingInput }) => apiRequest<SalesQuotationCostingRecord>(`/sales-quotations/${id}/costing`, { method: "PUT", body }), onSuccess: invalidate });
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: SaveSalesQuotationCostingInput }) =>
+      apiRequest<SalesQuotationRecord>(`/sales-quotations/${id}/costing`, { method: "PUT", body }),
+    onSuccess: invalidate,
+  });
 }
 
 export function useSaveSalesQuotationResult() {
   const invalidate = useInvalidateSalesQuotations();
-  return useMutation({ mutationFn: ({ id, body }: { id: string; body: SaveSalesQuotationResultInput }) => apiRequest<SalesQuotationDetailRecord>(`/sales-quotations/${id}/result`, { method: "PUT", body }), onSuccess: invalidate });
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: RecordSalesQuotationResultInput }) =>
+      apiRequest<SalesQuotationRecord>(`/sales-quotations/${id}/result`, { method: "POST", body }),
+    onSuccess: invalidate,
+  });
 }
 
 export function useCreateSalesQuotationFollowUp() {
   const invalidate = useInvalidateSalesQuotations();
-  return useMutation({ mutationFn: ({ id, body }: { id: string; body: CreateSalesQuotationFollowUpInput }) => apiRequest<SalesQuotationFollowUpRecord>(`/sales-quotations/${id}/follow-ups`, { method: "POST", body }), onSuccess: invalidate });
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: CreateSalesQuotationFollowUpInput }) =>
+      apiRequest<SalesQuotationFollowUpRecord>(`/sales-quotations/${id}/follow-ups`, {
+        method: "POST",
+        body,
+      }),
+    onSuccess: invalidate,
+  });
 }
 
 export function useExportSalesQuotations() {
-  return useMutation({ mutationFn: (query: SalesQuotationQuery) => apiRequest<SalesQuotationExport>("/sales-quotations/export", { params: exportParams(query) }) });
+  return useMutation({
+    mutationFn: (query: SalesQuotationQuery) =>
+      apiRequest<SalesQuotationExport>("/sales-quotations/export", { params: exportParams(query) }),
+  });
 }
 
 export function useExportSalesQuotationResults() {
-  return useMutation({ mutationFn: (query: SalesQuotationResultQuery) => apiRequest<SalesQuotationExport>("/sales-quotations/results/export", { params: exportParams(query) }) });
+  return useMutation({
+    mutationFn: (query: SalesQuotationResultQuery) =>
+      apiRequest<SalesQuotationExport>("/sales-quotations/export", { params: exportParams(query) }),
+  });
 }

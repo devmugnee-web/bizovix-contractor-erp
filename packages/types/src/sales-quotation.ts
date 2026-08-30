@@ -1,15 +1,17 @@
 export type SalesQuotationStatus = "DRAFT" | "SENT" | "ACCEPTED" | "REJECTED";
+/** PENDING is derived from DRAFT and SENT; it is never persisted as a quotation status. */
 export type SalesQuotationDecision = "PENDING" | "ACCEPTED" | "REJECTED";
 
-export interface SalesQuotationPartyRef {
+export interface SalesQuotationCustomerRef {
   id: string;
-  shortName: string;
-  fullName: string;
+  name: string;
+  shortName?: string | null;
 }
 
 export interface SalesQuotationUserRef {
   id: string;
   name: string;
+  email?: string | null;
 }
 
 export interface SalesQuotationItemRecord {
@@ -56,13 +58,15 @@ export interface SalesQuotationStatusHistoryRecord {
 export interface SalesQuotationListRecord {
   id: string;
   quotationNo: string;
-  customer: SalesQuotationPartyRef;
+  customerId: string;
+  customer: SalesQuotationCustomerRef;
   workName: string;
   quotationDate: string;
   validUntil: string;
   currency: string;
   status: SalesQuotationStatus;
   decision: SalesQuotationDecision;
+  salesPersonId: string | null;
   salesPerson: SalesQuotationUserRef | null;
   remarks: string | null;
   version: number;
@@ -77,6 +81,7 @@ export interface SalesQuotationListRecord {
   grandTotal: string;
   sentAt: string | null;
   decisionDate: string | null;
+  decisionById: string | null;
   acceptedAmount: string | null;
   customerPoWoNo: string | null;
   rejectionReason: string | null;
@@ -86,7 +91,13 @@ export interface SalesQuotationListRecord {
   updatedAt: string;
 }
 
+/** Result tables receive decision data with the list row to avoid per-row detail requests. */
+export interface SalesQuotationResultRow extends SalesQuotationListRecord {
+  decisionBy: SalesQuotationUserRef | null;
+}
+
 export interface SalesQuotationRecord extends SalesQuotationListRecord {
+  decisionBy: SalesQuotationUserRef | null;
   items: SalesQuotationItemRecord[];
   overheads: SalesQuotationOverheadRecord[];
   followUps: SalesQuotationFollowUpRecord[];
@@ -107,6 +118,18 @@ export interface SalesQuotationQuery {
   projectName?: string;
 }
 
+export interface SalesQuotationResultQuery extends Omit<
+  SalesQuotationQuery,
+  "status" | "decision"
+> {
+  decision?: SalesQuotationDecision;
+}
+
+export interface SalesQuotationFollowUpQuery {
+  page?: number;
+  limit?: number;
+}
+
 export interface SalesQuotationSummary {
   total: number;
   draft: number;
@@ -120,9 +143,20 @@ export interface SalesQuotationSummary {
 }
 
 export interface SalesQuotationOptions {
-  customers: SalesQuotationPartyRef[];
-  salespeople: SalesQuotationUserRef[];
+  customers: SalesQuotationCustomerRef[];
+  salesPeople: SalesQuotationUserRef[];
   workNames: string[];
+  projectNames: string[];
+}
+
+export interface SalesQuotationRecentRecord {
+  id: string;
+  quotationNo: string;
+  customer: SalesQuotationCustomerRef;
+  workName: string;
+  status: SalesQuotationStatus;
+  decision: SalesQuotationDecision;
+  activityAt: string;
 }
 
 export interface CreateSalesQuotationInput {
@@ -135,8 +169,13 @@ export interface CreateSalesQuotationInput {
   currency?: string;
 }
 
-export interface UpdateSalesQuotationInput extends Partial<CreateSalesQuotationInput> {
+export interface UpdateSalesQuotationInput extends Omit<
+  Partial<CreateSalesQuotationInput>,
+  "salesPersonId"
+> {
   expectedVersion: number;
+  /** Use null to explicitly clear an existing salesperson assignment. */
+  salesPersonId?: string | null;
 }
 
 export interface SalesQuotationCostingItemInput {
@@ -161,18 +200,33 @@ export interface SaveSalesQuotationCostingInput {
   vatRate?: string;
 }
 
-export interface RecordSalesQuotationResultInput {
+export interface VersionedSalesQuotationActionInput {
   expectedVersion: number;
-  decision: "ACCEPTED" | "REJECTED";
-  decisionDate: string;
-  acceptedAmount?: string;
-  customerPoWoNo?: string;
-  rejectionReason?: string;
 }
+
+export type RecordSalesQuotationResultInput =
+  | {
+      expectedVersion: number;
+      decision: "ACCEPTED";
+      decisionDate: string;
+      acceptedAmount: string;
+      customerPoWoNo: string;
+    }
+  | {
+      expectedVersion: number;
+      decision: "REJECTED";
+      decisionDate: string;
+      rejectionReason: string;
+    };
 
 export interface CreateSalesQuotationFollowUpInput {
   expectedVersion: number;
   followedUpAt: string;
   nextFollowUpAt?: string;
   notes?: string;
+}
+
+export interface SalesQuotationExport {
+  filename: string;
+  content: string;
 }

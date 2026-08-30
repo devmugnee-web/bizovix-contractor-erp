@@ -67,6 +67,7 @@ import { SupplierBillsModule } from "./modules/supplier-bills/supplier-bills.mod
 import { SupplierPaymentsModule } from "./modules/supplier-payments/supplier-payments.module";
 import { SupplierLedgerModule } from "./modules/supplier-ledger/supplier-ledger.module";
 import { VendorLicensingModule } from "./modules/vendor-licensing/vendor-licensing.module";
+import { SalesQuotationsModule } from "./modules/sales-quotations/sales-quotations.module";
 
 @Module({
   imports: [
@@ -132,6 +133,7 @@ import { VendorLicensingModule } from "./modules/vendor-licensing/vendor-licensi
     SupplierPaymentsModule,
     SupplierLedgerModule,
     VendorLicensingModule,
+    SalesQuotationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

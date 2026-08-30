@@ -89,7 +89,13 @@ docker/              Dockerfile(s) for containerized deployment
 
 ## Running in development
 
-Start the API and the renderer in separate terminals:
+Start the browser ERP stack (API + renderer) from the repository root:
+
+```bash
+pnpm dev
+```
+
+The same services can also be started in separate terminals when debugging them individually:
 
 ```bash
 pnpm --filter @bizovix/api dev        # http://localhost:4000/api/v1
@@ -109,7 +115,9 @@ Electron since all business logic lives behind the REST API.
 
 | Command | Description |
 | --- | --- |
-| `pnpm dev` | Run every app's `dev` script via Turborepo |
+| `pnpm dev` | Run the browser ERP API and renderer via Turborepo |
+| `pnpm dev:electron` | Launch the Electron shell after the web stack is running |
+| `pnpm dev:all` | Run every app's `dev` script, including Electron |
 | `pnpm build` | Build every app/package |
 | `pnpm lint` | Lint every app/package |
 | `pnpm typecheck` | Type-check every app/package |

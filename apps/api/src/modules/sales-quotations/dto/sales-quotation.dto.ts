@@ -1,25 +1,42 @@
 import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
   IsNotEmpty,
-  IsNumberString,
   IsOptional,
   IsString,
-  IsUUID,
   Length,
   Max,
   MaxLength,
+  Matches,
   Min,
   ValidateNested,
 } from "class-validator";
 
-export enum SalesQuotationStatusDto { DRAFT = "DRAFT", SENT = "SENT", ACCEPTED = "ACCEPTED", REJECTED = "REJECTED" }
-export enum SalesQuotationDecisionDto { PENDING = "PENDING", ACCEPTED = "ACCEPTED", REJECTED = "REJECTED" }
+export const SALES_QUOTATION_QUANTITY_PATTERN = /^\d{1,15}(\.\d{1,3})?$/;
+export const SALES_QUOTATION_MONEY_PATTERN = /^\d{1,16}(\.\d{1,2})?$/;
+export const SALES_QUOTATION_PERCENT_PATTERN = /^(100(\.0{1,2})?|\d{1,2}(\.\d{1,2})?)$/;
+
+export enum SalesQuotationStatusDto {
+  DRAFT = "DRAFT",
+  SENT = "SENT",
+  ACCEPTED = "ACCEPTED",
+  REJECTED = "REJECTED",
+}
+export enum SalesQuotationDecisionDto {
+  PENDING = "PENDING",
+  ACCEPTED = "ACCEPTED",
+  REJECTED = "REJECTED",
+}
+export enum SalesQuotationResultDto {
+  ACCEPTED = "ACCEPTED",
+  REJECTED = "REJECTED",
+}
 
 export class QuerySalesQuotationDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
@@ -51,33 +68,41 @@ export class UpdateSalesQuotationDto {
   @IsOptional() @IsString() @IsNotEmpty() @MaxLength(200) workName?: string;
   @IsOptional() @IsDateString() quotationDate?: string;
   @IsOptional() @IsDateString() validUntil?: string;
-  @IsOptional() @IsString() salesPersonId?: string;
+  @IsOptional() @IsString() salesPersonId?: string | null;
   @IsOptional() @IsString() @MaxLength(2000) remarks?: string;
   @IsOptional() @IsString() @Length(3, 3) currency?: string;
 }
 
 export class SalesQuotationCostingItemDto {
   @IsString() @IsNotEmpty() @MaxLength(500) description!: string;
-  @IsNumberString() quantity!: string;
+  @Matches(SALES_QUOTATION_QUANTITY_PATTERN) quantity!: string;
   @IsString() @IsNotEmpty() @MaxLength(30) unit!: string;
-  @IsNumberString() unitCost!: string;
-  @IsOptional() @IsNumberString() taxPct?: string;
-  @IsNumberString() unitPrice!: string;
+  @Matches(SALES_QUOTATION_MONEY_PATTERN) unitCost!: string;
+  @IsOptional() @Matches(SALES_QUOTATION_PERCENT_PATTERN) taxPct?: string;
+  @Matches(SALES_QUOTATION_MONEY_PATTERN) unitPrice!: string;
 }
 
 export class SalesQuotationOverheadDto {
   @IsString() @IsNotEmpty() @MaxLength(500) description!: string;
-  @IsNumberString() amount!: string;
+  @Matches(SALES_QUOTATION_MONEY_PATTERN) amount!: string;
 }
 
 export class SaveSalesQuotationCostingDto {
   @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
-  @IsArray() @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => SalesQuotationCostingItemDto)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => SalesQuotationCostingItemDto)
   items!: SalesQuotationCostingItemDto[];
-  @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => SalesQuotationOverheadDto)
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => SalesQuotationOverheadDto)
   overheads?: SalesQuotationOverheadDto[];
   @IsOptional() @IsBoolean() vatApplicable?: boolean;
-  @IsOptional() @IsNumberString() vatRate?: string;
+  @IsOptional() @Matches(SALES_QUOTATION_PERCENT_PATTERN) vatRate?: string;
 }
 
 export class VersionedSalesQuotationActionDto {
@@ -85,9 +110,9 @@ export class VersionedSalesQuotationActionDto {
 }
 
 export class RecordSalesQuotationResultDto extends VersionedSalesQuotationActionDto {
-  @IsEnum(SalesQuotationDecisionDto) decision!: SalesQuotationDecisionDto.ACCEPTED | SalesQuotationDecisionDto.REJECTED;
+  @IsEnum(SalesQuotationResultDto) decision!: SalesQuotationResultDto;
   @IsDateString() decisionDate!: string;
-  @IsOptional() @IsNumberString() acceptedAmount?: string;
+  @IsOptional() @Matches(SALES_QUOTATION_MONEY_PATTERN) acceptedAmount?: string;
   @IsOptional() @IsString() @MaxLength(100) customerPoWoNo?: string;
   @IsOptional() @IsString() @MaxLength(2000) rejectionReason?: string;
 }
