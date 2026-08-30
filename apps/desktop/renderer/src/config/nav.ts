@@ -112,9 +112,9 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Quotation / Sales",
     icon: Handshake,
     children: [
-      { label: "Quotation", icon: FileText, disabled: true },
-      { label: "Quotation Costing", icon: Calculator, disabled: true },
-      { label: "Accepted / Rejected", icon: ListChecks, disabled: true },
+      { label: "Quotation", href: "/quotation-sales/quotation", icon: FileText },
+      { label: "Quotation Costing", href: "/quotation-sales/quotation-costing", icon: Calculator },
+      { label: "Accepted / Rejected", href: "/quotation-sales/accepted-rejected", icon: ListChecks },
     ],
   },
   {

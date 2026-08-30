@@ -217,6 +217,22 @@ export const PERMISSIONS = [
   "quotation.create",
   "quotation.update",
 
+  "sales_quotation.read",
+  "sales_quotation.create",
+  "sales_quotation.update",
+  "sales_quotation.send",
+  "sales_quotation.result",
+  "sales_quotation.follow_up",
+  "sales_quotation.export",
+
+  "sales_quotation.read",
+  "sales_quotation.create",
+  "sales_quotation.update",
+  "sales_quotation.costing.manage",
+  "sales_quotation.result.manage",
+  "sales_quotation.follow_up.manage",
+  "sales_quotation.export",
+
   "cs.create",
   "cs.evaluate",
   "cs.approve",

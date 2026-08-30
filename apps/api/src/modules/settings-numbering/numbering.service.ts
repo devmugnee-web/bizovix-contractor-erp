@@ -36,6 +36,7 @@ export const NUMBERING_MODULE_KEYS = [
   "GOODS_RECEIPT_NOTE",
   "SUPPLIER_BILL",
   "SUPPLIER_PAYMENT",
+  "SALES_QUOTATION",
 ] as const;
 export type NumberingModuleKey = (typeof NUMBERING_MODULE_KEYS)[number];
 
@@ -71,6 +72,7 @@ const DEFAULT_PREFIX: Record<NumberingModuleKey, string> = {
   GOODS_RECEIPT_NOTE: "GRN",
   SUPPLIER_BILL: "SB",
   SUPPLIER_PAYMENT: "SPY",
+  SALES_QUOTATION: "QT",
 };
 
 /** RECEIPT keeps its pre-existing 5-digit format (the live ReceiptSequence counter

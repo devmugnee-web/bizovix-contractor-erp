@@ -273,6 +273,11 @@ model Organization {
   supplierBillItems              SupplierBillItem[]
   supplierBillDeductions         SupplierBillDeduction[]
   supplierPayments               SupplierPayment[]
+  salesQuotations                SalesQuotation[]
+  salesQuotationItems            SalesQuotationItem[]
+  salesQuotationOverheads        SalesQuotationOverhead[]
+  salesQuotationFollowUps        SalesQuotationFollowUp[]
+  salesQuotationStatusHistory    SalesQuotationStatusHistory[]
 
   @@map("organizations")
 }
@@ -293,6 +298,12 @@ model User {
   auditLogs       AuditLog[]
   expensesThrough Expense[]          @relation("ExpenseThrough")
   notifications   Notification[]
+  salesQuotationsCreated        SalesQuotation[]              @relation("SalesQuotationCreatedBy")
+  salesQuotationsAssigned       SalesQuotation[]              @relation("SalesQuotationSalesPerson")
+  salesQuotationsSent           SalesQuotation[]              @relation("SalesQuotationSentBy")
+  salesQuotationsDecided        SalesQuotation[]              @relation("SalesQuotationDecisionBy")
+  salesQuotationFollowUps       SalesQuotationFollowUp[]
+  salesQuotationStatusChanges   SalesQuotationStatusHistory[]
 
   @@map("users")
 }
@@ -436,9 +447,151 @@ model OrganizationMaster {
   performanceGuarantees PerformanceGuarantee[]
   documents             Document[]
   projectContracts      ProjectContract[]
+  salesQuotations       SalesQuotation[]
 
   @@unique([organizationId, shortName])
   @@map("organization_masters")
+}
+
+enum SalesQuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+}
+
+model SalesQuotation {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  quotationNo        String
+  customerId         String
+  workName           String
+  quotationDate      DateTime
+  validUntil         DateTime
+  currency           String               @default("BDT")
+  status             SalesQuotationStatus @default(DRAFT)
+  salesPersonId      String?
+  remarks            String?
+  version            Int                  @default(1)
+  totalCost          Decimal              @default(0) @db.Decimal(18, 2)
+  itemTaxTotal       Decimal              @default(0) @db.Decimal(18, 2)
+  totalSelling       Decimal              @default(0) @db.Decimal(18, 2)
+  overheadTotal      Decimal              @default(0) @db.Decimal(18, 2)
+  subtotalBeforeVat  Decimal              @default(0) @db.Decimal(18, 2)
+  vatApplicable      Boolean              @default(false)
+  vatRate            Decimal              @default(0) @db.Decimal(5, 2)
+  vatAmount          Decimal              @default(0) @db.Decimal(18, 2)
+  grandTotal         Decimal              @default(0) @db.Decimal(18, 2)
+  sentAt             DateTime?
+  sentById           String?
+  decisionDate       DateTime?
+  decisionById       String?
+  acceptedAmount     Decimal?             @db.Decimal(18, 2)
+  customerPoWoNo     String?
+  rejectionReason    String?
+  lastFollowUpAt     DateTime?
+  nextFollowUpAt     DateTime?
+  createdById        String
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  organization Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     OrganizationMaster             @relation(fields: [customerId], references: [id])
+  salesPerson  User?                          @relation("SalesQuotationSalesPerson", fields: [salesPersonId], references: [id])
+  sentBy       User?                          @relation("SalesQuotationSentBy", fields: [sentById], references: [id])
+  decisionBy   User?                          @relation("SalesQuotationDecisionBy", fields: [decisionById], references: [id])
+  createdBy    User                           @relation("SalesQuotationCreatedBy", fields: [createdById], references: [id])
+  items        SalesQuotationItem[]
+  overheads    SalesQuotationOverhead[]
+  followUps    SalesQuotationFollowUp[]
+  statusHistory SalesQuotationStatusHistory[]
+
+  @@unique([organizationId, quotationNo])
+  @@index([organizationId, status, quotationDate])
+  @@index([organizationId, customerId])
+  @@index([organizationId, salesPersonId])
+  @@index([organizationId, workName])
+  @@map("sales_quotations")
+}
+
+model SalesQuotationItem {
+  id             String   @id @default(cuid())
+  organizationId String
+  quotationId    String
+  description    String
+  quantity       Decimal  @db.Decimal(18, 3)
+  unit           String
+  unitCost       Decimal  @db.Decimal(18, 2)
+  totalCost      Decimal  @db.Decimal(18, 2)
+  taxPct         Decimal  @db.Decimal(5, 2)
+  taxAmount      Decimal  @db.Decimal(18, 2)
+  unitPrice      Decimal  @db.Decimal(18, 2)
+  totalPrice     Decimal  @db.Decimal(18, 2)
+  profit         Decimal  @db.Decimal(18, 2)
+  marginPct      Decimal  @db.Decimal(7, 4)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quotation    SalesQuotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, quotationId, sortOrder])
+  @@map("sales_quotation_items")
+}
+
+model SalesQuotationOverhead {
+  id             String   @id @default(cuid())
+  organizationId String
+  quotationId    String
+  description    String
+  amount         Decimal  @db.Decimal(18, 2)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quotation    SalesQuotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, quotationId, sortOrder])
+  @@map("sales_quotation_overheads")
+}
+
+model SalesQuotationFollowUp {
+  id             String   @id @default(cuid())
+  organizationId String
+  quotationId    String
+  followedUpAt   DateTime
+  nextFollowUpAt DateTime?
+  notes          String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quotation    SalesQuotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  createdBy    User           @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId, quotationId, followedUpAt])
+  @@index([organizationId, nextFollowUpAt])
+  @@map("sales_quotation_follow_ups")
+}
+
+model SalesQuotationStatusHistory {
+  id             String                @id @default(cuid())
+  organizationId String
+  quotationId    String
+  fromStatus     SalesQuotationStatus?
+  toStatus       SalesQuotationStatus
+  changedById    String
+  reason         String?
+  changedAt      DateTime              @default(now())
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quotation    SalesQuotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  changedBy    User           @relation(fields: [changedById], references: [id])
+
+  @@index([organizationId, quotationId, changedAt])
+  @@map("sales_quotation_status_history")
 }
 
 model BankAccount {

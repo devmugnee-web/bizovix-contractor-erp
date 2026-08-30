@@ -47,3 +47,5 @@ export * from "./grn";
 export * from "./supplier-bill";
 export * from "./supplier-payment";
 export * from "./supplier-ledger";
+export * from "./sales-quotation";
+export * from "./sales-quotation";

@@ -101,4 +101,13 @@ export const queryKeys = {
   supplierLedger: (params?: unknown) => ["supplier-ledger", params ?? {}] as const,
   apAging: (params?: unknown) => ["supplier-ledger", "aging", params ?? {}] as const,
   apReconciliation: ["supplier-ledger", "reconciliation"] as const,
+  salesQuotations: (params?: unknown) => ["sales-quotations", "list", params ?? {}] as const,
+  salesQuotation: (id: string) => ["sales-quotations", "one", id] as const,
+  salesQuotationSummary: (params?: unknown) => ["sales-quotations", "summary", params ?? {}] as const,
+  salesQuotationRecent: (params?: unknown) => ["sales-quotations", "recent", params ?? {}] as const,
+  salesQuotationOptions: ["sales-quotations", "options"] as const,
+  salesQuotationCosting: (id: string) => ["sales-quotations", "one", id, "costing"] as const,
+  salesQuotationResults: (params?: unknown) => ["sales-quotations", "results", "list", params ?? {}] as const,
+  salesQuotationResultSummary: (params?: unknown) => ["sales-quotations", "results", "summary", params ?? {}] as const,
+  salesQuotationFollowUps: (id: string, params?: unknown) => ["sales-quotations", "one", id, "follow-ups", params ?? {}] as const,
 };

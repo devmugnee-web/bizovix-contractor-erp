@@ -110,7 +110,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         showWhatsApp={
           !pathname.startsWith("/bank-instruments/pg-bg") &&
           !pathname.startsWith("/cms") &&
-          !pathname.startsWith("/expenses/project-expense")
+          !pathname.startsWith("/expenses/project-expense") &&
+          !pathname.startsWith("/quotation-sales")
         }
       />
       <div className="flex flex-1 overflow-hidden">
