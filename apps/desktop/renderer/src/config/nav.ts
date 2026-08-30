@@ -110,6 +110,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     label: "Quotation / Sales",
+    href: "/quotation-sales",
     icon: Handshake,
     children: [
       { label: "Quotation", href: "/quotation-sales/quotation", icon: FileText },

@@ -33,6 +33,16 @@ export class SalesQuotationsController {
   recent(@Query() query: QuerySalesQuotationDto, @CurrentUser() user: AuthUser) {
     return this.service.recent(user.organizationId, query);
   }
+  @Get("costing-summary")
+  @RequirePermissions("sales_quotation.read")
+  costingSummary(@Query() query: QuerySalesQuotationDto, @CurrentUser() user: AuthUser) {
+    return this.service.costingSummary(user.organizationId, query);
+  }
+  @Get("recent-decisions")
+  @RequirePermissions("sales_quotation.read")
+  recentDecisions(@Query() query: QuerySalesQuotationDto, @CurrentUser() user: AuthUser) {
+    return this.service.recentDecisions(user.organizationId, query);
+  }
   @Get("options")
   @RequirePermissions("sales_quotation.read")
   options(@CurrentUser() user: AuthUser) {

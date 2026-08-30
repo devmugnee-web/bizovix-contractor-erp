@@ -289,6 +289,67 @@ export class SalesQuotationsService {
       orderBy: { updatedAt: "desc" },
       take: Math.min(query.limit ?? 10, 50),
     });
+    return rows.map((row) => ({
+      ...listDto(row),
+      activityAt: row.updatedAt.toISOString(),
+    }));
+  }
+
+  async costingSummary(org: string, query: QuerySalesQuotationDto) {
+    const quotationWhere = this.where(org, query);
+    const where: Prisma.SalesQuotationItemWhereInput = {
+      organizationId: org,
+      quotation: { is: quotationWhere },
+    };
+    const limit = Math.min(query.limit ?? 5, 50);
+    const [groups, totals] = await Promise.all([
+      this.prisma.salesQuotationItem.groupBy({
+        by: ["description", "unit"],
+        where,
+        _sum: { quantity: true, totalCost: true, totalPrice: true, profit: true },
+        orderBy: { _sum: { totalPrice: "desc" } },
+        take: limit,
+      }),
+      this.prisma.salesQuotationItem.aggregate({
+        where,
+        _sum: { totalCost: true, totalPrice: true, profit: true },
+      }),
+    ]);
+    const zero = new Prisma.Decimal(0);
+    return {
+      items: groups.map((group) => {
+        const quantity = group._sum.quantity ?? zero;
+        const totalCost = group._sum.totalCost ?? zero;
+        const totalSelling = group._sum.totalPrice ?? zero;
+        const profit = group._sum.profit ?? zero;
+        return {
+          description: group.description,
+          unit: group.unit,
+          quantity: quantity.toFixed(3),
+          weightedUnitCost: quantity.isZero() ? "0.00" : totalCost.div(quantity).toFixed(2),
+          weightedUnitPrice: quantity.isZero() ? "0.00" : totalSelling.div(quantity).toFixed(2),
+          marginPct: totalSelling.isZero() ? "0.0000" : profit.div(totalSelling).mul(100).toFixed(4),
+          totalCost: totalCost.toFixed(2),
+          totalSelling: totalSelling.toFixed(2),
+          profit: profit.toFixed(2),
+        };
+      }),
+      totalCost: (totals._sum.totalCost ?? zero).toFixed(2),
+      totalSelling: (totals._sum.totalPrice ?? zero).toFixed(2),
+      profit: (totals._sum.profit ?? zero).toFixed(2),
+    };
+  }
+
+  async recentDecisions(org: string, query: QuerySalesQuotationDto) {
+    if (query.status || query.decision) {
+      throw new BadRequestException("Recent decisions does not accept status or decision filters");
+    }
+    const rows = await this.prisma.salesQuotation.findMany({
+      where: { ...this.where(org, query), status: { in: ["ACCEPTED", "REJECTED"] } },
+      include: listInclude,
+      orderBy: [{ decisionDate: "desc" }, { updatedAt: "desc" }],
+      take: Math.min(query.limit ?? 5, 20),
+    });
     return rows.map(listDto);
   }
 

@@ -142,6 +142,35 @@ export interface SalesQuotationSummary {
   rejectedValue: string;
 }
 
+export interface SalesQuotationCostingSummaryQuery
+  extends Omit<SalesQuotationQuery, "page"> {
+  limit?: number;
+}
+
+export interface SalesQuotationCostingSummaryRow {
+  description: string;
+  unit: string;
+  quantity: string;
+  weightedUnitCost: string;
+  weightedUnitPrice: string;
+  marginPct: string;
+  totalCost: string;
+  totalSelling: string;
+  profit: string;
+}
+
+export interface SalesQuotationCostingSummary {
+  items: SalesQuotationCostingSummaryRow[];
+  totalCost: string;
+  totalSelling: string;
+  profit: string;
+}
+
+export interface SalesQuotationRecentDecisionQuery
+  extends Omit<SalesQuotationQuery, "page" | "status" | "decision"> {
+  limit?: number;
+}
+
 export interface SalesQuotationOptions {
   customers: SalesQuotationCustomerRef[];
   salesPeople: SalesQuotationUserRef[];
@@ -154,6 +183,7 @@ export interface SalesQuotationRecentRecord {
   quotationNo: string;
   customer: SalesQuotationCustomerRef;
   workName: string;
+  grandTotal: string;
   status: SalesQuotationStatus;
   decision: SalesQuotationDecision;
   activityAt: string;

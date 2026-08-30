@@ -105,6 +105,8 @@ export const queryKeys = {
   salesQuotation: (id: string) => ["sales-quotations", "one", id] as const,
   salesQuotationSummary: (params?: unknown) => ["sales-quotations", "summary", params ?? {}] as const,
   salesQuotationRecent: (params?: unknown) => ["sales-quotations", "recent", params ?? {}] as const,
+  salesQuotationCostingSummary: (params?: unknown) => ["sales-quotations", "costing-summary", params ?? {}] as const,
+  salesQuotationRecentDecisions: (params?: unknown) => ["sales-quotations", "recent-decisions", params ?? {}] as const,
   salesQuotationOptions: ["sales-quotations", "options"] as const,
   salesQuotationCosting: (id: string) => ["sales-quotations", "one", id, "costing"] as const,
   salesQuotationResults: (params?: unknown) => ["sales-quotations", "results", "list", params ?? {}] as const,

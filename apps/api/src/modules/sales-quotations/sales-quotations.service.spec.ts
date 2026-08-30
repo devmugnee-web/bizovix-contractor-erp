@@ -28,6 +28,10 @@ function setup(record = fixture()) {
       findMany: jest.fn(),
       count: jest.fn(),
     },
+    salesQuotationItem: {
+      groupBy: jest.fn(),
+      aggregate: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
   const service = new SalesQuotationsService(
@@ -39,6 +43,88 @@ function setup(record = fixture()) {
 }
 
 describe("SalesQuotationsService hardening", () => {
+  it("returns tenant-scoped weighted costing aggregates as Decimal strings", async () => {
+    const { service, prisma } = setup();
+    prisma.salesQuotationItem.groupBy.mockResolvedValue([
+      {
+        description: "Excavation",
+        unit: "LS",
+        _sum: {
+          quantity: new Prisma.Decimal("4.000"),
+          totalCost: new Prisma.Decimal("100.00"),
+          totalPrice: new Prisma.Decimal("160.00"),
+          profit: new Prisma.Decimal("60.00"),
+        },
+      },
+    ]);
+    prisma.salesQuotationItem.aggregate.mockResolvedValue({
+      _sum: {
+        totalCost: new Prisma.Decimal("100.00"),
+        totalPrice: new Prisma.Decimal("160.00"),
+        profit: new Prisma.Decimal("60.00"),
+      },
+    });
+
+    await expect(
+      service.costingSummary("org-1", {
+        page: 1,
+        limit: 500,
+        workName: "Office",
+      }),
+    ).resolves.toEqual({
+      items: [{
+        description: "Excavation",
+        unit: "LS",
+        quantity: "4.000",
+        weightedUnitCost: "25.00",
+        weightedUnitPrice: "40.00",
+        marginPct: "37.5000",
+        totalCost: "100.00",
+        totalSelling: "160.00",
+        profit: "60.00",
+      }],
+      totalCost: "100.00",
+      totalSelling: "160.00",
+      profit: "60.00",
+    });
+    expect(prisma.salesQuotationItem.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 50,
+        where: {
+          organizationId: "org-1",
+          quotation: { is: expect.objectContaining({ organizationId: "org-1", workName: "Office" }) },
+        },
+      }),
+    );
+  });
+
+  it("returns recent terminal decisions ordered by decision date with a capped limit", async () => {
+    const { service, prisma } = setup();
+    prisma.salesQuotation.findMany.mockResolvedValue([]);
+    await expect(
+      service.recentDecisions("org-1", { page: 1, limit: 100, workName: "Office" }),
+    ).resolves.toEqual([]);
+    expect(prisma.salesQuotation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: "org-1",
+          workName: "Office",
+          status: { in: ["ACCEPTED", "REJECTED"] },
+        }),
+        orderBy: [{ decisionDate: "desc" }, { updatedAt: "desc" }],
+        take: 20,
+      }),
+    );
+  });
+
+  it("rejects status overrides on the mixed recent-decisions endpoint", async () => {
+    const { service, prisma } = setup();
+    await expect(
+      service.recentDecisions("org-1", { page: 1, limit: 5, status: "DRAFT" as never }),
+    ).rejects.toThrow("does not accept status or decision filters");
+    expect(prisma.salesQuotation.findMany).not.toHaveBeenCalled();
+  });
+
   it("rejects conflicting status and decision filters before querying", async () => {
     const { service, prisma } = setup();
     await expect(

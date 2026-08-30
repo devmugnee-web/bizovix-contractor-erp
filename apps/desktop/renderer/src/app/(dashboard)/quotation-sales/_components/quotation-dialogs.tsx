@@ -176,7 +176,9 @@ interface QuotationFormState {
   salesPersonId: string;
 }
 
-function formState(record?: SalesQuotationRecord | null): QuotationFormState {
+type SalesQuotationFormInitial = SalesQuotationRecord | SalesQuotationListRecord;
+
+function formState(record?: SalesQuotationFormInitial | null): QuotationFormState {
   return {
     customerId: record?.customer.id ?? "",
     workName: record?.workName ?? "",
@@ -194,7 +196,7 @@ export function QuotationFormDialog({
   onSaved,
 }: {
   open: boolean;
-  initial?: SalesQuotationRecord | null;
+  initial?: SalesQuotationFormInitial | null;
   onClose: () => void;
   onSaved: (record: SalesQuotationRecord, mode: "create" | "edit") => void;
 }) {

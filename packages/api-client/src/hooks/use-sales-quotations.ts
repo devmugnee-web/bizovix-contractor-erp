@@ -8,10 +8,14 @@ import type {
   SalesQuotationOptions,
   SalesQuotationQuery,
   SalesQuotationListRecord,
+  SalesQuotationRecentRecord,
   SalesQuotationRecord,
   SalesQuotationResultRow,
   SalesQuotationResultQuery,
   SalesQuotationSummary,
+  SalesQuotationCostingSummary,
+  SalesQuotationCostingSummaryQuery,
+  SalesQuotationRecentDecisionQuery,
   SaveSalesQuotationCostingInput,
   RecordSalesQuotationResultInput,
   VersionedSalesQuotationActionInput,
@@ -61,7 +65,31 @@ export function useSalesQuotationRecent(query: { limit?: number } = {}) {
   return useQuery({
     queryKey: queryKeys.salesQuotationRecent(query),
     queryFn: () =>
-      apiRequest<SalesQuotationListRecord[]>("/sales-quotations/recent", { params: query }),
+      apiRequest<SalesQuotationRecentRecord[]>("/sales-quotations/recent", { params: query }),
+  });
+}
+
+export function useSalesQuotationCostingSummary(
+  query: SalesQuotationCostingSummaryQuery = {},
+) {
+  return useQuery({
+    queryKey: queryKeys.salesQuotationCostingSummary(query),
+    queryFn: () =>
+      apiRequest<SalesQuotationCostingSummary>("/sales-quotations/costing-summary", {
+        params: { ...query },
+      }),
+  });
+}
+
+export function useSalesQuotationRecentDecisions(
+  query: SalesQuotationRecentDecisionQuery = {},
+) {
+  return useQuery({
+    queryKey: queryKeys.salesQuotationRecentDecisions(query),
+    queryFn: () =>
+      apiRequest<SalesQuotationResultRow[]>("/sales-quotations/recent-decisions", {
+        params: { ...query },
+      }),
   });
 }
 
