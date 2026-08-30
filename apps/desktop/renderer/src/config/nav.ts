@@ -162,9 +162,15 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Project Expense", href: "/expenses/project-expense", icon: Briefcase },
       { label: "General Expense", href: "/expenses/general-expense", icon: Wallet2 },
-      { label: "IOU", icon: HandCoins, disabled: true },
-      { label: "Work IOU", icon: ClipboardList, disabled: true, indent: true },
-      { label: "Personal IOU", icon: Users, disabled: true, indent: true },
+      {
+        label: "IOU",
+        href: "/expenses/iou",
+        icon: HandCoins,
+        children: [
+          { label: "Work IOU", href: "/expenses/iou/work", icon: ClipboardList },
+          { label: "Personal IOU", icon: Users, disabled: true },
+        ],
+      },
     ],
   },
   {

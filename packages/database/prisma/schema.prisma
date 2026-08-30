@@ -40,6 +40,32 @@ enum ExpenseStatus {
   AMENDED
 }
 
+enum WorkIouStatus {
+  DRAFT
+  SUBMITTED
+  CANCELLED
+}
+
+enum WorkIouSettlementStatus {
+  PENDING
+  PARTIALLY_SETTLED
+  SETTLED
+}
+
+enum WorkIouExpenseFor {
+  TENDER
+  PROJECT
+}
+
+enum WorkIouPaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  MOBILE_BANKING
+  CHEQUE
+  OTHER
+}
+
 enum ReceiptStatus {
   PENDING
   RECEIVED
@@ -203,6 +229,9 @@ model Organization {
   expenses                       Expense[]
   expenseAttachments             ExpenseAttachment[]
   expenseHeads                   ExpenseHead[]
+  workIous                       WorkIou[]
+  workIouItems                   WorkIouItem[]
+  workIouAttachments             WorkIouAttachment[]
   receipts                       Receipt[]
   receiptSequences               ReceiptSequence[]
   reminders                      Reminder[]
@@ -293,17 +322,22 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  organizations   OrganizationUser[]
-  refreshTokens   RefreshToken[]
-  auditLogs       AuditLog[]
-  expensesThrough Expense[]          @relation("ExpenseThrough")
-  notifications   Notification[]
-  salesQuotationsCreated        SalesQuotation[]              @relation("SalesQuotationCreatedBy")
-  salesQuotationsAssigned       SalesQuotation[]              @relation("SalesQuotationSalesPerson")
-  salesQuotationsSent           SalesQuotation[]              @relation("SalesQuotationSentBy")
-  salesQuotationsDecided        SalesQuotation[]              @relation("SalesQuotationDecisionBy")
-  salesQuotationFollowUps       SalesQuotationFollowUp[]
-  salesQuotationStatusChanges   SalesQuotationStatusHistory[]
+  organizations                OrganizationUser[]
+  refreshTokens                RefreshToken[]
+  auditLogs                    AuditLog[]
+  expensesThrough              Expense[]                     @relation("ExpenseThrough")
+  notifications                Notification[]
+  salesQuotationsCreated       SalesQuotation[]              @relation("SalesQuotationCreatedBy")
+  salesQuotationsAssigned      SalesQuotation[]              @relation("SalesQuotationSalesPerson")
+  salesQuotationsSent          SalesQuotation[]              @relation("SalesQuotationSentBy")
+  salesQuotationsDecided       SalesQuotation[]              @relation("SalesQuotationDecisionBy")
+  salesQuotationFollowUps      SalesQuotationFollowUp[]
+  salesQuotationStatusChanges  SalesQuotationStatusHistory[]
+  workIousPaidBy               WorkIou[]                     @relation("WorkIouPaidBy")
+  workIousSubmittedBy          WorkIou[]                     @relation("WorkIouSubmittedBy")
+  workIousCancelledBy          WorkIou[]                     @relation("WorkIouCancelledBy")
+  workIousCreatedBy            WorkIou[]                     @relation("WorkIouCreatedBy")
+  workIouAttachmentsUploadedBy WorkIouAttachment[]           @relation("WorkIouAttachmentUploadedBy")
 
   @@map("users")
 }
@@ -461,49 +495,49 @@ enum SalesQuotationStatus {
 }
 
 model SalesQuotation {
-  id                 String               @id @default(cuid())
-  organizationId     String
-  quotationNo        String
-  customerId         String
-  workName           String
-  quotationDate      DateTime
-  validUntil         DateTime
-  currency           String               @default("BDT")
-  status             SalesQuotationStatus @default(DRAFT)
-  salesPersonId      String?
-  remarks            String?
-  version            Int                  @default(1)
-  totalCost          Decimal              @default(0) @db.Decimal(18, 2)
-  itemTaxTotal       Decimal              @default(0) @db.Decimal(18, 2)
-  totalSelling       Decimal              @default(0) @db.Decimal(18, 2)
-  overheadTotal      Decimal              @default(0) @db.Decimal(18, 2)
-  subtotalBeforeVat  Decimal              @default(0) @db.Decimal(18, 2)
-  vatApplicable      Boolean              @default(false)
-  vatRate            Decimal              @default(0) @db.Decimal(5, 2)
-  vatAmount          Decimal              @default(0) @db.Decimal(18, 2)
-  grandTotal         Decimal              @default(0) @db.Decimal(18, 2)
-  sentAt             DateTime?
-  sentById           String?
-  decisionDate       DateTime?
-  decisionById       String?
-  acceptedAmount     Decimal?             @db.Decimal(18, 2)
-  customerPoWoNo     String?
-  rejectionReason    String?
-  lastFollowUpAt     DateTime?
-  nextFollowUpAt     DateTime?
-  createdById        String
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  id                String               @id @default(cuid())
+  organizationId    String
+  quotationNo       String
+  customerId        String
+  workName          String
+  quotationDate     DateTime
+  validUntil        DateTime
+  currency          String               @default("BDT")
+  status            SalesQuotationStatus @default(DRAFT)
+  salesPersonId     String?
+  remarks           String?
+  version           Int                  @default(1)
+  totalCost         Decimal              @default(0) @db.Decimal(18, 2)
+  itemTaxTotal      Decimal              @default(0) @db.Decimal(18, 2)
+  totalSelling      Decimal              @default(0) @db.Decimal(18, 2)
+  overheadTotal     Decimal              @default(0) @db.Decimal(18, 2)
+  subtotalBeforeVat Decimal              @default(0) @db.Decimal(18, 2)
+  vatApplicable     Boolean              @default(false)
+  vatRate           Decimal              @default(0) @db.Decimal(5, 2)
+  vatAmount         Decimal              @default(0) @db.Decimal(18, 2)
+  grandTotal        Decimal              @default(0) @db.Decimal(18, 2)
+  sentAt            DateTime?
+  sentById          String?
+  decisionDate      DateTime?
+  decisionById      String?
+  acceptedAmount    Decimal?             @db.Decimal(18, 2)
+  customerPoWoNo    String?
+  rejectionReason   String?
+  lastFollowUpAt    DateTime?
+  nextFollowUpAt    DateTime?
+  createdById       String
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
-  organization Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customer     OrganizationMaster             @relation(fields: [customerId], references: [id])
-  salesPerson  User?                          @relation("SalesQuotationSalesPerson", fields: [salesPersonId], references: [id])
-  sentBy       User?                          @relation("SalesQuotationSentBy", fields: [sentById], references: [id])
-  decisionBy   User?                          @relation("SalesQuotationDecisionBy", fields: [decisionById], references: [id])
-  createdBy    User                           @relation("SalesQuotationCreatedBy", fields: [createdById], references: [id])
-  items        SalesQuotationItem[]
-  overheads    SalesQuotationOverhead[]
-  followUps    SalesQuotationFollowUp[]
+  organization  Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer      OrganizationMaster            @relation(fields: [customerId], references: [id])
+  salesPerson   User?                         @relation("SalesQuotationSalesPerson", fields: [salesPersonId], references: [id])
+  sentBy        User?                         @relation("SalesQuotationSentBy", fields: [sentById], references: [id])
+  decisionBy    User?                         @relation("SalesQuotationDecisionBy", fields: [decisionById], references: [id])
+  createdBy     User                          @relation("SalesQuotationCreatedBy", fields: [createdById], references: [id])
+  items         SalesQuotationItem[]
+  overheads     SalesQuotationOverhead[]
+  followUps     SalesQuotationFollowUp[]
   statusHistory SalesQuotationStatusHistory[]
 
   @@unique([organizationId, quotationNo])
@@ -558,14 +592,14 @@ model SalesQuotationOverhead {
 }
 
 model SalesQuotationFollowUp {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   quotationId    String
   followedUpAt   DateTime
   nextFollowUpAt DateTime?
   notes          String?
   createdById    String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   quotation    SalesQuotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
@@ -798,7 +832,9 @@ model Tender {
   cmsWorks              CmsWork[]
   documents             Document[]
   contracts             ProjectContract[]
+  workIous              WorkIou[]
 
+  @@unique([organizationId, id])
   @@index([organizationId, status])
   @@index([organizationId, submissionDeadline])
   @@map("tenders")
@@ -1110,7 +1146,9 @@ model CmsWork {
   purchaseOrderItems     PurchaseOrderItem[]
   goodsReceiptNotes      GoodsReceiptNote[]
   supplierBills          SupplierBill[]
+  workIous               WorkIou[]
 
+  @@unique([organizationId, id])
   @@index([organizationId, status])
   @@index([organizationId, status, completionDate])
   @@index([organizationId, organizationMasterId])
@@ -1951,10 +1989,109 @@ model ExpenseHead {
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   expenses     Expense[]
   budgetLines  ProjectBudgetLine[]
+  workIouItems WorkIouItem[]
 
+  @@unique([organizationId, id])
   @@unique([organizationId, name])
   @@index([organizationId, budgetCategory])
   @@map("expense_heads")
+}
+
+model WorkIou {
+  id                     String                  @id @default(cuid())
+  organizationId         String
+  iouNo                  String
+  iouDate                DateTime
+  paidOn                 DateTime
+  paidById               String
+  paidToName             String
+  paymentMethod          WorkIouPaymentMethod
+  referenceNo            String?
+  expenseFor             WorkIouExpenseFor
+  tenderId               String?
+  workId                 String?
+  purpose                String
+  remarks                String?
+  otherCharges           Decimal                 @default(0) @db.Decimal(18, 2)
+  subtotal               Decimal                 @default(0) @db.Decimal(18, 2)
+  discount               Decimal                 @default(0) @db.Decimal(18, 2)
+  totalAmount            Decimal                 @default(0) @db.Decimal(18, 2)
+  settledAmount          Decimal                 @default(0) @db.Decimal(18, 2)
+  settlementStatus       WorkIouSettlementStatus @default(PENDING)
+  expectedSettlementDate DateTime?
+  settlementRemarks      String?
+  status                 WorkIouStatus           @default(DRAFT)
+  version                Int                     @default(1)
+  submittedAt            DateTime?
+  submittedById          String?
+  cancelledAt            DateTime?
+  cancelledById          String?
+  cancellationReason     String?
+  createdById            String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  paidBy       User                @relation("WorkIouPaidBy", fields: [paidById], references: [id], onDelete: Restrict)
+  tender       Tender?             @relation(fields: [organizationId, tenderId], references: [organizationId, id], onDelete: Restrict)
+  work         CmsWork?            @relation(fields: [organizationId, workId], references: [organizationId, id], onDelete: Restrict)
+  submittedBy  User?               @relation("WorkIouSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+  cancelledBy  User?               @relation("WorkIouCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  createdBy    User?               @relation("WorkIouCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  items        WorkIouItem[]
+  attachments  WorkIouAttachment[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, iouNo])
+  @@index([organizationId, status, iouDate])
+  @@index([organizationId, expenseFor, tenderId])
+  @@index([organizationId, expenseFor, workId])
+  @@index([organizationId, paidById])
+  @@index([organizationId, settlementStatus, expectedSettlementDate], map: "work_ious_org_settlement_expected_idx")
+  @@map("work_ious")
+}
+
+model WorkIouItem {
+  id             String   @id @default(cuid())
+  organizationId String
+  workIouId      String
+  expenseDate    DateTime
+  description    String
+  expenseHeadId  String
+  categoryName   String
+  paidToName     String
+  referenceNo    String?
+  amount         Decimal  @db.Decimal(18, 2)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workIou      WorkIou      @relation(fields: [organizationId, workIouId], references: [organizationId, id], onDelete: Cascade)
+  expenseHead  ExpenseHead  @relation(fields: [organizationId, expenseHeadId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, workIouId, sortOrder])
+  @@index([organizationId, expenseHeadId])
+  @@map("work_iou_items")
+}
+
+model WorkIouAttachment {
+  id             String   @id @default(cuid())
+  organizationId String
+  workIouId      String
+  fileName       String
+  mimeType       String
+  fileSize       Int
+  data           Bytes
+  uploadedById   String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workIou      WorkIou      @relation(fields: [organizationId, workIouId], references: [organizationId, id], onDelete: Cascade)
+  uploadedBy   User?        @relation("WorkIouAttachmentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, workIouId])
+  @@map("work_iou_attachments")
 }
 
 model Receipt {

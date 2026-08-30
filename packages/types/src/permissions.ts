@@ -121,6 +121,13 @@ export const PERMISSIONS = [
   "project_expense.delete",
   "project_expense.export",
 
+  "work_iou.read",
+  "work_iou.create",
+  "work_iou.update",
+  "work_iou.submit",
+  "work_iou.cancel",
+  "work_iou.attachment",
+
   "receipt.create",
   "receipt.read",
 

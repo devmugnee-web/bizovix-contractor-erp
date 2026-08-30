@@ -27,6 +27,7 @@ export * from "./hooks/use-time-extensions";
 export * from "./hooks/use-deduction-configs";
 export * from "./hooks/use-project-expenses";
 export * from "./hooks/use-general-expenses";
+export * from "./hooks/use-work-ious";
 export * from "./hooks/use-receipts";
 export * from "./hooks/use-activity-logs";
 export * from "./hooks/use-cash-bank";
