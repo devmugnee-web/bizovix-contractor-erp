@@ -926,7 +926,7 @@ export class TendersService {
     return rows.flatMap((row) => (row.category ? [row.category] : []));
   }
 
-  async options(organizationId: string) {
+  async options(organizationId: string, currentUserId: string) {
     const memberships = await this.prisma.organizationUser.findMany({
       where: { organizationId, user: { isActive: true } },
       select: { user: { select: { id: true, name: true } } },
@@ -935,6 +935,7 @@ export class TendersService {
     return {
       users: memberships.map((membership) => membership.user),
       procurementMethods: PROCUREMENT_METHODS,
+      currentUserId,
     };
   }
 }

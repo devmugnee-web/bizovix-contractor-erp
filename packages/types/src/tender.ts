@@ -15,6 +15,7 @@ export interface TenderOptionUser {
 export interface TenderOptions {
   procurementMethods: TenderProcurementMethod[];
   users: TenderOptionUser[];
+  currentUserId: string;
 }
 
 export function normalizeTenderBusinessId(value: string): string {

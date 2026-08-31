@@ -85,8 +85,9 @@ describe("TendersService costing intake workflow", () => {
     prisma.organizationUser.findMany.mockResolvedValue([
       { user: { id: "user-1", name: "A User" } },
     ]);
-    await expect(service.options("org-1")).resolves.toEqual({
+    await expect(service.options("org-1", "user-1")).resolves.toEqual({
       users: [{ id: "user-1", name: "A User" }],
+      currentUserId: "user-1",
       procurementMethods: [
         "OTM",
         "RFQ",

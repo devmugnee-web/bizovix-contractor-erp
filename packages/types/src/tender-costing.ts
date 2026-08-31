@@ -1,5 +1,9 @@
 import type { TenderCostingStatus } from "./enums";
 
+export type TenderCostingSourcingType = "LOCAL" | "FOREIGN" | "LOCAL_AND_FOREIGN";
+export type TenderCostingItemStatus = "NOT_COSTED" | "DRAFT" | "COSTED";
+export type TenderCostingSelectedSource = "LOCAL" | "FOREIGN";
+
 export interface TenderCostingUser {
   id: string;
   name: string;
@@ -10,6 +14,9 @@ export interface TenderCostingItemRecord {
   id: string;
   organizationId: string;
   costingId: string;
+  costingDate: string;
+  preparedByUserId: string | null;
+  preparedByName: string | null;
   description: string;
   secondaryDescription: string | null;
   unit: string;
@@ -18,6 +25,37 @@ export interface TenderCostingItemRecord {
   marginPercent: string;
   totalCost: string;
   ourCost: string;
+  sourcingType: TenderCostingSourcingType;
+  costingStatus: TenderCostingItemStatus;
+  selectedSource: TenderCostingSelectedSource | null;
+  localSupplierName: string | null;
+  localUnitPrice: string;
+  localDiscountPercent: string;
+  localVatPercent: string;
+  localTaxPercent: string;
+  localTransportCost: string;
+  localOtherCost: string;
+  localTotalCost: string;
+  foreignSupplierName: string | null;
+  foreignCountry: string | null;
+  foreignCurrency: string;
+  foreignUnitPrice: string;
+  foreignExchangeRate: string;
+  exchangeRateDate: string | null;
+  foreignFreightCost: string;
+  foreignInsuranceCost: string;
+  customsDutyPercent: string;
+  regulatoryDutyPercent: string;
+  supplementaryDutyPercent: string;
+  foreignVatPercent: string;
+  foreignTaxPercent: string;
+  cnfCharge: string;
+  portHandlingCharge: string;
+  bankLcCharge: string;
+  foreignLocalTransportCost: string;
+  foreignOtherCost: string;
+  foreignProductValueBdt: string;
+  foreignLandedCost: string;
   remarks: string | null;
   sortOrder: number;
   createdAt: string;
@@ -77,12 +115,42 @@ export interface TenderCostingDetail extends TenderCostingRecord {
 }
 
 export interface SaveTenderCostingItemInput {
+  costingDate: string;
+  preparedByUserId?: string;
   description: string;
   secondaryDescription?: string;
   unit: string;
   quantity: number;
-  unitCost: number;
-  marginPercent: number;
+  unitCost?: number;
+  marginPercent?: number;
+  sourcingType: TenderCostingSourcingType;
+  costingStatus: TenderCostingItemStatus;
+  selectedSource?: TenderCostingSelectedSource;
+  localSupplierName?: string;
+  localUnitPrice?: number;
+  localDiscountPercent?: number;
+  localVatPercent?: number;
+  localTaxPercent?: number;
+  localTransportCost?: number;
+  localOtherCost?: number;
+  foreignSupplierName?: string;
+  foreignCountry?: string;
+  foreignCurrency?: string;
+  foreignUnitPrice?: number;
+  foreignExchangeRate?: number;
+  exchangeRateDate?: string;
+  foreignFreightCost?: number;
+  foreignInsuranceCost?: number;
+  customsDutyPercent?: number;
+  regulatoryDutyPercent?: number;
+  supplementaryDutyPercent?: number;
+  foreignVatPercent?: number;
+  foreignTaxPercent?: number;
+  cnfCharge?: number;
+  portHandlingCharge?: number;
+  bankLcCharge?: number;
+  foreignLocalTransportCost?: number;
+  foreignOtherCost?: number;
   remarks?: string;
   sortOrder?: number;
 }

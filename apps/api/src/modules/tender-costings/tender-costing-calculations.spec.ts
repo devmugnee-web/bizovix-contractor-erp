@@ -29,4 +29,56 @@ describe("calculateTenderCostingTotals", () => {
       }),
     ).toThrow("between 0 and 100");
   });
+
+  it("calculates Local VAT, Tax and transport into the selected BDT cost", () => {
+    const result = calculateTenderCostingTotals({
+      items: [
+        {
+          quantity: 10,
+          sourcingType: "LOCAL",
+          costingStatus: "COSTED",
+          localUnitPrice: 100,
+          localVatPercent: 5,
+          localTaxPercent: 2,
+          localTransportCost: 30,
+          marginPercent: 12.5,
+        },
+      ],
+      freightCost: 0,
+      installationCost: 0,
+      otherCost: 0,
+      contingencyPercent: 0,
+      costingBudget: 2000,
+    });
+    expect(result.calculatedItems[0]?.localTotalCost.toFixed(2)).toBe("1100.00");
+    expect(result.calculatedItems[0]?.marginPercent.toFixed(2)).toBe("12.50");
+    expect(result.estimatedCost.toFixed(2)).toBe("1100.00");
+    expect(result.marginPercent.toFixed(4)).toBe("45.0000");
+  });
+
+  it("converts Foreign unit price to BDT and calculates landed cost", () => {
+    const result = calculateTenderCostingTotals({
+      items: [
+        {
+          quantity: 2,
+          sourcingType: "FOREIGN",
+          costingStatus: "COSTED",
+          foreignUnitPrice: 100,
+          foreignExchangeRate: 120,
+          foreignFreightCost: 1000,
+          customsDutyPercent: 10,
+          foreignVatPercent: 5,
+          selectedSource: "FOREIGN",
+        },
+      ],
+      freightCost: 0,
+      installationCost: 0,
+      otherCost: 0,
+      contingencyPercent: 0,
+      costingBudget: 50000,
+    });
+    expect(result.calculatedItems[0]?.foreignProductValueBdt.toFixed(2)).toBe("24000.00");
+    expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("28875.00");
+    expect(result.estimatedCost.toFixed(2)).toBe("28875.00");
+  });
 });

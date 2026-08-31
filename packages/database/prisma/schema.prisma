@@ -973,6 +973,9 @@ model TenderCostingItem {
   id                   String   @id @default(cuid())
   organizationId       String
   costingId            String
+  costingDate          DateTime @default(now())
+  preparedByUserId     String?
+  preparedByName       String?
   description          String
   secondaryDescription String?
   unit                 String
@@ -981,6 +984,37 @@ model TenderCostingItem {
   marginPercent        Decimal  @default(0) @db.Decimal(7, 4)
   totalCost            Decimal  @db.Decimal(18, 2)
   ourCost              Decimal  @db.Decimal(18, 2)
+  sourcingType         String   @default("LOCAL")
+  costingStatus        String   @default("NOT_COSTED")
+  selectedSource       String?
+  localSupplierName    String?
+  localUnitPrice       Decimal  @default(0) @db.Decimal(18, 2)
+  localDiscountPercent Decimal  @default(0) @db.Decimal(7, 4)
+  localVatPercent      Decimal  @default(0) @db.Decimal(7, 4)
+  localTaxPercent      Decimal  @default(0) @db.Decimal(7, 4)
+  localTransportCost   Decimal  @default(0) @db.Decimal(18, 2)
+  localOtherCost       Decimal  @default(0) @db.Decimal(18, 2)
+  localTotalCost       Decimal  @default(0) @db.Decimal(18, 2)
+  foreignSupplierName  String?
+  foreignCountry       String?
+  foreignCurrency      String   @default("USD")
+  foreignUnitPrice     Decimal  @default(0) @db.Decimal(18, 4)
+  foreignExchangeRate  Decimal  @default(1) @db.Decimal(18, 6)
+  exchangeRateDate     DateTime?
+  foreignFreightCost   Decimal  @default(0) @db.Decimal(18, 2)
+  foreignInsuranceCost Decimal  @default(0) @db.Decimal(18, 2)
+  customsDutyPercent   Decimal  @default(0) @db.Decimal(7, 4)
+  regulatoryDutyPercent Decimal @default(0) @db.Decimal(7, 4)
+  supplementaryDutyPercent Decimal @default(0) @db.Decimal(7, 4)
+  foreignVatPercent    Decimal  @default(0) @db.Decimal(7, 4)
+  foreignTaxPercent    Decimal  @default(0) @db.Decimal(7, 4)
+  cnfCharge            Decimal  @default(0) @db.Decimal(18, 2)
+  portHandlingCharge   Decimal  @default(0) @db.Decimal(18, 2)
+  bankLcCharge         Decimal  @default(0) @db.Decimal(18, 2)
+  foreignLocalTransportCost Decimal @default(0) @db.Decimal(18, 2)
+  foreignOtherCost     Decimal  @default(0) @db.Decimal(18, 2)
+  foreignProductValueBdt Decimal @default(0) @db.Decimal(18, 2)
+  foreignLandedCost    Decimal  @default(0) @db.Decimal(18, 2)
   remarks              String?
   sortOrder            Int      @default(0)
   createdAt            DateTime @default(now())

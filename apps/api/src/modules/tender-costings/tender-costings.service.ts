@@ -91,6 +91,9 @@ function toDetailDto(record: DetailRecord) {
       id: item.id,
       organizationId: item.organizationId,
       costingId: item.costingId,
+      costingDate: item.costingDate.toISOString(),
+      preparedByUserId: item.preparedByUserId,
+      preparedByName: item.preparedByName,
       description: item.description,
       secondaryDescription: item.secondaryDescription,
       unit: item.unit,
@@ -99,6 +102,37 @@ function toDetailDto(record: DetailRecord) {
       marginPercent: item.marginPercent.toFixed(4),
       totalCost: decimal(item.totalCost),
       ourCost: decimal(item.ourCost),
+      sourcingType: item.sourcingType,
+      costingStatus: item.costingStatus,
+      selectedSource: item.selectedSource,
+      localSupplierName: item.localSupplierName,
+      localUnitPrice: decimal(item.localUnitPrice),
+      localDiscountPercent: item.localDiscountPercent.toFixed(4),
+      localVatPercent: item.localVatPercent.toFixed(4),
+      localTaxPercent: item.localTaxPercent.toFixed(4),
+      localTransportCost: decimal(item.localTransportCost),
+      localOtherCost: decimal(item.localOtherCost),
+      localTotalCost: decimal(item.localTotalCost),
+      foreignSupplierName: item.foreignSupplierName,
+      foreignCountry: item.foreignCountry,
+      foreignCurrency: item.foreignCurrency,
+      foreignUnitPrice: item.foreignUnitPrice.toFixed(4),
+      foreignExchangeRate: item.foreignExchangeRate.toFixed(6),
+      exchangeRateDate: item.exchangeRateDate?.toISOString() ?? null,
+      foreignFreightCost: decimal(item.foreignFreightCost),
+      foreignInsuranceCost: decimal(item.foreignInsuranceCost),
+      customsDutyPercent: item.customsDutyPercent.toFixed(4),
+      regulatoryDutyPercent: item.regulatoryDutyPercent.toFixed(4),
+      supplementaryDutyPercent: item.supplementaryDutyPercent.toFixed(4),
+      foreignVatPercent: item.foreignVatPercent.toFixed(4),
+      foreignTaxPercent: item.foreignTaxPercent.toFixed(4),
+      cnfCharge: decimal(item.cnfCharge),
+      portHandlingCharge: decimal(item.portHandlingCharge),
+      bankLcCharge: decimal(item.bankLcCharge),
+      foreignLocalTransportCost: decimal(item.foreignLocalTransportCost),
+      foreignOtherCost: decimal(item.foreignOtherCost),
+      foreignProductValueBdt: decimal(item.foreignProductValueBdt),
+      foreignLandedCost: decimal(item.foreignLandedCost),
       remarks: item.remarks,
       sortOrder: item.sortOrder,
       createdAt: item.createdAt.toISOString(),
@@ -218,7 +252,7 @@ export class TenderCostingsService {
       include: { tender: true },
     });
     if (!existing) throw new NotFoundException("Tender costing not found");
-    if (existing.status === "COMPLETED" || existing.status === "CANCELLED") {
+    if (existing.status === "CANCELLED") {
       throw new BadRequestException(`A ${existing.status.toLowerCase()} costing budget cannot be edited`);
     }
 
@@ -257,8 +291,11 @@ export class TenderCostingsService {
       include: { tender: true },
     });
     if (!existing) throw new NotFoundException("Tender costing not found");
-    if (existing.status === "COMPLETED" || existing.status === "CANCELLED") {
+    if (existing.status === "CANCELLED") {
       throw new BadRequestException(`A ${existing.status.toLowerCase()} costing cannot be edited`);
+    }
+    if (existing.status === "COMPLETED" && dto.status !== TenderCostingStatus.COMPLETED) {
+      throw new BadRequestException("A completed costing must remain completed when it is updated");
     }
     if (!existing.costingBudget || existing.costingBudget.lte(0)) {
       throw new BadRequestException(
@@ -275,11 +312,36 @@ export class TenderCostingsService {
     if (dto.status !== TenderCostingStatus.READY && dto.items.length === 0) {
       throw new BadRequestException("At least one costing item is required before submission");
     }
+    if (
+      dto.status === TenderCostingStatus.COMPLETED &&
+      dto.items.some((item) => item.costingStatus !== "COSTED")
+    ) {
+      throw new BadRequestException("Complete and select the source for every item before finalizing");
+    }
+    if (
+      dto.status === TenderCostingStatus.COMPLETED &&
+      dto.items.some((item) => !item.preparedByUserId)
+    ) {
+      throw new BadRequestException("Select Prepared By for every item before finalizing");
+    }
 
     const [preparedBy, assignedTo] = await Promise.all([
       this.tenantUser(organizationId, dto.preparedByUserId),
       this.tenantUser(organizationId, dto.assignedToUserId),
     ]);
+    const itemPreparerIds = [
+      ...new Set(
+        dto.items.flatMap((item) => (item.preparedByUserId ? [item.preparedByUserId] : [])),
+      ),
+    ];
+    const itemPreparers = await Promise.all(
+      itemPreparerIds.map((itemPreparerId) => this.tenantUser(organizationId, itemPreparerId)),
+    );
+    const itemPreparerById = new Map(
+      itemPreparers.flatMap((itemPreparer) =>
+        itemPreparer ? [[itemPreparer.id, itemPreparer] as const] : [],
+      ),
+    );
     if (dto.paymentTermId) {
       const paymentTerm = await this.prisma.paymentTerm.findFirst({
         where: { id: dto.paymentTermId, organizationId, isActive: true },
@@ -288,7 +350,7 @@ export class TenderCostingsService {
       if (!paymentTerm) throw new BadRequestException("Selected payment term is unavailable");
     }
 
-    const totals = calculateTenderCostingTotals(dto);
+    const totals = calculateTenderCostingTotals({ ...dto, costingBudget: existing.costingBudget });
     const saved = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.tenderCosting.updateMany({
         where: { id, organizationId, version: dto.version },
@@ -329,9 +391,15 @@ export class TenderCostingsService {
         await tx.tenderCostingItem.createMany({
           data: dto.items.map((item, index) => {
             const calculated = totals.calculatedItems[index]!;
+            const itemPreparer = item.preparedByUserId
+              ? itemPreparerById.get(item.preparedByUserId)
+              : null;
             return {
               organizationId,
               costingId: id,
+              costingDate: new Date(item.costingDate),
+              preparedByUserId: itemPreparer?.id ?? null,
+              preparedByName: itemPreparer?.name ?? null,
               description: item.description.trim(),
               secondaryDescription: item.secondaryDescription?.trim() || null,
               unit: item.unit.trim(),
@@ -340,6 +408,37 @@ export class TenderCostingsService {
               marginPercent: calculated.marginPercent,
               totalCost: calculated.totalCost,
               ourCost: calculated.ourCost,
+              sourcingType: calculated.sourcingType,
+              costingStatus: calculated.costingStatus,
+              selectedSource: calculated.selectedSource,
+              localSupplierName: item.localSupplierName?.trim() || null,
+              localUnitPrice: calculated.localUnitPrice,
+              localDiscountPercent: calculated.localDiscountPercent,
+              localVatPercent: calculated.localVatPercent,
+              localTaxPercent: calculated.localTaxPercent,
+              localTransportCost: calculated.localTransportCost,
+              localOtherCost: calculated.localOtherCost,
+              localTotalCost: calculated.localTotalCost,
+              foreignSupplierName: item.foreignSupplierName?.trim() || null,
+              foreignCountry: item.foreignCountry?.trim() || null,
+              foreignCurrency: item.foreignCurrency?.trim().toUpperCase() || "USD",
+              foreignUnitPrice: calculated.foreignUnitPrice,
+              foreignExchangeRate: calculated.foreignExchangeRate,
+              exchangeRateDate: item.exchangeRateDate ? new Date(item.exchangeRateDate) : null,
+              foreignFreightCost: calculated.foreignFreightCost,
+              foreignInsuranceCost: calculated.foreignInsuranceCost,
+              customsDutyPercent: calculated.customsDutyPercent,
+              regulatoryDutyPercent: calculated.regulatoryDutyPercent,
+              supplementaryDutyPercent: calculated.supplementaryDutyPercent,
+              foreignVatPercent: calculated.foreignVatPercent,
+              foreignTaxPercent: calculated.foreignTaxPercent,
+              cnfCharge: calculated.cnfCharge,
+              portHandlingCharge: calculated.portHandlingCharge,
+              bankLcCharge: calculated.bankLcCharge,
+              foreignLocalTransportCost: calculated.foreignLocalTransportCost,
+              foreignOtherCost: calculated.foreignOtherCost,
+              foreignProductValueBdt: calculated.foreignProductValueBdt,
+              foreignLandedCost: calculated.foreignLandedCost,
               remarks: item.remarks?.trim() || null,
               sortOrder: item.sortOrder ?? index,
             };

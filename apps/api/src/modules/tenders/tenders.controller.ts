@@ -39,7 +39,7 @@ export class TendersController {
   @Get("options")
   @RequirePermissions("tender.read")
   options(@CurrentUser() user: AuthUser) {
-    return this.tendersService.options(user.organizationId);
+    return this.tendersService.options(user.organizationId, user.id);
   }
 
   @Get(":id")

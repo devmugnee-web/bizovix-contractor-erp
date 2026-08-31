@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Banknote,
+  Calculator,
   CheckCircle2,
   Clock3,
   Download,
@@ -60,6 +61,14 @@ const EMPTY_FILTERS: FilterDraft = {
   fromDate: "",
   toDate: "",
 };
+
+function formatBDTLakh(value: number): string {
+  if (!Number.isFinite(value)) return "BDT 0.00 Lakh";
+  return `BDT ${(value / 100_000).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} Lakh`;
+}
 
 function toCsv(rows: string[][]): string {
   return rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -210,7 +219,7 @@ export default function TenderCostingPage() {
           icon={Banknote}
           iconClassName="bg-biz-purple-soft text-biz-purple"
           label="Costing Budget"
-          value={snapshot ? formatBDTCompact(Number(snapshot.totalCostingBudget)) : "—"}
+          value={snapshot ? formatBDTLakh(Number(snapshot.totalCostingBudget)) : "—"}
           helper="Saved budgets"
         />
         <ModuleStatCard
@@ -218,7 +227,7 @@ export default function TenderCostingPage() {
           icon={Banknote}
           iconClassName="bg-biz-orange-soft text-biz-orange"
           label="Our Cost"
-          value={snapshot ? formatBDTCompact(Number(snapshot.totalOurCost)) : "—"}
+          value={snapshot ? formatBDTLakh(Number(snapshot.totalOurCost)) : "—"}
           helper="Calculated total"
         />
       </div>
@@ -496,17 +505,20 @@ export default function TenderCostingPage() {
               className: "w-[17%] overflow-hidden px-1 text-center xl:w-[14%] xl:px-2",
               render: (record) => (
                 <Link href={`/tender-management/tender-costing/add?costingId=${record.id}`}>
-                  <SecondaryButton className="h-7 max-w-full gap-1 px-1.5 text-[9px] xl:px-2 xl:text-[10px]">
-                    <Eye className="hidden h-3 w-3 shrink-0 sm:block" />
-                    {record.status === "READY" ? (
+                  {record.status === "READY" ? (
+                    <PrimaryButton className="h-7 max-w-full gap-1 bg-biz-blue px-1.5 text-[9px] text-white shadow-sm hover:bg-biz-blue/90 xl:px-2 xl:text-[10px]">
+                      <Calculator className="hidden h-3 w-3 shrink-0 sm:block" />
                       <>
                         <span className="sm:hidden">Start</span>
                         <span className="hidden sm:inline">Start Costing</span>
                       </>
-                    ) : (
-                      "Open"
-                    )}
-                  </SecondaryButton>
+                    </PrimaryButton>
+                  ) : (
+                    <SecondaryButton className="h-7 max-w-full gap-1 px-1.5 text-[9px] xl:px-2 xl:text-[10px]">
+                      <Eye className="hidden h-3 w-3 shrink-0 sm:block" />
+                      Open
+                    </SecondaryButton>
+                  )}
                 </Link>
               ),
             },

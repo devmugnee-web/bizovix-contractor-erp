@@ -6,6 +6,7 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -33,6 +34,14 @@ export class QueryTenderCostingDto extends PaginationQueryDto {
 }
 
 export class TenderCostingItemInputDto {
+  @IsDateString()
+  costingDate!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  preparedByUserId?: string | null;
+
   @IsString()
   @IsNotEmpty()
   @Matches(/\S/, { message: "Item description must contain text" })
@@ -56,15 +65,182 @@ export class TenderCostingItemInputDto {
   quantity!: number;
 
   @Type(() => Number)
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  unitCost!: number;
+  unitCost?: number;
 
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  marginPercent?: number;
+
+  @IsString()
+  @IsIn(["LOCAL", "FOREIGN", "LOCAL_AND_FOREIGN"])
+  sourcingType!: "LOCAL" | "FOREIGN" | "LOCAL_AND_FOREIGN";
+
+  @IsString()
+  @IsIn(["NOT_COSTED", "DRAFT", "COSTED"])
+  costingStatus!: "NOT_COSTED" | "DRAFT" | "COSTED";
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["LOCAL", "FOREIGN"])
+  selectedSource?: "LOCAL" | "FOREIGN" | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  localSupplierName?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  localUnitPrice?: number;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   @Max(100)
-  marginPercent!: number;
+  localDiscountPercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  localVatPercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  localTaxPercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  localTransportCost?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  localOtherCost?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  foreignSupplierName?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  foreignCountry?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  foreignCurrency?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  foreignUnitPrice?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.000001)
+  foreignExchangeRate?: number;
+
+  @IsOptional()
+  @IsDateString()
+  exchangeRateDate?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  foreignFreightCost?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  foreignInsuranceCost?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  customsDutyPercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  regulatoryDutyPercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  supplementaryDutyPercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  foreignVatPercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  foreignTaxPercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  cnfCharge?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  portHandlingCharge?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  bankLcCharge?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  foreignLocalTransportCost?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  foreignOtherCost?: number;
 
   @IsOptional()
   @IsString()
