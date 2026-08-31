@@ -32,6 +32,39 @@ enum TenderStatus {
   CANCELLED
 }
 
+enum TenderProcurementMethod {
+  OTM
+  RFQ
+  LTM
+  TSTM
+  QCBS
+  LCS
+  SFB
+  DC
+  SBCQ
+  SSS
+  IC
+  CSE
+  DPM
+  OSTETM
+  RFQU
+  RFQL
+}
+
+enum TenderCostingApprovalStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum TenderCostingStatus {
+  READY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 enum ExpenseStatus {
   PENDING
   APPROVED
@@ -219,6 +252,8 @@ model Organization {
   organizationMasters            OrganizationMaster[]
   bankAccounts                   BankAccount[]
   tenders                        Tender[]
+  tenderCostings                 TenderCosting[]
+  tenderCostingItems             TenderCostingItem[]
   documentPurchases              DocumentPurchase[]
   tenderSecurities               TenderSecurity[]
   creditCommitments              CreditCommitment[]
@@ -338,6 +373,14 @@ model User {
   workIousCancelledBy          WorkIou[]                     @relation("WorkIouCancelledBy")
   workIousCreatedBy            WorkIou[]                     @relation("WorkIouCreatedBy")
   workIouAttachmentsUploadedBy WorkIouAttachment[]           @relation("WorkIouAttachmentUploadedBy")
+  tendersCreated               Tender[]                      @relation("TenderCreatedBy")
+  tendersFound                 Tender[]                      @relation("TenderFoundBy")
+  tendersCostingSubmitted      Tender[]                      @relation("TenderCostingSubmittedBy")
+  tendersCostingApproved       Tender[]                      @relation("TenderCostingApprovedBy")
+  tendersCostingRejected       Tender[]                      @relation("TenderCostingRejectedBy")
+  tenderCostingsPrepared       TenderCosting[]               @relation("TenderCostingPreparedBy")
+  tenderCostingsAssigned       TenderCosting[]               @relation("TenderCostingAssignedTo")
+  tenderCostingsApproved       TenderCosting[]               @relation("TenderCostingApprovedForBy")
 
   @@map("users")
 }
@@ -773,18 +816,38 @@ enum TimeExtensionStatus {
 }
 
 model Tender {
-  id                   String       @id @default(cuid())
-  organizationId       String
-  organizationMasterId String
-  egpTenderId          String?
-  workName             String
-  category             String
-  tenderType           String?
-  procurementMethod    String?
-  tenderMethod         String?
-  contractValue        Decimal      @default(0) @db.Decimal(18, 2)
-  status               TenderStatus @default(DRAFT)
-  progressPercentage   Int          @default(0)
+  id                      String                      @id @default(cuid())
+  organizationId          String
+  organizationMasterId    String?
+  /// Business Tender ID. Kept nullable only so legacy rows can remain readable;
+  /// every new tender must supply it through the validated service contract.
+  egpTenderId             String?
+  /// Upper-cased, trimmed, whitespace-collapsed server-authoritative key used
+  /// for tenant-scoped duplicate protection. Legacy rows without a Tender ID stay null.
+  tenderIdNormalized      String?
+  /// Migration-only exemption for pre-existing rows that did not have a business Tender ID.
+  /// Application create/update contracts never accept this flag.
+  legacyTenderIdExempt    Boolean                     @default(false)
+  workName                String
+  category                String?
+  tenderType              String?
+  /// Standardized procurement method used by all new workflows.
+  procurementMethod       TenderProcurementMethod     @default(OTM)
+  /// Original pre-workflow text retained so a non-standard historical value is
+  /// never discarded while the standardized method safely falls back to OTM.
+  legacyProcurementMethod String?
+  tenderMethod            String?
+  contractValue           Decimal                     @default(0) @db.Decimal(18, 2)
+  status                  TenderStatus                @default(DRAFT)
+  costingApprovalStatus   TenderCostingApprovalStatus @default(DRAFT)
+  progressPercentage      Int                         @default(0)
+  payOrderRequired        Boolean                     @default(false)
+  payOrderAmount          Decimal?                    @db.Decimal(18, 2)
+  foundByUserId           String?
+  foundByName             String?
+  findingDate             DateTime?
+  remarks                 String?
+  version                 Int                         @default(1)
 
   publishedDate                 DateTime?
   documentPurchaseDeadline      DateTime?
@@ -817,12 +880,26 @@ model Tender {
   resultRemarks   String?
   awardedAt       DateTime?
 
+  costingSubmittedAt     DateTime?
+  costingSubmittedById   String?
+  costingApprovedAt      DateTime?
+  costingApprovedById    String?
+  costingRejectedAt      DateTime?
+  costingRejectedById    String?
+  costingRejectionReason String?
+
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  organizationMaster OrganizationMaster @relation(fields: [organizationMasterId], references: [id])
+  organizationMaster OrganizationMaster? @relation(fields: [organizationMasterId], references: [id])
+  createdBy          User?              @relation("TenderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  foundBy            User?              @relation("TenderFoundBy", fields: [foundByUserId], references: [id], onDelete: SetNull)
+  costingSubmittedBy User?              @relation("TenderCostingSubmittedBy", fields: [costingSubmittedById], references: [id], onDelete: SetNull)
+  costingApprovedBy  User?              @relation("TenderCostingApprovedBy", fields: [costingApprovedById], references: [id], onDelete: SetNull)
+  costingRejectedBy  User?              @relation("TenderCostingRejectedBy", fields: [costingRejectedById], references: [id], onDelete: SetNull)
+  costing            TenderCosting?
 
   documentPurchases     DocumentPurchase[]
   tenderSecurities      TenderSecurity[]
@@ -835,9 +912,85 @@ model Tender {
   workIous              WorkIou[]
 
   @@unique([organizationId, id])
+  @@unique([organizationId, tenderIdNormalized])
   @@index([organizationId, status])
+  @@index([organizationId, costingApprovalStatus, updatedAt])
   @@index([organizationId, submissionDeadline])
   @@map("tenders")
+}
+
+model TenderCosting {
+  id                     String              @id @default(cuid())
+  organizationId         String
+  tenderId               String
+  status                 TenderCostingStatus @default(READY)
+  costingDate            DateTime            @default(now())
+  source                 String?
+  currency               String              @default("BDT")
+  exchangeRate           Decimal             @default(1) @db.Decimal(18, 6)
+  costingVersion         Int                 @default(1)
+  remarks                String?
+  preparedByUserId       String?
+  preparedByName         String?
+  costingBudget          Decimal?            @db.Decimal(18, 2)
+  estimatedValue         Decimal             @default(0) @db.Decimal(18, 2)
+  estimatedCost          Decimal             @default(0) @db.Decimal(18, 2)
+  ourCost                Decimal             @default(0) @db.Decimal(18, 2)
+  marginPercent          Decimal             @default(0) @db.Decimal(7, 4)
+  freightCost            Decimal             @default(0) @db.Decimal(18, 2)
+  installationCost       Decimal             @default(0) @db.Decimal(18, 2)
+  otherCost              Decimal             @default(0) @db.Decimal(18, 2)
+  contingencyPercent     Decimal             @default(0) @db.Decimal(7, 4)
+  contingencyAmount      Decimal             @default(0) @db.Decimal(18, 2)
+  validityDays           Int?
+  paymentTermId          String?
+  deliveryTime           String?
+  warranty               String?
+  assignedToUserId       String?
+  assignedToName         String?
+  approvedForCostingAt   DateTime
+  approvedForCostingById String?
+  version                Int                 @default(1)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender               Tender              @relation(fields: [organizationId, tenderId], references: [organizationId, id], onDelete: Restrict)
+  paymentTerm          PaymentTerm?        @relation(fields: [organizationId, paymentTermId], references: [organizationId, id], onDelete: Restrict)
+  preparedBy           User?               @relation("TenderCostingPreparedBy", fields: [preparedByUserId], references: [id], onDelete: SetNull)
+  assignedTo           User?               @relation("TenderCostingAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  approvedForCostingBy User?               @relation("TenderCostingApprovedForBy", fields: [approvedForCostingById], references: [id], onDelete: SetNull)
+  items                TenderCostingItem[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, tenderId])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, assignedToUserId])
+  @@map("tender_costings")
+}
+
+model TenderCostingItem {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  costingId            String
+  description          String
+  secondaryDescription String?
+  unit                 String
+  quantity             Decimal  @db.Decimal(18, 3)
+  unitCost             Decimal  @db.Decimal(18, 2)
+  marginPercent        Decimal  @default(0) @db.Decimal(7, 4)
+  totalCost            Decimal  @db.Decimal(18, 2)
+  ourCost              Decimal  @db.Decimal(18, 2)
+  remarks              String?
+  sortOrder            Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  costing      TenderCosting @relation(fields: [organizationId, costingId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, costingId, sortOrder])
+  @@map("tender_costing_items")
 }
 
 model MonthlyTarget {
@@ -3153,10 +3306,12 @@ model PaymentTerm {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parties       Party[]
-  supplierBills SupplierBill[]
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parties        Party[]
+  supplierBills  SupplierBill[]
+  tenderCostings TenderCosting[]
 
+  @@unique([organizationId, id])
   @@unique([organizationId, name])
   @@map("payment_terms")
 }

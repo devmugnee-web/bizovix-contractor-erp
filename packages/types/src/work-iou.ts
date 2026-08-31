@@ -38,7 +38,7 @@ export interface WorkIouTenderRef {
   tenderId: string | null;
   workName: string;
   status: string;
-  organization: WorkIouOrganizationRef;
+  organization: WorkIouOrganizationRef | null;
 }
 
 export interface WorkIouProjectRef {
@@ -146,7 +146,7 @@ export interface WorkIouOptionTender {
   tenderId: string | null;
   workName: string;
   status: string;
-  organization: WorkIouOrganizationRef;
+  organization: WorkIouOrganizationRef | null;
 }
 
 export interface WorkIouOptionProject {

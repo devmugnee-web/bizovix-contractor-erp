@@ -7,8 +7,8 @@ export interface PendingTenderSecurity {
   tenderRecordId: string;
   documentPurchaseId: string | null;
   tenderId: string | null;
-  organizationMasterId: string;
-  organizationMaster: { id: string; shortName: string; fullName: string };
+  organizationMasterId: string | null;
+  organizationMaster: { id: string; shortName: string; fullName: string } | null;
   tenderWorkName: string;
   submissionDeadline: string | null;
   tenderStatus: TenderStatus;

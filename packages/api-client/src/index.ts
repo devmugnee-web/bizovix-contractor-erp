@@ -8,6 +8,7 @@ export * from "./hooks/use-dashboard";
 export * from "./hooks/use-organizations";
 export * from "./hooks/use-bank-accounts";
 export * from "./hooks/use-tenders";
+export * from "./hooks/use-tender-costings";
 export * from "./hooks/use-document-purchases";
 export * from "./hooks/use-documents";
 export * from "./hooks/use-tender-securities";

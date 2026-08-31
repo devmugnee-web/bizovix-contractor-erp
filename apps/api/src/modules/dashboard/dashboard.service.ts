@@ -194,11 +194,12 @@ export class DashboardService {
     const items = grouped
       .map((g) => {
         const amount = Number(g._sum?.contractValue ?? 0);
+        const category = g.category ?? "Uncategorised";
         return {
-          category: g.category,
+          category,
           amount: amount.toString(),
           percentage: totalBusiness > 0 ? Number(((amount / totalBusiness) * 100).toFixed(2)) : 0,
-          color: CATEGORY_COLORS[g.category] ?? "#667085",
+          color: CATEGORY_COLORS[category] ?? "#667085",
         };
       })
       .sort((a, b) => Number(b.amount) - Number(a.amount));

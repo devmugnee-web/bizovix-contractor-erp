@@ -293,12 +293,12 @@ export class PgBgService {
 
   async workCategories(organizationId: string) {
     const rows = await this.prisma.tender.findMany({
-      where: { organizationId },
+      where: { organizationId, category: { not: null } },
       distinct: ["category"],
       select: { category: true },
       orderBy: { category: "asc" },
     });
-    return rows.map((row) => row.category);
+    return rows.flatMap((row) => (row.category ? [row.category] : []));
   }
 
   organizationContacts(organizationId: string, organizationMasterId?: string) {

@@ -4,6 +4,7 @@ export * from "./permissions";
 export * from "./auth";
 export * from "./organization";
 export * from "./tender";
+export * from "./tender-costing";
 export * from "./document-purchase";
 export * from "./document";
 export * from "./tender-security";

@@ -1,4 +1,4 @@
-import { TenderStatus } from "@bizovix/database";
+import { TenderProcurementMethod, TenderStatus } from "@bizovix/database";
 import { IsEnum, IsOptional, IsString } from "class-validator";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 
@@ -14,6 +14,14 @@ export class QueryTenderDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(TenderStatus)
   status?: TenderStatus;
+
+  @IsOptional()
+  @IsString()
+  tenderType?: string;
+
+  @IsOptional()
+  @IsEnum(TenderProcurementMethod)
+  procurementMethod?: TenderProcurementMethod;
 
   @IsOptional()
   @IsString()

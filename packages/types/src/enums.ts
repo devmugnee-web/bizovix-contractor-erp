@@ -21,6 +21,62 @@ export const TenderStatus = {
 } as const;
 export type TenderStatus = (typeof TenderStatus)[keyof typeof TenderStatus];
 
+export const TENDER_PROCUREMENT_METHODS = [
+  "OTM",
+  "RFQ",
+  "LTM",
+  "TSTM",
+  "QCBS",
+  "LCS",
+  "SFB",
+  "DC",
+  "SBCQ",
+  "SSS",
+  "IC",
+  "CSE",
+  "DPM",
+  "OSTETM",
+  "RFQU",
+  "RFQL",
+] as const;
+
+export const TenderProcurementMethod = {
+  OTM: "OTM",
+  RFQ: "RFQ",
+  LTM: "LTM",
+  TSTM: "TSTM",
+  QCBS: "QCBS",
+  LCS: "LCS",
+  SFB: "SFB",
+  DC: "DC",
+  SBCQ: "SBCQ",
+  SSS: "SSS",
+  IC: "IC",
+  CSE: "CSE",
+  DPM: "DPM",
+  OSTETM: "OSTETM",
+  RFQU: "RFQU",
+  RFQL: "RFQL",
+} as const;
+export type TenderProcurementMethod = (typeof TENDER_PROCUREMENT_METHODS)[number];
+
+export const TenderCostingApprovalStatus = {
+  DRAFT: "DRAFT",
+  PENDING_APPROVAL: "PENDING_APPROVAL",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const;
+export type TenderCostingApprovalStatus =
+  (typeof TenderCostingApprovalStatus)[keyof typeof TenderCostingApprovalStatus];
+
+export const TenderCostingStatus = {
+  READY: "READY",
+  IN_PROGRESS: "IN_PROGRESS",
+  COMPLETED: "COMPLETED",
+  CANCELLED: "CANCELLED",
+} as const;
+export type TenderCostingStatus = (typeof TenderCostingStatus)[keyof typeof TenderCostingStatus];
+
 export const ContractType = {
   WORK_ORDER: "WORK_ORDER",
   CONTRACT_AGREEMENT: "CONTRACT_AGREEMENT",

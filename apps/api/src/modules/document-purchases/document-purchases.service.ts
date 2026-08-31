@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import type { Prisma } from "@bizovix/database";
-import type { PaginationMeta } from "@bizovix/types";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@bizovix/database";
+import { normalizeTenderBusinessId, type PaginationMeta } from "@bizovix/types";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
@@ -20,6 +20,14 @@ type DocumentPurchaseStats = {
   egpPurchases: number;
   manualPurchases: number;
   totalAmount: string;
+};
+
+type ExistingTenderBusinessId = {
+  id: string;
+  egpTenderId: string | null;
+  workName: string;
+  createdAt: Date;
+  createdBy: { name: string } | null;
 };
 
 function toDto(record: DocumentPurchaseWithRelations): DocumentPurchaseDto {
@@ -123,6 +131,47 @@ export class DocumentPurchasesService {
     if (!tender) throw new NotFoundException("Tender not found");
   }
 
+  private async findTenderByBusinessId(
+    organizationId: string,
+    tenderIdNormalized: string,
+  ): Promise<ExistingTenderBusinessId | null> {
+    return this.prisma.tender.findFirst({
+      where: { organizationId, tenderIdNormalized },
+      select: {
+        id: true,
+        egpTenderId: true,
+        workName: true,
+        createdAt: true,
+        createdBy: { select: { name: true } },
+      },
+    });
+  }
+
+  private duplicateTenderConflict(
+    existing: ExistingTenderBusinessId | null,
+    tenderIdNormalized: string,
+  ): never {
+    throw new ConflictException({
+      message: "Tender ID already exists. Open the existing tender to add its document purchase.",
+      errors: {
+        duplicateCode: ["DUPLICATE_TENDER_ID"],
+        recordId: existing ? [existing.id] : [],
+        existingTenderId: [existing?.egpTenderId ?? tenderIdNormalized],
+        existingWorkName: existing ? [existing.workName] : [],
+        createdByName: [existing?.createdBy?.name ?? "Unknown user"],
+        createdAt: existing ? [existing.createdAt.toISOString()] : [],
+      },
+    });
+  }
+
+  private isTenderBusinessIdConflict(error: unknown): boolean {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false;
+    const target = error.meta?.target;
+    return Array.isArray(target)
+      ? target.includes("tenderIdNormalized")
+      : typeof target === "string" && target.includes("tenderIdNormalized");
+  }
+
   async create(
     organizationId: string,
     userId: string,
@@ -131,17 +180,78 @@ export class DocumentPurchasesService {
     await this.assertBelongsToOrg(organizationId, dto.organizationMasterId, dto.paymentFromAccountId);
     await this.assertTenderBelongsToOrg(organizationId, dto.linkedTenderId);
 
-    const record = await this.prisma.$transaction(async (tx) => {
-      // If this purchase isn't explicitly linked to an existing Tender (i.e. it wasn't started
-      // from a Tender's own page), create the internal Tender record here from the same fields —
-      // Bank Instruments is the primary entry point and users must never enter the same tender twice.
-      let linkedTenderId = dto.linkedTenderId ?? null;
-      if (!linkedTenderId) {
+    const shouldCreateTender = !dto.linkedTenderId;
+    const suppliedTenderId = dto.purchaseType === "EGP" ? dto.tenderId?.trim() ?? "" : "";
+    const suppliedTenderIdNormalized = suppliedTenderId ? normalizeTenderBusinessId(suppliedTenderId) : "";
+    if (shouldCreateTender && dto.purchaseType === "EGP" && !suppliedTenderIdNormalized) {
+      throw new BadRequestException("Tender ID is required for e-GP purchases");
+    }
+
+    if (shouldCreateTender && suppliedTenderIdNormalized) {
+      const duplicate = await this.findTenderByBusinessId(organizationId, suppliedTenderIdNormalized);
+      if (duplicate) this.duplicateTenderConflict(duplicate, suppliedTenderIdNormalized);
+    }
+
+    let record: DocumentPurchaseWithRelations;
+    try {
+      record = await this.prisma.$transaction(async (tx) => {
+        // Purchases started from an existing Tender retain that authoritative link.
+        if (dto.linkedTenderId) {
+          return tx.documentPurchase.create({
+            data: {
+              organizationId,
+              purchaseType: dto.purchaseType,
+              egpTenderId: dto.purchaseType === "EGP" ? suppliedTenderId : null,
+              linkedTenderId: dto.linkedTenderId,
+              organizationMasterId: dto.organizationMasterId,
+              tenderWorkName: dto.tenderWorkName,
+              purchaseDate: new Date(dto.purchaseDate),
+              documentPrice: dto.documentPrice,
+              estimatedTenderAmount: dto.estimatedTenderAmount ?? 0,
+              category: dto.category,
+              submissionDate: dto.submissionDate ? new Date(dto.submissionDate) : null,
+              openingDate: dto.openingDate ? new Date(dto.openingDate) : null,
+              remarks: dto.remarks,
+              paymentFromAccountId: dto.paymentFromAccountId,
+              createdById: userId,
+            },
+            include: includeRelations,
+          });
+        }
+
+        // A Manual purchase has no external Tender ID. Create the purchase first and use its
+        // primary key as the stable, authoritative source of the internal Tender's business ID.
+        // The purchase, Tender, and link remain atomic in this transaction.
+        const purchase = await tx.documentPurchase.create({
+          data: {
+            organizationId,
+            purchaseType: dto.purchaseType,
+            egpTenderId: dto.purchaseType === "EGP" ? suppliedTenderId : null,
+            linkedTenderId: null,
+            organizationMasterId: dto.organizationMasterId,
+            tenderWorkName: dto.tenderWorkName,
+            purchaseDate: new Date(dto.purchaseDate),
+            documentPrice: dto.documentPrice,
+            estimatedTenderAmount: dto.estimatedTenderAmount ?? 0,
+            category: dto.category,
+            submissionDate: dto.submissionDate ? new Date(dto.submissionDate) : null,
+            openingDate: dto.openingDate ? new Date(dto.openingDate) : null,
+            remarks: dto.remarks,
+            paymentFromAccountId: dto.paymentFromAccountId,
+            createdById: userId,
+          },
+          include: includeRelations,
+        });
+
+        const tenderBusinessId = dto.purchaseType === "EGP"
+          ? suppliedTenderId
+          : `MANUAL-DP-${purchase.id}`;
         const tender = await tx.tender.create({
           data: {
             organizationId,
             organizationMasterId: dto.organizationMasterId,
-            egpTenderId: dto.purchaseType === "EGP" ? dto.tenderId : null,
+            egpTenderId: tenderBusinessId,
+            tenderIdNormalized: normalizeTenderBusinessId(tenderBusinessId),
             workName: dto.tenderWorkName,
             category: dto.category ?? "General",
             contractValue: dto.estimatedTenderAmount ?? 0,
@@ -152,30 +262,20 @@ export class DocumentPurchasesService {
             createdById: userId,
           },
         });
-        linkedTenderId = tender.id;
-      }
 
-      return tx.documentPurchase.create({
-        data: {
-          organizationId,
-          purchaseType: dto.purchaseType,
-          egpTenderId: dto.purchaseType === "EGP" ? dto.tenderId : null,
-          linkedTenderId,
-          organizationMasterId: dto.organizationMasterId,
-          tenderWorkName: dto.tenderWorkName,
-          purchaseDate: new Date(dto.purchaseDate),
-          documentPrice: dto.documentPrice,
-          estimatedTenderAmount: dto.estimatedTenderAmount ?? 0,
-          category: dto.category,
-          submissionDate: dto.submissionDate ? new Date(dto.submissionDate) : null,
-          openingDate: dto.openingDate ? new Date(dto.openingDate) : null,
-          remarks: dto.remarks,
-          paymentFromAccountId: dto.paymentFromAccountId,
-          createdById: userId,
-        },
-        include: includeRelations,
+        return tx.documentPurchase.update({
+          where: { id: purchase.id, organizationId },
+          data: { linkedTenderId: tender.id },
+          include: includeRelations,
+        });
       });
-    });
+    } catch (error) {
+      if (shouldCreateTender && suppliedTenderIdNormalized && this.isTenderBusinessIdConflict(error)) {
+        const existing = await this.findTenderByBusinessId(organizationId, suppliedTenderIdNormalized);
+        this.duplicateTenderConflict(existing, suppliedTenderIdNormalized);
+      }
+      throw error;
+    }
 
     await this.auditLogService.record({
       organizationId,

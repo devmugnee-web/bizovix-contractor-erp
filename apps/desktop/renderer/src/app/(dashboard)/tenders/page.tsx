@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Award,
@@ -13,11 +14,18 @@ import {
   Info,
   MoreVertical,
   Search,
-  SlidersHorizontal,
+  ShieldCheck,
   SquareStack,
+  Trash2,
   XCircle,
 } from "lucide-react";
-import { useAllOrganizations, useTenderCategories, useTenderStats, useTenders } from "@bizovix/api-client";
+import {
+  ApiError,
+  useApproveTenderForCosting,
+  useDeleteTender,
+  useTenderStats,
+  useTenders,
+} from "@bizovix/api-client";
 import {
   DataTable,
   IconButton,
@@ -29,39 +37,47 @@ import {
   StatusBadge,
   TextInput,
 } from "@bizovix/ui";
-import { formatBDT, formatDate } from "@bizovix/utils";
-import type { TenderQuery, TenderRecord, TenderStatus } from "@bizovix/types";
-import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
-import { TENDER_STATUS_META, TENDER_STATUS_OPTIONS } from "@/lib/tenders";
+import { formatDate } from "@bizovix/utils";
 import {
-  PRIORITY_TONE,
-  SOURCE_OPTIONS,
-  avatarForAssignee,
-  tenderNextFollowUp,
-  tenderPriority,
-  tenderSource,
-} from "./list-helpers";
+  TENDER_PROCUREMENT_METHODS,
+  type TenderProcurementMethod,
+  type TenderQuery,
+  type TenderRecord,
+  type TenderStatus,
+} from "@bizovix/types";
+import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
+import { Modal } from "@/components/layout/Modal";
+import { SuccessPopup } from "@/components/layout/SuccessPopup";
+import { TenderForm } from "@/components/tenders/TenderForm";
+import { TENDER_STATUS_META, TENDER_STATUS_OPTIONS } from "@/lib/tenders";
 
 interface FilterDraft {
   search: string;
-  assignedToName: string;
-  organizationMasterId: string;
-  source: string;
+  tenderType: string;
+  procurementMethod: string;
   status: string;
-  category: string;
   fromDate: string;
   toDate: string;
 }
 
 const EMPTY_DRAFT: FilterDraft = {
   search: "",
-  assignedToName: "",
-  organizationMasterId: "",
-  source: "",
+  tenderType: "",
+  procurementMethod: "",
   status: "",
-  category: "",
   fromDate: "",
   toDate: "",
+};
+
+const TENDER_TYPE_OPTIONS = ["Works", "Goods", "Services", "Physical Service"].map(
+  (value) => ({ value, label: value }),
+);
+
+const COSTING_APPROVAL_META = {
+  DRAFT: { label: "Draft", tone: "neutral" as const },
+  PENDING_APPROVAL: { label: "Pending Approval", tone: "warning" as const },
+  APPROVED: { label: "Approved for Costing", tone: "success" as const },
+  REJECTED: { label: "Costing Rejected", tone: "danger" as const },
 };
 
 function toCsv(rows: string[][]): string {
@@ -81,89 +97,145 @@ function downloadCsv(filename: string, rows: string[][]) {
 }
 
 export default function TendersListPage() {
-  useSetBreadcrumb([{ label: "Tender Management", href: "/tender-management" }, { label: "Tender List" }]);
+  useSetBreadcrumb([
+    { label: "Tender Management", href: "/tender-management" },
+    { label: "Tender List" },
+  ]);
+  const router = useRouter();
 
   const [draft, setDraft] = React.useState<FilterDraft>(EMPTY_DRAFT);
-  const [appliedSource, setAppliedSource] = React.useState("");
   const [query, setQuery] = React.useState<TenderQuery>({ page: 1, limit: 10 });
-  const [moreFiltersOpen, setMoreFiltersOpen] = React.useState(false);
   const [dateRangeOpen, setDateRangeOpen] = React.useState(false);
-  const [menuAnchor, setMenuAnchor] = React.useState<{ id: string; top: number; right: number } | null>(null);
+  const [menuAnchor, setMenuAnchor] = React.useState<{
+    tender: TenderRecord;
+    top: number;
+    right: number;
+  } | null>(null);
+  const [approvalTender, setApprovalTender] = React.useState<TenderRecord | null>(null);
+  const [approvalError, setApprovalError] = React.useState("");
+  const [successMessage, setSuccessMessage] = React.useState("");
+  const [successTitle, setSuccessTitle] = React.useState("Tender Saved");
+  const [createTenderOpen, setCreateTenderOpen] = React.useState(false);
+  const [deleteTender, setDeleteTender] = React.useState<TenderRecord | null>(null);
+  const [deleteError, setDeleteError] = React.useState("");
 
   const stats = useTenderStats();
-  const organizations = useAllOrganizations();
-  const categories = useTenderCategories();
   const tenders = useTenders(query);
+  const approveForCosting = useApproveTenderForCosting();
+  const deleteTenderMutation = useDeleteTender();
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const notice = params.get("notice");
+    if (!notice) return;
+    const timer = window.setTimeout(() => {
+      setSuccessTitle("Tender Saved");
+      setSuccessMessage(notice);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  function closeSuccess() {
+    setSuccessMessage("");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("notice");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  }
+
+  async function approveSelectedTender() {
+    if (!approvalTender) return;
+    setApprovalError("");
+    try {
+      const result = await approveForCosting.mutateAsync({
+        id: approvalTender.id,
+        payload: { version: approvalTender.version },
+      });
+      setApprovalTender(null);
+      router.push(`/tender-management/tender-costing?costingId=${result.costing.id}`);
+    } catch (error) {
+      setApprovalError(
+        error instanceof ApiError ? error.message : "Could not approve this tender for costing.",
+      );
+    }
+  }
+
+  async function deleteSelectedTender() {
+    if (!deleteTender) return;
+    setDeleteError("");
+    try {
+      await deleteTenderMutation.mutateAsync(deleteTender.id);
+      setDeleteTender(null);
+      setSuccessTitle("Tender Deleted");
+      setSuccessMessage("Tender deleted successfully.");
+      setQuery((current) => ({
+        ...current,
+        page:
+          visibleItems.length === 1 && (current.page ?? 1) > 1
+            ? (current.page ?? 1) - 1
+            : current.page,
+      }));
+    } catch (error) {
+      setDeleteError(
+        error instanceof ApiError ? error.message : "Could not delete this tender.",
+      );
+    }
+  }
 
   function applyFilters(next: FilterDraft = draft) {
     setQuery({
       page: 1,
       limit: 10,
       search: next.search || undefined,
-      organizationMasterId: next.organizationMasterId || undefined,
-      category: next.category || undefined,
+      tenderType: next.tenderType || undefined,
+      procurementMethod: (next.procurementMethod as TenderProcurementMethod) || undefined,
       status: (next.status as TenderStatus) || undefined,
-      assignedToName: next.assignedToName || undefined,
       fromDate: next.fromDate || undefined,
       toDate: next.toDate || undefined,
     });
-    setAppliedSource(next.source);
     setDateRangeOpen(false);
   }
 
   function clearFilters() {
     setDraft(EMPTY_DRAFT);
     setQuery({ page: 1, limit: 10 });
-    setAppliedSource("");
-    setMoreFiltersOpen(false);
   }
 
-  function toggleMenu(id: string, e: React.MouseEvent<HTMLButtonElement>) {
-    if (menuAnchor?.id === id) {
+  function toggleMenu(tender: TenderRecord, e: React.MouseEvent<HTMLButtonElement>) {
+    if (menuAnchor?.tender.id === tender.id) {
       setMenuAnchor(null);
       return;
     }
     const rect = e.currentTarget.getBoundingClientRect();
-    setMenuAnchor({ id, top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    setMenuAnchor({ tender, top: rect.bottom + 4, right: window.innerWidth - rect.right });
   }
 
   const meta = tenders.data?.meta ?? { page: 1, limit: 10, total: 0, totalPages: 1 };
 
-  const visibleItems = React.useMemo(() => {
-    const list = tenders.data?.items ?? [];
-    return appliedSource ? list.filter((row) => tenderSource(row.id) === appliedSource) : list;
-  }, [tenders.data, appliedSource]);
+  const visibleItems = tenders.data?.items ?? [];
 
   function exportCsv() {
     const header = [
       "Tender ID",
-      "Work / Tender Name",
-      "Organization",
-      "Source",
-      "Search Date",
-      "Assigned To",
-      "Opening Date",
-      "Next Follow Up",
+      "Product / Work Name",
+      "Tender Type",
+      "Procurement Method",
+      "Closing Date",
+      "Found By",
+      "Finding Date",
       "Status",
-      "Priority",
-      "Tender Value (BDT)",
+      "Costing Approval",
     ];
-    const rows = visibleItems.map((row) => {
-      const followUp = tenderNextFollowUp(row);
-      return [
-        row.egpTenderId ?? "N/A",
-        row.workName,
-        row.organizationMaster.shortName,
-        tenderSource(row.id),
-        formatDate(row.createdAt),
-        row.assignedToName ?? "Unassigned",
-        row.openingDate ? formatDate(row.openingDate) : "—",
-        followUp ? formatDate(followUp) : "—",
-        TENDER_STATUS_META[row.status].label,
-        tenderPriority(row.id),
-        formatBDT(row.contractValue),
-      ];
-    });
+    const rows = visibleItems.map((row) => [
+      row.egpTenderId ?? "N/A",
+      row.workName,
+      row.tenderType ?? "Not set",
+      row.procurementMethod,
+      row.submissionDeadline ? formatDate(row.submissionDeadline) : "—",
+      row.foundBy?.name ?? row.foundByName ?? "—",
+      row.findingDate ? formatDate(row.findingDate) : "—",
+      TENDER_STATUS_META[row.status].label,
+      COSTING_APPROVAL_META[row.costingApprovalStatus].label,
+    ]);
     downloadCsv("tender-list.csv", [header, ...rows]);
   }
 
@@ -182,7 +254,8 @@ export default function TendersListPage() {
           <div className="relative">
             <SecondaryButton onClick={() => setDateRangeOpen((v) => !v)} className="h-9">
               <Calendar className="h-4 w-4" />
-              {draft.fromDate ? formatDate(draft.fromDate) : "From"} – {draft.toDate ? formatDate(draft.toDate) : "To"}
+              {draft.fromDate ? formatDate(draft.fromDate) : "From"} –{" "}
+              {draft.toDate ? formatDate(draft.toDate) : "To"}
             </SecondaryButton>
             {dateRangeOpen && (
               <>
@@ -231,18 +304,21 @@ export default function TendersListPage() {
             Export
           </button>
 
-          <Link href="/tenders/create">
-            <PrimaryButton className="h-9">
-              <FileEdit className="h-4 w-4" />
-              Add New Tender
-            </PrimaryButton>
-          </Link>
+          <PrimaryButton
+            type="button"
+            className="h-9"
+            onClick={() => setCreateTenderOpen(true)}
+          >
+            <FileEdit className="h-4 w-4" />
+            Add New Tender
+          </PrimaryButton>
         </div>
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid grid-cols-6 gap-1 sm:gap-1.5 lg:gap-2 xl:gap-3">
         <ModuleStatCard
+          compact
           icon={SquareStack}
           iconClassName="bg-biz-blue-soft text-biz-blue"
           label="Total Tenders"
@@ -250,6 +326,7 @@ export default function TendersListPage() {
           helper="All Time"
         />
         <ModuleStatCard
+          compact
           icon={ClipboardList}
           iconClassName="bg-biz-orange-soft text-biz-orange"
           label="Preparing"
@@ -257,6 +334,7 @@ export default function TendersListPage() {
           helper="Draft / Published / Preparing"
         />
         <ModuleStatCard
+          compact
           icon={ArrowRight}
           iconClassName="bg-biz-purple-soft text-biz-purple"
           label="Submitted"
@@ -264,6 +342,7 @@ export default function TendersListPage() {
           helper="Awaiting Opening"
         />
         <ModuleStatCard
+          compact
           icon={Search}
           iconClassName="bg-biz-warning-soft text-biz-warning"
           label="Under Evaluation"
@@ -271,6 +350,7 @@ export default function TendersListPage() {
           helper="Opened / NOA Pending"
         />
         <ModuleStatCard
+          compact
           icon={Award}
           iconClassName="bg-biz-success-soft text-biz-success"
           label="Awarded"
@@ -278,6 +358,7 @@ export default function TendersListPage() {
           helper="Awarded / Ongoing"
         />
         <ModuleStatCard
+          compact
           icon={XCircle}
           iconClassName="bg-biz-danger-soft text-biz-danger"
           label="Unsuccessful"
@@ -290,7 +371,9 @@ export default function TendersListPage() {
       <div className="rounded-lg border border-biz-border bg-biz-surface p-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-1 min-w-[180px] flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-biz-muted">Search Tender ID / Work Name</label>
+            <label className="text-[12px] font-medium text-biz-muted">
+              Search Tender ID / Work Name
+            </label>
             <TextInput
               icon={Search}
               placeholder="Search..."
@@ -300,36 +383,28 @@ export default function TendersListPage() {
             />
           </div>
 
-          <div className="flex flex-1 min-w-[160px] flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-biz-muted">Search Assigned To</label>
-            <TextInput
-              icon={Search}
-              placeholder="Anyone"
-              value={draft.assignedToName}
-              onChange={(e) => setDraft((d) => ({ ...d, assignedToName: e.target.value }))}
-              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-            />
-          </div>
-
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-biz-muted">Organization</label>
+            <label className="text-[12px] font-medium text-biz-muted">Tender Type</label>
             <SelectInput
               className="w-[160px]"
               placeholder="All"
-              value={draft.organizationMasterId}
-              onChange={(e) => setDraft((d) => ({ ...d, organizationMasterId: e.target.value }))}
-              options={(organizations.data ?? []).map((org) => ({ label: org.shortName, value: org.id }))}
+              value={draft.tenderType}
+              onChange={(e) => setDraft((d) => ({ ...d, tenderType: e.target.value }))}
+              options={TENDER_TYPE_OPTIONS}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-biz-muted">Source</label>
+            <label className="text-[12px] font-medium text-biz-muted">Procurement Method</label>
             <SelectInput
               className="w-[150px]"
               placeholder="All"
-              value={draft.source}
-              onChange={(e) => setDraft((d) => ({ ...d, source: e.target.value }))}
-              options={SOURCE_OPTIONS}
+              value={draft.procurementMethod}
+              onChange={(e) => setDraft((d) => ({ ...d, procurementMethod: e.target.value }))}
+              options={TENDER_PROCUREMENT_METHODS.map((method) => ({
+                value: method,
+                label: method,
+              }))}
             />
           </div>
 
@@ -344,11 +419,6 @@ export default function TendersListPage() {
             />
           </div>
 
-          <SecondaryButton onClick={() => setMoreFiltersOpen((v) => !v)}>
-            <SlidersHorizontal className="h-4 w-4" />
-            More Filters
-          </SecondaryButton>
-
           <PrimaryButton onClick={() => applyFilters()}>
             <Search className="h-4 w-4" />
             Search
@@ -356,111 +426,130 @@ export default function TendersListPage() {
           <SecondaryButton onClick={clearFilters}>Reset</SecondaryButton>
         </div>
 
-        {moreFiltersOpen && (
-          <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-biz-border pt-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] font-medium text-biz-muted">Work Category</label>
-              <SelectInput
-                className="w-[180px]"
-                placeholder="All"
-                value={draft.category}
-                onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
-                options={(categories.data ?? []).map((category) => ({ label: category, value: category }))}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Table */}
       <div className="rounded-lg border border-biz-border bg-biz-surface shadow-card">
         <div className="flex items-center justify-between border-b border-biz-border px-4 py-3">
-          <h3 className="text-[15px] font-semibold text-biz-text">Tender List</h3>
+          <h3 className="text-[15px] font-semibold text-biz-text">
+            All Tenders ({meta.total})
+          </h3>
         </div>
 
         <DataTable<TenderRecord>
+          containerClassName="overflow-x-hidden"
+          tableClassName="min-w-0 table-fixed text-[11px] xl:text-[12px]"
           isLoading={tenders.isLoading}
           data={visibleItems}
           rowKey={(row) => row.id}
           columns={[
-            { key: "tenderId", header: "Tender ID", render: (row) => row.egpTenderId ?? "N/A" },
+            {
+              key: "tenderId",
+              header: "Tender ID",
+              className: "w-[10%] overflow-hidden px-2 xl:px-3",
+              render: (row) => (
+                <span title={row.egpTenderId ?? "N/A"} className="block truncate">
+                  {row.egpTenderId ?? "N/A"}
+                </span>
+              ),
+            },
             {
               key: "work",
-              header: "Work / Tender Name",
+              header: "Product / Work Name",
+              className: "w-[21%] overflow-hidden px-2 xl:px-3",
               render: (row) => (
-                <Link href={`/tenders/${row.id}`} className="font-medium text-biz-blue hover:underline">
+                <Link
+                  href={`/tenders/${row.id}`}
+                  title={row.workName}
+                  className="line-clamp-2 w-full break-words font-medium leading-4 text-biz-blue hover:underline"
+                >
                   {row.workName}
                 </Link>
               ),
             },
-            { key: "org", header: "Organization", render: (row) => row.organizationMaster.shortName },
             {
-              key: "source",
-              header: "Source",
-              render: (row) => <StatusBadge label={tenderSource(row.id)} tone="info" />,
-            },
-            { key: "searchDate", header: "Search Date", render: (row) => formatDate(row.createdAt) },
-            {
-              key: "assigned",
-              header: "Assigned To",
-              render: (row) => {
-                const avatar = avatarForAssignee(row.assignedToName);
-                return (
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
-                      style={{ backgroundColor: avatar.color }}
-                    >
-                      {avatar.initial}
-                    </span>
-                    <span className="whitespace-nowrap">{avatar.name}</span>
-                  </span>
-                );
-              },
+              key: "tenderType",
+              header: "Tender Type",
+              className: "hidden w-[8%] overflow-hidden whitespace-normal px-2 leading-tight lg:table-cell xl:px-3",
+              render: (row) => (
+                <span title={row.tenderType ?? "Not set"} className="block truncate">
+                  {row.tenderType ?? "Not set"}
+                </span>
+              ),
             },
             {
-              key: "opening",
-              header: "Opening Date",
-              render: (row) => (row.openingDate ? formatDate(row.openingDate) : "—"),
+              key: "procurementMethod",
+              header: "Procurement Method",
+              className: "w-[9%] overflow-hidden whitespace-normal px-2 leading-tight xl:px-3",
+              render: (row) => (
+                <span title={row.procurementMethod} className="block truncate">
+                  {row.procurementMethod}
+                </span>
+              ),
             },
             {
-              key: "followUp",
-              header: "Next Follow Up",
-              render: (row) => {
-                const followUp = tenderNextFollowUp(row);
-                return followUp ? formatDate(followUp) : "—";
-              },
+              key: "closingDate",
+              header: "Closing Date",
+              className: "w-[10%] whitespace-normal px-2 leading-tight xl:px-3",
+              render: (row) =>
+                row.submissionDeadline ? formatDate(row.submissionDeadline) : "—",
+            },
+            {
+              key: "foundBy",
+              header: "Found By",
+              className: "hidden w-[9%] overflow-hidden px-2 lg:table-cell xl:px-3",
+              render: (row) => row.foundBy?.name ?? row.foundByName ?? "—",
+            },
+            {
+              key: "findingDate",
+              header: "Finding Date",
+              className: "hidden w-[9%] whitespace-normal px-2 leading-tight lg:table-cell xl:px-3",
+              render: (row) => (row.findingDate ? formatDate(row.findingDate) : "—"),
             },
             {
               key: "status",
               header: "Status",
+              className: "w-[9%] overflow-hidden px-2 xl:px-3",
               render: (row) => (
-                <StatusBadge label={TENDER_STATUS_META[row.status].label} tone={TENDER_STATUS_META[row.status].tone} />
+                <StatusBadge
+                  label={TENDER_STATUS_META[row.status].label}
+                  tone={TENDER_STATUS_META[row.status].tone}
+                />
               ),
             },
             {
-              key: "priority",
-              header: "Priority",
+              key: "costingApproval",
+              header: "Costing Approval",
+              className: "w-[11%] overflow-hidden whitespace-normal px-2 leading-tight xl:px-3",
               render: (row) => {
-                const priority = tenderPriority(row.id);
-                return <StatusBadge label={priority} tone={PRIORITY_TONE[priority]} />;
+                if (row.costingApprovalStatus === "PENDING_APPROVAL") {
+                  return (
+                    <PrimaryButton
+                      className="h-7 max-w-full gap-1 px-1.5 text-[10px] xl:px-2"
+                      onClick={() => {
+                        setApprovalError("");
+                        setApprovalTender(row);
+                      }}
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Approve
+                    </PrimaryButton>
+                  );
+                }
+                const meta = COSTING_APPROVAL_META[row.costingApprovalStatus];
+                return <StatusBadge label={meta.label} tone={meta.tone} />;
               },
             },
-            { key: "value", header: "Tender Value (BDT)", render: (row) => formatBDT(row.contractValue) },
             {
               key: "action",
               header: "Action",
+              className: "w-[5%] overflow-hidden bg-biz-surface px-1 text-center",
               render: (row) => (
-                <div className="flex items-center justify-center gap-1">
-                  <Link href={`/tenders/${row.id}`}>
-                    <IconButton aria-label="View Details" title="View">
-                      <Eye className="h-4 w-4" />
-                    </IconButton>
-                  </Link>
+                <div className="flex items-center justify-center">
                   <IconButton
                     aria-label="More actions"
                     title="More actions"
-                    onClick={(e) => toggleMenu(row.id, e)}
+                    onClick={(e) => toggleMenu(row, e)}
                   >
                     <MoreVertical className="h-4 w-4" />
                   </IconButton>
@@ -484,37 +573,161 @@ export default function TendersListPage() {
       <div className="flex items-center gap-2 rounded-lg border border-biz-blue/20 bg-biz-blue-soft px-4 py-2.5 text-[12.5px] text-biz-text">
         <Info className="h-4 w-4 shrink-0 text-biz-blue" />
         <span>
-          Click the <span className="font-semibold">tender name</span> or <span className="font-semibold">View</span>{" "}
-          to open full tender details and continue the workflow.
+          Click the <span className="font-semibold">tender name</span> or{" "}
+          <span className="font-semibold">View</span> to open full tender details and continue the
+          workflow.
         </span>
       </div>
 
       {menuAnchor && (
         <>
-          <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={() => setMenuAnchor(null)} />
+          <button
+            type="button"
+            className="fixed inset-0 z-40"
+            aria-label="Close"
+            onClick={() => setMenuAnchor(null)}
+          />
           <div
             className="fixed z-50 w-[180px] overflow-hidden rounded-md border border-biz-border bg-biz-surface py-1 shadow-card-hover"
             style={{ top: menuAnchor.top, right: menuAnchor.right }}
           >
             <Link
-              href={`/tenders/${menuAnchor.id}/edit`}
+              href={`/tenders/${menuAnchor.tender.id}`}
+              className="flex items-center gap-2 px-3 py-2 text-[12.5px] text-biz-text hover:bg-biz-bg"
+              onClick={() => setMenuAnchor(null)}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              View
+            </Link>
+            <Link
+              href={`/tenders/${menuAnchor.tender.id}/edit`}
               className="flex items-center gap-2 px-3 py-2 text-[12.5px] text-biz-text hover:bg-biz-bg"
               onClick={() => setMenuAnchor(null)}
             >
               <FileEdit className="h-3.5 w-3.5" />
               Edit
             </Link>
-            <Link
-              href={`/tenders/${menuAnchor.id}`}
-              className="flex items-center gap-2 px-3 py-2 text-[12.5px] text-biz-text hover:bg-biz-bg"
-              onClick={() => setMenuAnchor(null)}
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-biz-danger hover:bg-biz-danger/5"
+              onClick={() => {
+                setDeleteError("");
+                setDeleteTender(menuAnchor.tender);
+                setMenuAnchor(null);
+              }}
             >
-              <ArrowRight className="h-3.5 w-3.5" />
-              Continue Workflow
-            </Link>
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
           </div>
         </>
       )}
+
+      <Modal
+        open={!!deleteTender}
+        onClose={() => !deleteTenderMutation.isPending && setDeleteTender(null)}
+        title="Delete Tender?"
+      >
+        {deleteTender && (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-md border border-biz-border bg-biz-bg p-3 text-[13px] text-biz-text">
+              <p className="font-semibold">
+                {deleteTender.egpTenderId} · {deleteTender.workName}
+              </p>
+              <p className="mt-1 text-biz-muted">
+                Only an unused draft tender can be deleted. This action cannot be undone.
+              </p>
+            </div>
+            {(deleteTender.status !== "DRAFT" ||
+              deleteTender.costingApprovalStatus !== "DRAFT") && (
+              <p className="text-[12px] font-medium text-biz-danger">
+                This tender has already entered the workflow and cannot be deleted.
+              </p>
+            )}
+            {deleteError && <p className="text-[12px] text-biz-danger">{deleteError}</p>}
+            <div className="flex justify-end gap-2">
+              <SecondaryButton
+                disabled={deleteTenderMutation.isPending}
+                onClick={() => setDeleteTender(null)}
+              >
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton
+                className="bg-biz-danger hover:bg-biz-danger/90"
+                disabled={
+                  deleteTenderMutation.isPending ||
+                  deleteTender.status !== "DRAFT" ||
+                  deleteTender.costingApprovalStatus !== "DRAFT"
+                }
+                onClick={deleteSelectedTender}
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteTenderMutation.isPending ? "Deleting..." : "Delete Tender"}
+              </PrimaryButton>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={createTenderOpen}
+        onClose={() => setCreateTenderOpen(false)}
+        title="Add New Tender"
+        wide
+        contentClassName="max-h-[calc(100vh-2rem)] overflow-y-auto"
+      >
+        <TenderForm
+          mode="create"
+          embedded
+          onCancel={() => setCreateTenderOpen(false)}
+          onCompleted={(message) => {
+            setCreateTenderOpen(false);
+            setSuccessTitle("Tender Saved");
+            setSuccessMessage(message);
+          }}
+        />
+      </Modal>
+
+      <Modal
+        open={!!approvalTender}
+        onClose={() => !approveForCosting.isPending && setApprovalTender(null)}
+        title="Approve for Tender Costing?"
+      >
+        {approvalTender && (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-md border border-biz-border bg-biz-bg p-3 text-[13px] text-biz-text">
+              <p className="font-semibold">
+                {approvalTender.egpTenderId} · {approvalTender.workName}
+              </p>
+              <p className="mt-1 text-biz-muted">
+                A ready costing record will be created and placed at the top of the Tender Costing
+                list.
+              </p>
+            </div>
+            {approvalError && <p className="text-[12px] text-biz-danger">{approvalError}</p>}
+            <div className="flex justify-end gap-2">
+              <SecondaryButton
+                disabled={approveForCosting.isPending}
+                onClick={() => setApprovalTender(null)}
+              >
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton disabled={approveForCosting.isPending} onClick={approveSelectedTender}>
+                <ShieldCheck className="h-4 w-4" />
+                {approveForCosting.isPending ? "Approving..." : "Approve for Costing"}
+              </PrimaryButton>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <SuccessPopup
+        open={!!successMessage}
+        title={successTitle}
+        message={successMessage}
+        onClose={closeSuccess}
+        onPrimary={closeSuccess}
+      />
     </div>
   );
 }

@@ -91,7 +91,9 @@ export default function TenderDetailPage() {
             <StatusBadge label={statusMeta.label} tone={statusMeta.tone} />
           </div>
           <p className="mt-1 text-[13px] text-biz-muted">
-            {t.organizationMaster.shortName} — {t.organizationMaster.fullName}
+            {t.organizationMaster
+              ? `${t.organizationMaster.shortName} — ${t.organizationMaster.fullName}`
+              : "Organization not set"}
             {t.egpTenderId ? ` · e-GP ID: ${t.egpTenderId}` : ""}
           </p>
         </div>

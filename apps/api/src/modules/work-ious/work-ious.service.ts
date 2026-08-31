@@ -106,7 +106,9 @@ function headerDto(row: WorkIouListRecord) {
           tenderId: row.tender.egpTenderId,
           workName: row.tender.workName,
           status: row.tender.status,
-          organization: organizationDto(row.tender.organizationMaster),
+          organization: row.tender.organizationMaster
+            ? organizationDto(row.tender.organizationMaster)
+            : null,
         }
       : null,
     workId: row.workId,
@@ -422,7 +424,9 @@ export class WorkIousService {
         tenderId: tender.egpTenderId,
         workName: tender.workName,
         status: tender.status,
-        organization: organizationDto(tender.organizationMaster),
+        organization: tender.organizationMaster
+          ? organizationDto(tender.organizationMaster)
+          : null,
       })),
       projects: projects.map((work) => ({
         id: work.id,

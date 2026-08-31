@@ -2,29 +2,27 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Banknote,
-  Calendar,
-  Clock,
+  CheckCircle2,
+  Clock3,
   Download,
   Eye,
-  Filter,
-  Folder,
-  Hourglass,
-  Info,
-  LayoutGrid,
-  List,
-  Loader2,
-  MoreVertical,
+  FolderKanban,
   Plus,
+  RotateCcw,
   Search,
   Settings2,
-  SlidersHorizontal,
-  X,
 } from "lucide-react";
 import {
+  useAllOrganizations,
+  useTenderCostingStats,
+  useTenderCostings,
+  useTenderOptions,
+} from "@bizovix/api-client";
+import {
   DataTable,
-  IconButton,
   ModuleStatCard,
   Pagination,
   PrimaryButton,
@@ -32,739 +30,497 @@ import {
   SelectInput,
   StatusBadge,
   TextInput,
-  cn,
-  type DataTableColumn,
   type StatusBadgeTone,
 } from "@bizovix/ui";
-import { formatBDT, formatBDTCompact, formatDate } from "@bizovix/utils";
+import { formatBDTCompact, formatDate } from "@bizovix/utils";
+import type { TenderCostingQuery, TenderCostingRecord, TenderCostingStatus } from "@bizovix/types";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
-import {
-  COSTING_ASSIGNEES,
-  COSTING_ORGANIZATIONS,
-  COSTING_STATUS_OPTIONS,
-  type CostingAssignee,
-  type CostingStatus,
-  type TenderCostingRow,
-} from "./mock-data";
-import { useCostingRows } from "./use-costing-rows";
 
-const STATUS_TONE: Record<CostingStatus, StatusBadgeTone> = {
-  Completed: "success",
-  "In Progress": "warning",
-  Pending: "purple",
+const STATUS_META: Record<TenderCostingStatus, { label: string; tone: StatusBadgeTone }> = {
+  READY: { label: "Ready for Costing", tone: "info" },
+  IN_PROGRESS: { label: "In Progress", tone: "warning" },
+  COMPLETED: { label: "Completed", tone: "success" },
+  CANCELLED: { label: "Cancelled", tone: "danger" },
 };
-
-type SortKey = "estimatedValue" | "estimatedCost" | "ourCost";
 
 interface FilterDraft {
-  tenderId: string;
-  workName: string;
-  organization: string;
+  search: string;
+  organizationMasterId: string;
   status: string;
-  assignedTo: string;
-  marginMin: string;
-  marginMax: string;
+  assignedToUserId: string;
+  fromDate: string;
+  toDate: string;
 }
 
-const EMPTY_DRAFT: FilterDraft = {
-  tenderId: "",
-  workName: "",
-  organization: "",
+const EMPTY_FILTERS: FilterDraft = {
+  search: "",
+  organizationMasterId: "",
   status: "",
-  assignedTo: "",
-  marginMin: "",
-  marginMax: "",
+  assignedToUserId: "",
+  fromDate: "",
+  toDate: "",
 };
-
-const OPTIONAL_COLUMNS = [
-  { key: "work", label: "Work / Tender Name" },
-  { key: "org", label: "Organization" },
-  { key: "estValue", label: "Estimated Value (BDT)" },
-  { key: "estCost", label: "Estimated Cost (BDT)" },
-  { key: "ourCost", label: "Our Cost (BDT)" },
-  { key: "margin", label: "Margin (%)" },
-  { key: "status", label: "Status" },
-  { key: "assigned", label: "Assigned To" },
-  { key: "updated", label: "Last Updated" },
-] as const;
-
-const CSV_HEADER = [
-  "Tender ID",
-  "Work / Tender Name",
-  "Organization",
-  "Estimated Value (BDT)",
-  "Estimated Cost (BDT)",
-  "Our Cost (BDT)",
-  "Margin (%)",
-  "Status",
-  "Assigned To",
-  "Last Updated",
-];
-
-function toCsvRow(row: TenderCostingRow): string[] {
-  return [
-    row.tenderId,
-    row.workName,
-    row.organization,
-    String(row.estimatedValue),
-    String(row.estimatedCost),
-    String(row.ourCost),
-    `${row.marginPercent.toFixed(2)}%`,
-    row.status,
-    row.assignedTo.name,
-    formatDate(row.lastUpdated),
-  ];
-}
 
 function toCsv(rows: string[][]): string {
   return rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
 }
 
-function downloadCsv(filename: string, rows: string[][]) {
-  const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8;" });
+function downloadCsv(rows: TenderCostingRecord[]) {
+  const header = [
+    "Tender ID",
+    "Product / Work Name",
+    "Organization",
+    "Estimated Value",
+    "Estimated Cost",
+    "Our Cost",
+    "Margin %",
+    "Status",
+    "Assigned To",
+    "Last Updated",
+  ];
+  const body = rows.map((record) => [
+    record.tender.egpTenderId ?? record.tender.id,
+    record.tender.workName,
+    record.tender.organizationMaster?.shortName ?? "Not set",
+    record.estimatedValue,
+    record.estimatedCost,
+    record.ourCost,
+    record.marginPercent,
+    STATUS_META[record.status].label,
+    record.assignedTo?.name ?? record.assignedToName ?? record.preparedBy?.name ?? "Unassigned",
+    record.updatedAt,
+  ]);
+  const blob = new Blob([toCsv([header, ...body])], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "tender-costing.csv";
+  anchor.click();
   URL.revokeObjectURL(url);
 }
 
-function AssigneeCell({ assignee }: { assignee: CostingAssignee }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
-        style={{ backgroundColor: assignee.color }}
-      >
-        {assignee.initial}
-      </span>
-      <span className="whitespace-nowrap">{assignee.name}</span>
-    </span>
-  );
-}
-
 export default function TenderCostingPage() {
-  useSetBreadcrumb([{ label: "Tender Management", href: "/tender-management" }, { label: "Tender Costing" }]);
+  useSetBreadcrumb([
+    { label: "Tender Management", href: "/tender-management" },
+    { label: "Tender Costing" },
+  ]);
+  const router = useRouter();
+  const [filters, setFilters] = React.useState<FilterDraft>(EMPTY_FILTERS);
+  const [query, setQuery] = React.useState<TenderCostingQuery>({ page: 1, limit: 10 });
+  const [highlightedId, setHighlightedId] = React.useState("");
 
-  const rows = useCostingRows();
-  const [draft, setDraft] = React.useState<FilterDraft>(EMPTY_DRAFT);
-  const [query, setQuery] = React.useState<FilterDraft>(EMPTY_DRAFT);
-  const [page, setPage] = React.useState(1);
-  const [sort, setSort] = React.useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
-  const [viewMode, setViewMode] = React.useState<"list" | "grid">("list");
-  const [filterPanelOpen, setFilterPanelOpen] = React.useState(true);
-  const [moreFiltersOpen, setMoreFiltersOpen] = React.useState(false);
-  const [dateRangeOpen, setDateRangeOpen] = React.useState(false);
-  const [dateRange, setDateRange] = React.useState({ from: "2024-05-01", to: "2024-05-31" });
-  const [exportOpen, setExportOpen] = React.useState(false);
-  const [columnSettingOpen, setColumnSettingOpen] = React.useState(false);
-  const [hiddenColumns, setHiddenColumns] = React.useState<Set<string>>(new Set());
-  const [menuAnchor, setMenuAnchor] = React.useState<{ id: string; top: number; right: number } | null>(null);
-  const [viewing, setViewing] = React.useState<TenderCostingRow | null>(null);
+  const costings = useTenderCostings(query);
+  const stats = useTenderCostingStats();
+  const organizations = useAllOrganizations();
+  const options = useTenderOptions();
 
-  const limit = 10;
+  React.useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("costingId") ?? "";
+    const timer = window.setTimeout(() => setHighlightedId(id), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
-  function applyFilters(next: FilterDraft = draft) {
-    setQuery(next);
-    setPage(1);
+  function applyFilters() {
+    setQuery({
+      page: 1,
+      limit: 10,
+      search: filters.search || undefined,
+      organizationMasterId: filters.organizationMasterId || undefined,
+      status: (filters.status as TenderCostingStatus) || undefined,
+      assignedToUserId: filters.assignedToUserId || undefined,
+      fromDate: filters.fromDate || undefined,
+      toDate: filters.toDate || undefined,
+    });
   }
 
   function resetFilters() {
-    setDraft(EMPTY_DRAFT);
-    setQuery(EMPTY_DRAFT);
-    setPage(1);
-    setMoreFiltersOpen(false);
+    setFilters(EMPTY_FILTERS);
+    setQuery({ page: 1, limit: 10 });
   }
 
-  function toggleSort(key: SortKey) {
-    setSort((current) => {
-      if (current?.key !== key) return { key, dir: "asc" };
-      if (current.dir === "asc") return { key, dir: "desc" };
-      return null;
-    });
-  }
+  const records = React.useMemo(() => {
+    const items = costings.data?.items ?? [];
+    if (!highlightedId) return items;
+    return [...items].sort(
+      (left, right) => Number(right.id === highlightedId) - Number(left.id === highlightedId),
+    );
+  }, [costings.data?.items, highlightedId]);
 
-  const filtered = React.useMemo(() => {
-    const tenderIdTerm = query.tenderId.trim().toLowerCase();
-    const workNameTerm = query.workName.trim().toLowerCase();
-    const marginMin = query.marginMin ? Number(query.marginMin) : null;
-    const marginMax = query.marginMax ? Number(query.marginMax) : null;
-
-    let list = rows.filter((row) => {
-      if (tenderIdTerm && !row.tenderId.toLowerCase().includes(tenderIdTerm)) return false;
-      if (workNameTerm && !row.workName.toLowerCase().includes(workNameTerm)) return false;
-      if (query.organization && row.organization !== query.organization) return false;
-      if (query.status && row.status !== query.status) return false;
-      if (query.assignedTo && row.assignedTo.name !== query.assignedTo) return false;
-      if (marginMin !== null && row.marginPercent < marginMin) return false;
-      if (marginMax !== null && row.marginPercent > marginMax) return false;
-      return true;
-    });
-
-    if (sort) {
-      const { key, dir } = sort;
-      list = [...list].sort((a, b) => (a[key] - b[key]) * (dir === "asc" ? 1 : -1));
-    }
-
-    return list;
-  }, [rows, query, sort]);
-
-  const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / limit));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice((safePage - 1) * limit, safePage * limit);
-
-  const completedCount = rows.filter((row) => row.status === "Completed").length;
-  const inProgressCount = rows.filter((row) => row.status === "In Progress").length;
-  const pendingCount = rows.filter((row) => row.status === "Pending").length;
-  const totalEstimatedValue = rows.reduce((sum, row) => sum + row.estimatedValue, 0);
-  const pct = (count: number) => (rows.length > 0 ? ((count / rows.length) * 100).toFixed(2) : "0.00");
-
-  function toggleMenu(id: string, e: React.MouseEvent<HTMLButtonElement>) {
-    if (menuAnchor?.id === id) {
-      setMenuAnchor(null);
-      return;
-    }
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMenuAnchor({ id, top: rect.bottom + 4, right: window.innerWidth - rect.right });
-  }
-
-  function exportRowCsv(row: TenderCostingRow) {
-    downloadCsv(`${row.tenderId}.csv`, [CSV_HEADER, toCsvRow(row)]);
-    setMenuAnchor(null);
-  }
-
-  function exportListCsv() {
-    downloadCsv("tender-costing.csv", [CSV_HEADER, ...filtered.map(toCsvRow)]);
-    setExportOpen(false);
-  }
-
-  function toggleColumn(key: string) {
-    setHiddenColumns((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  const allColumns: DataTableColumn<TenderCostingRow>[] = [
-    {
-      key: "tenderId",
-      header: "Tender ID",
-      render: (row) => (
-        <button
-          type="button"
-          onClick={() => setViewing(row)}
-          className="font-medium text-biz-blue hover:underline"
-        >
-          {row.tenderId}
-        </button>
-      ),
-    },
-    { key: "work", header: "Work / Tender Name", render: (row) => row.workName },
-    { key: "org", header: "Organization", render: (row) => row.organization },
-    {
-      key: "estValue",
-      header: "Estimated Value (BDT)",
-      sortable: true,
-      sortDirection: sort?.key === "estimatedValue" ? sort.dir : null,
-      onSort: () => toggleSort("estimatedValue"),
-      render: (row) => row.estimatedValue.toLocaleString(),
-      className: "text-right",
-    },
-    {
-      key: "estCost",
-      header: "Estimated Cost (BDT)",
-      sortable: true,
-      sortDirection: sort?.key === "estimatedCost" ? sort.dir : null,
-      onSort: () => toggleSort("estimatedCost"),
-      render: (row) => row.estimatedCost.toLocaleString(),
-      className: "text-right",
-    },
-    {
-      key: "ourCost",
-      header: "Our Cost (BDT)",
-      sortable: true,
-      sortDirection: sort?.key === "ourCost" ? sort.dir : null,
-      onSort: () => toggleSort("ourCost"),
-      render: (row) => row.ourCost.toLocaleString(),
-      className: "text-right",
-    },
-    {
-      key: "margin",
-      header: "Margin (%)",
-      render: (row) => <span className="font-medium text-biz-success">{row.marginPercent.toFixed(2)}%</span>,
-      className: "text-right",
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => <StatusBadge label={row.status} tone={STATUS_TONE[row.status]} />,
-    },
-    { key: "assigned", header: "Assigned To", render: (row) => <AssigneeCell assignee={row.assignedTo} /> },
-    { key: "updated", header: "Last Updated", render: (row) => formatDate(row.lastUpdated) },
-    {
-      key: "action",
-      header: "Action",
-      render: (row) => (
-        <div className="flex items-center justify-center gap-1.5">
-          <SecondaryButton onClick={() => setViewing(row)} className="h-8 gap-1.5 px-2.5 text-[12px]">
-            <Eye className="h-3.5 w-3.5" />
-            View
-          </SecondaryButton>
-          <IconButton aria-label="More actions" title="More actions" onClick={(e) => toggleMenu(row.id, e)}>
-            <MoreVertical className="h-4 w-4" />
-          </IconButton>
-        </div>
-      ),
-    },
-  ];
-
-  const visibleColumns = allColumns.filter(
-    (col) => col.key === "tenderId" || col.key === "action" || !hiddenColumns.has(col.key),
-  );
+  const meta = costings.data?.meta ?? { page: 1, limit: 10, total: 0, totalPages: 1 };
+  const snapshot = stats.data;
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-biz-border bg-biz-surface px-4 py-3 shadow-card">
         <div>
           <h1 className="text-page-title text-biz-text">Tender Costing</h1>
-          <p className="mt-0.5 text-[12.5px] text-biz-muted">Tender Management &gt; Tender Costing</p>
+          <p className="mt-0.5 text-[12.5px] text-biz-muted">
+            Approved tenders appear here first, ready for costing preparation.
+          </p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <SecondaryButton onClick={() => setDateRangeOpen((v) => !v)} className="h-9">
-              <Calendar className="h-4 w-4" />
-              {formatDate(dateRange.from)} - {formatDate(dateRange.to)}
-            </SecondaryButton>
-            {dateRangeOpen && (
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-40"
-                  onClick={() => setDateRangeOpen(false)}
-                  aria-label="Close"
-                />
-                <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[260px] rounded-lg border border-biz-border bg-biz-surface p-3 shadow-card-hover">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[11px] font-medium text-biz-muted">
-                      From
-                      <input
-                        type="date"
-                        value={dateRange.from}
-                        onChange={(e) => setDateRange((r) => ({ ...r, from: e.target.value }))}
-                        className="mt-1 h-9 w-full rounded-sm border border-biz-border bg-biz-surface px-2 text-[13px] text-biz-text focus:outline-none focus:ring-2 focus:ring-biz-blue/30"
-                      />
-                    </label>
-                    <label className="text-[11px] font-medium text-biz-muted">
-                      To
-                      <input
-                        type="date"
-                        value={dateRange.to}
-                        onChange={(e) => setDateRange((r) => ({ ...r, to: e.target.value }))}
-                        className="mt-1 h-9 w-full rounded-sm border border-biz-border bg-biz-surface px-2 text-[13px] text-biz-text focus:outline-none focus:ring-2 focus:ring-biz-blue/30"
-                      />
-                    </label>
-                    <PrimaryButton className="mt-1 h-9" onClick={() => setDateRangeOpen(false)}>
-                      Apply
-                    </PrimaryButton>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          <SecondaryButton onClick={() => setFilterPanelOpen((v) => !v)} className="h-9">
-            <Filter className="h-4 w-4" />
-            Filter
+        <div className="flex items-center gap-2">
+          <SecondaryButton disabled={!records.length} onClick={() => downloadCsv(records)}>
+            <Download className="h-4 w-4" />
+            Export
           </SecondaryButton>
-
-          <div className="relative">
-            <SecondaryButton onClick={() => setExportOpen((v) => !v)} className="h-9">
-              <Download className="h-4 w-4" />
-              Export
-            </SecondaryButton>
-            {exportOpen && (
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-40"
-                  onClick={() => setExportOpen(false)}
-                  aria-label="Close"
-                />
-                <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[180px] overflow-hidden rounded-md border border-biz-border bg-biz-surface py-1 shadow-card-hover">
-                  <button
-                    type="button"
-                    onClick={exportListCsv}
-                    className="flex w-full items-center px-3 py-2 text-left text-[12.5px] text-biz-text hover:bg-biz-bg"
-                  >
-                    Export as CSV
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    title="Export as PDF (not yet available)"
-                    className="flex w-full cursor-not-allowed items-center px-3 py-2 text-left text-[12.5px] text-biz-muted"
-                  >
-                    Export as PDF
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          <Link href="/tenders">
+            <PrimaryButton>
+              <Plus className="h-4 w-4" />
+              Review Pending Tenders
+            </PrimaryButton>
+          </Link>
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <Link href="/tender-management/tender-costing/add">
-          <PrimaryButton className="h-9">
-            <Plus className="h-4 w-4" />
-            Add New Costing
-          </PrimaryButton>
-        </Link>
-      </div>
-
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-5">
+      <div className="grid grid-cols-6 gap-1 sm:gap-1.5 lg:gap-2">
         <ModuleStatCard
-          icon={Folder}
+          compact
+          icon={FolderKanban}
           iconClassName="bg-biz-blue-soft text-biz-blue"
           label="Total Costing"
-          value={String(rows.length)}
-          helper="In selected period"
+          value={String(snapshot?.total ?? "—")}
+          helper="Live records"
         />
         <ModuleStatCard
-          icon={Hourglass}
-          iconClassName="bg-biz-orange-soft text-biz-orange"
-          label="Completed"
-          value={String(completedCount)}
-          helper={`${pct(completedCount)}% of total`}
+          compact
+          icon={Clock3}
+          iconClassName="bg-biz-blue-soft text-biz-blue"
+          label="Ready"
+          value={String(snapshot?.ready ?? "—")}
+          helper="Approved tenders"
         />
         <ModuleStatCard
-          icon={Loader2}
-          iconClassName="bg-biz-orange-soft text-biz-orange"
+          compact
+          icon={Settings2}
+          iconClassName="bg-biz-warning-soft text-biz-warning"
           label="In Progress"
-          value={String(inProgressCount)}
-          helper={`${pct(inProgressCount)}% of total`}
+          value={String(snapshot?.inProgress ?? "—")}
+          helper="Costing underway"
         />
         <ModuleStatCard
-          icon={Clock}
-          iconClassName="bg-biz-purple-soft text-biz-purple"
-          label="Pending"
-          value={String(pendingCount)}
-          helper={`${pct(pendingCount)}% of total`}
-        />
-        <ModuleStatCard
-          icon={Banknote}
+          compact
+          icon={CheckCircle2}
           iconClassName="bg-biz-success-soft text-biz-success"
-          label="Total Estimated Value (BDT)"
-          value={formatBDTCompact(totalEstimatedValue)}
-          helper="In selected period"
+          label="Completed"
+          value={String(snapshot?.completed ?? "—")}
+          helper="Final costing"
+        />
+        <ModuleStatCard
+          compact
+          icon={Banknote}
+          iconClassName="bg-biz-purple-soft text-biz-purple"
+          label="Costing Budget"
+          value={snapshot ? formatBDTCompact(Number(snapshot.totalCostingBudget)) : "—"}
+          helper="Saved budgets"
+        />
+        <ModuleStatCard
+          compact
+          icon={Banknote}
+          iconClassName="bg-biz-orange-soft text-biz-orange"
+          label="Our Cost"
+          value={snapshot ? formatBDTCompact(Number(snapshot.totalOurCost)) : "—"}
+          helper="Calculated total"
         />
       </div>
 
-      {/* Filter Panel */}
-      {filterPanelOpen && (
-        <div className="rounded-lg border border-biz-border bg-biz-surface p-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-1 min-w-[160px] flex-col gap-1.5">
-              <label className="text-[12px] font-medium text-biz-muted">Search by Tender ID</label>
-              <TextInput
-                icon={Search}
-                placeholder="Enter Tender ID..."
-                value={draft.tenderId}
-                onChange={(e) => setDraft((d) => ({ ...d, tenderId: e.target.value }))}
-                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-              />
-            </div>
-
-            <div className="flex flex-1 min-w-[180px] flex-col gap-1.5">
-              <label className="text-[12px] font-medium text-biz-muted">Search by Work / Tender Name</label>
-              <TextInput
-                icon={Search}
-                placeholder="Enter Work / Tender Name..."
-                value={draft.workName}
-                onChange={(e) => setDraft((d) => ({ ...d, workName: e.target.value }))}
-                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] font-medium text-biz-muted">Organization</label>
-              <SelectInput
-                className="w-[160px]"
-                placeholder="All Organization"
-                value={draft.organization}
-                onChange={(e) => setDraft((d) => ({ ...d, organization: e.target.value }))}
-                options={COSTING_ORGANIZATIONS.map((org) => ({ label: org, value: org }))}
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] font-medium text-biz-muted">Status</label>
-              <SelectInput
-                className="w-[150px]"
-                placeholder="All Status"
-                value={draft.status}
-                onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
-                options={COSTING_STATUS_OPTIONS.map((s) => ({ label: s, value: s }))}
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] font-medium text-biz-muted">Assigned To</label>
-              <SelectInput
-                className="w-[160px]"
-                placeholder="All User"
-                value={draft.assignedTo}
-                onChange={(e) => setDraft((d) => ({ ...d, assignedTo: e.target.value }))}
-                options={COSTING_ASSIGNEES.map((a) => ({ label: a.name, value: a.name }))}
-              />
-            </div>
-
-            <SecondaryButton onClick={() => setMoreFiltersOpen((v) => !v)}>
-              <SlidersHorizontal className="h-4 w-4" />
-              More Filters
-            </SecondaryButton>
-
-            <PrimaryButton onClick={() => applyFilters()}>Search</PrimaryButton>
-            <SecondaryButton onClick={resetFilters}>Reset</SecondaryButton>
+      <div className="rounded-lg border border-biz-border bg-biz-surface p-2">
+        <div className="grid grid-cols-[minmax(0,2fr)_repeat(6,minmax(0,1fr))] items-end gap-1 lg:gap-2">
+          <div className="min-w-0">
+            <label className="mb-1 hidden text-[11px] font-medium text-biz-muted xl:block">
+              Search Tender ID / Work Name
+            </label>
+            <TextInput
+              className="h-8 min-w-0 px-1.5 text-[9px] sm:text-[10px] lg:px-2 lg:text-[11px]"
+              placeholder="Tender ID / Work..."
+              value={filters.search}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, search: event.target.value }))
+              }
+              onKeyDown={(event) => event.key === "Enter" && applyFilters()}
+            />
           </div>
+          <div className="min-w-0">
+            <label className="mb-1 hidden text-[11px] font-medium text-biz-muted xl:block">
+              Organization
+            </label>
+            <SelectInput
+              placeholder="All"
+              aria-label="Organization"
+              className="h-8 min-w-0 px-1 pr-4 text-[9px] sm:text-[10px] lg:px-2 lg:pr-6 lg:text-[11px]"
+              value={filters.organizationMasterId}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, organizationMasterId: event.target.value }))
+              }
+              options={(organizations.data ?? []).map((organization) => ({
+                value: organization.id,
+                label: organization.shortName,
+              }))}
+            />
+          </div>
+          <div className="min-w-0">
+            <label className="mb-1 hidden text-[11px] font-medium text-biz-muted xl:block">Status</label>
+            <SelectInput
+              placeholder="All"
+              aria-label="Status"
+              className="h-8 min-w-0 px-1 pr-4 text-[9px] sm:text-[10px] lg:px-2 lg:pr-6 lg:text-[11px]"
+              value={filters.status}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, status: event.target.value }))
+              }
+              options={Object.entries(STATUS_META).map(([value, meta]) => ({
+                value,
+                label: meta.label,
+              }))}
+            />
+          </div>
+          <div className="min-w-0">
+            <label className="mb-1 hidden text-[11px] font-medium text-biz-muted xl:block">
+              Assigned To
+            </label>
+            <SelectInput
+              placeholder="All"
+              aria-label="Assigned To"
+              className="h-8 min-w-0 px-1 pr-4 text-[9px] sm:text-[10px] lg:px-2 lg:pr-6 lg:text-[11px]"
+              value={filters.assignedToUserId}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, assignedToUserId: event.target.value }))
+              }
+              options={(options.data?.users ?? []).map((user) => ({
+                value: user.id,
+                label: user.name,
+              }))}
+            />
+          </div>
+          <div className="min-w-0">
+            <label className="mb-1 hidden text-[11px] font-medium text-biz-muted xl:block">From</label>
+            <TextInput
+              type="date"
+              aria-label="From date"
+              className="h-8 min-w-0 px-0.5 text-[8px] sm:px-1 sm:text-[9px] lg:px-2 lg:text-[10px]"
+              value={filters.fromDate}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, fromDate: event.target.value }))
+              }
+            />
+          </div>
+          <div className="min-w-0">
+            <label className="mb-1 hidden text-[11px] font-medium text-biz-muted xl:block">To</label>
+            <TextInput
+              type="date"
+              aria-label="To date"
+              className="h-8 min-w-0 px-0.5 text-[8px] sm:px-1 sm:text-[9px] lg:px-2 lg:text-[10px]"
+              value={filters.toDate}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, toDate: event.target.value }))
+              }
+            />
+          </div>
+          <div className="flex min-w-0 items-end gap-0.5 lg:gap-1">
+            <button
+              type="button"
+              aria-label="Search"
+              title="Search"
+              className="flex h-8 min-w-0 flex-1 items-center justify-center rounded-sm bg-biz-blue px-0.5 text-white hover:bg-biz-blue/90"
+              onClick={applyFilters}
+            >
+              <Search className="h-3 w-3 shrink-0" />
+              <span className="ml-1 hidden text-[10px] xl:inline">Search</span>
+            </button>
+            <button
+              type="button"
+              aria-label="Reset filters"
+              title="Reset filters"
+              className="flex h-8 min-w-0 flex-1 items-center justify-center rounded-sm border border-biz-border bg-biz-surface px-0.5 text-biz-muted hover:bg-biz-bg"
+              onClick={resetFilters}
+            >
+              <RotateCcw className="h-3 w-3 shrink-0" />
+              <span className="ml-1 hidden text-[10px] xl:inline">Reset</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
-          {moreFiltersOpen && (
-            <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-biz-border pt-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[12px] font-medium text-biz-muted">Min Margin (%)</label>
-                <TextInput
-                  type="number"
-                  className="w-[120px]"
-                  placeholder="0"
-                  value={draft.marginMin}
-                  onChange={(e) => setDraft((d) => ({ ...d, marginMin: e.target.value }))}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[12px] font-medium text-biz-muted">Max Margin (%)</label>
-                <TextInput
-                  type="number"
-                  className="w-[120px]"
-                  placeholder="100"
-                  value={draft.marginMax}
-                  onChange={(e) => setDraft((d) => ({ ...d, marginMax: e.target.value }))}
-                />
-              </div>
-            </div>
-          )}
+      {costings.isError && (
+        <div className="rounded-lg border border-biz-danger/30 bg-biz-danger/5 px-4 py-3 text-[12.5px] text-biz-danger">
+          Could not load tender costing records. Please retry.
         </div>
       )}
 
-      {/* Tender Costing List */}
       <div className="rounded-lg border border-biz-border bg-biz-surface shadow-card">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-biz-border px-4 py-3">
-          <h3 className="text-[15px] font-semibold text-biz-text">Tender Costing List ({total})</h3>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <SecondaryButton onClick={() => setColumnSettingOpen((v) => !v)} className="h-8 gap-1.5 px-2.5 text-[12px]">
-                <Settings2 className="h-3.5 w-3.5" />
-                Column Setting
-              </SecondaryButton>
-              {columnSettingOpen && (
-                <>
-                  <button
-                    type="button"
-                    className="fixed inset-0 z-40"
-                    onClick={() => setColumnSettingOpen(false)}
-                    aria-label="Close"
-                  />
-                  <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[220px] rounded-lg border border-biz-border bg-biz-surface p-2 shadow-card-hover">
-                    {OPTIONAL_COLUMNS.map((col) => (
-                      <label
-                        key={col.key}
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-biz-text hover:bg-biz-bg"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!hiddenColumns.has(col.key)}
-                          onChange={() => toggleColumn(col.key)}
-                          className="h-3.5 w-3.5 rounded border-biz-border text-biz-blue focus:ring-biz-blue/30"
-                        />
-                        {col.label}
-                      </label>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1 rounded-md border border-biz-border p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                aria-label="List view"
-                title="List view"
-                className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded",
-                  viewMode === "list" ? "bg-biz-blue text-white" : "text-biz-muted hover:bg-biz-bg",
-                )}
-              >
-                <List className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                aria-label="Grid view"
-                title="Grid view"
-                className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded",
-                  viewMode === "grid" ? "bg-biz-blue text-white" : "text-biz-muted hover:bg-biz-bg",
-                )}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+        <div className="flex items-center justify-between border-b border-biz-border px-4 py-3">
+          <h2 className="whitespace-nowrap text-[15px] font-semibold text-biz-text">Tender Costing List</h2>
+          <span className="hidden truncate text-[11.5px] text-biz-muted sm:block">
+            Ready records are created only after approval
+          </span>
         </div>
-
-        {viewMode === "grid" ? (
-          <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {pageRows.length === 0 ? (
-              <p className="col-span-full px-4 py-8 text-center text-biz-muted">No records found</p>
-            ) : (
-              pageRows.map((row) => (
+        <DataTable<TenderCostingRecord>
+          containerClassName="overflow-x-hidden"
+          tableClassName="min-w-0 table-fixed text-[10px] xl:text-[11px]"
+          isLoading={costings.isLoading}
+          data={records}
+          rowKey={(record) => record.id}
+          emptyMessage="No approved tender costing records found."
+          onRowClick={(record) =>
+            router.push(`/tender-management/tender-costing/add?costingId=${record.id}`)
+          }
+          columns={[
+            {
+              key: "tenderId",
+              header: "Tender ID",
+              className: "w-[12%] overflow-hidden px-1.5 xl:w-[10%] xl:px-2",
+              render: (record) => (
                 <div
-                  key={row.id}
-                  className="flex flex-col gap-2 rounded-lg border border-biz-border bg-biz-surface p-3 shadow-[0_1px_4px_rgba(15,23,42,0.04)]"
+                  className={
+                    highlightedId === record.id
+                      ? "rounded-md bg-biz-blue-soft px-2 py-1 ring-1 ring-biz-blue/30"
+                      : ""
+                  }
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setViewing(row)}
-                      className="text-left text-[13px] font-semibold text-biz-blue hover:underline"
-                    >
-                      {row.tenderId}
-                    </button>
-                    <StatusBadge label={row.status} tone={STATUS_TONE[row.status]} />
-                  </div>
-                  <p className="text-[12.5px] font-medium leading-snug text-biz-text">{row.workName}</p>
-                  <p className="text-[11.5px] text-biz-muted">{row.organization}</p>
-                  <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-[11.5px]">
-                    <span className="text-biz-muted">Est. Value</span>
-                    <span className="text-right font-medium text-biz-text">{formatBDT(row.estimatedValue)}</span>
-                    <span className="text-biz-muted">Our Cost</span>
-                    <span className="text-right font-medium text-biz-text">{formatBDT(row.ourCost)}</span>
-                    <span className="text-biz-muted">Margin</span>
-                    <span className="text-right font-semibold text-biz-success">{row.marginPercent.toFixed(2)}%</span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between border-t border-biz-border pt-2">
-                    <AssigneeCell assignee={row.assignedTo} />
-                    <div className="flex items-center gap-1">
-                      <SecondaryButton onClick={() => setViewing(row)} className="h-7 gap-1 px-2 text-[11px]">
-                        <Eye className="h-3 w-3" />
-                        View
-                      </SecondaryButton>
-                      <IconButton
-                        aria-label="More actions"
-                        title="More actions"
-                        onClick={(e) => toggleMenu(row.id, e)}
-                        className="h-7 w-7"
-                      >
-                        <MoreVertical className="h-3.5 w-3.5" />
-                      </IconButton>
-                    </div>
-                  </div>
+                  <p
+                    title={record.tender.egpTenderId ?? record.tender.id}
+                    className="truncate font-semibold text-biz-blue"
+                  >
+                    {record.tender.egpTenderId ?? record.tender.id}
+                  </p>
+                  {highlightedId === record.id && (
+                    <p className="text-[10px] font-medium text-biz-success">Newly approved</p>
+                  )}
                 </div>
-              ))
-            )}
-          </div>
-        ) : (
-          <DataTable<TenderCostingRow> data={pageRows} rowKey={(row) => row.id} columns={visibleColumns} />
-        )}
-
+              ),
+            },
+            {
+              key: "work",
+              header: "Product / Work Name",
+              className: "w-[22%] overflow-hidden px-1.5 xl:w-[18%] xl:px-2",
+              render: (record) => (
+                <span title={record.tender.workName} className="block truncate">
+                  {record.tender.workName}
+                </span>
+              ),
+            },
+            {
+              key: "organization",
+              header: "Organization",
+              className: "hidden w-[8%] overflow-hidden px-2 xl:table-cell",
+              render: (record) => {
+                const organization = record.tender.organizationMaster?.shortName ?? "Not set";
+                return (
+                  <span title={organization} className="block truncate">
+                    {organization}
+                  </span>
+                );
+              },
+            },
+            {
+              key: "value",
+              header: "Estimated Value (BDT)",
+              className: "w-[14%] overflow-hidden whitespace-normal px-1.5 text-right leading-tight xl:w-[10%] xl:px-2",
+              render: (record) => (
+                <>
+                  <span className="xl:hidden">{formatBDTCompact(Number(record.estimatedValue))}</span>
+                  <span className="hidden xl:inline">
+                    {Number(record.estimatedValue).toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </>
+              ),
+            },
+            {
+              key: "estimated",
+              header: "Estimated Cost (BDT)",
+              className: "hidden w-[10%] overflow-hidden whitespace-normal px-2 text-right leading-tight lg:table-cell",
+              render: (record) =>
+                Number(record.estimatedCost).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+            },
+            {
+              key: "ourCost",
+              header: "Our Cost (BDT)",
+              className: "w-[14%] overflow-hidden whitespace-normal px-1.5 text-right leading-tight xl:w-[10%] xl:px-2",
+              render: (record) => (
+                <>
+                  <span className="xl:hidden">{formatBDTCompact(Number(record.ourCost))}</span>
+                  <span className="hidden xl:inline">
+                    {Number(record.ourCost).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </>
+              ),
+            },
+            {
+              key: "margin",
+              header: "Margin",
+              className: "w-[9%] overflow-hidden px-1 text-right xl:w-[7%] xl:px-2",
+              render: (record) => (
+                <span className="font-semibold text-biz-success">
+                  {Number(record.marginPercent).toFixed(2)}%
+                </span>
+              ),
+            },
+            {
+              key: "status",
+              header: "Status",
+              className: "w-[12%] overflow-hidden px-1 xl:w-[8%] xl:px-2",
+              render: (record) => (
+                <StatusBadge
+                  label={STATUS_META[record.status].label}
+                  tone={STATUS_META[record.status].tone}
+                />
+              ),
+            },
+            {
+              key: "assigned",
+              header: "Assigned To",
+              className: "hidden w-[8%] overflow-hidden px-2 lg:table-cell",
+              render: (record) => {
+                const assigned =
+                  record.assignedTo?.name ??
+                  record.assignedToName ??
+                  record.preparedBy?.name ??
+                  "Unassigned";
+                return (
+                  <span title={assigned} className="block truncate">
+                    {assigned}
+                  </span>
+                );
+              },
+            },
+            {
+              key: "updated",
+              header: "Last Updated",
+              className: "hidden w-[7%] whitespace-normal px-2 leading-tight xl:table-cell",
+              render: (record) => formatDate(record.updatedAt),
+            },
+            {
+              key: "action",
+              header: "Action",
+              className: "w-[17%] overflow-hidden px-1 text-center xl:w-[14%] xl:px-2",
+              render: (record) => (
+                <Link href={`/tender-management/tender-costing/add?costingId=${record.id}`}>
+                  <SecondaryButton className="h-7 max-w-full gap-1 px-1.5 text-[9px] xl:px-2 xl:text-[10px]">
+                    <Eye className="hidden h-3 w-3 shrink-0 sm:block" />
+                    {record.status === "READY" ? (
+                      <>
+                        <span className="sm:hidden">Start</span>
+                        <span className="hidden sm:inline">Start Costing</span>
+                      </>
+                    ) : (
+                      "Open"
+                    )}
+                  </SecondaryButton>
+                </Link>
+              ),
+            },
+          ]}
+        />
         <Pagination
-          page={safePage}
-          limit={limit}
-          total={total}
-          totalPages={totalPages}
-          onPageChange={setPage}
+          page={meta.page}
+          limit={meta.limit}
+          total={meta.total}
+          totalPages={meta.totalPages}
+          onPageChange={(page) => setQuery((current) => ({ ...current, page }))}
           showJumpButtons
         />
       </div>
-
-      {/* Bottom info bar */}
-      <div className="flex items-center gap-2 rounded-lg border border-biz-blue/20 bg-biz-blue-soft px-4 py-2.5 text-[12.5px] text-biz-text">
-        <Info className="h-4 w-4 shrink-0 text-biz-blue" />
-        <span>Click on any tender to view costing details including item wise cost, margin analysis and history.</span>
-      </div>
-
-      {/* Row action menu */}
-      {menuAnchor && (
-        <>
-          <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={() => setMenuAnchor(null)} />
-          <div
-            className="fixed z-50 w-[160px] overflow-hidden rounded-md border border-biz-border bg-biz-surface py-1 shadow-card-hover"
-            style={{ top: menuAnchor.top, right: menuAnchor.right }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                const row = rows.find((r) => r.id === menuAnchor.id);
-                if (row) exportRowCsv(row);
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-biz-text hover:bg-biz-bg"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export Row
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* View details modal */}
-      {viewing && (
-        <>
-          <button
-            type="button"
-            aria-label="Close details"
-            onClick={() => setViewing(null)}
-            className="fixed inset-0 z-40 bg-biz-navy/25"
-          />
-          <div className="fixed left-1/2 top-1/2 z-50 w-[420px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-biz-border bg-biz-surface shadow-card-hover">
-            <div className="flex items-center justify-between border-b border-biz-border px-4 py-3">
-              <h3 className="text-[14px] font-semibold text-biz-text">{viewing.tenderId}</h3>
-              <IconButton aria-label="Close" onClick={() => setViewing(null)} className="h-8 w-8">
-                <X className="h-4 w-4" />
-              </IconButton>
-            </div>
-            <div className="flex flex-col gap-2.5 px-4 py-3">
-              {(
-                [
-                  ["Work / Tender Name", viewing.workName],
-                  ["Organization", viewing.organization],
-                  ["Estimated Value (BDT)", formatBDT(viewing.estimatedValue)],
-                  ["Estimated Cost (BDT)", formatBDT(viewing.estimatedCost)],
-                  ["Our Cost (BDT)", formatBDT(viewing.ourCost)],
-                  ["Margin (%)", `${viewing.marginPercent.toFixed(2)}%`],
-                  ["Status", viewing.status],
-                  ["Assigned To", viewing.assignedTo.name],
-                  ["Last Updated", formatDate(viewing.lastUpdated)],
-                ] as const
-              ).map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-3 text-[13px]">
-                  <span className="text-biz-muted">{label}</span>
-                  <span className="text-right font-medium text-biz-text">{value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-
     </div>
   );
 }

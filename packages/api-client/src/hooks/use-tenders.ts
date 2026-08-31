@@ -1,9 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateTenderInput,
+  ApproveTenderForCostingInput,
   RecordTenderOpeningInput,
+  RejectTenderForCostingInput,
+  SubmitTenderForCostingInput,
   SubmitTenderInput,
+  TenderCostingApprovalResult,
   TenderDetail,
+  TenderOptions,
   TenderQuery,
   TenderRecord,
   TenderStats,
@@ -36,6 +41,13 @@ export function useTenderCategories() {
   return useQuery({ queryKey: queryKeys.tenderCategories, queryFn: () => apiRequest<string[]>("/tenders/categories") });
 }
 
+export function useTenderOptions() {
+  return useQuery({
+    queryKey: queryKeys.tenderOptions,
+    queryFn: () => apiRequest<TenderOptions>("/tenders/options"),
+  });
+}
+
 function useInvalidateTenders() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: ["tenders"] });
@@ -58,6 +70,15 @@ export function useUpdateTender() {
   });
 }
 
+export function useDeleteTender() {
+  const invalidate = useInvalidateTenders();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiRequest<{ id: string }>(`/tenders/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useSubmitTender() {
   const invalidate = useInvalidateTenders();
   return useMutation({
@@ -73,5 +94,41 @@ export function useRecordTenderOpening() {
     mutationFn: ({ id, payload }: { id: string; payload: RecordTenderOpeningInput }) =>
       apiRequest<TenderRecord>(`/tenders/${id}/opening`, { method: "POST", body: payload }),
     onSuccess: invalidate,
+  });
+}
+
+export function useSubmitTenderForCostingApproval() {
+  const invalidate = useInvalidateTenders();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: SubmitTenderForCostingInput }) =>
+      apiRequest<TenderRecord>(`/tenders/${id}/submit-for-costing-approval`, { method: "POST", body: payload }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useApproveTenderForCosting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: ApproveTenderForCostingInput }) =>
+      apiRequest<TenderCostingApprovalResult>(`/tenders/${id}/approve-for-costing`, {
+        method: "POST",
+        body: payload,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenders"] });
+      queryClient.invalidateQueries({ queryKey: ["tender-costings"] });
+    },
+  });
+}
+
+export function useRejectTenderForCosting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: RejectTenderForCostingInput }) =>
+      apiRequest<TenderRecord>(`/tenders/${id}/reject-for-costing`, { method: "POST", body: payload }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenders"] });
+      queryClient.invalidateQueries({ queryKey: ["tender-costings"] });
+    },
   });
 }

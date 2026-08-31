@@ -12,6 +12,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { AuditLogModule } from "./modules/audit-logs/audit-log.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { TendersModule } from "./modules/tenders/tenders.module";
+import { TenderCostingsModule } from "./modules/tender-costings/tender-costings.module";
 import { BankAccountsModule } from "./modules/bank-accounts/bank-accounts.module";
 import { DocumentPurchasesModule } from "./modules/document-purchases/document-purchases.module";
 import { DocumentsModule } from "./modules/documents/documents.module";
@@ -79,6 +80,7 @@ import { WorkIousModule } from "./modules/work-ious/work-ious.module";
     AuthModule,
     OrganizationsModule,
     TendersModule,
+    TenderCostingsModule,
     BankAccountsModule,
     DocumentPurchasesModule,
     DocumentsModule,

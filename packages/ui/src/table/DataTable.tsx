@@ -21,6 +21,8 @@ export interface DataTableProps<T> {
   emptyMessage?: string;
   /** Extra classes merged onto the scroll container. Use to opt into vertical scrolling (e.g. "flex-1 min-h-0 overflow-y-auto"). */
   containerClassName?: string;
+  /** Extra classes merged onto the table element (e.g. "table-fixed min-w-0" for a no-scroll layout). */
+  tableClassName?: string;
   /** Pins the header row to the top of the scroll container with a solid background. */
   stickyHeader?: boolean;
   /** Makes each data row actionable. Interactive controls inside the row keep their own behavior. */
@@ -34,12 +36,13 @@ export function DataTable<T>({
   isLoading = false,
   emptyMessage = "No records found",
   containerClassName,
+  tableClassName,
   stickyHeader = false,
   onRowClick,
 }: DataTableProps<T>) {
   return (
     <div className={cn("overflow-x-auto", containerClassName)}>
-      <table className="w-full min-w-[720px] text-left text-[13px]">
+      <table className={cn("w-full min-w-[720px] text-left text-[13px]", tableClassName)}>
         <thead>
           <tr className={cn("bg-biz-bg", stickyHeader && "sticky top-0 z-10")}>
             {columns.map((col) => (

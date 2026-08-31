@@ -6,6 +6,9 @@ export const PERMISSIONS = [
   "tender.update",
   "tender.submit",
   "tender.result.manage",
+  "tender.costing.read",
+  "tender.costing.update",
+  "tender.costing.approve",
 
   "document_purchase.create",
   "document_purchase.read",

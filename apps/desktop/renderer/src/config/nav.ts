@@ -102,7 +102,6 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Gavel,
     children: [
       { label: "Tender List", href: "/tenders", icon: ClipboardList },
-      { label: "Document Purchase", href: "/tender-management/document-purchase", icon: FileText },
       { label: "Tender Costing", href: "/tender-management/tender-costing", icon: Calculator },
       { label: "SLT Calculation", icon: FunctionSquare, disabled: true },
       { label: "Item Price History", href: "/tender-management/item-price-history", icon: History },

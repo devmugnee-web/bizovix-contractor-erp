@@ -461,7 +461,9 @@ export default function TenderSecurityPage() {
                     </td>
                     <td className="px-3 py-2">{index + 1}</td>
                     <td className="px-3 py-2 font-semibold text-biz-navy">{row.tenderId ?? "N/A"}</td>
-                    <td className="px-3 py-2 font-semibold">{row.organizationMaster.shortName}</td>
+                    <td className="px-3 py-2 font-semibold">
+                      {row.organizationMaster?.shortName ?? "Not set"}
+                    </td>
                     <td className="px-3 py-2">{row.tenderWorkName}</td>
                     <td className="px-3 py-2"><span className="rounded-md bg-biz-blue-soft px-2 py-1 text-[11px] font-medium text-biz-blue">{TENDER_STATUS_LABELS[row.tenderStatus] ?? row.tenderStatus}</span></td>
                     <td className="px-3 py-2">{row.submissionDeadline ? displayDate(row.submissionDeadline) : "—"}</td>
@@ -624,7 +626,9 @@ export default function TenderSecurityPage() {
                     <tr key={row.id} className="border-b border-biz-border last:border-b-0">
                       <td className="px-3 py-1.5">{index + 1}</td>
                       <td className="px-3 py-1.5 font-semibold text-biz-navy">{row.tenderId}</td>
-                      <td className="px-3 py-1.5 font-semibold">{row.organizationMaster.shortName}</td>
+                      <td className="px-3 py-1.5 font-semibold">
+                        {row.organizationMaster?.shortName ?? "Not set"}
+                      </td>
                       <td className="px-3 py-1.5">{row.tenderWorkName}</td>
                       <td className="px-3 py-1.5"><input type="number" min={0.01} value={row.securityAmount} onFocus={() => { if (Number(row.securityAmount) === 0) setSelectedValue(row.id, "securityAmount", ""); }} onChange={(e) => setSelectedValue(row.id, "securityAmount", e.target.value)} className="h-8 w-32 rounded border border-biz-border px-2 text-right" /></td>
                       <td className="px-3 py-1.5"><div className="flex"><input type="number" min={0} max={100} value={row.marginPercentage} onChange={(e) => setSelectedValue(row.id, "marginPercentage", e.target.value)} className="h-8 w-20 rounded-l border border-biz-border px-2 text-right" /><span className="flex h-8 w-8 items-center justify-center rounded-r border border-l-0 border-biz-border bg-biz-bg">%</span></div></td>

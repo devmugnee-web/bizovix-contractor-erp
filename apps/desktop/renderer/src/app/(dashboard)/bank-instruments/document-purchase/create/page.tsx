@@ -97,10 +97,15 @@ function AddDocumentPurchaseForm() {
   React.useEffect(() => {
     if (!linkedTender.data || prefilledFromTender.current) return;
     prefilledFromTender.current = true;
-    setValue("organizationMasterId", linkedTender.data.organizationMasterId);
+    if (linkedTender.data.organizationMasterId && linkedTender.data.organizationMaster) {
+      setValue("organizationMasterId", linkedTender.data.organizationMasterId);
+      setSelectedOrg({
+        value: linkedTender.data.organizationMasterId,
+        label: linkedTender.data.organizationMaster.shortName,
+      });
+    }
     setValue("tenderWorkName", linkedTender.data.workName);
     if (linkedTender.data.egpTenderId) setValue("tenderId", linkedTender.data.egpTenderId);
-    setSelectedOrg({ value: linkedTender.data.organizationMasterId, label: linkedTender.data.organizationMaster.shortName });
   }, [linkedTender.data, setValue]);
 
   function onSubmit(values: CreateDocumentPurchaseFormValues) {

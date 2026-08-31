@@ -42,9 +42,11 @@ function CreateOngoingWorkForm() {
     // <select> is a no-op if the matching <option> hasn't rendered yet.
     if (!linkedTender.data || !organizations.data || prefilledFromTender.current) return;
     prefilledFromTender.current = true;
-    setValue("organizationMasterId", linkedTender.data.organizationMasterId);
+    if (linkedTender.data.organizationMasterId) {
+      setValue("organizationMasterId", linkedTender.data.organizationMasterId);
+    }
     setValue("workName", linkedTender.data.workName);
-    setValue("workCategory", linkedTender.data.category);
+    if (linkedTender.data.category) setValue("workCategory", linkedTender.data.category);
     const contractValue = Number(linkedTender.data.contractValue);
     if (contractValue > 0) setValue("contractValue", contractValue);
   }, [linkedTender.data, organizations.data, setValue]);

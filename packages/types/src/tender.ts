@@ -1,18 +1,47 @@
-import type { TenderStatus } from "./enums";
+import type { TenderCostingApprovalStatus, TenderProcurementMethod, TenderStatus } from "./enums";
+import type { TenderCostingRecord } from "./tender-costing";
+
+export interface TenderWorkflowUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface TenderOptionUser {
+  id: string;
+  name: string;
+}
+
+export interface TenderOptions {
+  procurementMethods: TenderProcurementMethod[];
+  users: TenderOptionUser[];
+}
+
+export function normalizeTenderBusinessId(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toUpperCase();
+}
 
 export interface TenderRecord {
   id: string;
-  organizationMasterId: string;
-  organizationMaster: { id: string; shortName: string; fullName: string };
+  organizationMasterId: string | null;
+  organizationMaster: { id: string; shortName: string; fullName: string } | null;
   egpTenderId: string | null;
+  tenderIdNormalized: string | null;
   workName: string;
-  category: string;
+  category: string | null;
   tenderType: string | null;
-  procurementMethod: string | null;
+  procurementMethod: TenderProcurementMethod;
   tenderMethod: string | null;
   contractValue: string;
   status: TenderStatus;
   progressPercentage: number;
+  payOrderRequired: boolean;
+  payOrderAmount: string | null;
+  foundByUserId: string | null;
+  foundByName: string | null;
+  findingDate: string | null;
+  remarks: string | null;
+  version: number;
   publishedDate: string | null;
   documentPurchaseDeadline: string | null;
   preBidDate: string | null;
@@ -37,6 +66,20 @@ export interface TenderRecord {
   lowestBidder: string | null;
   resultRemarks: string | null;
   awardedAt: string | null;
+  costingApprovalStatus: TenderCostingApprovalStatus;
+  costingSubmittedAt: string | null;
+  costingSubmittedById: string | null;
+  costingApprovedAt: string | null;
+  costingApprovedById: string | null;
+  costingRejectedAt: string | null;
+  costingRejectedById: string | null;
+  costingRejectionReason: string | null;
+  createdById: string | null;
+  createdBy: TenderWorkflowUser | null;
+  foundBy: TenderWorkflowUser | null;
+  costingSubmittedBy: TenderWorkflowUser | null;
+  costingApprovedBy: TenderWorkflowUser | null;
+  costingRejectedBy: TenderWorkflowUser | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -94,12 +137,12 @@ export interface TenderDetail extends TenderRecord {
 }
 
 export interface CreateTenderInput {
-  organizationMasterId: string;
-  egpTenderId?: string;
+  organizationMasterId?: string;
+  egpTenderId: string;
   workName: string;
-  category: string;
+  category?: string;
   tenderType?: string;
-  procurementMethod?: string;
+  procurementMethod?: TenderProcurementMethod;
   tenderMethod?: string;
   contractValue?: number;
   status?: TenderStatus;
@@ -113,9 +156,48 @@ export interface CreateTenderInput {
   assignedToUserId?: string;
   assignedToName?: string;
   description?: string;
+  payOrderRequired?: boolean;
+  payOrderAmount?: number;
+  foundByUserId?: string;
+  foundByName?: string;
+  findingDate?: string;
+  remarks?: string;
 }
 
 export type UpdateTenderInput = Partial<CreateTenderInput>;
+
+export interface SubmitTenderForCostingInput {
+  version: number;
+}
+
+export interface ApproveTenderForCostingInput {
+  version: number;
+}
+
+export interface TenderCostingApprovalResult {
+  tender: TenderRecord;
+  costing: Pick<TenderCostingRecord, "id">;
+}
+
+export interface RejectTenderForCostingInput {
+  version: number;
+  reason: string;
+}
+
+export interface TenderDuplicateConflict {
+  code: "DUPLICATE_TENDER_ID";
+  message: string;
+  existing: {
+    id: string;
+    egpTenderId: string;
+    workName: string;
+    organizationMaster: { id: string; shortName: string; fullName: string } | null;
+    createdAt: string;
+    createdBy: TenderWorkflowUser | null;
+    foundBy: TenderWorkflowUser | null;
+    foundByName: string | null;
+  };
+}
 
 export interface SubmitTenderInput {
   submissionDate: string;
@@ -145,6 +227,8 @@ export interface TenderQuery {
   organizationMasterId?: string;
   category?: string;
   status?: TenderStatus;
+  tenderType?: string;
+  procurementMethod?: TenderProcurementMethod;
   assignedToUserId?: string;
   assignedToName?: string;
   fromDate?: string;

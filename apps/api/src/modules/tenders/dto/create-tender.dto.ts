@@ -1,4 +1,4 @@
-import { TenderStatus } from "@bizovix/database";
+import { TenderProcurementMethod, TenderStatus } from "@bizovix/database";
 import { Type } from "class-transformer";
 import {
   IsBoolean,
@@ -8,36 +8,47 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
+  MaxLength,
   Min,
 } from "class-validator";
 
 export class CreateTenderDto {
-  @IsString()
-  @IsNotEmpty()
-  organizationMasterId!: string;
-
   @IsOptional()
   @IsString()
-  egpTenderId?: string;
+  @Matches(/\S/, { message: "organizationMasterId must contain text" })
+  organizationMasterId?: string;
 
   @IsString()
   @IsNotEmpty()
+  @Matches(/\S/, { message: "Tender ID must contain text" })
+  @MaxLength(100)
+  egpTenderId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/, { message: "Product / Work Name must contain text" })
+  @MaxLength(300)
   workName!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  category!: string;
+  @Matches(/\S/, { message: "category must contain text" })
+  @MaxLength(150)
+  category?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   tenderType?: string;
 
   @IsOptional()
-  @IsString()
-  procurementMethod?: string;
+  @IsEnum(TenderProcurementMethod)
+  procurementMethod?: TenderProcurementMethod;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   tenderMethod?: string;
 
   @IsOptional()
@@ -75,6 +86,16 @@ export class CreateTenderDto {
   tenderSecurityRequired?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  payOrderRequired?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  payOrderAmount?: number;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
@@ -90,5 +111,24 @@ export class CreateTenderDto {
 
   @IsOptional()
   @IsString()
+  foundByUserId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  foundByName?: string;
+
+  @IsOptional()
+  @IsDateString()
+  findingDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  remarks?: string;
 }
