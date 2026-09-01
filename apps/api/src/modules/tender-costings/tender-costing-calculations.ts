@@ -125,17 +125,7 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
     item.domesticTransportCost,
     "Domestic transport cost",
   );
-  const shippingCharge = shippingRateBasis === "PER_CBM"
-    ? shippingVolumeCbm.mul(shippingRate)
-    : shippingRateBasis === "PER_KG"
-      ? shippingWeightKg.mul(shippingRate)
-      : shippingRate;
-  const shippingSubtotal = foreignTransportCharge
-    .plus(customsDeclarationCharge)
-    .plus(shippingCharge);
-  const shippingSubtotalBdt = shippingSubtotal.gt(0)
-    ? shippingSubtotal.mul(foreignExchangeRate)
-    : foreignDoorToDoorCharge;
+  const shippingCostBdt = shippingWeightKg.mul(shippingRate);
   const customsDutyPercent = percentage(item.customsDutyPercent, "Customs duty percentage");
   const regulatoryDutyPercent = percentage(item.regulatoryDutyPercent, "Regulatory duty percentage");
   const supplementaryDutyPercent = percentage(
@@ -156,29 +146,107 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
     .mul(foreignUnitPrice)
     .mul(foreignExchangeRate)
     .toDecimalPlaces(2);
-  const assessableValue = isDoorToDoor
-    ? foreignProductValueBdt.plus(shippingSubtotalBdt)
+  const usesLegacyDetailedDoorShipping =
+    isDoorToDoor &&
+    (shippingRateBasis !== "PER_KG" ||
+      foreignImportDutyIncluded ||
+      foreignDoorToDoorCharge.gt(0) ||
+      foreignFreightCost.gt(0) ||
+      shippingVolumeCbm.gt(0) ||
+      customsDeclarationCharge.gt(0) ||
+      customsDutyPercent.gt(0) ||
+      regulatoryDutyPercent.gt(0) ||
+      supplementaryDutyPercent.gt(0) ||
+      foreignInsuranceCost.gt(0) ||
+      cnfCharge.gt(0) ||
+      portHandlingCharge.gt(0) ||
+      bankLcCharge.gt(0) ||
+      foreignOtherCost.gt(0));
+  const usesLegacyDetailedLcShipping = !isDoorToDoor && shippingRateBasis !== "FLAT";
+  const usesLegacyDetailedShipping = isDoorToDoor
+    ? usesLegacyDetailedDoorShipping
+    : usesLegacyDetailedLcShipping;
+  // Door rows use submitted BDT/kg shipping. FLAT is an explicit marker for
+  // the new fixed-fee LC model; older PER_CBM/PER_KG LC rows remain legacy.
+  const hasSubmittedKgShipping =
+    isDoorToDoor &&
+    !usesLegacyDetailedDoorShipping &&
+    shippingWeightKg.gt(0) &&
+    shippingRate.gt(0);
+  const foreignOriginTransportBdt = foreignTransportCharge.mul(foreignExchangeRate);
+  const legacyInternationalShippingBdt = isDoorToDoor
+    ? foreignDoorToDoorCharge
+    : foreignFreightCost;
+  const internationalShippingBdt = hasSubmittedKgShipping
+    ? shippingCostBdt
+    : legacyInternationalShippingBdt;
+  const simplifiedDoorCostBeforeProfit = foreignProductValueBdt
+    .plus(foreignOriginTransportBdt)
+    .plus(internationalShippingBdt)
+    .plus(foreignLocalTransportCost)
+    .plus(domesticTransportCost)
+    .toDecimalPlaces(2);
+  const simplifiedLcCostBeforeProfit = foreignProductValueBdt
+    .plus(bankLcCharge)
+    .plus(portHandlingCharge)
+    .plus(foreignFreightCost)
+    .plus(cnfCharge)
+    .plus(foreignLocalTransportCost)
+    .toDecimalPlaces(2);
+
+  const legacyShippingCharge =
+    shippingRateBasis === "PER_CBM"
+      ? shippingVolumeCbm.mul(shippingRate)
+      : shippingRateBasis === "PER_KG"
+        ? shippingWeightKg.mul(shippingRate)
+        : shippingRate;
+  const legacyShippingSubtotal = foreignTransportCharge
+    .plus(customsDeclarationCharge)
+    .plus(legacyShippingCharge);
+  const legacyShippingSubtotalBdt = legacyShippingSubtotal.gt(0)
+    ? legacyShippingSubtotal.mul(foreignExchangeRate)
+    : foreignDoorToDoorCharge;
+  const legacyAssessableValue = isDoorToDoor
+    ? foreignProductValueBdt.plus(legacyShippingSubtotalBdt)
     : foreignProductValueBdt.plus(foreignFreightCost).plus(foreignInsuranceCost);
-  const customsDuty = assessableValue.mul(customsDutyPercent).div(HUNDRED);
-  const regulatoryDuty = assessableValue.mul(regulatoryDutyPercent).div(HUNDRED);
-  const supplementaryDuty = assessableValue.mul(supplementaryDutyPercent).div(HUNDRED);
-  const taxBase = isDoorToDoor && foreignImportDutyIncluded
-    ? assessableValue
-    : assessableValue.plus(customsDuty).plus(regulatoryDuty).plus(supplementaryDuty);
-  const foreignCostBeforeProfit = isDoorToDoor
-    ? taxBase.plus(domesticTransportCost).plus(foreignOtherCost)
-    : taxBase
+  const legacyCustomsDuty = legacyAssessableValue.mul(customsDutyPercent).div(HUNDRED);
+  const legacyRegulatoryDuty = legacyAssessableValue
+    .mul(regulatoryDutyPercent)
+    .div(HUNDRED);
+  const legacySupplementaryDuty = legacyAssessableValue
+    .mul(supplementaryDutyPercent)
+    .div(HUNDRED);
+  const legacyTaxBase = isDoorToDoor && foreignImportDutyIncluded
+    ? legacyAssessableValue
+    : legacyAssessableValue
+        .plus(legacyCustomsDuty)
+        .plus(legacyRegulatoryDuty)
+        .plus(legacySupplementaryDuty);
+  const legacyCostBeforeProfit = isDoorToDoor
+    ? legacyTaxBase.plus(domesticTransportCost).plus(foreignOtherCost)
+    : legacyTaxBase
         .plus(cnfCharge)
         .plus(portHandlingCharge)
         .plus(bankLcCharge)
         .plus(foreignLocalTransportCost)
+        .plus(domesticTransportCost)
         .plus(foreignOtherCost);
+  const foreignCostBeforeProfit = (
+    usesLegacyDetailedShipping
+      ? legacyCostBeforeProfit
+      : isDoorToDoor
+        ? simplifiedDoorCostBeforeProfit
+        : simplifiedLcCostBeforeProfit
+  ).toDecimalPlaces(2);
   const foreignProfit = foreignCostBeforeProfit.mul(marginPercent).div(HUNDRED);
   const foreignSubtotal = foreignCostBeforeProfit.plus(foreignProfit);
-  const foreignLandedCost = foreignSubtotal
+  const foreignQuotedTotal = foreignSubtotal
     .plus(foreignSubtotal.mul(foreignVatPercent).div(HUNDRED))
     .plus(foreignSubtotal.mul(foreignTaxPercent).div(HUNDRED))
     .toDecimalPlaces(2);
+  const foreignLandedCost = usesLegacyDetailedShipping
+    ? foreignQuotedTotal
+    : foreignCostBeforeProfit;
 
   let selectedSource = item.selectedSource ?? null;
   if (sourcingType === "LOCAL") selectedSource = "LOCAL";
@@ -197,7 +265,7 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
   const selectedTotal =
     costingStatus === "COSTED"
       ? selectedSource === "FOREIGN"
-        ? foreignLandedCost
+        ? foreignQuotedTotal
         : localTotalCost
       : ZERO;
   const selectedOurCost =

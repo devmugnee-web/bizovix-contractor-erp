@@ -59,7 +59,7 @@ describe("calculateTenderCostingTotals", () => {
     expect(result.marginPercent.toFixed(4)).toBe("12.5000");
   });
 
-  it("converts Foreign unit price to BDT and calculates landed cost", () => {
+  it("preserves the legacy LC calculation for an existing detailed row", () => {
     const result = calculateTenderCostingTotals({
       items: [
         {
@@ -69,6 +69,7 @@ describe("calculateTenderCostingTotals", () => {
           foreignUnitPrice: 100,
           foreignExchangeRate: 120,
           foreignFreightCost: 1000,
+          domesticTransportCost: 300,
           customsDutyPercent: 10,
           foreignVatPercent: 5,
           selectedSource: "FOREIGN",
@@ -81,8 +82,9 @@ describe("calculateTenderCostingTotals", () => {
       costingBudget: 50000,
     });
     expect(result.calculatedItems[0]?.foreignProductValueBdt.toFixed(2)).toBe("24000.00");
-    expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("28875.00");
-    expect(result.estimatedCost.toFixed(2)).toBe("28875.00");
+    expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("29190.00");
+    expect(result.ourCost.toFixed(2)).toBe("27800.00");
+    expect(result.estimatedCost.toFixed(2)).toBe("29190.00");
   });
 
   it("uses the legacy door-to-door BDT charge when detailed shipping is empty", () => {
@@ -113,9 +115,10 @@ describe("calculateTenderCostingTotals", () => {
     expect(result.calculatedItems[0]?.ourCost.toFixed(2)).toBe("11000.00");
     expect(result.calculatedItems[0]?.profitAmount.toFixed(2)).toBe("1100.00");
     expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("12947.00");
+    expect(result.estimatedCost.toFixed(2)).toBe("12947.00");
   });
 
-  it("calculates detailed Door-to-Door Sea shipping in row currency before BDT duties", () => {
+  it("calculates origin currency and Sea shipping BDT before quote profit, VAT and tax", () => {
     const result = calculateTenderCostingTotals({
       items: [
         {
@@ -127,15 +130,11 @@ describe("calculateTenderCostingTotals", () => {
           foreignExchangeRate: 100,
           foreignShippingMethod: "DOOR_TO_DOOR_SEA",
           foreignTransportCharge: 10,
-          customsDeclarationCharge: 5,
-          shippingVolumeCbm: 2.5,
-          shippingRateBasis: "PER_CBM",
-          shippingRate: 20,
+          shippingWeightKg: 2.5,
+          shippingRateBasis: "PER_KG",
+          shippingRate: 400,
+          foreignLocalTransportCost: 300,
           domesticTransportCost: 500,
-          foreignOtherCost: 25,
-          customsDutyPercent: 10,
-          regulatoryDutyPercent: 2,
-          supplementaryDutyPercent: 3,
           marginPercent: 10,
           foreignVatPercent: 5,
           foreignTaxPercent: 2,
@@ -149,12 +148,13 @@ describe("calculateTenderCostingTotals", () => {
 
     const item = result.calculatedItems[0]!;
     expect(item.foreignProductValueBdt.toFixed(2)).toBe("10000.00");
-    expect(item.ourCost.toFixed(2)).toBe("19500.00");
-    expect(item.profitAmount.toFixed(2)).toBe("1950.00");
-    expect(item.foreignLandedCost.toFixed(2)).toBe("22951.50");
+    expect(item.foreignLandedCost.toFixed(2)).toBe("12800.00");
+    expect(item.ourCost.toFixed(2)).toBe("12800.00");
+    expect(item.profitAmount.toFixed(2)).toBe("1280.00");
+    expect(result.estimatedCost.toFixed(2)).toBe("15065.60");
   });
 
-  it("uses weight for a PER_KG Door-to-Door Air rate and skips included duties", () => {
+  it("uses submitted BDT per KG for simplified Air shipping", () => {
     const result = calculateTenderCostingTotals({
       items: [
         {
@@ -165,12 +165,9 @@ describe("calculateTenderCostingTotals", () => {
           foreignUnitPrice: 100,
           foreignExchangeRate: 120,
           foreignShippingMethod: "DOOR_TO_DOOR_AIR",
-          foreignImportDutyIncluded: true,
           shippingWeightKg: 10,
-          shippingVolumeCbm: 99,
           shippingRateBasis: "PER_KG",
           shippingRate: 2,
-          customsDutyPercent: 25,
         },
       ],
       freightCost: 0,
@@ -179,7 +176,116 @@ describe("calculateTenderCostingTotals", () => {
       contingencyPercent: 0,
     });
 
-    expect(result.calculatedItems[0]?.ourCost.toFixed(2)).toBe("14400.00");
-    expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("14400.00");
+    expect(result.calculatedItems[0]?.ourCost.toFixed(2)).toBe("12020.00");
+    expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("12020.00");
+  });
+
+  it.each(["DOOR_TO_DOOR_SEA", "DOOR_TO_DOOR_AIR"] as const)(
+    "adds each simplified Door-to-Door logistics stage exactly once for %s",
+    (foreignShippingMethod) => {
+      const result = calculateTenderCostingTotals({
+        items: [
+          {
+            quantity: 1,
+            sourcingType: "FOREIGN",
+            costingStatus: "COSTED",
+            selectedSource: "FOREIGN",
+            foreignUnitPrice: 10,
+            foreignExchangeRate: 100,
+            foreignShippingMethod,
+            shippingRateBasis: "PER_KG",
+            foreignTransportCharge: 3,
+            shippingWeightKg: 2,
+            shippingRate: 500,
+            foreignLocalTransportCost: 400,
+            domesticTransportCost: 500,
+          },
+        ],
+        freightCost: 0,
+        installationCost: 0,
+        otherCost: 0,
+        contingencyPercent: 0,
+      });
+
+      expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("3200.00");
+      expect(result.ourCost.toFixed(2)).toBe("3200.00");
+      expect(result.estimatedCost.toFixed(2)).toBe("3200.00");
+    },
+  );
+
+  it.each(["LC_SEA", "LC_AIR"] as const)(
+    "uses exactly the five simplified LC fees for %s",
+    (foreignShippingMethod) => {
+      const result = calculateTenderCostingTotals({
+        items: [
+          {
+            quantity: 2,
+            sourcingType: "FOREIGN",
+            costingStatus: "COSTED",
+            selectedSource: "FOREIGN",
+            foreignUnitPrice: 50,
+            foreignExchangeRate: 100,
+            foreignShippingMethod,
+            shippingRateBasis: "FLAT",
+            bankLcCharge: 100,
+            portHandlingCharge: 200,
+            foreignFreightCost: 300,
+            cnfCharge: 400,
+            foreignLocalTransportCost: 500,
+            marginPercent: 10,
+            foreignVatPercent: 5,
+            foreignTaxPercent: 2,
+            foreignTransportCharge: 90000,
+            foreignInsuranceCost: 90000,
+            foreignOtherCost: 90000,
+            domesticTransportCost: 90000,
+            customsDutyPercent: 50,
+            regulatoryDutyPercent: 50,
+            supplementaryDutyPercent: 50,
+          },
+        ],
+        freightCost: 0,
+        installationCost: 0,
+        otherCost: 0,
+        contingencyPercent: 0,
+      });
+
+      const item = result.calculatedItems[0]!;
+      expect(item.foreignProductValueBdt.toFixed(2)).toBe("10000.00");
+      expect(item.foreignLandedCost.toFixed(2)).toBe("11500.00");
+      expect(item.ourCost.toFixed(2)).toBe("11500.00");
+      expect(item.profitAmount.toFixed(2)).toBe("1150.00");
+      expect(result.estimatedCost.toFixed(2)).toBe("13535.50");
+    },
+  );
+
+  it("keeps an existing PER_KG LC row on the legacy calculation", () => {
+    const result = calculateTenderCostingTotals({
+      items: [
+        {
+          quantity: 1,
+          sourcingType: "FOREIGN",
+          costingStatus: "COSTED",
+          selectedSource: "FOREIGN",
+          foreignUnitPrice: 100,
+          foreignExchangeRate: 100,
+          foreignShippingMethod: "LC_SEA",
+          shippingRateBasis: "PER_KG",
+          shippingWeightKg: 2,
+          shippingRate: 500,
+          foreignFreightCost: 1000,
+          bankLcCharge: 500,
+          foreignLocalTransportCost: 300,
+          domesticTransportCost: 200,
+        },
+      ],
+      freightCost: 0,
+      installationCost: 0,
+      otherCost: 0,
+      contingencyPercent: 0,
+    });
+
+    expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("12000.00");
+    expect(result.ourCost.toFixed(2)).toBe("12000.00");
   });
 });

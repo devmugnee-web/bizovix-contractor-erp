@@ -3,15 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  MoreVertical,
-  Plus,
-  Save,
-  Send,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, CheckCircle2, MoreVertical, Plus, Save, Send, Trash2 } from "lucide-react";
 import {
   ApiError,
   useSaveTenderCosting,
@@ -120,11 +112,6 @@ interface BulkForeignForm {
   exchangeRate: string;
   exchangeRateDate: string;
   shippingMethod: TenderCostingShippingMethod;
-  customsDutyPercent: string;
-  regulatoryDutyPercent: string;
-  supplementaryDutyPercent: string;
-  vatPercent: string;
-  taxPercent: string;
 }
 
 let itemCounter = 0;
@@ -132,10 +119,7 @@ const SOURCING_OPTIONS = [
   { value: "LOCAL", label: "Local" },
   { value: "FOREIGN", label: "Foreign" },
 ];
-const SOURCE_FILTER_OPTIONS = [
-  { value: "ALL", label: "All Items" },
-  ...SOURCING_OPTIONS,
-];
+const SOURCE_FILTER_OPTIONS = [{ value: "ALL", label: "All Items" }, ...SOURCING_OPTIONS];
 const UNIT_OPTIONS = [
   "Nos",
   "Pcs",
@@ -156,22 +140,48 @@ const UNIT_OPTIONS = [
 const CURRENCY_OPTIONS = ["USD", "EUR", "CNY", "GBP", "INR", "JPY", "SGD", "AED"].map(
   (currency) => ({ value: currency, label: currency }),
 );
+const COUNTRY_OPTIONS = [
+  "China",
+  "India",
+  "United States",
+  "United Kingdom",
+  "Germany",
+  "Italy",
+  "Japan",
+  "South Korea",
+  "United Arab Emirates",
+  "Turkey",
+  "Singapore",
+  "Malaysia",
+  "Thailand",
+  "Vietnam",
+  "Indonesia",
+  "Taiwan",
+  "Hong Kong",
+  "Canada",
+  "Australia",
+].map((country) => ({ value: country, label: country }));
 const SHIPPING_METHOD_OPTIONS = [
   { value: "DOOR_TO_DOOR_SEA", label: "Door to Door - Sea Shipping" },
   { value: "DOOR_TO_DOOR_AIR", label: "Door to Door - Air Shipment" },
   { value: "LC_SEA", label: "LC - Sea Shipment" },
   { value: "LC_AIR", label: "LC - Air Shipment" },
 ];
-const SHIPPING_RATE_BASIS_OPTIONS = [
-  { value: "PER_CBM", label: "Per CBM" },
-  { value: "PER_KG", label: "Per KG" },
-  { value: "FLAT", label: "Flat Rate" },
-];
-
 function defaultShippingRateBasis(
   method: TenderCostingShippingMethod,
 ): TenderCostingShippingRateBasis {
-  return method.endsWith("AIR") ? "PER_KG" : "PER_CBM";
+  return method.startsWith("LC_") ? "FLAT" : "PER_KG";
+}
+
+function defaultShippingRate(method: TenderCostingShippingMethod): string {
+  if (method.startsWith("LC_")) return "";
+  return method.endsWith("AIR") ? "800" : "400";
+}
+
+function countryOptionsWithCurrent(country: string) {
+  return country && !COUNTRY_OPTIONS.some((option) => option.value === country)
+    ? [{ value: country, label: country }, ...COUNTRY_OPTIONS]
+    : COUNTRY_OPTIONS;
 }
 
 function blankItem(
@@ -192,7 +202,8 @@ function blankItem(
     marginPercent: "10",
     sourcingType,
     costingStatus: "NOT_COSTED",
-    selectedSource: sourcingType === "FOREIGN" ? "FOREIGN" : sourcingType === "LOCAL" ? "LOCAL" : "",
+    selectedSource:
+      sourcingType === "FOREIGN" ? "FOREIGN" : sourcingType === "LOCAL" ? "LOCAL" : "",
     localSupplierName: "",
     localUnitPrice: "",
     localDiscountPercent: "",
@@ -201,7 +212,7 @@ function blankItem(
     localTransportCost: "",
     localOtherCost: "",
     foreignSupplierName: "",
-    foreignCountry: "",
+    foreignCountry: "China",
     foreignCurrency: "USD",
     foreignUnitPrice: "",
     foreignExchangeRate: "1",
@@ -216,8 +227,8 @@ function blankItem(
     customsDeclarationCharge: "",
     shippingWeightKg: "",
     shippingVolumeCbm: "",
-    shippingRateBasis: "PER_CBM",
-    shippingRate: "",
+    shippingRateBasis: "PER_KG",
+    shippingRate: "400",
     domesticTransportCost: "",
     foreignFreightCost: "",
     foreignInsuranceCost: "",
@@ -256,10 +267,11 @@ function formatCompactMoney(value: number): string {
   return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
 }
 
-function compactInputNumber(
-  value: string | number | null | undefined,
-  blankZero = false,
-): string {
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function compactInputNumber(value: string | number | null | undefined, blankZero = false): string {
   const text = String(value ?? "").trim();
   if (!text) return "";
   const numericValue = Number(text);
@@ -272,67 +284,104 @@ function compactInputNumber(
 const NUMBER_INPUT_CLASS =
   "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
-function quotedUnitPriceFromProfit(
-  unitCost: number,
-  profitPercent: number,
-  vatPercent: number,
-  taxPercent: number,
-): number {
-  if (unitCost <= 0) return 0;
-  const subtotal = unitCost * (1 + Math.max(0, profitPercent) / 100);
-  return subtotal * (1 + (Math.max(0, vatPercent) + Math.max(0, taxPercent)) / 100);
-}
-
 function calculateItemPreview(item: CostingItemForm) {
   const quantity = Number(item.quantity) || 0;
   const localBase = quantity * (Number(item.localUnitPrice) || 0);
   const localTaxable = localBase * (1 - (Number(item.localDiscountPercent) || 0) / 100);
   const localCostBeforeProfit =
-    localTaxable +
-    (Number(item.localTransportCost) || 0) +
-    (Number(item.localOtherCost) || 0);
-  const foreignProductValue =
-    quantity *
-    (Number(item.foreignUnitPrice) || 0) *
-    (Number(item.foreignExchangeRate) || 1);
+    localTaxable + (Number(item.localTransportCost) || 0) + (Number(item.localOtherCost) || 0);
+  const foreignExchangeRate = Number(item.foreignExchangeRate) || 1;
+  const foreignProductTotal = quantity * (Number(item.foreignUnitPrice) || 0);
+  const foreignProductValue = roundMoney(foreignProductTotal * foreignExchangeRate);
   const isDoorToDoor = item.foreignShippingMethod.startsWith("DOOR_TO_DOOR");
+  const isLc = item.foreignShippingMethod.startsWith("LC_");
   const shippingRate = Number(item.shippingRate) || 0;
-  const shippingCharge =
+  const shippingWeightKg = Number(item.shippingWeightKg) || 0;
+  const shippingCostBdt = shippingWeightKg * shippingRate;
+  const foreignTransportFee = Number(item.foreignTransportCharge) || 0;
+  const foreignTransportBdt = foreignTransportFee * foreignExchangeRate;
+  const usesLegacyDetailedDoorShipping =
+    !isLc &&
+    (item.shippingRateBasis !== "PER_KG" ||
+      item.foreignImportDutyIncluded ||
+      Number(item.foreignDoorToDoorCharge) > 0 ||
+      Number(item.foreignFreightCost) > 0 ||
+      Number(item.shippingVolumeCbm) > 0 ||
+      Number(item.customsDeclarationCharge) > 0 ||
+      Number(item.customsDutyPercent) > 0 ||
+      Number(item.regulatoryDutyPercent) > 0 ||
+      Number(item.supplementaryDutyPercent) > 0 ||
+      Number(item.foreignInsuranceCost) > 0 ||
+      Number(item.cnfCharge) > 0 ||
+      Number(item.portHandlingCharge) > 0 ||
+      Number(item.bankLcCharge) > 0 ||
+      Number(item.foreignOtherCost) > 0);
+  const usesLegacyDetailedShipping = isLc
+    ? item.shippingRateBasis !== "FLAT"
+    : usesLegacyDetailedDoorShipping;
+  const hasSubmittedKgShipping =
+    !usesLegacyDetailedShipping && shippingWeightKg > 0 && shippingRate > 0;
+  const legacyInternationalShippingBdt = isDoorToDoor
+    ? Number(item.foreignDoorToDoorCharge) || 0
+    : Number(item.foreignFreightCost) || 0;
+  const internationalShippingBdt = hasSubmittedKgShipping
+    ? shippingCostBdt
+    : legacyInternationalShippingBdt;
+  const legacyShippingCharge =
     item.shippingRateBasis === "PER_CBM"
       ? (Number(item.shippingVolumeCbm) || 0) * shippingRate
       : item.shippingRateBasis === "PER_KG"
-        ? (Number(item.shippingWeightKg) || 0) * shippingRate
+        ? shippingWeightKg * shippingRate
         : shippingRate;
-  const foreignShippingSubtotal =
-    (Number(item.foreignTransportCharge) || 0) +
-    (Number(item.customsDeclarationCharge) || 0) +
-    shippingCharge;
-  const foreignShippingSubtotalBdt = foreignShippingSubtotal > 0
-    ? foreignShippingSubtotal * (Number(item.foreignExchangeRate) || 1)
-    : Number(item.foreignDoorToDoorCharge) || 0;
-  const assessable = isDoorToDoor
-    ? foreignProductValue + foreignShippingSubtotalBdt
+  const legacyShippingSubtotal =
+    foreignTransportFee + (Number(item.customsDeclarationCharge) || 0) + legacyShippingCharge;
+  const legacyShippingSubtotalBdt =
+    legacyShippingSubtotal > 0
+      ? legacyShippingSubtotal * foreignExchangeRate
+      : Number(item.foreignDoorToDoorCharge) || 0;
+  const legacyAssessableValue = isDoorToDoor
+    ? foreignProductValue + legacyShippingSubtotalBdt
     : foreignProductValue +
       (Number(item.foreignFreightCost) || 0) +
       (Number(item.foreignInsuranceCost) || 0);
-  const dutyRate =
+  const legacyDutyRate =
     ((Number(item.customsDutyPercent) || 0) +
       (Number(item.regulatoryDutyPercent) || 0) +
       (Number(item.supplementaryDutyPercent) || 0)) /
     100;
-  const taxBase = isDoorToDoor && item.foreignImportDutyIncluded
-    ? assessable
-    : assessable * (1 + dutyRate);
-  const foreignCostBeforeProfit = isDoorToDoor
-    ? taxBase +
+  const legacyTaxBase =
+    isDoorToDoor && item.foreignImportDutyIncluded
+      ? legacyAssessableValue
+      : legacyAssessableValue * (1 + legacyDutyRate);
+  const legacyCostBeforeProfit = isDoorToDoor
+    ? legacyTaxBase +
       (Number(item.domesticTransportCost) || 0) +
       (Number(item.foreignOtherCost) || 0)
-    : taxBase +
+    : legacyTaxBase +
       (Number(item.cnfCharge) || 0) +
       (Number(item.portHandlingCharge) || 0) +
       (Number(item.bankLcCharge) || 0) +
       (Number(item.foreignLocalTransportCost) || 0) +
       (Number(item.foreignOtherCost) || 0);
+  const simplifiedLcCostBeforeProfit =
+    foreignProductValue +
+    (Number(item.bankLcCharge) || 0) +
+    (Number(item.portHandlingCharge) || 0) +
+    (Number(item.foreignFreightCost) || 0) +
+    (Number(item.cnfCharge) || 0) +
+    (Number(item.foreignLocalTransportCost) || 0);
+  const simplifiedDoorCostBeforeProfit =
+    foreignProductValue +
+    foreignTransportBdt +
+    internationalShippingBdt +
+    (Number(item.foreignLocalTransportCost) || 0) +
+    (Number(item.domesticTransportCost) || 0);
+  const simplifiedCostBeforeProfit = isLc
+    ? simplifiedLcCostBeforeProfit
+    : simplifiedDoorCostBeforeProfit;
+  const foreignCostBeforeProfit = roundMoney(
+    usesLegacyDetailedShipping ? legacyCostBeforeProfit : simplifiedCostBeforeProfit,
+  );
   const selectedSource =
     item.sourcingType === "LOCAL"
       ? "LOCAL"
@@ -344,38 +393,33 @@ function calculateItemPreview(item: CostingItemForm) {
     localCostBeforeProfit *
     (1 + marginPercent / 100) *
     (1 + ((Number(item.localVatPercent) || 0) + (Number(item.localTaxPercent) || 0)) / 100);
-  const foreignLanded =
-    foreignCostBeforeProfit *
-    (1 + marginPercent / 100) *
-    (1 + ((Number(item.foreignVatPercent) || 0) + (Number(item.foreignTaxPercent) || 0)) / 100);
+  const foreignLanded = foreignCostBeforeProfit;
   const selectedCostBeforeProfit =
     selectedSource === "FOREIGN" ? foreignCostBeforeProfit : localCostBeforeProfit;
   const selectedUnitCost = quantity > 0 ? selectedCostBeforeProfit / quantity : 0;
-  const selectedVatPercent = selectedSource === "FOREIGN"
-    ? Number(item.foreignVatPercent) || 0
-    : Number(item.localVatPercent) || 0;
-  const selectedTaxPercent = selectedSource === "FOREIGN"
-    ? Number(item.foreignTaxPercent) || 0
-    : Number(item.localTaxPercent) || 0;
-  const unitSalesPrice = quotedUnitPriceFromProfit(
-    selectedUnitCost,
-    marginPercent,
-    selectedVatPercent,
-    selectedTaxPercent,
-  );
-  const totalSales = unitSalesPrice * quantity;
-  const taxFactor = 1 + (selectedVatPercent + selectedTaxPercent) / 100;
-  const subtotalBeforeTax = totalSales / taxFactor;
-  const totalProfit = subtotalBeforeTax - selectedCostBeforeProfit;
-  const vatAmount = subtotalBeforeTax * selectedVatPercent / 100;
-  const taxAmount = subtotalBeforeTax * selectedTaxPercent / 100;
-  const selectedGrandTotal = totalSales;
+  const selectedVatPercent =
+    selectedSource === "FOREIGN"
+      ? Number(item.foreignVatPercent) || 0
+      : Number(item.localVatPercent) || 0;
+  const selectedTaxPercent =
+    selectedSource === "FOREIGN"
+      ? Number(item.foreignTaxPercent) || 0
+      : Number(item.localTaxPercent) || 0;
+  const subtotalBeforeTax = selectedCostBeforeProfit * (1 + marginPercent / 100);
+  const totalProfit = selectedCostBeforeProfit * (marginPercent / 100);
+  const vatAmount = (subtotalBeforeTax * selectedVatPercent) / 100;
+  const taxAmount = (subtotalBeforeTax * selectedTaxPercent) / 100;
+  const selectedGrandTotal = roundMoney(subtotalBeforeTax + vatAmount + taxAmount);
+  const totalSales = selectedGrandTotal;
+  const unitSalesPrice = quantity > 0 ? selectedGrandTotal / quantity : 0;
   const selectedTotal = item.costingStatus === "COSTED" ? selectedGrandTotal : 0;
   return {
     localTotal,
+    foreignProductTotal,
+    foreignUnitValueBdt: roundMoney((Number(item.foreignUnitPrice) || 0) * foreignExchangeRate),
     foreignProductValue,
-    foreignShippingSubtotal,
-    foreignShippingSubtotalBdt,
+    foreignTransportBdt,
+    shippingCostBdt,
     foreignLanded,
     selectedCostBeforeProfit,
     selectedTotal,
@@ -396,21 +440,15 @@ function foreignCostingValidationError(item: CostingItemForm): string | null {
   const product = item.description || "the selected item";
   if (Number(item.foreignUnitPrice) <= 0) return `Enter Foreign Unit Price for ${product}.`;
   if (Number(item.foreignExchangeRate) <= 0) return `Enter a valid Exchange Rate for ${product}.`;
-  if (!item.foreignShippingMethod.startsWith("DOOR_TO_DOOR")) return null;
-
-  const usesLegacyDoorCharge =
-    Number(item.foreignDoorToDoorCharge) > 0 &&
-    Number(item.foreignTransportCharge) <= 0 &&
-    Number(item.customsDeclarationCharge) <= 0 &&
-    Number(item.shippingRate) <= 0;
-  if (usesLegacyDoorCharge) return null;
+  if (!item.foreignCountry.trim()) return `Select Country for ${product}.`;
+  if (item.foreignShippingMethod.startsWith("LC_")) return null;
+  const usesLegacyShipping =
+    Number(item.shippingWeightKg) <= 0 &&
+    Number(item.shippingRate) <= 0 &&
+    (Number(item.foreignDoorToDoorCharge) > 0 || Number(item.foreignFreightCost) > 0);
+  if (usesLegacyShipping) return null;
+  if (Number(item.shippingWeightKg) <= 0) return `Enter Shipping Weight (KG) for ${product}.`;
   if (Number(item.shippingRate) <= 0) return `Enter a Shipping Rate for ${product}.`;
-  if (item.shippingRateBasis === "PER_KG" && Number(item.shippingWeightKg) <= 0) {
-    return `Enter Weight (KG) for ${product}.`;
-  }
-  if (item.shippingRateBasis === "PER_CBM" && Number(item.shippingVolumeCbm) <= 0) {
-    return `Enter Volume (CBM) for ${product}.`;
-  }
   return null;
 }
 
@@ -444,9 +482,12 @@ export default function TenderCostingEditorPage() {
   });
   const [items, setItems] = React.useState<CostingItemForm[]>([blankItem()]);
   const [sourceFilter, setSourceFilter] = React.useState("ALL");
-  const [bulkSourcingType, setBulkSourcingType] = React.useState<TenderCostingSourcingType | "">("");
+  const [bulkSourcingType, setBulkSourcingType] = React.useState<TenderCostingSourcingType | "">(
+    "",
+  );
   const [selectedItemIds, setSelectedItemIds] = React.useState<Set<string>>(new Set());
   const [activeCostingIds, setActiveCostingIds] = React.useState<Set<string>>(new Set());
+  const [foreignEditReturnIds, setForeignEditReturnIds] = React.useState<Set<string>>(new Set());
   const [lastPreparedByUserId, setLastPreparedByUserId] = React.useState("");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [saveError, setSaveError] = React.useState("");
@@ -463,21 +504,18 @@ export default function TenderCostingEditorPage() {
   const [commonVatPercent, setCommonVatPercent] = React.useState("");
   const [commonTaxPercent, setCommonTaxPercent] = React.useState("");
   const [bulkForeign, setBulkForeign] = React.useState<BulkForeignForm>({
-    country: "",
+    country: "China",
     currency: "USD",
     exchangeRate: "1",
     exchangeRateDate: localDate(),
     shippingMethod: "DOOR_TO_DOOR_SEA",
-    customsDutyPercent: "",
-    regulatoryDutyPercent: "",
-    supplementaryDutyPercent: "",
-    vatPercent: "",
-    taxPercent: "",
   });
+  const [foreignCostingNotice, setForeignCostingNotice] = React.useState("");
   const [success, setSuccess] = React.useState<{ title: string; message: string } | null>(null);
   const hydratedId = React.useRef<string | undefined>(undefined);
   const intakeSectionRef = React.useRef<HTMLDivElement | null>(null);
   const costingWorkspaceRef = React.useRef<HTMLDivElement | null>(null);
+  const costedItemsListRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("costingId") ?? undefined;
@@ -592,8 +630,7 @@ export default function TenderCostingEditorPage() {
     );
     const firstPricedItem = record.items[0];
     const useForeignRates =
-      firstPricedItem?.sourcingType === "FOREIGN" ||
-      firstPricedItem?.selectedSource === "FOREIGN";
+      firstPricedItem?.sourcingType === "FOREIGN" || firstPricedItem?.selectedSource === "FOREIGN";
     setCommonVatPercent(
       firstPricedItem
         ? useForeignRates
@@ -614,31 +651,23 @@ export default function TenderCostingEditorPage() {
     setBulkForeign(
       firstForeignItem
         ? {
-            country: firstForeignItem.foreignCountry ?? "",
+            country: firstForeignItem.foreignCountry ?? "China",
             currency: firstForeignItem.foreignCurrency,
             exchangeRate: compactInputNumber(firstForeignItem.foreignExchangeRate, true),
             exchangeRateDate: firstForeignItem.exchangeRateDate?.slice(0, 10) ?? localDate(),
             shippingMethod: firstForeignItem.foreignShippingMethod,
-            customsDutyPercent: compactInputNumber(firstForeignItem.customsDutyPercent, true),
-            regulatoryDutyPercent: compactInputNumber(firstForeignItem.regulatoryDutyPercent, true),
-            supplementaryDutyPercent: compactInputNumber(firstForeignItem.supplementaryDutyPercent, true),
-            vatPercent: compactInputNumber(firstForeignItem.foreignVatPercent, true),
-            taxPercent: compactInputNumber(firstForeignItem.foreignTaxPercent, true),
           }
         : {
-            country: "",
+            country: "China",
             currency: "USD",
             exchangeRate: "1",
             exchangeRateDate: localDate(),
             shippingMethod: "DOOR_TO_DOOR_SEA",
-            customsDutyPercent: "",
-            regulatoryDutyPercent: "",
-            supplementaryDutyPercent: "",
-            vatPercent: "",
-            taxPercent: "",
           },
     );
     setActiveCostingIds(new Set());
+    setSelectedItemIds(new Set());
+    setForeignEditReturnIds(new Set());
     setIsDirty(false);
   }, [costing.data]);
 
@@ -670,13 +699,8 @@ export default function TenderCostingEditorPage() {
     setIsDirty(true);
   }
 
-  function updateItemRate(
-    item: CostingItemForm,
-    rate: "VAT" | "TAX",
-    value: string,
-  ) {
-    const usesForeignRate =
-      item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN";
+  function updateItemRate(item: CostingItemForm, rate: "VAT" | "TAX", value: string) {
+    const usesForeignRate = item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN";
     updateItem(
       item.id,
       rate === "VAT"
@@ -701,11 +725,50 @@ export default function TenderCostingEditorPage() {
       exchangeRateDate: bulkForeign.exchangeRateDate,
       foreignShippingMethod: bulkForeign.shippingMethod,
       shippingRateBasis: defaultShippingRateBasis(bulkForeign.shippingMethod),
-      customsDutyPercent: bulkForeign.customsDutyPercent,
-      regulatoryDutyPercent: bulkForeign.regulatoryDutyPercent,
-      supplementaryDutyPercent: bulkForeign.supplementaryDutyPercent,
-      foreignVatPercent: bulkForeign.vatPercent,
-      foreignTaxPercent: bulkForeign.taxPercent,
+      shippingRate: defaultShippingRate(bulkForeign.shippingMethod),
+    };
+  }
+
+  function applyCommonForeignValues(item: CostingItemForm): CostingItemForm {
+    const isLc = bulkForeign.shippingMethod.startsWith("LC_");
+    const preserveLcCharges = isLc && item.foreignShippingMethod.startsWith("LC_");
+    const keepEditedRate =
+      !isLc &&
+      item.shippingRateBasis === "PER_KG" &&
+      item.foreignShippingMethod === bulkForeign.shippingMethod &&
+      Number(item.shippingRate) > 0;
+    return {
+      ...item,
+      foreignCountry: bulkForeign.country,
+      foreignCurrency: bulkForeign.currency,
+      foreignExchangeRate: bulkForeign.exchangeRate,
+      exchangeRateDate: bulkForeign.exchangeRateDate,
+      foreignShippingMethod: bulkForeign.shippingMethod,
+      shippingRateBasis: defaultShippingRateBasis(bulkForeign.shippingMethod),
+      shippingRate: keepEditedRate
+        ? item.shippingRate
+        : defaultShippingRate(bulkForeign.shippingMethod),
+      shippingWeightKg: isLc ? "" : item.shippingWeightKg,
+      foreignTransportCharge: isLc ? "" : item.foreignTransportCharge,
+      foreignDoorToDoorCharge: "",
+      foreignImportDutyIncluded: false,
+      customsDeclarationCharge: "",
+      shippingVolumeCbm: "",
+      foreignFreightCost: preserveLcCharges ? item.foreignFreightCost : "",
+      foreignInsuranceCost: "",
+      customsDutyPercent: "",
+      regulatoryDutyPercent: "",
+      supplementaryDutyPercent: "",
+      cnfCharge: preserveLcCharges ? item.cnfCharge : "",
+      portHandlingCharge: preserveLcCharges ? item.portHandlingCharge : "",
+      bankLcCharge: preserveLcCharges ? item.bankLcCharge : "",
+      foreignLocalTransportCost: isLc
+        ? preserveLcCharges
+          ? item.foreignLocalTransportCost
+          : ""
+        : item.foreignLocalTransportCost,
+      domesticTransportCost: isLc ? "" : item.domesticTransportCost,
+      foreignOtherCost: "",
     };
   }
 
@@ -723,8 +786,7 @@ export default function TenderCostingEditorPage() {
       ...current,
       {
         ...newItem,
-        marginPercent:
-          sourcingType === "FOREIGN" ? foreignTargetMargin : localTargetMargin,
+        marginPercent: sourcingType === "FOREIGN" ? foreignTargetMargin : localTargetMargin,
         localVatPercent: commonVatPercent,
         localTaxPercent: commonTaxPercent,
         foreignVatPercent: commonVatPercent,
@@ -754,21 +816,21 @@ export default function TenderCostingEditorPage() {
     const vatPercent = Math.min(100, Math.max(0, Number(commonVatPercent) || 0));
     const taxPercent = Math.min(100, Math.max(0, Number(commonTaxPercent) || 0));
     const updatedItems = items.map((item) => ({
-        ...item,
-        localVatPercent: String(vatPercent),
-        localTaxPercent: String(taxPercent),
-        foreignVatPercent: String(vatPercent),
-        foreignTaxPercent: String(taxPercent),
-        marginPercent: String(
-          item.sourcingType === "FOREIGN"
-            ? foreignMargin
-            : item.sourcingType === "LOCAL"
-              ? localMargin
-              : item.selectedSource === "FOREIGN"
-                ? foreignMargin
-                : localMargin,
-        ),
-      }));
+      ...item,
+      localVatPercent: String(vatPercent),
+      localTaxPercent: String(taxPercent),
+      foreignVatPercent: String(vatPercent),
+      foreignTaxPercent: String(taxPercent),
+      marginPercent: String(
+        item.sourcingType === "FOREIGN"
+          ? foreignMargin
+          : item.sourcingType === "LOCAL"
+            ? localMargin
+            : item.selectedSource === "FOREIGN"
+              ? foreignMargin
+              : localMargin,
+      ),
+    }));
     setLocalTargetMargin(String(localMargin));
     setForeignTargetMargin(String(foreignMargin));
     setCommonVatPercent(String(vatPercent));
@@ -807,6 +869,11 @@ export default function TenderCostingEditorPage() {
       selectedItemIds.forEach((id) => next.delete(id));
       return next;
     });
+    setForeignEditReturnIds((current) => {
+      const next = new Set(current);
+      selectedItemIds.forEach((id) => next.delete(id));
+      return next;
+    });
     setBulkSourcingType("");
     setIsDirty(true);
   }
@@ -821,17 +888,13 @@ export default function TenderCostingEditorPage() {
   }
 
   function startSelectedCosting() {
-    const candidateIds =
-      selectedItemIds.size > 0
-        ? [...selectedItemIds]
-        : filteredItems
-            .filter((item) => item.sourcingType === "FOREIGN")
-            .map((item) => item.id);
+    const candidateIds = costingCandidateItems.map((item) => item.id);
     if (candidateIds.length === 0) {
       setSaveError("No item is available in the current filter.");
       return;
     }
     setSaveError("");
+    setForeignCostingNotice("");
     setActiveCostingIds((current) => new Set([...current, ...candidateIds]));
     window.setTimeout(
       () => costingWorkspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
@@ -852,7 +915,14 @@ export default function TenderCostingEditorPage() {
       markItemCosted(item);
       return;
     }
+    setForeignEditReturnIds((current) => {
+      const next = new Set(current);
+      if (item.costingStatus === "DRAFT") next.add(item.id);
+      else next.delete(item.id);
+      return next;
+    });
     setSaveError("");
+    setForeignCostingNotice("");
     setActiveCostingIds((current) => new Set([...current, item.id]));
     window.setTimeout(
       () => costingWorkspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
@@ -862,26 +932,15 @@ export default function TenderCostingEditorPage() {
 
   function applyBulkForeignSettings() {
     const targetIds = activeCostingIds;
-    if (targetIds.size === 0 || Number(bulkForeign.exchangeRate) <= 0) {
-      setSaveError("Enter a valid Foreign exchange rate first.");
+    if (!bulkForeign.country || targetIds.size === 0 || Number(bulkForeign.exchangeRate) <= 0) {
+      setSaveError("Select Country and enter a valid Foreign exchange rate first.");
       return;
     }
     setItems((current) =>
       current.map((item) =>
         targetIds.has(item.id) && item.sourcingType === "FOREIGN"
           ? {
-              ...item,
-              foreignCountry: bulkForeign.country,
-              foreignCurrency: bulkForeign.currency,
-              foreignExchangeRate: bulkForeign.exchangeRate,
-              exchangeRateDate: bulkForeign.exchangeRateDate,
-              foreignShippingMethod: bulkForeign.shippingMethod,
-              shippingRateBasis: defaultShippingRateBasis(bulkForeign.shippingMethod),
-              customsDutyPercent: bulkForeign.customsDutyPercent,
-              regulatoryDutyPercent: bulkForeign.regulatoryDutyPercent,
-              supplementaryDutyPercent: bulkForeign.supplementaryDutyPercent,
-              foreignVatPercent: bulkForeign.vatPercent,
-              foreignTaxPercent: bulkForeign.taxPercent,
+              ...applyCommonForeignValues(item),
               costingStatus: "DRAFT",
             }
           : item,
@@ -891,8 +950,21 @@ export default function TenderCostingEditorPage() {
     setIsDirty(true);
   }
 
-  async function markAllActiveForeignCosted() {
-    const targetItems = items.filter(
+  async function saveAllActiveForeignCosting() {
+    if (!bulkForeign.country || Number(bulkForeign.exchangeRate) <= 0) {
+      setSaveError("Select Country and enter a valid Foreign exchange rate first.");
+      return;
+    }
+    const updatedItems: CostingItemForm[] = items.map((item) =>
+      activeCostingIds.has(item.id) && item.sourcingType === "FOREIGN"
+        ? {
+            ...applyCommonForeignValues(item),
+            selectedSource: "FOREIGN",
+            costingStatus: "DRAFT",
+          }
+        : item,
+    );
+    const targetItems = updatedItems.filter(
       (item) => activeCostingIds.has(item.id) && item.sourcingType === "FOREIGN",
     );
     const validationError = targetItems
@@ -902,17 +974,23 @@ export default function TenderCostingEditorPage() {
       setSaveError(validationError ?? "No Foreign item is open for costing.");
       return;
     }
-    const updatedItems: CostingItemForm[] = items.map((item) =>
-        activeCostingIds.has(item.id) && item.sourcingType === "FOREIGN"
-          ? { ...item, selectedSource: "FOREIGN", costingStatus: "COSTED" }
-          : item,
-      );
+    const isCompletedEdit = costing.data?.status === "COMPLETED";
+    const persistedItems = isCompletedEdit
+      ? updatedItems.map((item) =>
+          targetItems.some((target) => target.id === item.id)
+            ? { ...item, costingStatus: "COSTED" as const }
+            : item,
+        )
+      : updatedItems;
+    const saved = await save(isCompletedEdit ? "COMPLETED" : "IN_PROGRESS", persistedItems, {
+      showSuccess: false,
+    });
+    if (!saved) return;
+    if (isCompletedEdit && costing.data) hydratedId.current = costing.data.id;
     setItems(updatedItems);
     setActiveCostingIds((current) => {
       const next = new Set(current);
-      items
-        .filter((item) => item.sourcingType === "FOREIGN")
-        .forEach((item) => next.delete(item.id));
+      targetItems.forEach((item) => next.delete(item.id));
       return next;
     });
     setSelectedItemIds((current) => {
@@ -920,9 +998,70 @@ export default function TenderCostingEditorPage() {
       targetItems.forEach((item) => next.delete(item.id));
       return next;
     });
+    setForeignEditReturnIds((current) => {
+      const next = new Set(current);
+      targetItems.forEach((item) => next.delete(item.id));
+      return next;
+    });
     setSaveError("");
-    setIsDirty(true);
-    await save(costing.data?.status === "COMPLETED" ? "COMPLETED" : "IN_PROGRESS", updatedItems);
+    setForeignCostingNotice(
+      "Foreign costing saved. Add Profit, VAT and Tax in Costing Items Intake, then click Save All.",
+    );
+    setIsDirty(isCompletedEdit);
+    window.setTimeout(
+      () => intakeSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      0,
+    );
+  }
+
+  async function saveAllPricing() {
+    const pricingReadyItems = items.filter(
+      (item) =>
+        item.sourcingType === "FOREIGN" &&
+        item.costingStatus === "DRAFT" &&
+        !activeCostingIds.has(item.id),
+    );
+    if (pricingReadyItems.length === 0) {
+      setSaveError("Save Foreign Costing first, then add Profit, VAT and Tax.");
+      return;
+    }
+    const validationError = pricingReadyItems
+      .map((item) => foreignCostingValidationError(item))
+      .find((message): message is string => Boolean(message));
+    if (validationError) {
+      setSaveError(validationError);
+      return;
+    }
+    const pricingReadyIds = new Set(pricingReadyItems.map((item) => item.id));
+    const updatedItems: CostingItemForm[] = items.map((item) =>
+      pricingReadyIds.has(item.id) ? { ...item, costingStatus: "COSTED" } : item,
+    );
+    const saved = await save(
+      costing.data?.status === "COMPLETED" ? "COMPLETED" : "IN_PROGRESS",
+      updatedItems,
+      { showSuccess: false },
+    );
+    if (!saved) return;
+    setItems(updatedItems);
+    setSelectedItemIds((current) => {
+      const next = new Set(current);
+      pricingReadyItems.forEach((item) => next.delete(item.id));
+      return next;
+    });
+    setForeignEditReturnIds((current) => {
+      const next = new Set(current);
+      pricingReadyItems.forEach((item) => next.delete(item.id));
+      return next;
+    });
+    setForeignCostingNotice(
+      `${pricingReadyItems.length} foreign item(s) moved to Costed Items List.`,
+    );
+    setSaveError("");
+    setIsDirty(false);
+    window.setTimeout(
+      () => costedItemsListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      0,
+    );
   }
 
   function markItemCosted(item: CostingItemForm) {
@@ -933,7 +1072,9 @@ export default function TenderCostingEditorPage() {
           ? "FOREIGN"
           : item.selectedSource;
     if (!source) {
-      setSaveError(`Select the final Local or Foreign source for ${item.description || "this item"}.`);
+      setSaveError(
+        `Select the final Local or Foreign source for ${item.description || "this item"}.`,
+      );
       return;
     }
     if (source === "LOCAL" && Number(item.localUnitPrice) <= 0) {
@@ -959,20 +1100,25 @@ export default function TenderCostingEditorPage() {
   }
 
   function editCostedItem(item: CostingItemForm) {
-    const openForeignWorkspace = item.sourcingType === "FOREIGN";
+    const isForeignItem = item.sourcingType === "FOREIGN";
     updateItem(item.id, {
-      costingStatus: openForeignWorkspace ? "DRAFT" : "NOT_COSTED",
+      costingStatus: isForeignItem ? "DRAFT" : "NOT_COSTED",
     });
-    if (openForeignWorkspace) {
-      setActiveCostingIds((current) => new Set([...current, item.id]));
-    }
+    setActiveCostingIds((current) => {
+      const next = new Set(current);
+      next.delete(item.id);
+      return next;
+    });
+    setSelectedItemIds(new Set());
+    setForeignEditReturnIds((current) => {
+      const next = new Set(current);
+      if (isForeignItem) next.add(item.id);
+      else next.delete(item.id);
+      return next;
+    });
     setSaveError("");
     window.setTimeout(
-      () =>
-        (openForeignWorkspace ? costingWorkspaceRef.current : intakeSectionRef.current)?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        }),
+      () => intakeSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
       0,
     );
   }
@@ -999,10 +1145,14 @@ export default function TenderCostingEditorPage() {
     return Object.keys(nextErrors).length === 0;
   }
 
-  async function save(status: TenderCostingStatus, itemsOverride?: CostingItemForm[]) {
+  async function save(
+    status: TenderCostingStatus,
+    itemsOverride?: CostingItemForm[],
+    saveOptions: { showSuccess?: boolean } = {},
+  ): Promise<boolean> {
     const record = costing.data;
     const itemsToSave = itemsOverride ?? items;
-    if (!record || !validate(status, itemsToSave)) return;
+    if (!record || !validate(status, itemsToSave)) return false;
     setSaveError("");
     const firstItem = itemsToSave[0]!;
     const firstPreparedByUserId = preparedByForItem(firstItem);
@@ -1062,9 +1212,7 @@ export default function TenderCostingEditorPage() {
         shippingRate: Number(item.shippingRate) || 0,
         domesticTransportCost: Number(item.domesticTransportCost) || 0,
         foreignImportDutyIncluded: item.foreignImportDutyIncluded,
-        foreignTransitDays: item.foreignTransitDays
-          ? Number(item.foreignTransitDays)
-          : undefined,
+        foreignTransitDays: item.foreignTransitDays ? Number(item.foreignTransitDays) : undefined,
         foreignShippingReference: item.foreignShippingReference.trim() || undefined,
         foreignFreightCost: Number(item.foreignFreightCost) || 0,
         foreignInsuranceCost: Number(item.foreignInsuranceCost) || 0,
@@ -1089,20 +1237,24 @@ export default function TenderCostingEditorPage() {
       setIsDirty(false);
       setCompleteReviewOpen(false);
       const isCompletedUpdate = record.status === "COMPLETED" && status === "COMPLETED";
-      setSuccess({
-        title: isCompletedUpdate
-          ? "Costing Updated"
-          : status === "COMPLETED"
-            ? "Costing Completed"
-            : "Costing Saved",
-        message: isCompletedUpdate
-          ? `${saved.tender.egpTenderId ?? saved.tender.workName} costing updated successfully.`
-          : status === "COMPLETED"
-            ? `${saved.tender.egpTenderId ?? saved.tender.workName} costing completed successfully.`
-            : "Tender costing progress saved successfully.",
-      });
+      if (saveOptions.showSuccess !== false) {
+        setSuccess({
+          title: isCompletedUpdate
+            ? "Costing Updated"
+            : status === "COMPLETED"
+              ? "Costing Completed"
+              : "Costing Saved",
+          message: isCompletedUpdate
+            ? `${saved.tender.egpTenderId ?? saved.tender.workName} costing updated successfully.`
+            : status === "COMPLETED"
+              ? `${saved.tender.egpTenderId ?? saved.tender.workName} costing completed successfully.`
+              : "Tender costing progress saved successfully.",
+        });
+      }
+      return true;
     } catch (error) {
       setSaveError(error instanceof ApiError ? error.message : "Could not save tender costing.");
+      return false;
     }
   }
 
@@ -1148,22 +1300,38 @@ export default function TenderCostingEditorPage() {
   const activeForeignItems = items.filter(
     (item) => activeCostingIds.has(item.id) && item.sourcingType === "FOREIGN",
   );
+  const pricingReadyItems = items.filter(
+    (item) =>
+      item.sourcingType === "FOREIGN" &&
+      item.costingStatus === "DRAFT" &&
+      !activeCostingIds.has(item.id),
+  );
   const hasCalculatedCost = costedItemCount > 0;
   const isPartialCosting = hasCalculatedCost && costedItemCount < items.length;
+  const foreignEditCandidates = filteredItems.filter(
+    (item) => item.sourcingType === "FOREIGN" && foreignEditReturnIds.has(item.id),
+  );
   const costingCandidateItems =
     selectedItemIds.size > 0
       ? items.filter((item) => selectedItemIds.has(item.id))
-      : filteredItems.filter((item) => item.sourcingType === "FOREIGN");
+      : foreignEditCandidates.length > 0
+        ? foreignEditCandidates
+        : filteredItems.filter(
+            (item) => item.sourcingType === "FOREIGN" && item.costingStatus !== "DRAFT",
+          );
+  const shouldShowStartCosting =
+    costingCandidateItems.length > 0 &&
+    (pricingReadyItems.length === 0 || foreignEditCandidates.length > 0);
   const canStartCosting =
     costingCandidateItems.length > 0 &&
     costingCandidateItems.every(
-        (item) =>
-          item.costingDate &&
-          preparedByForItem(item) &&
-          item.description.trim() &&
-          item.unit.trim() &&
-          Number(item.quantity) > 0,
-      );
+      (item) =>
+        item.costingDate &&
+        preparedByForItem(item) &&
+        item.description.trim() &&
+        item.unit.trim() &&
+        Number(item.quantity) > 0,
+    );
   const itemTotal = computed.reduce((sum, item) => sum + item.selectedTotal, 0);
   const directAdditional =
     Number(additional.freightCost) +
@@ -1174,20 +1342,23 @@ export default function TenderCostingEditorPage() {
   const estimatedTotal = itemTotal + directAdditional + contingencyAmount;
   const localProfit = computed.reduce(
     (sum, preview, index) =>
-      items[index]?.selectedSource === "LOCAL" || items[index]?.sourcingType === "LOCAL"
+      items[index]?.costingStatus === "COSTED" &&
+      (items[index]?.selectedSource === "LOCAL" || items[index]?.sourcingType === "LOCAL")
         ? sum + preview.totalProfit
         : sum,
     0,
   );
   const foreignProfit = computed.reduce(
     (sum, preview, index) =>
-      items[index]?.selectedSource === "FOREIGN" || items[index]?.sourcingType === "FOREIGN"
+      items[index]?.costingStatus === "COSTED" &&
+      (items[index]?.selectedSource === "FOREIGN" || items[index]?.sourcingType === "FOREIGN")
         ? sum + preview.totalProfit
         : sum,
     0,
   );
   const totalBaseCost = computed.reduce(
-    (sum, preview) => sum + preview.selectedCostBeforeProfit,
+    (sum, preview, index) =>
+      items[index]?.costingStatus === "COSTED" ? sum + preview.selectedCostBeforeProfit : sum,
     0,
   );
   const totalProfit = localProfit + foreignProfit;
@@ -1308,19 +1479,25 @@ export default function TenderCostingEditorPage() {
           label="Local Profit"
           value={formatMoney(localProfit)}
           tone="success"
-          action={!isReadOnly ? <ProfitAction onClick={() => setProfitSettingsOpen(true)} /> : undefined}
+          action={
+            !isReadOnly ? <ProfitAction onClick={() => setProfitSettingsOpen(true)} /> : undefined
+          }
         />
         <CostingKpi
           label="Foreign Profit"
           value={formatMoney(foreignProfit)}
           tone="success"
-          action={!isReadOnly ? <ProfitAction onClick={() => setProfitSettingsOpen(true)} /> : undefined}
+          action={
+            !isReadOnly ? <ProfitAction onClick={() => setProfitSettingsOpen(true)} /> : undefined
+          }
         />
         <CostingKpi
           label="Profit Margin"
           value={`${overallProfitMargin.toFixed(2)}%`}
           tone="blue"
-          action={!isReadOnly ? <ProfitAction onClick={() => setProfitSettingsOpen(true)} /> : undefined}
+          action={
+            !isReadOnly ? <ProfitAction onClick={() => setProfitSettingsOpen(true)} /> : undefined
+          }
         />
       </div>
 
@@ -1338,7 +1515,8 @@ export default function TenderCostingEditorPage() {
                 Set Total Costing Budget to Start
               </h2>
               <p className="mt-0.5 text-[11px] text-biz-muted">
-                Enter and save the approved costing budget. The item costing section will unlock automatically.
+                Enter and save the approved costing budget. The item costing section will unlock
+                automatically.
               </p>
             </div>
             <div className="flex min-w-[360px] items-end gap-2">
@@ -1399,526 +1577,572 @@ export default function TenderCostingEditorPage() {
       </div>
 
       <div className="relative">
-      <fieldset
-        disabled={isReadOnly || !hasCostingBudget}
-        className={`m-0 flex min-w-0 flex-col gap-3 border-0 p-0 ${!hasCostingBudget && !isReadOnly ? "opacity-55" : ""}`}
-      >
-        <div ref={intakeSectionRef} className="scroll-mt-20 rounded-lg border border-biz-border bg-biz-surface">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-biz-border px-4 py-3">
-            <div>
-              <h2 className="text-[14px] font-semibold text-biz-text">1. Costing Items Intake</h2>
-              <p className="text-[11px] text-biz-muted">
-                Add multiple products first; source prices and import charges are entered later.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-medium text-biz-muted">
-                  Costing Date <RequiredMark />
-                </span>
-                <TextInput
-                  className="h-9 w-[145px] px-2 text-[11px]"
-                  type="date"
-                  value={header.costingDate}
-                  onChange={(event) => updateCommonCostingDate(event.target.value)}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-medium text-biz-muted">
-                  Prepared By <RequiredMark />
-                </span>
+        <fieldset
+          disabled={isReadOnly || !hasCostingBudget}
+          className={`m-0 flex min-w-0 flex-col gap-3 border-0 p-0 ${!hasCostingBudget && !isReadOnly ? "opacity-55" : ""}`}
+        >
+          <div
+            ref={intakeSectionRef}
+            className="scroll-mt-20 rounded-lg border border-biz-border bg-biz-surface"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-biz-border px-4 py-3">
+              <div>
+                <h2 className="text-[14px] font-semibold text-biz-text">1. Costing Items Intake</h2>
+                <p className="text-[11px] text-biz-muted">
+                  Add multiple products first; source prices and import charges are entered later.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10px] font-medium text-biz-muted">
+                    Costing Date <RequiredMark />
+                  </span>
+                  <TextInput
+                    className="h-9 w-[145px] px-2 text-[11px]"
+                    type="date"
+                    value={header.costingDate}
+                    onChange={(event) => updateCommonCostingDate(event.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10px] font-medium text-biz-muted">
+                    Prepared By <RequiredMark />
+                  </span>
+                  <SelectInput
+                    className="h-9 w-[180px] text-[11px]"
+                    placeholder="Select user"
+                    value={effectivePreparedByUserId}
+                    options={(options.data?.users ?? []).map((user) => ({
+                      value: user.id,
+                      label: user.name,
+                    }))}
+                    onChange={(event) => updateCommonPreparedBy(event.target.value)}
+                  />
+                </label>
                 <SelectInput
-                  className="h-9 w-[180px] text-[11px]"
-                  placeholder="Select user"
-                  value={effectivePreparedByUserId}
-                  options={(options.data?.users ?? []).map((user) => ({
-                    value: user.id,
-                    label: user.name,
-                  }))}
-                  onChange={(event) => updateCommonPreparedBy(event.target.value)}
+                  className="h-9 w-[170px] text-[11px]"
+                  value={sourceFilter}
+                  options={SOURCE_FILTER_OPTIONS}
+                  onChange={(event) => setSourceFilter(event.target.value)}
                 />
-              </label>
-              <SelectInput
-                className="h-9 w-[170px] text-[11px]"
-                value={sourceFilter}
-                options={SOURCE_FILTER_OPTIONS}
-                onChange={(event) => setSourceFilter(event.target.value)}
-              />
-              <PrimaryButton onClick={addAnotherItem}>
-                <Plus className="h-4 w-4" />
-                Add Another Row
-              </PrimaryButton>
+                <PrimaryButton onClick={addAnotherItem}>
+                  <Plus className="h-4 w-4" />
+                  Add Another Row
+                </PrimaryButton>
+              </div>
             </div>
-          </div>
-          <div className="overflow-hidden">
-            <table className="w-full table-fixed text-left text-[9px] xl:text-[10px]">
-              <thead className="bg-biz-bg text-biz-muted">
-                <tr>
-                  <th className="w-[2%] px-0.5 py-2 text-center">
-                    <input
-                      type="checkbox"
-                      aria-label="Select all visible items"
-                      checked={
-                        filteredItems.some((item) => item.sourcingType === "FOREIGN") &&
-                        filteredItems
-                          .filter((item) => item.sourcingType === "FOREIGN")
-                          .every((item) => selectedItemIds.has(item.id))
-                      }
-                      onChange={(event) =>
-                        setSelectedItemIds((current) => {
-                          const next = new Set(current);
+            <div className="overflow-hidden">
+              <table className="w-full table-fixed text-left text-[9px] xl:text-[10px]">
+                <thead className="bg-biz-bg text-biz-muted">
+                  <tr>
+                    <th className="w-[2%] px-0.5 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all visible items"
+                        checked={
+                          filteredItems.some((item) => item.sourcingType === "FOREIGN") &&
                           filteredItems
                             .filter((item) => item.sourcingType === "FOREIGN")
-                            .forEach((item) =>
-                              event.target.checked ? next.add(item.id) : next.delete(item.id),
-                            );
-                          return next;
-                        })
-                      }
-                    />
-                  </th>
-                  <th className="w-[2%] px-0.5 py-2">SL</th>
-                  <th className="w-[12%] px-1 py-2">Product Name <RequiredMark /></th>
-                  <th className="w-[8%] px-0.5 py-2">Source of Product</th>
-                  <th className="w-[6%] px-0.5 py-2">Unit <RequiredMark /></th>
-                  <th className="w-[5%] px-0.5 py-2">Qty <RequiredMark /></th>
-                  <th className="w-[7%] px-0.5 py-2 text-right">Unit Price <RequiredMark /></th>
-                  <th className="w-[8%] px-0.5 py-2 text-right">Total Price</th>
-                  <th className="w-[7%] px-0.5 py-2 text-right">Profit</th>
-                  <th className="w-[8%] px-0.5 py-2 text-right">Sub Total</th>
-                  <th className="w-[5%] px-0.5 py-2 text-right">VAT</th>
-                  <th className="w-[5%] px-0.5 py-2 text-right">Tax</th>
-                  <th className="w-[8%] px-0.5 py-2 text-right">Grand Total</th>
-                  <th className="w-[8%] px-0.5 py-2 text-right">Unit Sales</th>
-                  <th className="w-[9%] px-0.5 py-2 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredItems.map((item) => {
-                  const originalIndex = items.findIndex((row) => row.id === item.id);
-                  const preview = calculateItemPreview(item);
-                  return (
-                    <tr key={item.id} className="border-t border-biz-border">
-                      <td className="px-1 py-2 text-center">
-                        {item.sourcingType !== "FOREIGN" ? (
-                          <span className="text-biz-muted">-</span>
-                        ) : (
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${item.description || `item ${originalIndex + 1}`}`}
-                            checked={selectedItemIds.has(item.id)}
-                            onChange={() => toggleItemSelection(item.id)}
-                          />
-                        )}
-                      </td>
-                      <td className="px-1 py-2">{originalIndex + 1}</td>
-                      <td className="px-1 py-2">
-                        <RequiredRowField>
-                          <TextInput
-                            className="h-9 min-w-0 px-1.5 text-[10px]"
-                            value={item.description}
-                            placeholder="Enter product"
-                            onChange={(event) =>
-                              updateItem(item.id, {
-                                description: event.target.value,
-                                costingStatus: "NOT_COSTED",
-                              })
-                            }
-                          />
-                        </RequiredRowField>
-                      </td>
-                      <td className="px-0.5 py-2">
-                        <SelectInput
-                          className="h-9 min-w-0 px-1 pr-4 text-[9px]"
-                          value={item.sourcingType}
-                          options={SOURCING_OPTIONS}
-                          onChange={(event) => {
-                            const sourcingType = event.target.value as TenderCostingSourcingType;
-                            if (sourcingType !== "FOREIGN") {
-                              setSelectedItemIds((current) => {
-                                const next = new Set(current);
-                                next.delete(item.id);
-                                return next;
-                              });
-                              setActiveCostingIds((current) => {
-                                const next = new Set(current);
-                                next.delete(item.id);
-                                return next;
-                              });
-                            }
-                            updateItem(item.id, {
-                              sourcingType,
-                              selectedSource:
-                                sourcingType === "LOCAL"
-                                  ? "LOCAL"
-                                  : sourcingType === "FOREIGN"
-                                    ? "FOREIGN"
-                                    : "",
-                              costingStatus: "NOT_COSTED",
-                              marginPercent:
-                                sourcingType === "FOREIGN"
-                                  ? foreignTargetMargin
-                                  : localTargetMargin,
-                              ...(sourcingType === "FOREIGN" ? currentForeignDefaults() : {}),
-                            });
-                          }}
-                        />
-                      </td>
-                      <td className="px-0.5 py-2">
-                        <RequiredRowField>
-                          <SelectInput
-                            className="h-9 min-w-0 px-1 pr-4 text-[9px] xl:text-[10px]"
-                            value={item.unit}
-                            options={
-                              UNIT_OPTIONS.some((option) => option.value === item.unit)
-                                ? UNIT_OPTIONS
-                                : [{ value: item.unit, label: item.unit }, ...UNIT_OPTIONS]
-                            }
-                            onChange={(event) => updateItem(item.id, { unit: event.target.value })}
-                          />
-                        </RequiredRowField>
-                      </td>
-                      <td className="px-1 py-2">
-                        <RequiredRowField>
-                          <TextInput
-                            className={`h-9 min-w-0 px-1 text-[10px] ${NUMBER_INPUT_CLASS}`}
-                            type="number"
-                            min="0.001"
-                            step="any"
-                            value={item.quantity}
-                            onChange={(event) =>
-                              updateItem(item.id, {
-                                quantity: event.target.value,
-                                costingStatus: "NOT_COSTED",
-                              })
-                            }
-                          />
-                        </RequiredRowField>
-                      </td>
-                      <td className="px-0.5 py-2">
-                        {item.sourcingType === "LOCAL" ? (
+                            .every((item) => selectedItemIds.has(item.id))
+                        }
+                        onChange={(event) =>
+                          setSelectedItemIds((current) => {
+                            const next = new Set(current);
+                            filteredItems
+                              .filter((item) => item.sourcingType === "FOREIGN")
+                              .forEach((item) =>
+                                event.target.checked ? next.add(item.id) : next.delete(item.id),
+                              );
+                            return next;
+                          })
+                        }
+                      />
+                    </th>
+                    <th className="w-[2%] px-0.5 py-2">SL</th>
+                    <th className="w-[12%] px-1 py-2">
+                      Product Name <RequiredMark />
+                    </th>
+                    <th className="w-[8%] px-0.5 py-2">Source of Product</th>
+                    <th className="w-[6%] px-0.5 py-2">
+                      Unit <RequiredMark />
+                    </th>
+                    <th className="w-[5%] px-0.5 py-2">
+                      Qty <RequiredMark />
+                    </th>
+                    <th className="w-[7%] px-0.5 py-2 text-right">
+                      Unit Price <RequiredMark />
+                    </th>
+                    <th className="w-[8%] px-0.5 py-2 text-right">Total Price</th>
+                    <th className="w-[7%] px-0.5 py-2 text-right">Profit</th>
+                    <th className="w-[8%] px-0.5 py-2 text-right">Sub Total</th>
+                    <th className="w-[5%] px-0.5 py-2 text-right">VAT</th>
+                    <th className="w-[5%] px-0.5 py-2 text-right">Tax</th>
+                    <th className="w-[8%] px-0.5 py-2 text-right">Grand Total</th>
+                    <th className="w-[8%] px-0.5 py-2 text-right">Unit Sales</th>
+                    <th className="w-[9%] px-0.5 py-2 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredItems.map((item) => {
+                    const originalIndex = items.findIndex((row) => row.id === item.id);
+                    const preview = calculateItemPreview(item);
+                    return (
+                      <tr key={item.id} className="border-t border-biz-border">
+                        <td className="px-1 py-2 text-center">
+                          {item.sourcingType !== "FOREIGN" ? (
+                            <span className="text-biz-muted">-</span>
+                          ) : (
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${item.description || `item ${originalIndex + 1}`}`}
+                              checked={selectedItemIds.has(item.id)}
+                              onChange={() => toggleItemSelection(item.id)}
+                            />
+                          )}
+                        </td>
+                        <td className="px-1 py-2">{originalIndex + 1}</td>
+                        <td className="px-1 py-2">
                           <RequiredRowField>
                             <TextInput
-                              className={`h-8 min-w-0 px-1 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={item.localUnitPrice}
+                              className="h-9 min-w-0 px-1.5 text-[10px]"
+                              value={item.description}
+                              placeholder="Enter product"
                               onChange={(event) =>
                                 updateItem(item.id, {
-                                  localUnitPrice: event.target.value,
+                                  description: event.target.value,
                                   costingStatus: "NOT_COSTED",
                                 })
                               }
                             />
                           </RequiredRowField>
-                        ) : (
-                          <span className="block text-right font-medium text-biz-text">
-                            {preview.selectedUnitCost > 0
-                              ? formatCompactMoney(preview.selectedUnitCost)
+                        </td>
+                        <td className="px-0.5 py-2">
+                          <SelectInput
+                            className="h-9 min-w-0 px-1 pr-4 text-[9px]"
+                            value={item.sourcingType}
+                            options={SOURCING_OPTIONS}
+                            onChange={(event) => {
+                              const sourcingType = event.target.value as TenderCostingSourcingType;
+                              if (sourcingType !== "FOREIGN") {
+                                setSelectedItemIds((current) => {
+                                  const next = new Set(current);
+                                  next.delete(item.id);
+                                  return next;
+                                });
+                                setActiveCostingIds((current) => {
+                                  const next = new Set(current);
+                                  next.delete(item.id);
+                                  return next;
+                                });
+                                setForeignEditReturnIds((current) => {
+                                  const next = new Set(current);
+                                  next.delete(item.id);
+                                  return next;
+                                });
+                              }
+                              updateItem(item.id, {
+                                sourcingType,
+                                selectedSource:
+                                  sourcingType === "LOCAL"
+                                    ? "LOCAL"
+                                    : sourcingType === "FOREIGN"
+                                      ? "FOREIGN"
+                                      : "",
+                                costingStatus: "NOT_COSTED",
+                                marginPercent:
+                                  sourcingType === "FOREIGN"
+                                    ? foreignTargetMargin
+                                    : localTargetMargin,
+                                ...(sourcingType === "FOREIGN" ? currentForeignDefaults() : {}),
+                              });
+                            }}
+                          />
+                        </td>
+                        <td className="px-0.5 py-2">
+                          <RequiredRowField>
+                            <SelectInput
+                              className="h-9 min-w-0 px-1 pr-4 text-[9px] xl:text-[10px]"
+                              value={item.unit}
+                              options={
+                                UNIT_OPTIONS.some((option) => option.value === item.unit)
+                                  ? UNIT_OPTIONS
+                                  : [{ value: item.unit, label: item.unit }, ...UNIT_OPTIONS]
+                              }
+                              onChange={(event) =>
+                                updateItem(item.id, { unit: event.target.value })
+                              }
+                            />
+                          </RequiredRowField>
+                        </td>
+                        <td className="px-1 py-2">
+                          <RequiredRowField>
+                            <TextInput
+                              className={`h-9 min-w-0 px-1 text-[10px] ${NUMBER_INPUT_CLASS}`}
+                              type="number"
+                              min="0.001"
+                              step="any"
+                              value={item.quantity}
+                              onChange={(event) =>
+                                updateItem(item.id, {
+                                  quantity: event.target.value,
+                                  costingStatus: "NOT_COSTED",
+                                })
+                              }
+                            />
+                          </RequiredRowField>
+                        </td>
+                        <td className="px-0.5 py-2">
+                          {item.sourcingType === "LOCAL" ? (
+                            <RequiredRowField>
+                              <TextInput
+                                className={`h-8 min-w-0 px-1 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={item.localUnitPrice}
+                                onChange={(event) =>
+                                  updateItem(item.id, {
+                                    localUnitPrice: event.target.value,
+                                    costingStatus: "NOT_COSTED",
+                                  })
+                                }
+                              />
+                            </RequiredRowField>
+                          ) : (
+                            <span className="block text-right font-medium text-biz-text">
+                              {preview.selectedUnitCost > 0
+                                ? formatCompactMoney(preview.selectedUnitCost)
+                                : "—"}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-0.5 py-2 text-right font-medium text-biz-text">
+                          {preview.selectedCostBeforeProfit > 0
+                            ? formatCompactMoney(preview.selectedCostBeforeProfit)
+                            : "—"}
+                        </td>
+                        <td className="relative px-0.5 py-2">
+                          <TextInput
+                            aria-label={`Profit percentage for ${item.description || `item ${originalIndex + 1}`}`}
+                            title={`Calculated profit: ${formatCompactMoney(preview.totalProfit)}`}
+                            className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                            type="number"
+                            min="0"
+                            max="99.99"
+                            step="any"
+                            value={item.marginPercent}
+                            onFocus={(event) => event.currentTarget.select()}
+                            onChange={(event) =>
+                              updateItem(item.id, {
+                                marginPercent: event.target.value,
+                              })
+                            }
+                          />
+                          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
+                            %
+                          </span>
+                        </td>
+                        <td className="px-0.5 py-2 text-right font-semibold text-biz-text">
+                          {formatCompactMoney(preview.subtotalBeforeTax)}
+                        </td>
+                        <td className="relative px-0.5 py-2">
+                          <TextInput
+                            aria-label={`VAT percentage for ${item.description || `item ${originalIndex + 1}`}`}
+                            title={`VAT amount: ${formatCompactMoney(preview.vatAmount)}`}
+                            className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            value={
+                              item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN"
+                                ? item.foreignVatPercent
+                                : item.localVatPercent
+                            }
+                            onFocus={(event) => event.currentTarget.select()}
+                            onChange={(event) => updateItemRate(item, "VAT", event.target.value)}
+                          />
+                          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
+                            %
+                          </span>
+                        </td>
+                        <td className="relative px-0.5 py-2">
+                          <TextInput
+                            aria-label={`Tax percentage for ${item.description || `item ${originalIndex + 1}`}`}
+                            title={`Tax amount: ${formatCompactMoney(preview.taxAmount)}`}
+                            className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            value={
+                              item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN"
+                                ? item.foreignTaxPercent
+                                : item.localTaxPercent
+                            }
+                            onFocus={(event) => event.currentTarget.select()}
+                            onChange={(event) => updateItemRate(item, "TAX", event.target.value)}
+                          />
+                          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
+                            %
+                          </span>
+                        </td>
+                        <td className="px-0.5 py-2 text-right font-semibold">
+                          {formatCompactMoney(preview.selectedGrandTotal)}
+                        </td>
+                        <td className="px-0.5 py-2">
+                          <span className="block text-right font-medium text-biz-blue">
+                            {preview.unitSalesPrice > 0
+                              ? formatCompactMoney(preview.unitSalesPrice)
                               : "—"}
                           </span>
-                        )}
-                      </td>
-                      <td className="px-0.5 py-2 text-right font-medium text-biz-text">
-                        {preview.selectedCostBeforeProfit > 0
-                          ? formatCompactMoney(preview.selectedCostBeforeProfit)
-                          : "—"}
-                      </td>
-                      <td className="relative px-0.5 py-2">
-                        <TextInput
-                          aria-label={`Profit percentage for ${item.description || `item ${originalIndex + 1}`}`}
-                          title={`Calculated profit: ${formatCompactMoney(preview.totalProfit)}`}
-                          className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
-                          type="number"
-                          min="0"
-                          max="99.99"
-                          step="any"
-                          value={item.marginPercent}
-                          onFocus={(event) => event.currentTarget.select()}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              marginPercent: event.target.value,
-                            })
-                          }
-                        />
-                        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">%</span>
-                      </td>
-                      <td className="px-0.5 py-2 text-right font-semibold text-biz-text">
-                        {formatCompactMoney(preview.subtotalBeforeTax)}
-                      </td>
-                      <td className="relative px-0.5 py-2">
-                        <TextInput
-                          aria-label={`VAT percentage for ${item.description || `item ${originalIndex + 1}`}`}
-                          title={`VAT amount: ${formatCompactMoney(preview.vatAmount)}`}
-                          className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="any"
-                          value={
-                            item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN"
-                              ? item.foreignVatPercent
-                              : item.localVatPercent
-                          }
-                          onFocus={(event) => event.currentTarget.select()}
-                          onChange={(event) => updateItemRate(item, "VAT", event.target.value)}
-                        />
-                        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">%</span>
-                      </td>
-                      <td className="relative px-0.5 py-2">
-                        <TextInput
-                          aria-label={`Tax percentage for ${item.description || `item ${originalIndex + 1}`}`}
-                          title={`Tax amount: ${formatCompactMoney(preview.taxAmount)}`}
-                          className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="any"
-                          value={
-                            item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN"
-                              ? item.foreignTaxPercent
-                              : item.localTaxPercent
-                          }
-                          onFocus={(event) => event.currentTarget.select()}
-                          onChange={(event) => updateItemRate(item, "TAX", event.target.value)}
-                        />
-                        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">%</span>
-                      </td>
-                      <td className="px-0.5 py-2 text-right font-semibold">{formatCompactMoney(preview.selectedGrandTotal)}</td>
-                      <td className="px-0.5 py-2">
-                        <span className="block text-right font-medium text-biz-blue">
-                          {preview.unitSalesPrice > 0
-                            ? formatCompactMoney(preview.unitSalesPrice)
-                            : "—"}
-                          </span>
-                      </td>
-                      <td className="px-0.5 py-2 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            className="h-8 rounded border border-biz-blue px-2 text-[9px] font-semibold text-biz-blue hover:bg-biz-blue hover:text-white"
-                          onClick={() => openItemCosting(item)}
-                        >
-                            {item.sourcingType === "LOCAL"
-                              ? item.costingStatus === "COSTED"
-                                ? "Update"
-                                : "Add"
-                              : item.sourcingType === "LOCAL_AND_FOREIGN"
+                        </td>
+                        <td className="px-0.5 py-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              className="h-8 rounded border border-biz-blue px-2 text-[9px] font-semibold text-biz-blue hover:bg-biz-blue hover:text-white"
+                              onClick={() => openItemCosting(item)}
+                            >
+                              {item.sourcingType === "LOCAL"
                                 ? item.costingStatus === "COSTED"
-                                  ? "Edit Compare"
-                                  : "Compare"
-                                : item.costingStatus === "COSTED"
-                                  ? "Edit Cost"
-                                  : "Cost"}
-                          </button>
-                        {items.length > 1 ? (
-                          <IconButton
-                            aria-label="Remove item"
-                            onClick={() => {
-                              setItems((current) => current.filter((row) => row.id !== item.id));
-                              setSelectedItemIds((current) => {
-                                const next = new Set(current);
-                                next.delete(item.id);
-                                return next;
-                              });
-                              setActiveCostingIds((current) => {
-                                const next = new Set(current);
-                                next.delete(item.id);
-                                return next;
-                              });
-                              setIsDirty(true);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-biz-danger" />
-                          </IconButton>
-                        ) : (
-                          null
-                        )}
-                        </div>
+                                  ? "Update"
+                                  : "Add"
+                                : item.sourcingType === "LOCAL_AND_FOREIGN"
+                                  ? item.costingStatus === "COSTED"
+                                    ? "Edit Compare"
+                                    : "Compare"
+                                  : item.costingStatus === "DRAFT"
+                                    ? "Edit Foreign Cost"
+                                    : item.costingStatus === "COSTED"
+                                      ? "Edit Cost"
+                                      : "Cost"}
+                            </button>
+                            {items.length > 1 ? (
+                              <IconButton
+                                aria-label="Remove item"
+                                onClick={() => {
+                                  setItems((current) =>
+                                    current.filter((row) => row.id !== item.id),
+                                  );
+                                  setSelectedItemIds((current) => {
+                                    const next = new Set(current);
+                                    next.delete(item.id);
+                                    return next;
+                                  });
+                                  setActiveCostingIds((current) => {
+                                    const next = new Set(current);
+                                    next.delete(item.id);
+                                    return next;
+                                  });
+                                  setForeignEditReturnIds((current) => {
+                                    const next = new Set(current);
+                                    next.delete(item.id);
+                                    return next;
+                                  });
+                                  setIsDirty(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-biz-danger" />
+                              </IconButton>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredItems.length === 0 && (
+                    <tr className="border-t border-biz-border">
+                      <td colSpan={15} className="px-4 py-8 text-center text-[11px] text-biz-muted">
+                        No pending items. Add another row or edit an item from the Costed Items
+                        List.
                       </td>
                     </tr>
-                  );
-                })}
-                {filteredItems.length === 0 && (
-                  <tr className="border-t border-biz-border">
-                    <td colSpan={15} className="px-4 py-8 text-center text-[11px] text-biz-muted">
-                      No pending items. Add another row or edit an item from the Costed Items List.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-biz-border px-3 py-2.5">
-            <span className="text-[11px] text-biz-muted">
-              {costedItemCount} of {items.length} items costed &middot; {selectedItemIds.size} selected
-            </span>
-            <div className="flex flex-wrap items-center gap-2">
-              {selectedItemIds.size > 0 && (
-                <>
-                  <SelectInput
-                    className="h-9 w-[150px] text-[11px]"
-                    placeholder="Set source"
-                    value={bulkSourcingType}
-                    options={SOURCING_OPTIONS}
-                    onChange={(event) =>
-                      setBulkSourcingType(
-                        event.target.value as TenderCostingSourcingType | "",
-                      )
-                    }
-                  />
-                  <SecondaryButton
-                    className="h-9"
-                    disabled={!bulkSourcingType}
-                    onClick={applyBulkSourcingType}
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-biz-border px-3 py-2.5">
+              <span className="text-[11px] text-biz-muted">
+                {costedItemCount} of {items.length} items costed &middot; {selectedItemIds.size}{" "}
+                selected
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {pricingReadyItems.length > 0 && activeForeignItems.length === 0 && (
+                  <PrimaryButton
+                    className="h-9 bg-biz-success hover:bg-biz-success/90"
+                    disabled={saveCosting.isPending}
+                    onClick={saveAllPricing}
                   >
-                    Apply Source
-                  </SecondaryButton>
-                </>
-              )}
-              <PrimaryButton
-                className="h-9"
-                disabled={!canStartCosting}
-                title={
-                  !canStartCosting
-                    ? "Complete Date, Prepared By, Product, Quantity and Unit for the selected or filtered items"
-                    : selectedItemIds.size > 0
-                      ? "Start costing selected items"
-                      : "Start costing all items in the current filter"
-                }
-                onClick={startSelectedCosting}
-              >
-                {costingCandidateItems.every((item) => item.sourcingType === "FOREIGN")
-                  ? "Start Foreign Costing"
-                  : "Start Selected Costing"}{" "}
-                ({costingCandidateItems.length})
-              </PrimaryButton>
+                    <Save className="h-4 w-4" />
+                    {saveCosting.isPending ? "Saving..." : `Save All (${pricingReadyItems.length})`}
+                  </PrimaryButton>
+                )}
+                {selectedItemIds.size > 0 && (
+                  <>
+                    <SelectInput
+                      className="h-9 w-[150px] text-[11px]"
+                      placeholder="Set source"
+                      value={bulkSourcingType}
+                      options={SOURCING_OPTIONS}
+                      onChange={(event) =>
+                        setBulkSourcingType(event.target.value as TenderCostingSourcingType | "")
+                      }
+                    />
+                    <SecondaryButton
+                      className="h-9"
+                      disabled={!bulkSourcingType}
+                      onClick={applyBulkSourcingType}
+                    >
+                      Apply Source
+                    </SecondaryButton>
+                  </>
+                )}
+                {shouldShowStartCosting && (
+                  <PrimaryButton
+                    className="h-9"
+                    disabled={!canStartCosting}
+                    title={
+                      !canStartCosting
+                        ? "Complete Date, Prepared By, Product, Quantity and Unit for the selected or filtered items"
+                        : selectedItemIds.size > 0
+                          ? "Start costing selected items"
+                          : "Start costing all items in the current filter"
+                    }
+                    onClick={startSelectedCosting}
+                  >
+                    {costingCandidateItems.every((item) => item.sourcingType === "FOREIGN")
+                      ? "Start Foreign Costing"
+                      : "Start Selected Costing"}{" "}
+                    ({costingCandidateItems.length})
+                  </PrimaryButton>
+                )}
+              </div>
             </div>
-          </div>
-          {errors.items && (
-            <p className="border-t border-biz-border px-4 py-2 text-[12px] text-biz-danger">
-              {errors.items}
-            </p>
-          )}
-        </div>
-
-        {items.some((item) => activeCostingIds.has(item.id)) && (
-          <div ref={costingWorkspaceRef} className="scroll-mt-20 flex flex-col gap-3">
-            <div>
-              <h2 className="text-[14px] font-semibold text-biz-text">Costing Workspace</h2>
-              <p className="text-[11px] text-biz-muted">
-                Foreign prices are converted to BDT and all landed-cost charges are calculated automatically.
+            {errors.items && (
+              <p className="border-t border-biz-border px-4 py-2 text-[12px] text-biz-danger">
+                {errors.items}
               </p>
-            </div>
-            {activeForeignItems.length > 0 && (
-              <div className="rounded-lg border border-biz-blue/25 bg-biz-blue/5 p-3">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-[12px] font-semibold text-biz-text">
-                      Common Foreign Settings ({activeForeignItems.length} items)
-                    </h3>
-                    <p className="text-[10px] text-biz-muted">
-                      Apply shared import rates once. Unit price, shipping and other amounts remain item-specific.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
+            )}
+            {foreignCostingNotice && (
+              <p className="border-t border-biz-success/20 bg-biz-success/5 px-4 py-2 text-[11px] text-biz-success">
+                {foreignCostingNotice}
+              </p>
+            )}
+          </div>
+
+          {items.some((item) => activeCostingIds.has(item.id)) && (
+            <div ref={costingWorkspaceRef} className="scroll-mt-20 flex flex-col gap-3">
+              <div>
+                <h2 className="text-[14px] font-semibold text-biz-text">Costing Workspace</h2>
+                <p className="text-[11px] text-biz-muted">
+                  Foreign prices are converted to BDT and all landed-cost charges are calculated
+                  automatically.
+                </p>
+              </div>
+              {activeForeignItems.length > 0 && (
+                <div className="rounded-lg border border-biz-blue/25 bg-biz-blue/5 p-3">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-[12px] font-semibold text-biz-text">
+                        Common Foreign Settings ({activeForeignItems.length} items)
+                      </h3>
+                      <p className="text-[10px] text-biz-muted">
+                        Set the shared country, currency, shipping method and exchange rate once.
+                      </p>
+                    </div>
                     <SecondaryButton className="h-9" onClick={applyBulkForeignSettings}>
                       Apply Common Settings
                     </SecondaryButton>
-                    <PrimaryButton
-                      className="h-9"
-                      disabled={saveCosting.isPending}
-                      onClick={markAllActiveForeignCosted}
-                    >
-                      {saveCosting.isPending ? "Saving..." : "Save All Foreign Costing"}
-                    </PrimaryButton>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    <MiniField label="Country" required>
+                      <SelectInput
+                        className="h-9 text-[10px]"
+                        value={bulkForeign.country}
+                        options={countryOptionsWithCurrent(bulkForeign.country)}
+                        onChange={(event) =>
+                          setBulkForeign((current) => ({ ...current, country: event.target.value }))
+                        }
+                      />
+                    </MiniField>
+                    <MiniField label="Currency">
+                      <SelectInput
+                        className="h-9 text-[10px]"
+                        value={bulkForeign.currency}
+                        options={CURRENCY_OPTIONS}
+                        onChange={(event) =>
+                          setBulkForeign((current) => ({
+                            ...current,
+                            currency: event.target.value,
+                          }))
+                        }
+                      />
+                    </MiniField>
+                    <MiniField label="Default Shipping Method" required>
+                      <SelectInput
+                        className="h-9 text-[9px]"
+                        value={bulkForeign.shippingMethod}
+                        options={SHIPPING_METHOD_OPTIONS}
+                        onChange={(event) =>
+                          setBulkForeign((current) => ({
+                            ...current,
+                            shippingMethod: event.target.value as TenderCostingShippingMethod,
+                          }))
+                        }
+                      />
+                    </MiniField>
+                    <BulkForeignNumber
+                      required
+                      label="Exchange Rate"
+                      field="exchangeRate"
+                      value={bulkForeign.exchangeRate}
+                      onChange={setBulkForeign}
+                    />
+                    <MiniField label="Rate Date">
+                      <TextInput
+                        type="date"
+                        className="h-9 px-1 text-[9px]"
+                        value={bulkForeign.exchangeRateDate}
+                        onChange={(event) =>
+                          setBulkForeign((current) => ({
+                            ...current,
+                            exchangeRateDate: event.target.value,
+                          }))
+                        }
+                      />
+                    </MiniField>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-10">
-                  <MiniField label="Country">
-                    <TextInput
-                      className="h-9 px-2 text-[10px]"
-                      value={bulkForeign.country}
-                      onChange={(event) =>
-                        setBulkForeign((current) => ({ ...current, country: event.target.value }))
-                      }
-                    />
-                  </MiniField>
-                  <MiniField label="Currency">
-                    <SelectInput
-                      className="h-9 text-[10px]"
-                      value={bulkForeign.currency}
-                      options={CURRENCY_OPTIONS}
-                      onChange={(event) =>
-                        setBulkForeign((current) => ({ ...current, currency: event.target.value }))
-                      }
-                    />
-                  </MiniField>
-                  <MiniField label="Default Shipping Method" required>
-                    <SelectInput
-                      className="h-9 text-[9px]"
-                      value={bulkForeign.shippingMethod}
-                      options={SHIPPING_METHOD_OPTIONS}
-                      onChange={(event) =>
-                        setBulkForeign((current) => ({
-                          ...current,
-                          shippingMethod: event.target.value as TenderCostingShippingMethod,
-                        }))
-                      }
-                    />
-                  </MiniField>
-                  <BulkForeignNumber required label="Exchange Rate" field="exchangeRate" value={bulkForeign.exchangeRate} onChange={setBulkForeign} />
-                  <MiniField label="Rate Date">
-                    <TextInput
-                      type="date"
-                      className="h-9 px-1 text-[9px]"
-                      value={bulkForeign.exchangeRateDate}
-                      onChange={(event) =>
-                        setBulkForeign((current) => ({ ...current, exchangeRateDate: event.target.value }))
-                      }
-                    />
-                  </MiniField>
-                  <BulkForeignNumber label="Customs %" field="customsDutyPercent" value={bulkForeign.customsDutyPercent} onChange={setBulkForeign} />
-                  <BulkForeignNumber label="Regulatory %" field="regulatoryDutyPercent" value={bulkForeign.regulatoryDutyPercent} onChange={setBulkForeign} />
-                  <BulkForeignNumber label="Supplementary %" field="supplementaryDutyPercent" value={bulkForeign.supplementaryDutyPercent} onChange={setBulkForeign} />
-                  <BulkForeignNumber label="VAT %" field="vatPercent" value={bulkForeign.vatPercent} onChange={setBulkForeign} />
-                  <BulkForeignNumber label="Tax %" field="taxPercent" value={bulkForeign.taxPercent} onChange={setBulkForeign} />
-                </div>
-              </div>
-            )}
-            {activeForeignItems.length > 0 && (
-              <ForeignBatchTable
-                items={activeForeignItems}
-                onChange={(id, patch) =>
-                  updateItem(id, { ...patch, costingStatus: "DRAFT" })
-                }
-              />
-            )}
-            {items
-              .filter(
-                (item) =>
-                  activeCostingIds.has(item.id) && item.sourcingType !== "FOREIGN",
-              )
-              .map((item) => (
-                <CostingWorkspaceCard
-                  key={item.id}
-                  item={item}
-                  preview={calculateItemPreview(item)}
-                  onChange={(patch) =>
-                    updateItem(item.id, { ...patch, costingStatus: "DRAFT" })
-                  }
-                  onMarkCosted={() => markItemCosted(item)}
+              )}
+              {activeForeignItems.length > 0 && (
+                <ForeignBatchTable
+                  items={activeForeignItems}
+                  saving={saveCosting.isPending}
+                  onChange={(id, patch) => updateItem(id, { ...patch, costingStatus: "DRAFT" })}
+                  onSaveAll={saveAllActiveForeignCosting}
                 />
-              ))}
-          </div>
-        )}
+              )}
+              {items
+                .filter((item) => activeCostingIds.has(item.id) && item.sourcingType !== "FOREIGN")
+                .map((item) => (
+                  <CostingWorkspaceCard
+                    key={item.id}
+                    item={item}
+                    preview={calculateItemPreview(item)}
+                    onChange={(patch) => updateItem(item.id, { ...patch, costingStatus: "DRAFT" })}
+                    onMarkCosted={() => markItemCosted(item)}
+                  />
+                ))}
+            </div>
+          )}
 
-        {costedItems.length > 0 && (
-          <CostedItemsList items={costedItems} onEdit={editCostedItem} />
-        )}
-
-      </fieldset>
+          {costedItems.length > 0 && (
+            <div ref={costedItemsListRef} className="scroll-mt-20">
+              <CostedItemsList items={costedItems} onEdit={editCostedItem} />
+            </div>
+          )}
+        </fieldset>
       </div>
 
       {saveError && (
@@ -1972,14 +2196,11 @@ export default function TenderCostingEditorPage() {
               tone="success"
             />
             <CostingKpi label="Total Costing Budget" value={formatMoney(costingBudget)} />
-            <CostingKpi
-              label="Estimated Cost"
-              value={formatMoney(estimatedTotal)}
-              tone="blue"
-            />
+            <CostingKpi label="Estimated Cost" value={formatMoney(estimatedTotal)} tone="blue" />
           </div>
           <p className="rounded-md border border-biz-warning/25 bg-biz-warning/5 px-3 py-2.5 text-[11.5px] text-biz-text">
-            All items are costed and ready to complete. You can reopen the costing later if an update is needed.
+            All items are costed and ready to complete. You can reopen the costing later if an
+            update is needed.
           </p>
           <div className="flex justify-end gap-2">
             <SecondaryButton
@@ -1988,10 +2209,7 @@ export default function TenderCostingEditorPage() {
             >
               Back
             </SecondaryButton>
-            <PrimaryButton
-              disabled={saveCosting.isPending}
-              onClick={() => save("COMPLETED")}
-            >
+            <PrimaryButton disabled={saveCosting.isPending} onClick={() => save("COMPLETED")}>
               <Send className="h-4 w-4" />
               {saveCosting.isPending ? "Completing..." : "Confirm & Complete"}
             </PrimaryButton>
@@ -2006,7 +2224,8 @@ export default function TenderCostingEditorPage() {
       >
         <div className="flex flex-col gap-4">
           <p className="text-[11.5px] text-biz-muted">
-            Apply common rates to every costing item. Profit, VAT and Tax remain editable in each row afterward.
+            Apply common rates to every costing item. Profit, VAT and Tax remain editable in each
+            row afterward.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Local Target Profit Margin (%)">
@@ -2063,14 +2282,12 @@ export default function TenderCostingEditorPage() {
             </Field>
           </div>
           <p className="rounded-md border border-biz-blue/20 bg-biz-blue/5 px-3 py-2 text-[10.5px] text-biz-text">
-            Apply & Save updates all current rows. You can then override Profit %, VAT % or Tax % directly in any row.
+            Apply & Save updates all current rows. You can then override Profit %, VAT % or Tax %
+            directly in any row.
           </p>
           <div className="flex justify-end gap-2">
             <SecondaryButton onClick={() => setProfitSettingsOpen(false)}>Cancel</SecondaryButton>
-            <PrimaryButton
-              disabled={saveCosting.isPending}
-              onClick={applyPricingSettings}
-            >
+            <PrimaryButton disabled={saveCosting.isPending} onClick={applyPricingSettings}>
               {saveCosting.isPending ? "Saving..." : "Apply & Save"}
             </PrimaryButton>
           </div>
@@ -2145,7 +2362,8 @@ function CostedItemsList({
         <div>
           <h2 className="text-[14px] font-semibold text-biz-text">Costed Items List</h2>
           <p className="text-[10.5px] text-biz-muted">
-            Completed item costings are listed here. Edit Cost reopens an item without losing its data.
+            Completed item costings are listed here. Edit Cost reopens an item without losing its
+            data.
           </p>
         </div>
         <StatusBadge label={`${items.length} Costed`} tone="success" />
@@ -2175,23 +2393,40 @@ function CostedItemsList({
             return (
               <tr key={item.id} className="border-t border-biz-border">
                 <td className="px-1 py-2.5">{index + 1}</td>
-                <td className="truncate px-1 py-2.5 font-medium text-biz-text" title={item.description}>
+                <td
+                  className="truncate px-1 py-2.5 font-medium text-biz-text"
+                  title={item.description}
+                >
                   {item.description}
                 </td>
                 <td className="px-1 py-2.5">
-                  <span className={`rounded-full px-2 py-1 text-[8.5px] font-semibold ${isForeign ? "bg-biz-purple/10 text-biz-purple" : "bg-biz-success/10 text-biz-success"}`}>
+                  <span
+                    className={`rounded-full px-2 py-1 text-[8.5px] font-semibold ${isForeign ? "bg-biz-purple/10 text-biz-purple" : "bg-biz-success/10 text-biz-success"}`}
+                  >
                     {isForeign ? "Foreign" : "Local"}
                   </span>
                 </td>
-                <td className="px-1 py-2.5 text-right">{formatCompactMoney(Number(item.quantity) || 0)}</td>
+                <td className="px-1 py-2.5 text-right">
+                  {formatCompactMoney(Number(item.quantity) || 0)}
+                </td>
                 <td className="px-1 py-2.5">{item.unit}</td>
-                <td className="px-1 py-2.5 text-right">{formatCompactMoney(preview.selectedUnitCost)}</td>
-                <td className="px-1 py-2.5 text-right">{formatCompactMoney(Number(item.marginPercent) || 0)}%</td>
+                <td className="px-1 py-2.5 text-right">
+                  {formatCompactMoney(preview.selectedUnitCost)}
+                </td>
+                <td className="px-1 py-2.5 text-right">
+                  {formatCompactMoney(Number(item.marginPercent) || 0)}%
+                </td>
                 <td className="px-1 py-2.5 text-right">{preview.selectedVatPercent.toFixed(2)}%</td>
                 <td className="px-1 py-2.5 text-right">{preview.selectedTaxPercent.toFixed(2)}%</td>
-                <td className="px-1 py-2.5 text-right font-semibold">{formatCompactMoney(preview.selectedGrandTotal)}</td>
-                <td className="px-1 py-2.5 text-right font-medium text-biz-blue">{formatCompactMoney(preview.unitSalesPrice)}</td>
-                <td className="px-1 py-2.5 text-right font-semibold text-biz-success">{formatCompactMoney(preview.totalProfit)}</td>
+                <td className="px-1 py-2.5 text-right font-semibold">
+                  {formatCompactMoney(preview.selectedGrandTotal)}
+                </td>
+                <td className="px-1 py-2.5 text-right font-medium text-biz-blue">
+                  {formatCompactMoney(preview.unitSalesPrice)}
+                </td>
+                <td className="px-1 py-2.5 text-right font-semibold text-biz-success">
+                  {formatCompactMoney(preview.totalProfit)}
+                </td>
                 <td className="px-1 py-2 text-center">
                   <button
                     type="button"
@@ -2212,306 +2447,240 @@ function CostedItemsList({
 
 function ForeignBatchTable({
   items,
+  saving,
   onChange,
+  onSaveAll,
 }: {
   items: CostingItemForm[];
+  saving: boolean;
   onChange: (id: string, patch: Partial<CostingItemForm>) => void;
+  onSaveAll: () => void;
 }) {
-  const totals = items.reduce(
-    (summary, item) => {
-      const preview = calculateItemPreview(item);
-      return {
-        landed: summary.landed + preview.foreignLanded,
-        sales: summary.sales + preview.totalSales,
-        profit: summary.profit + preview.totalProfit,
-      };
-    },
-    { landed: 0, sales: 0, profit: 0 },
+  const batchLandedCost = items.reduce(
+    (total, item) => total + calculateItemPreview(item).foreignLanded,
+    0,
   );
+
   return (
     <div className="overflow-hidden rounded-lg border border-biz-border bg-biz-surface shadow-card">
-      <div className="border-b border-biz-border px-3 py-2">
-        <h3 className="text-[12px] font-semibold text-biz-text">Foreign Product Costing</h3>
-        <p className="text-[9.5px] text-biz-muted">
-          Select a shipping method per product. Only the fields needed for that method are shown.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-biz-border px-3 py-2.5">
+        <div>
+          <h3 className="text-[12px] font-semibold text-biz-text">Foreign Product Costing</h3>
+          <p className="text-[9.5px] text-biz-muted">
+            Foreign-currency purchase costs are converted automatically. Shipping and local
+            transport costs are entered in BDT.
+          </p>
+        </div>
+        <PrimaryButton className="h-9" disabled={saving} onClick={onSaveAll}>
+          <Save className="h-4 w-4" />
+          {saving ? "Saving..." : "Save All Foreign Costing"}
+        </PrimaryButton>
       </div>
-      <table className="w-full table-fixed text-left text-[8.5px] xl:text-[9.5px]">
-        <thead className="bg-biz-bg text-biz-muted">
-          <tr>
-            <th className="w-[17%] px-1 py-2">Product</th>
-            <th className="w-[5%] px-1 py-2">Qty</th>
-            <th className="w-[20%] px-1 py-2">Shipping Method <RequiredMark /></th>
-            <th className="w-[15%] px-1 py-2">Supplier / Forwarder</th>
-            <th className="w-[10%] px-1 py-2">Unit Price <RequiredMark /></th>
-            <th className="w-[13%] px-1 py-2 text-right">Grand Total</th>
-            <th className="w-[10%] px-1 py-2 text-right">Unit Sales</th>
-            <th className="w-[10%] px-1 py-2 text-right">Profit</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item, index) => {
-            const preview = calculateItemPreview(item);
-            const isDoorToDoor = item.foreignShippingMethod.startsWith("DOOR_TO_DOOR");
-            const isSeaShipment = item.foreignShippingMethod.endsWith("SEA");
-            const rowTone = [
-              "bg-biz-blue/5",
-              "bg-biz-success/5",
-              "bg-biz-purple/5",
-              "bg-biz-warning/5",
-            ][index % 4];
-            const rowAccent = [
-              "border-biz-blue",
-              "border-biz-success",
-              "border-biz-purple",
-              "border-biz-warning",
-            ][index % 4];
-            return (
-              <React.Fragment key={item.id}>
-                <tr className={`border-t border-biz-border ${rowTone}`}>
-                  <td className={`truncate border-l-4 px-1 py-2 font-medium text-biz-text ${rowAccent}`} title={item.description}>
+
+      <div className="flex flex-col gap-3 p-3">
+        {items.map((item, index) => {
+          const preview = calculateItemPreview(item);
+          const currency = item.foreignCurrency || "USD";
+          const isAir = item.foreignShippingMethod.endsWith("AIR");
+          const isLc = item.foreignShippingMethod.startsWith("LC_");
+          const rowTone = [
+            "border-biz-blue/30 bg-biz-blue/5",
+            "border-biz-success/30 bg-biz-success/5",
+            "border-biz-purple/30 bg-biz-purple/5",
+            "border-biz-warning/30 bg-biz-warning/5",
+          ][index % 4];
+
+          return (
+            <section key={item.id} className={`rounded-lg border p-3 ${rowTone}`}>
+              <div className="mb-3 grid grid-cols-2 gap-2 border-b border-biz-border/70 pb-3 sm:grid-cols-4">
+                <div>
+                  <span className="block text-[9px] text-biz-muted">SL</span>
+                  <strong className="text-[11px] text-biz-text">{index + 1}</strong>
+                </div>
+                <div>
+                  <span className="block text-[9px] text-biz-muted">Product Name</span>
+                  <strong
+                    className="block truncate text-[11px] text-biz-text"
+                    title={item.description}
+                  >
                     {item.description}
-                  </td>
-                  <td className="px-1 py-2 text-biz-muted">{item.quantity}</td>
-                  <td className="px-1 py-2">
-                    <RequiredRowField>
-                      <SelectInput
-                        className="h-8 min-w-0 px-1 pr-4 text-[8.5px]"
-                        value={item.foreignShippingMethod}
-                        options={SHIPPING_METHOD_OPTIONS}
-                        onChange={(event) =>
+                  </strong>
+                </div>
+                <div>
+                  <span className="block text-[9px] text-biz-muted">Qty</span>
+                  <strong className="text-[11px] text-biz-text">{item.quantity}</strong>
+                </div>
+                <div className="flex items-end justify-between gap-2">
+                  <div>
+                    <span className="block text-[9px] text-biz-muted">Unit</span>
+                    <strong className="text-[11px] text-biz-text">{item.unit}</strong>
+                  </div>
+                  <StatusBadge
+                    label={
+                      isLc
+                        ? `LC - ${isAir ? "Air" : "Sea"}`
+                        : isAir
+                          ? "Air Shipment"
+                          : "Sea Shipment"
+                    }
+                    tone={isAir ? "warning" : "info"}
+                  />
+                </div>
+              </div>
+
+              <div className="mb-3">
+                <h4 className="mb-2 text-[10.5px] font-semibold text-biz-text">
+                  Foreign Currency Cost
+                </h4>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                  <MiniField label={`Unit Price (${currency})`} required>
+                    <BatchNumberInput
+                      value={item.foreignUnitPrice}
+                      onChange={(value) => onChange(item.id, { foreignUnitPrice: value })}
+                    />
+                  </MiniField>
+                  <MiniField label="Unit Price (BDT)">
+                    <ReadOnlyCostValue value={formatCompactMoney(preview.foreignUnitValueBdt)} />
+                  </MiniField>
+                  <MiniField label={`Total (${currency})`}>
+                    <ReadOnlyCostValue value={formatCompactMoney(preview.foreignProductTotal)} />
+                  </MiniField>
+                  <MiniField label="Currency">
+                    <ReadOnlyCostValue value={currency} />
+                  </MiniField>
+                  <MiniField label="Total (BDT)">
+                    <ReadOnlyCostValue value={formatCompactMoney(preview.foreignProductValue)} />
+                  </MiniField>
+                  {!isLc && (
+                    <MiniField label={`Foreign Transport Fee (${currency})`}>
+                      <BatchNumberInput
+                        value={item.foreignTransportCharge}
+                        onChange={(value) => onChange(item.id, { foreignTransportCharge: value })}
+                      />
+                    </MiniField>
+                  )}
+                </div>
+              </div>
+
+              {isLc ? (
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-[10.5px] font-semibold text-biz-text">LC Charges (BDT)</h4>
+                    <span className="text-[9px] text-biz-muted">
+                      Enter only applicable charges. Blank fields are treated as BDT 0.
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                    <MiniField label="Bank LC Fee (BDT)">
+                      <BatchNumberInput
+                        value={item.bankLcCharge}
+                        onChange={(value) => onChange(item.id, { bankLcCharge: value })}
+                      />
+                    </MiniField>
+                    <MiniField label="Agent Fee (BDT)">
+                      <BatchNumberInput
+                        value={item.portHandlingCharge}
+                        onChange={(value) => onChange(item.id, { portHandlingCharge: value })}
+                      />
+                    </MiniField>
+                    <MiniField label="Container Fee (BDT)">
+                      <BatchNumberInput
+                        value={item.foreignFreightCost}
+                        onChange={(value) => onChange(item.id, { foreignFreightCost: value })}
+                      />
+                    </MiniField>
+                    <MiniField label="C&F Charge (BDT)">
+                      <BatchNumberInput
+                        value={item.cnfCharge}
+                        onChange={(value) => onChange(item.id, { cnfCharge: value })}
+                      />
+                    </MiniField>
+                    <MiniField label="Transport Charge (BDT)">
+                      <BatchNumberInput
+                        value={item.foreignLocalTransportCost}
+                        onChange={(value) =>
+                          onChange(item.id, { foreignLocalTransportCost: value })
+                        }
+                      />
+                    </MiniField>
+                    <MiniField label="Total Price (BDT)">
+                      <ReadOnlyCostValue
+                        value={formatCompactMoney(preview.foreignLanded)}
+                        emphasized
+                      />
+                    </MiniField>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-[10.5px] font-semibold text-biz-text">
+                      Shipping & Bangladesh Cost (BDT)
+                    </h4>
+                    <span className="text-[9px] text-biz-muted">
+                      Default: {isAir ? "Air BDT 800/KG" : "Sea BDT 400/KG"} — editable
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                    <MiniField label="Shipping Weight (KG)" required>
+                      <BatchNumberInput
+                        value={item.shippingWeightKg}
+                        onChange={(value) =>
                           onChange(item.id, {
-                            foreignShippingMethod: event.target.value as TenderCostingShippingMethod,
-                            shippingRateBasis: defaultShippingRateBasis(
-                              event.target.value as TenderCostingShippingMethod,
-                            ),
-                            foreignDoorToDoorCharge: "",
+                            shippingWeightKg: value,
+                            shippingRateBasis: "PER_KG",
                           })
                         }
                       />
-                    </RequiredRowField>
-                  </td>
-                  <td className="px-1 py-2">
-                    <TextInput
-                      className="h-8 min-w-0 px-1 text-[8.5px]"
-                      placeholder={isDoorToDoor ? "Forwarder company" : "Supplier"}
-                      value={isDoorToDoor ? item.foreignShippingProvider : item.foreignSupplierName}
-                      onChange={(event) =>
-                        onChange(
-                          item.id,
-                          isDoorToDoor
-                            ? { foreignShippingProvider: event.target.value }
-                            : { foreignSupplierName: event.target.value },
-                        )
-                      }
-                    />
-                  </td>
-                  <td className="px-1 py-2">
-                    <RequiredRowField>
-                      <BatchNumberInput value={item.foreignUnitPrice} onChange={(value) => onChange(item.id, { foreignUnitPrice: value })} />
-                    </RequiredRowField>
-                  </td>
-                  <td className="px-1 py-2 text-right font-semibold text-biz-purple">{formatCompactMoney(preview.foreignLanded)}</td>
-                  <td className="px-1 py-2 text-right font-medium text-biz-blue">
-                    {preview.unitSalesPrice > 0 ? formatCompactMoney(preview.unitSalesPrice) : "—"}
-                  </td>
-                  <td className="px-1 py-2 text-right font-semibold text-biz-success">{formatCompactMoney(preview.totalProfit)}</td>
-                </tr>
-                <tr className={`border-t border-biz-border/70 ${rowTone}`}>
-                  <td colSpan={8} className={`border-l-4 px-3 py-2.5 ${rowAccent}`}>
-                    {isDoorToDoor ? (
-                      <div className="flex items-end gap-2 overflow-x-auto pb-1 [&>label]:w-[135px] [&>label]:shrink-0">
-                        <MiniField label="Currency" required>
-                          <SelectInput
-                            className="h-9 text-[10px]"
-                            value={item.foreignCurrency}
-                            options={CURRENCY_OPTIONS}
-                            onChange={(event) => onChange(item.id, { foreignCurrency: event.target.value })}
-                          />
-                        </MiniField>
-                        <NumberCostField
-                          required
-                          label="1 Currency = BDT"
-                          value={item.foreignExchangeRate}
-                          step="0.000001"
-                          onChange={(value) => onChange(item.id, { foreignExchangeRate: value })}
-                        />
-                        <MiniField label="Rate Date">
-                          <TextInput
-                            type="date"
-                            className="h-9 px-2 text-[10px]"
-                            value={item.exchangeRateDate}
-                            onChange={(event) => onChange(item.id, { exchangeRateDate: event.target.value })}
-                          />
-                        </MiniField>
-                        <NumberCostField
-                          label={`Foreign Transport (${item.foreignCurrency})`}
-                          value={item.foreignTransportCharge}
-                          onChange={(value) =>
-                            onChange(item.id, {
-                              foreignTransportCharge: value,
-                              foreignDoorToDoorCharge: "",
-                            })
-                          }
-                        />
-                        <NumberCostField
-                          label={`Customs Declaration (${item.foreignCurrency})`}
-                          value={item.customsDeclarationCharge}
-                          onChange={(value) =>
-                            onChange(item.id, {
-                              customsDeclarationCharge: value,
-                              foreignDoorToDoorCharge: "",
-                            })
-                          }
-                        />
-                        <NumberCostField
-                          required={item.shippingRateBasis === "PER_KG"}
-                          label="Weight (KG)"
-                          value={item.shippingWeightKg}
-                          step="0.001"
-                          onChange={(value) =>
-                            onChange(item.id, {
-                              shippingWeightKg: value,
-                              foreignDoorToDoorCharge: "",
-                            })
-                          }
-                        />
-                        <NumberCostField
-                          required={item.shippingRateBasis === "PER_CBM"}
-                          label="Volume (CBM)"
-                          value={item.shippingVolumeCbm}
-                          step="0.0001"
-                          onChange={(value) =>
-                            onChange(item.id, {
-                              shippingVolumeCbm: value,
-                              foreignDoorToDoorCharge: "",
-                            })
-                          }
-                        />
-                        <MiniField label="Rate Basis" required>
-                          <SelectInput
-                            className="h-9 text-[10px]"
-                            value={item.shippingRateBasis}
-                            options={SHIPPING_RATE_BASIS_OPTIONS}
-                            onChange={(event) =>
-                              onChange(item.id, {
-                                shippingRateBasis: event.target.value as TenderCostingShippingRateBasis,
-                                foreignDoorToDoorCharge: "",
-                              })
-                            }
-                          />
-                        </MiniField>
-                        <NumberCostField
-                          required
-                          label={`${
-                            item.shippingRateBasis === "PER_KG"
-                              ? "Per KG Rate"
-                              : item.shippingRateBasis === "PER_CBM"
-                                ? "Per CBM Rate"
-                                : "Flat Shipping Charge"
-                          } (${item.foreignCurrency})`}
-                          value={item.shippingRate}
-                          step="0.0001"
-                          onChange={(value) =>
-                            onChange(item.id, {
-                              shippingRate: value,
-                              foreignDoorToDoorCharge: "",
-                            })
-                          }
-                        />
-                        <MiniField label={`Shipping Subtotal (${item.foreignCurrency})`}>
-                          <ReadOnlyCostValue value={formatCompactMoney(preview.foreignShippingSubtotal)} />
-                        </MiniField>
-                        <MiniField label="Shipping Subtotal (BDT)">
-                          <ReadOnlyCostValue value={formatCompactMoney(preview.foreignShippingSubtotalBdt)} />
-                        </MiniField>
-                        <NumberCostField
-                          label="Domestic Transport (BDT)"
-                          value={item.domesticTransportCost}
-                          onChange={(value) => onChange(item.id, { domesticTransportCost: value })}
-                        />
-                        <MiniField label="Import Duty Included?">
-                          <SelectInput
-                            className="h-9 text-[10px]"
-                            value={item.foreignImportDutyIncluded ? "YES" : "NO"}
-                            options={[
-                              { value: "NO", label: "No" },
-                              { value: "YES", label: "Yes" },
-                            ]}
-                            onChange={(event) => onChange(item.id, { foreignImportDutyIncluded: event.target.value === "YES" })}
-                          />
-                        </MiniField>
-                        <MiniField label="Transit / Delivery Days">
-                          <TextInput
-                            className={`h-9 px-2 text-[10px] ${NUMBER_INPUT_CLASS}`}
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={item.foreignTransitDays}
-                            onChange={(event) => onChange(item.id, { foreignTransitDays: event.target.value })}
-                          />
-                        </MiniField>
-                        <MiniField label="Tracking / Reference">
-                          <TextInput
-                            className="h-9 px-2 text-[10px]"
-                            value={item.foreignShippingReference}
-                            onChange={(event) => onChange(item.id, { foreignShippingReference: event.target.value })}
-                          />
-                        </MiniField>
-                        <NumberCostField label="Other Cost (BDT)" value={item.foreignOtherCost} onChange={(value) => onChange(item.id, { foreignOtherCost: value })} />
-                        <MiniField label="Grand Total (BDT)">
-                          <ReadOnlyCostValue value={formatCompactMoney(preview.foreignLanded)} emphasized />
-                        </MiniField>
-                      </div>
-                    ) : (
-                      <div className="flex items-end gap-2 overflow-x-auto pb-1 [&>label]:w-[135px] [&>label]:shrink-0">
-                        <MiniField label="Currency" required>
-                          <SelectInput
-                            className="h-9 text-[10px]"
-                            value={item.foreignCurrency}
-                            options={CURRENCY_OPTIONS}
-                            onChange={(event) => onChange(item.id, { foreignCurrency: event.target.value })}
-                          />
-                        </MiniField>
-                        <NumberCostField
-                          required
-                          label="1 Currency = BDT"
-                          value={item.foreignExchangeRate}
-                          step="0.000001"
-                          onChange={(value) => onChange(item.id, { foreignExchangeRate: value })}
-                        />
-                        <MiniField label="Rate Date">
-                          <TextInput
-                            type="date"
-                            className="h-9 px-2 text-[10px]"
-                            value={item.exchangeRateDate}
-                            onChange={(event) => onChange(item.id, { exchangeRateDate: event.target.value })}
-                          />
-                        </MiniField>
-                        <NumberCostField label={isSeaShipment ? "Sea Freight" : "Air Freight"} value={item.foreignFreightCost} onChange={(value) => onChange(item.id, { foreignFreightCost: value })} />
-                        <NumberCostField label="Insurance" value={item.foreignInsuranceCost} onChange={(value) => onChange(item.id, { foreignInsuranceCost: value })} />
-                        <NumberCostField label="C&F Charge" value={item.cnfCharge} onChange={(value) => onChange(item.id, { cnfCharge: value })} />
-                        <NumberCostField label={isSeaShipment ? "Port Handling" : "Airport Handling"} value={item.portHandlingCharge} onChange={(value) => onChange(item.id, { portHandlingCharge: value })} />
-                        <NumberCostField label="Bank / LC Charge" value={item.bankLcCharge} onChange={(value) => onChange(item.id, { bankLcCharge: value })} />
-                        <NumberCostField label="Local Transport" value={item.foreignLocalTransportCost} onChange={(value) => onChange(item.id, { foreignLocalTransportCost: value })} />
-                        <NumberCostField label="Other Cost" value={item.foreignOtherCost} onChange={(value) => onChange(item.id, { foreignOtherCost: value })} />
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-        <tfoot className="border-t border-biz-border bg-biz-bg font-semibold text-biz-text">
-          <tr>
-            <td colSpan={5} className="px-2 py-2 text-right">Batch Total</td>
-            <td className="px-1 py-2 text-right">{formatCompactMoney(totals.landed)}</td>
-            <td className="px-1 py-2 text-right">{formatCompactMoney(totals.sales)}</td>
-            <td className="px-1 py-2 text-right text-biz-success">{formatCompactMoney(totals.profit)}</td>
-          </tr>
-        </tfoot>
-      </table>
+                    </MiniField>
+                    <MiniField label="Shipping Rate (BDT/KG)" required>
+                      <BatchNumberInput
+                        value={item.shippingRate}
+                        onChange={(value) =>
+                          onChange(item.id, {
+                            shippingRate: value,
+                            shippingRateBasis: "PER_KG",
+                          })
+                        }
+                      />
+                    </MiniField>
+                    <MiniField label="Shipping Cost (BDT)">
+                      <ReadOnlyCostValue value={formatCompactMoney(preview.shippingCostBdt)} />
+                    </MiniField>
+                    <MiniField label="Domestic Transport (BDT)">
+                      <BatchNumberInput
+                        value={item.foreignLocalTransportCost}
+                        onChange={(value) =>
+                          onChange(item.id, { foreignLocalTransportCost: value })
+                        }
+                      />
+                    </MiniField>
+                    <MiniField label="Warehouse to Project (BDT, Optional)">
+                      <BatchNumberInput
+                        value={item.domesticTransportCost}
+                        onChange={(value) => onChange(item.id, { domesticTransportCost: value })}
+                      />
+                    </MiniField>
+                    <MiniField label="Total Price (BDT)">
+                      <ReadOnlyCostValue
+                        value={formatCompactMoney(preview.foreignLanded)}
+                        emphasized
+                      />
+                    </MiniField>
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-end gap-3 border-t border-biz-border bg-biz-bg px-4 py-3">
+        <span className="text-[10px] font-medium text-biz-muted">Batch Landed Cost</span>
+        <strong className="text-[13px] text-biz-purple">
+          BDT {formatCompactMoney(batchLandedCost)}
+        </strong>
+      </div>
     </div>
   );
 }
@@ -2561,7 +2730,10 @@ function CostingWorkspaceCard({
               {item.description || "Unnamed Product"}
             </h3>
             <StatusBadge
-              label={SOURCING_OPTIONS.find((option) => option.value === item.sourcingType)?.label ?? item.sourcingType}
+              label={
+                SOURCING_OPTIONS.find((option) => option.value === item.sourcingType)?.label ??
+                item.sourcingType
+              }
               tone="info"
             />
           </div>
@@ -2591,7 +2763,9 @@ function CostingWorkspaceCard({
         </div>
       </div>
 
-      <div className={`grid gap-3 p-3 ${showLocal && showForeign ? "xl:grid-cols-2" : "grid-cols-1"}`}>
+      <div
+        className={`grid gap-3 p-3 ${showLocal && showForeign ? "xl:grid-cols-2" : "grid-cols-1"}`}
+      >
         {showLocal && (
           <div className="rounded-md border border-biz-success/25 bg-biz-success/5 p-3">
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -2608,12 +2782,37 @@ function CostingWorkspaceCard({
                   onChange={(event) => onChange({ localSupplierName: event.target.value })}
                 />
               </MiniField>
-              <NumberCostField required label="Unit Price (BDT)" value={item.localUnitPrice} onChange={(value) => onChange({ localUnitPrice: value })} />
-              <NumberCostField label="Discount %" value={item.localDiscountPercent} onChange={(value) => onChange({ localDiscountPercent: value })} />
-              <NumberCostField label="VAT %" value={item.localVatPercent} onChange={(value) => onChange({ localVatPercent: value })} />
-              <NumberCostField label="Tax / AIT %" value={item.localTaxPercent} onChange={(value) => onChange({ localTaxPercent: value })} />
-              <NumberCostField label="Transport (BDT)" value={item.localTransportCost} onChange={(value) => onChange({ localTransportCost: value })} />
-              <NumberCostField label="Other Cost (BDT)" value={item.localOtherCost} onChange={(value) => onChange({ localOtherCost: value })} />
+              <NumberCostField
+                required
+                label="Unit Price (BDT)"
+                value={item.localUnitPrice}
+                onChange={(value) => onChange({ localUnitPrice: value })}
+              />
+              <NumberCostField
+                label="Discount %"
+                value={item.localDiscountPercent}
+                onChange={(value) => onChange({ localDiscountPercent: value })}
+              />
+              <NumberCostField
+                label="VAT %"
+                value={item.localVatPercent}
+                onChange={(value) => onChange({ localVatPercent: value })}
+              />
+              <NumberCostField
+                label="Tax / AIT %"
+                value={item.localTaxPercent}
+                onChange={(value) => onChange({ localTaxPercent: value })}
+              />
+              <NumberCostField
+                label="Transport (BDT)"
+                value={item.localTransportCost}
+                onChange={(value) => onChange({ localTransportCost: value })}
+              />
+              <NumberCostField
+                label="Other Cost (BDT)"
+                value={item.localOtherCost}
+                onChange={(value) => onChange({ localOtherCost: value })}
+              />
             </div>
           </div>
         )}
@@ -2633,40 +2832,125 @@ function CostingWorkspaceCard({
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               <MiniField label="Supplier">
-                <TextInput className="h-9 px-2 text-[11px]" value={item.foreignSupplierName} onChange={(event) => onChange({ foreignSupplierName: event.target.value })} />
+                <TextInput
+                  className="h-9 px-2 text-[11px]"
+                  value={item.foreignSupplierName}
+                  onChange={(event) => onChange({ foreignSupplierName: event.target.value })}
+                />
               </MiniField>
               <MiniField label="Country">
-                <TextInput className="h-9 px-2 text-[11px]" value={item.foreignCountry} onChange={(event) => onChange({ foreignCountry: event.target.value })} />
+                <TextInput
+                  className="h-9 px-2 text-[11px]"
+                  value={item.foreignCountry}
+                  onChange={(event) => onChange({ foreignCountry: event.target.value })}
+                />
               </MiniField>
               <MiniField label="Currency">
-                <SelectInput className="h-9 text-[11px]" value={item.foreignCurrency} options={CURRENCY_OPTIONS} onChange={(event) => onChange({ foreignCurrency: event.target.value })} />
+                <SelectInput
+                  className="h-9 text-[11px]"
+                  value={item.foreignCurrency}
+                  options={CURRENCY_OPTIONS}
+                  onChange={(event) => onChange({ foreignCurrency: event.target.value })}
+                />
               </MiniField>
-              <NumberCostField required label="Foreign Unit Price" value={item.foreignUnitPrice} step="0.0001" onChange={(value) => onChange({ foreignUnitPrice: value })} />
-              <NumberCostField required label="1 Currency = BDT" value={item.foreignExchangeRate} step="0.000001" onChange={(value) => onChange({ foreignExchangeRate: value })} />
+              <NumberCostField
+                required
+                label="Foreign Unit Price"
+                value={item.foreignUnitPrice}
+                step="0.0001"
+                onChange={(value) => onChange({ foreignUnitPrice: value })}
+              />
+              <NumberCostField
+                required
+                label="1 Currency = BDT"
+                value={item.foreignExchangeRate}
+                step="0.000001"
+                onChange={(value) => onChange({ foreignExchangeRate: value })}
+              />
               <MiniField label="Rate Date">
-                <TextInput type="date" className="h-9 px-2 text-[10px]" value={item.exchangeRateDate} onChange={(event) => onChange({ exchangeRateDate: event.target.value })} />
+                <TextInput
+                  type="date"
+                  className="h-9 px-2 text-[10px]"
+                  value={item.exchangeRateDate}
+                  onChange={(event) => onChange({ exchangeRateDate: event.target.value })}
+                />
               </MiniField>
-              <NumberCostField label="Freight / Shipping" value={item.foreignFreightCost} onChange={(value) => onChange({ foreignFreightCost: value })} />
-              <NumberCostField label="Insurance" value={item.foreignInsuranceCost} onChange={(value) => onChange({ foreignInsuranceCost: value })} />
-              <NumberCostField label="Customs Duty %" value={item.customsDutyPercent} onChange={(value) => onChange({ customsDutyPercent: value })} />
-              <NumberCostField label="Regulatory Duty %" value={item.regulatoryDutyPercent} onChange={(value) => onChange({ regulatoryDutyPercent: value })} />
-              <NumberCostField label="Supplementary Duty %" value={item.supplementaryDutyPercent} onChange={(value) => onChange({ supplementaryDutyPercent: value })} />
-              <NumberCostField label="VAT %" value={item.foreignVatPercent} onChange={(value) => onChange({ foreignVatPercent: value })} />
-              <NumberCostField label="Tax / AIT %" value={item.foreignTaxPercent} onChange={(value) => onChange({ foreignTaxPercent: value })} />
-              <NumberCostField label="C&F Charge" value={item.cnfCharge} onChange={(value) => onChange({ cnfCharge: value })} />
-              <NumberCostField label="Port / Handling" value={item.portHandlingCharge} onChange={(value) => onChange({ portHandlingCharge: value })} />
-              <NumberCostField label="Bank / LC Charge" value={item.bankLcCharge} onChange={(value) => onChange({ bankLcCharge: value })} />
-              <NumberCostField label="Local Transport" value={item.foreignLocalTransportCost} onChange={(value) => onChange({ foreignLocalTransportCost: value })} />
-              <NumberCostField label="Other Cost" value={item.foreignOtherCost} onChange={(value) => onChange({ foreignOtherCost: value })} />
+              <NumberCostField
+                label="Freight / Shipping"
+                value={item.foreignFreightCost}
+                onChange={(value) => onChange({ foreignFreightCost: value })}
+              />
+              <NumberCostField
+                label="Insurance"
+                value={item.foreignInsuranceCost}
+                onChange={(value) => onChange({ foreignInsuranceCost: value })}
+              />
+              <NumberCostField
+                label="Customs Duty %"
+                value={item.customsDutyPercent}
+                onChange={(value) => onChange({ customsDutyPercent: value })}
+              />
+              <NumberCostField
+                label="Regulatory Duty %"
+                value={item.regulatoryDutyPercent}
+                onChange={(value) => onChange({ regulatoryDutyPercent: value })}
+              />
+              <NumberCostField
+                label="Supplementary Duty %"
+                value={item.supplementaryDutyPercent}
+                onChange={(value) => onChange({ supplementaryDutyPercent: value })}
+              />
+              <NumberCostField
+                label="VAT %"
+                value={item.foreignVatPercent}
+                onChange={(value) => onChange({ foreignVatPercent: value })}
+              />
+              <NumberCostField
+                label="Tax / AIT %"
+                value={item.foreignTaxPercent}
+                onChange={(value) => onChange({ foreignTaxPercent: value })}
+              />
+              <NumberCostField
+                label="C&F Charge"
+                value={item.cnfCharge}
+                onChange={(value) => onChange({ cnfCharge: value })}
+              />
+              <NumberCostField
+                label="Port / Handling"
+                value={item.portHandlingCharge}
+                onChange={(value) => onChange({ portHandlingCharge: value })}
+              />
+              <NumberCostField
+                label="Bank / LC Charge"
+                value={item.bankLcCharge}
+                onChange={(value) => onChange({ bankLcCharge: value })}
+              />
+              <NumberCostField
+                label="Local Transport"
+                value={item.foreignLocalTransportCost}
+                onChange={(value) => onChange({ foreignLocalTransportCost: value })}
+              />
+              <NumberCostField
+                label="Other Cost"
+                value={item.foreignOtherCost}
+                onChange={(value) => onChange({ foreignOtherCost: value })}
+              />
             </div>
           </div>
         )}
       </div>
       {showLocal && showForeign && (
         <div className="grid grid-cols-3 border-t border-biz-border bg-biz-bg/60 text-center text-[10.5px]">
-          <div className="p-2">Local: <strong>{formatMoney(preview.localTotal)}</strong></div>
-          <div className="border-x border-biz-border p-2">Foreign: <strong>{formatMoney(preview.foreignLanded)}</strong></div>
-          <div className="p-2">Difference: <strong>{formatMoney(Math.abs(preview.localTotal - preview.foreignLanded))}</strong></div>
+          <div className="p-2">
+            Local: <strong>{formatMoney(preview.localTotal)}</strong>
+          </div>
+          <div className="border-x border-biz-border p-2">
+            Foreign: <strong>{formatMoney(preview.foreignLanded)}</strong>
+          </div>
+          <div className="p-2">
+            Difference:{" "}
+            <strong>{formatMoney(Math.abs(preview.localTotal - preview.foreignLanded))}</strong>
+          </div>
         </div>
       )}
     </div>
@@ -2674,7 +2958,11 @@ function CostingWorkspaceCard({
 }
 
 function RequiredMark() {
-  return <span className="font-bold text-biz-danger" aria-hidden="true">*</span>;
+  return (
+    <span className="font-bold text-biz-danger" aria-hidden="true">
+      *
+    </span>
+  );
 }
 
 function RequiredRowField({ children }: { children: React.ReactNode }) {
@@ -2733,13 +3021,7 @@ function NumberCostField({
   );
 }
 
-function ReadOnlyCostValue({
-  value,
-  emphasized = false,
-}: {
-  value: string;
-  emphasized?: boolean;
-}) {
+function ReadOnlyCostValue({ value, emphasized = false }: { value: string; emphasized?: boolean }) {
   return (
     <div
       className={`flex h-9 items-center justify-end rounded-md border border-biz-border bg-biz-bg px-2 text-[10.5px] ${
@@ -2772,9 +3054,7 @@ function BulkForeignNumber({
         step="any"
         className={`h-9 min-w-0 px-1.5 text-[10px] ${NUMBER_INPUT_CLASS}`}
         value={value}
-        onChange={(event) =>
-          onChange((current) => ({ ...current, [field]: event.target.value }))
-        }
+        onChange={(event) => onChange((current) => ({ ...current, [field]: event.target.value }))}
       />
     </MiniField>
   );
@@ -2822,7 +3102,7 @@ function CostingKpi({
           ? "text-biz-danger"
           : tone === "warning"
             ? "text-biz-warning"
-          : "text-biz-text";
+            : "text-biz-text";
   return (
     <div
       className={`relative min-w-0 rounded-md border p-1.5 shadow-card sm:p-2 ${tone === "warning" ? "border-biz-warning/30 bg-biz-warning/5" : "border-biz-border bg-biz-surface"}`}
