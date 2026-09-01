@@ -1,5 +1,9 @@
 import { BadRequestException } from "@nestjs/common";
 import { Prisma } from "@bizovix/database";
+import type {
+  TenderCostingShippingMethod,
+  TenderCostingShippingRateBasis,
+} from "@bizovix/types";
 
 interface CostingItemInput {
   quantity: string | number;
@@ -16,6 +20,16 @@ interface CostingItemInput {
   localOtherCost?: string | number;
   foreignUnitPrice?: string | number;
   foreignExchangeRate?: string | number;
+  foreignShippingMethod?: TenderCostingShippingMethod;
+  foreignDoorToDoorCharge?: string | number;
+  foreignImportDutyIncluded?: boolean;
+  foreignTransportCharge?: string | number;
+  customsDeclarationCharge?: string | number;
+  shippingWeightKg?: string | number;
+  shippingVolumeCbm?: string | number;
+  shippingRateBasis?: TenderCostingShippingRateBasis;
+  shippingRate?: string | number;
+  domesticTransportCost?: string | number;
   foreignFreightCost?: string | number;
   foreignInsuranceCost?: string | number;
   customsDutyPercent?: string | number;
@@ -69,11 +83,14 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
   const localOtherCost = amount(item.localOtherCost, "Local other cost");
   const localBase = quantity.mul(localUnitPrice);
   const localTaxable = localBase.minus(localBase.mul(localDiscountPercent).div(HUNDRED));
-  const localTotalCost = localTaxable
-    .plus(localTaxable.mul(localVatPercent).div(HUNDRED))
-    .plus(localTaxable.mul(localTaxPercent).div(HUNDRED))
+  const localCostBeforeProfit = localTaxable
     .plus(localTransportCost)
-    .plus(localOtherCost)
+    .plus(localOtherCost);
+  const localProfit = localCostBeforeProfit.mul(marginPercent).div(HUNDRED);
+  const localSubtotal = localCostBeforeProfit.plus(localProfit);
+  const localTotalCost = localSubtotal
+    .plus(localSubtotal.mul(localVatPercent).div(HUNDRED))
+    .plus(localSubtotal.mul(localTaxPercent).div(HUNDRED))
     .toDecimalPlaces(2);
 
   const foreignUnitPrice = amount(item.foreignUnitPrice, "Foreign unit price");
@@ -83,6 +100,42 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
   }
   const foreignFreightCost = amount(item.foreignFreightCost, "Foreign freight cost");
   const foreignInsuranceCost = amount(item.foreignInsuranceCost, "Foreign insurance cost");
+  const foreignShippingMethod = item.foreignShippingMethod ?? "LC_SEA";
+  const foreignDoorToDoorCharge = amount(
+    item.foreignDoorToDoorCharge,
+    "Door-to-door shipping charge",
+  );
+  const foreignImportDutyIncluded = item.foreignImportDutyIncluded ?? false;
+  const isDoorToDoor = foreignShippingMethod.startsWith("DOOR_TO_DOOR");
+  const foreignTransportCharge = amount(
+    item.foreignTransportCharge,
+    "Foreign transport charge",
+  );
+  const customsDeclarationCharge = amount(
+    item.customsDeclarationCharge,
+    "Customs declaration charge",
+  );
+  const shippingWeightKg = amount(item.shippingWeightKg, "Shipping weight");
+  const shippingVolumeCbm = amount(item.shippingVolumeCbm, "Shipping volume");
+  const shippingRateBasis = item.shippingRateBasis ?? (
+    foreignShippingMethod.endsWith("AIR") ? "PER_KG" : "PER_CBM"
+  );
+  const shippingRate = amount(item.shippingRate, "Shipping rate");
+  const domesticTransportCost = amount(
+    item.domesticTransportCost,
+    "Domestic transport cost",
+  );
+  const shippingCharge = shippingRateBasis === "PER_CBM"
+    ? shippingVolumeCbm.mul(shippingRate)
+    : shippingRateBasis === "PER_KG"
+      ? shippingWeightKg.mul(shippingRate)
+      : shippingRate;
+  const shippingSubtotal = foreignTransportCharge
+    .plus(customsDeclarationCharge)
+    .plus(shippingCharge);
+  const shippingSubtotalBdt = shippingSubtotal.gt(0)
+    ? shippingSubtotal.mul(foreignExchangeRate)
+    : foreignDoorToDoorCharge;
   const customsDutyPercent = percentage(item.customsDutyPercent, "Customs duty percentage");
   const regulatoryDutyPercent = percentage(item.regulatoryDutyPercent, "Regulatory duty percentage");
   const supplementaryDutyPercent = percentage(
@@ -103,19 +156,28 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
     .mul(foreignUnitPrice)
     .mul(foreignExchangeRate)
     .toDecimalPlaces(2);
-  const assessableValue = foreignProductValueBdt.plus(foreignFreightCost).plus(foreignInsuranceCost);
+  const assessableValue = isDoorToDoor
+    ? foreignProductValueBdt.plus(shippingSubtotalBdt)
+    : foreignProductValueBdt.plus(foreignFreightCost).plus(foreignInsuranceCost);
   const customsDuty = assessableValue.mul(customsDutyPercent).div(HUNDRED);
   const regulatoryDuty = assessableValue.mul(regulatoryDutyPercent).div(HUNDRED);
   const supplementaryDuty = assessableValue.mul(supplementaryDutyPercent).div(HUNDRED);
-  const taxBase = assessableValue.plus(customsDuty).plus(regulatoryDuty).plus(supplementaryDuty);
-  const foreignLandedCost = taxBase
-    .plus(taxBase.mul(foreignVatPercent).div(HUNDRED))
-    .plus(taxBase.mul(foreignTaxPercent).div(HUNDRED))
-    .plus(cnfCharge)
-    .plus(portHandlingCharge)
-    .plus(bankLcCharge)
-    .plus(foreignLocalTransportCost)
-    .plus(foreignOtherCost)
+  const taxBase = isDoorToDoor && foreignImportDutyIncluded
+    ? assessableValue
+    : assessableValue.plus(customsDuty).plus(regulatoryDuty).plus(supplementaryDuty);
+  const foreignCostBeforeProfit = isDoorToDoor
+    ? taxBase.plus(domesticTransportCost).plus(foreignOtherCost)
+    : taxBase
+        .plus(cnfCharge)
+        .plus(portHandlingCharge)
+        .plus(bankLcCharge)
+        .plus(foreignLocalTransportCost)
+        .plus(foreignOtherCost);
+  const foreignProfit = foreignCostBeforeProfit.mul(marginPercent).div(HUNDRED);
+  const foreignSubtotal = foreignCostBeforeProfit.plus(foreignProfit);
+  const foreignLandedCost = foreignSubtotal
+    .plus(foreignSubtotal.mul(foreignVatPercent).div(HUNDRED))
+    .plus(foreignSubtotal.mul(foreignTaxPercent).div(HUNDRED))
     .toDecimalPlaces(2);
 
   let selectedSource = item.selectedSource ?? null;
@@ -132,20 +194,33 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
       throw new BadRequestException("Select Local or Foreign for every compared costed item");
     }
   }
-  const selectedCost =
+  const selectedTotal =
     costingStatus === "COSTED"
       ? selectedSource === "FOREIGN"
         ? foreignLandedCost
         : localTotalCost
       : ZERO;
-  const normalizedUnitCost = selectedCost.div(quantity).toDecimalPlaces(2);
+  const selectedOurCost =
+    costingStatus === "COSTED"
+      ? selectedSource === "FOREIGN"
+        ? foreignCostBeforeProfit
+        : localCostBeforeProfit
+      : ZERO;
+  const selectedProfit =
+    costingStatus === "COSTED"
+      ? selectedSource === "FOREIGN"
+        ? foreignProfit
+        : localProfit
+      : ZERO;
+  const normalizedUnitCost = selectedOurCost.div(quantity).toDecimalPlaces(2);
 
   return {
     quantity,
     unitCost: normalizedUnitCost,
     marginPercent,
-    totalCost: selectedCost,
-    ourCost: selectedCost,
+    totalCost: selectedTotal,
+    ourCost: selectedOurCost.toDecimalPlaces(2),
+    profitAmount: selectedProfit.toDecimalPlaces(2),
     sourcingType,
     costingStatus,
     selectedSource,
@@ -158,6 +233,16 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
     localTotalCost,
     foreignUnitPrice,
     foreignExchangeRate,
+    foreignShippingMethod,
+    foreignDoorToDoorCharge,
+    foreignImportDutyIncluded,
+    foreignTransportCharge,
+    customsDeclarationCharge,
+    shippingWeightKg,
+    shippingVolumeCbm,
+    shippingRateBasis,
+    shippingRate,
+    domesticTransportCost,
     foreignFreightCost,
     foreignInsuranceCost,
     customsDutyPercent,
@@ -191,6 +276,7 @@ export function calculateTenderCostingTotals(input: CostingTotalsInput) {
       marginPercent,
       totalCost,
       ourCost,
+      profitAmount: totalCost.minus(ourCost).toDecimalPlaces(2),
       sourcingType: "LOCAL",
       costingStatus: unitCost.gt(0) ? "COSTED" : "NOT_COSTED",
       selectedSource: unitCost.gt(0) ? "LOCAL" : null,
@@ -203,6 +289,16 @@ export function calculateTenderCostingTotals(input: CostingTotalsInput) {
       localTotalCost: totalCost,
       foreignUnitPrice: ZERO,
       foreignExchangeRate: ONE,
+      foreignShippingMethod: "LC_SEA",
+      foreignDoorToDoorCharge: ZERO,
+      foreignImportDutyIncluded: false,
+      foreignTransportCharge: ZERO,
+      customsDeclarationCharge: ZERO,
+      shippingWeightKg: ZERO,
+      shippingVolumeCbm: ZERO,
+      shippingRateBasis: "PER_CBM",
+      shippingRate: ZERO,
+      domesticTransportCost: ZERO,
       foreignFreightCost: ZERO,
       foreignInsuranceCost: ZERO,
       customsDutyPercent: ZERO,
@@ -226,15 +322,15 @@ export function calculateTenderCostingTotals(input: CostingTotalsInput) {
   const contingencyPercent = percentage(input.contingencyPercent, "Contingency percentage");
   const itemTotal = calculatedItems.reduce((sum, item) => sum.plus(item.totalCost), ZERO);
   const itemOurCost = calculatedItems.reduce((sum, item) => sum.plus(item.ourCost), ZERO);
+  const itemProfit = calculatedItems.reduce((sum, item) => sum.plus(item.profitAmount), ZERO);
   const additionalCost = freightCost.plus(installationCost).plus(otherCost);
   const preContingency = itemTotal.plus(additionalCost);
   const contingencyAmount = preContingency.mul(contingencyPercent).div(HUNDRED).toDecimalPlaces(2);
   const estimatedCost = preContingency.plus(contingencyAmount).toDecimalPlaces(2);
   const hasSourcingItems = input.items.some((item) => !!item.sourcingType);
-  const ourCost = hasSourcingItems ? estimatedCost : itemOurCost.plus(additionalCost).toDecimalPlaces(2);
-  const budget = input.costingBudget ? new Prisma.Decimal(input.costingBudget) : ZERO;
-  const marginPercent = hasSourcingItems && budget.gt(0)
-    ? Prisma.Decimal.max(ZERO, budget.minus(estimatedCost).mul(HUNDRED).div(budget)).toDecimalPlaces(4)
+  const ourCost = itemOurCost.plus(additionalCost).toDecimalPlaces(2);
+  const marginPercent = hasSourcingItems && itemOurCost.gt(0)
+    ? itemProfit.mul(HUNDRED).div(itemOurCost).toDecimalPlaces(4)
     : estimatedCost.gt(0)
       ? estimatedCost.minus(ourCost).mul(HUNDRED).div(estimatedCost).toDecimalPlaces(4)
       : ZERO;

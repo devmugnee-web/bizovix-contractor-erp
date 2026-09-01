@@ -1,10 +1,18 @@
 import type { NextConfig } from "next";
+import { networkInterfaces } from "node:os";
+
+const lanDevOrigins = Object.values(networkInterfaces())
+  .flatMap((addresses) => addresses ?? [])
+  .filter((address) => address.family === "IPv4" && !address.internal)
+  .map((address) => address.address);
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
   devIndicators: false,
-  allowedDevOrigins: ["localhost", "127.0.0.1", "192.168.68.84", "103.166.39.76"],
+  allowedDevOrigins: [
+    ...new Set(["localhost", "127.0.0.1", ...lanDevOrigins, "103.166.39.76"]),
+  ],
   async rewrites() {
     return [
       {

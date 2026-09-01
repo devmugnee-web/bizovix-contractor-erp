@@ -3,6 +3,7 @@ import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -164,6 +165,82 @@ export class TenderCostingItemInputDto {
   @IsOptional()
   @IsDateString()
   exchangeRateDate?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["DOOR_TO_DOOR_SEA", "DOOR_TO_DOOR_AIR", "LC_SEA", "LC_AIR"])
+  foreignShippingMethod?:
+    | "DOOR_TO_DOOR_SEA"
+    | "DOOR_TO_DOOR_AIR"
+    | "LC_SEA"
+    | "LC_AIR";
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  foreignShippingProvider?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  foreignDoorToDoorCharge?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  foreignImportDutyIncluded?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  foreignTransitDays?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  foreignShippingReference?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  foreignTransportCharge?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  customsDeclarationCharge?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  shippingWeightKg?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  shippingVolumeCbm?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["PER_CBM", "PER_KG", "FLAT"])
+  shippingRateBasis?: "PER_CBM" | "PER_KG" | "FLAT";
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  shippingRate?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  domesticTransportCost?: number;
 
   @IsOptional()
   @Type(() => Number)

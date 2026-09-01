@@ -3,6 +3,12 @@ import type { TenderCostingStatus } from "./enums";
 export type TenderCostingSourcingType = "LOCAL" | "FOREIGN" | "LOCAL_AND_FOREIGN";
 export type TenderCostingItemStatus = "NOT_COSTED" | "DRAFT" | "COSTED";
 export type TenderCostingSelectedSource = "LOCAL" | "FOREIGN";
+export type TenderCostingShippingMethod =
+  | "DOOR_TO_DOOR_SEA"
+  | "DOOR_TO_DOOR_AIR"
+  | "LC_SEA"
+  | "LC_AIR";
+export type TenderCostingShippingRateBasis = "PER_CBM" | "PER_KG" | "FLAT";
 
 export interface TenderCostingUser {
   id: string;
@@ -42,6 +48,19 @@ export interface TenderCostingItemRecord {
   foreignUnitPrice: string;
   foreignExchangeRate: string;
   exchangeRateDate: string | null;
+  foreignShippingMethod: TenderCostingShippingMethod;
+  foreignShippingProvider: string | null;
+  foreignDoorToDoorCharge: string;
+  foreignImportDutyIncluded: boolean;
+  foreignTransitDays: number | null;
+  foreignShippingReference: string | null;
+  foreignTransportCharge: string;
+  customsDeclarationCharge: string;
+  shippingWeightKg: string;
+  shippingVolumeCbm: string;
+  shippingRateBasis: TenderCostingShippingRateBasis;
+  shippingRate: string;
+  domesticTransportCost: string;
   foreignFreightCost: string;
   foreignInsuranceCost: string;
   customsDutyPercent: string;
@@ -139,6 +158,19 @@ export interface SaveTenderCostingItemInput {
   foreignUnitPrice?: number;
   foreignExchangeRate?: number;
   exchangeRateDate?: string;
+  foreignShippingMethod?: TenderCostingShippingMethod;
+  foreignShippingProvider?: string;
+  foreignDoorToDoorCharge?: number;
+  foreignImportDutyIncluded?: boolean;
+  foreignTransitDays?: number;
+  foreignShippingReference?: string;
+  foreignTransportCharge?: number;
+  customsDeclarationCharge?: number;
+  shippingWeightKg?: number;
+  shippingVolumeCbm?: number;
+  shippingRateBasis?: TenderCostingShippingRateBasis;
+  shippingRate?: number;
+  domesticTransportCost?: number;
   foreignFreightCost?: number;
   foreignInsuranceCost?: number;
   customsDutyPercent?: number;
