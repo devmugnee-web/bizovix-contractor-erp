@@ -958,7 +958,7 @@ export default function TenderCostingEditorPage() {
     const updatedItems: CostingItemForm[] = items.map((item) =>
       activeCostingIds.has(item.id) && item.sourcingType === "FOREIGN"
         ? {
-            ...applyCommonForeignValues(item),
+            ...item,
             selectedSource: "FOREIGN",
             costingStatus: "DRAFT",
           }
@@ -2489,10 +2489,18 @@ function ForeignBatchTable({
             "border-biz-purple/30 bg-biz-purple/5",
             "border-biz-warning/30 bg-biz-warning/5",
           ][index % 4];
+          const headerTone = [
+            "border-biz-blue/30 bg-biz-blue/10",
+            "border-biz-success/30 bg-biz-success/10",
+            "border-biz-purple/30 bg-biz-purple/10",
+            "border-biz-warning/30 bg-biz-warning/10",
+          ][index % 4];
 
           return (
             <section key={item.id} className={`rounded-lg border p-3 ${rowTone}`}>
-              <div className="mb-3 grid grid-cols-2 gap-2 border-b border-biz-border/70 pb-3 sm:grid-cols-4">
+              <div
+                className={`mb-3 grid grid-cols-2 gap-2 rounded-md border px-3 py-2 sm:grid-cols-4 ${headerTone}`}
+              >
                 <div>
                   <span className="block text-[9px] text-biz-muted">SL</span>
                   <strong className="text-[11px] text-biz-text">{index + 1}</strong>
@@ -2510,21 +2518,9 @@ function ForeignBatchTable({
                   <span className="block text-[9px] text-biz-muted">Qty</span>
                   <strong className="text-[11px] text-biz-text">{item.quantity}</strong>
                 </div>
-                <div className="flex items-end justify-between gap-2">
-                  <div>
-                    <span className="block text-[9px] text-biz-muted">Unit</span>
-                    <strong className="text-[11px] text-biz-text">{item.unit}</strong>
-                  </div>
-                  <StatusBadge
-                    label={
-                      isLc
-                        ? `LC - ${isAir ? "Air" : "Sea"}`
-                        : isAir
-                          ? "Air Shipment"
-                          : "Sea Shipment"
-                    }
-                    tone={isAir ? "warning" : "info"}
-                  />
+                <div>
+                  <span className="block text-[9px] text-biz-muted">Unit</span>
+                  <strong className="text-[11px] text-biz-text">{item.unit}</strong>
                 </div>
               </div>
 
@@ -2532,33 +2528,72 @@ function ForeignBatchTable({
                 <h4 className="mb-2 text-[10.5px] font-semibold text-biz-text">
                   Foreign Currency Cost
                 </h4>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                  <MiniField label={`Unit Price (${currency})`} required>
-                    <BatchNumberInput
-                      value={item.foreignUnitPrice}
-                      onChange={(value) => onChange(item.id, { foreignUnitPrice: value })}
-                    />
-                  </MiniField>
-                  <MiniField label="Unit Price (BDT)">
-                    <ReadOnlyCostValue value={formatCompactMoney(preview.foreignUnitValueBdt)} />
-                  </MiniField>
-                  <MiniField label={`Total (${currency})`}>
-                    <ReadOnlyCostValue value={formatCompactMoney(preview.foreignProductTotal)} />
-                  </MiniField>
-                  <MiniField label="Currency">
-                    <ReadOnlyCostValue value={currency} />
-                  </MiniField>
-                  <MiniField label="Total (BDT)">
-                    <ReadOnlyCostValue value={formatCompactMoney(preview.foreignProductValue)} />
-                  </MiniField>
-                  {!isLc && (
-                    <MiniField label={`Foreign Transport Fee (${currency})`}>
+                <div className="overflow-x-auto pb-1">
+                  <div className="grid min-w-[900px] grid-cols-7 gap-2">
+                    <MiniField label={`Unit Price (${currency})`} required>
                       <BatchNumberInput
-                        value={item.foreignTransportCharge}
-                        onChange={(value) => onChange(item.id, { foreignTransportCharge: value })}
+                        value={item.foreignUnitPrice}
+                        onChange={(value) => onChange(item.id, { foreignUnitPrice: value })}
                       />
                     </MiniField>
-                  )}
+                    <MiniField label="Unit Price (BDT)">
+                      <ReadOnlyCostValue value={formatCompactMoney(preview.foreignUnitValueBdt)} />
+                    </MiniField>
+                    <MiniField label={`Total (${currency})`}>
+                      <ReadOnlyCostValue value={formatCompactMoney(preview.foreignProductTotal)} />
+                    </MiniField>
+                    <MiniField label="Currency" required>
+                      <SelectInput
+                        className="h-9 text-[10px]"
+                        value={item.foreignCurrency}
+                        options={CURRENCY_OPTIONS}
+                        onChange={(event) =>
+                          onChange(item.id, { foreignCurrency: event.target.value })
+                        }
+                      />
+                    </MiniField>
+                    <MiniField label="Shipping Method" required>
+                      <SelectInput
+                        className="h-9 text-[9px]"
+                        value={item.foreignShippingMethod}
+                        options={SHIPPING_METHOD_OPTIONS}
+                        onChange={(event) => {
+                          const shippingMethod = event.target.value as TenderCostingShippingMethod;
+                          const nextIsLc = shippingMethod.startsWith("LC_");
+                          const switchingFamily =
+                            nextIsLc !== item.foreignShippingMethod.startsWith("LC_");
+                          onChange(item.id, {
+                            foreignShippingMethod: shippingMethod,
+                            shippingRateBasis: defaultShippingRateBasis(shippingMethod),
+                            shippingRate: defaultShippingRate(shippingMethod),
+                            ...(switchingFamily
+                              ? {
+                                  shippingWeightKg: "",
+                                  foreignTransportCharge: "",
+                                  foreignFreightCost: "",
+                                  cnfCharge: "",
+                                  portHandlingCharge: "",
+                                  bankLcCharge: "",
+                                  foreignLocalTransportCost: "",
+                                  domesticTransportCost: "",
+                                }
+                              : {}),
+                          });
+                        }}
+                      />
+                    </MiniField>
+                    <MiniField label="Total (BDT)">
+                      <ReadOnlyCostValue value={formatCompactMoney(preview.foreignProductValue)} />
+                    </MiniField>
+                    {!isLc && (
+                      <MiniField label={`Foreign Transport Fee (${currency})`}>
+                        <BatchNumberInput
+                          value={item.foreignTransportCharge}
+                          onChange={(value) => onChange(item.id, { foreignTransportCharge: value })}
+                        />
+                      </MiniField>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2570,45 +2605,47 @@ function ForeignBatchTable({
                       Enter only applicable charges. Blank fields are treated as BDT 0.
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                    <MiniField label="Bank LC Fee (BDT)">
-                      <BatchNumberInput
-                        value={item.bankLcCharge}
-                        onChange={(value) => onChange(item.id, { bankLcCharge: value })}
-                      />
-                    </MiniField>
-                    <MiniField label="Agent Fee (BDT)">
-                      <BatchNumberInput
-                        value={item.portHandlingCharge}
-                        onChange={(value) => onChange(item.id, { portHandlingCharge: value })}
-                      />
-                    </MiniField>
-                    <MiniField label="Container Fee (BDT)">
-                      <BatchNumberInput
-                        value={item.foreignFreightCost}
-                        onChange={(value) => onChange(item.id, { foreignFreightCost: value })}
-                      />
-                    </MiniField>
-                    <MiniField label="C&F Charge (BDT)">
-                      <BatchNumberInput
-                        value={item.cnfCharge}
-                        onChange={(value) => onChange(item.id, { cnfCharge: value })}
-                      />
-                    </MiniField>
-                    <MiniField label="Transport Charge (BDT)">
-                      <BatchNumberInput
-                        value={item.foreignLocalTransportCost}
-                        onChange={(value) =>
-                          onChange(item.id, { foreignLocalTransportCost: value })
-                        }
-                      />
-                    </MiniField>
-                    <MiniField label="Total Price (BDT)">
-                      <ReadOnlyCostValue
-                        value={formatCompactMoney(preview.foreignLanded)}
-                        emphasized
-                      />
-                    </MiniField>
+                  <div className="overflow-x-auto pb-1">
+                    <div className="grid min-w-[780px] grid-cols-6 gap-2">
+                      <MiniField label="Bank LC Fee (BDT)">
+                        <BatchNumberInput
+                          value={item.bankLcCharge}
+                          onChange={(value) => onChange(item.id, { bankLcCharge: value })}
+                        />
+                      </MiniField>
+                      <MiniField label="Agent Fee (BDT)">
+                        <BatchNumberInput
+                          value={item.portHandlingCharge}
+                          onChange={(value) => onChange(item.id, { portHandlingCharge: value })}
+                        />
+                      </MiniField>
+                      <MiniField label="Container Fee (BDT)">
+                        <BatchNumberInput
+                          value={item.foreignFreightCost}
+                          onChange={(value) => onChange(item.id, { foreignFreightCost: value })}
+                        />
+                      </MiniField>
+                      <MiniField label="C&F Charge (BDT)">
+                        <BatchNumberInput
+                          value={item.cnfCharge}
+                          onChange={(value) => onChange(item.id, { cnfCharge: value })}
+                        />
+                      </MiniField>
+                      <MiniField label="Transport Charge (BDT)">
+                        <BatchNumberInput
+                          value={item.foreignLocalTransportCost}
+                          onChange={(value) =>
+                            onChange(item.id, { foreignLocalTransportCost: value })
+                          }
+                        />
+                      </MiniField>
+                      <MiniField label="Total Price (BDT)">
+                        <ReadOnlyCostValue
+                          value={formatCompactMoney(preview.foreignLanded)}
+                          emphasized
+                        />
+                      </MiniField>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -2621,52 +2658,54 @@ function ForeignBatchTable({
                       Default: {isAir ? "Air BDT 800/KG" : "Sea BDT 400/KG"} — editable
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                    <MiniField label="Shipping Weight (KG)" required>
-                      <BatchNumberInput
-                        value={item.shippingWeightKg}
-                        onChange={(value) =>
-                          onChange(item.id, {
-                            shippingWeightKg: value,
-                            shippingRateBasis: "PER_KG",
-                          })
-                        }
-                      />
-                    </MiniField>
-                    <MiniField label="Shipping Rate (BDT/KG)" required>
-                      <BatchNumberInput
-                        value={item.shippingRate}
-                        onChange={(value) =>
-                          onChange(item.id, {
-                            shippingRate: value,
-                            shippingRateBasis: "PER_KG",
-                          })
-                        }
-                      />
-                    </MiniField>
-                    <MiniField label="Shipping Cost (BDT)">
-                      <ReadOnlyCostValue value={formatCompactMoney(preview.shippingCostBdt)} />
-                    </MiniField>
-                    <MiniField label="Domestic Transport (BDT)">
-                      <BatchNumberInput
-                        value={item.foreignLocalTransportCost}
-                        onChange={(value) =>
-                          onChange(item.id, { foreignLocalTransportCost: value })
-                        }
-                      />
-                    </MiniField>
-                    <MiniField label="Warehouse to Project (BDT, Optional)">
-                      <BatchNumberInput
-                        value={item.domesticTransportCost}
-                        onChange={(value) => onChange(item.id, { domesticTransportCost: value })}
-                      />
-                    </MiniField>
-                    <MiniField label="Total Price (BDT)">
-                      <ReadOnlyCostValue
-                        value={formatCompactMoney(preview.foreignLanded)}
-                        emphasized
-                      />
-                    </MiniField>
+                  <div className="overflow-x-auto pb-1">
+                    <div className="grid min-w-[780px] grid-cols-6 gap-2">
+                      <MiniField label="Shipping Weight (KG)" required>
+                        <BatchNumberInput
+                          value={item.shippingWeightKg}
+                          onChange={(value) =>
+                            onChange(item.id, {
+                              shippingWeightKg: value,
+                              shippingRateBasis: "PER_KG",
+                            })
+                          }
+                        />
+                      </MiniField>
+                      <MiniField label="Shipping Rate (BDT/KG)" required>
+                        <BatchNumberInput
+                          value={item.shippingRate}
+                          onChange={(value) =>
+                            onChange(item.id, {
+                              shippingRate: value,
+                              shippingRateBasis: "PER_KG",
+                            })
+                          }
+                        />
+                      </MiniField>
+                      <MiniField label="Shipping Cost (BDT)">
+                        <ReadOnlyCostValue value={formatCompactMoney(preview.shippingCostBdt)} />
+                      </MiniField>
+                      <MiniField label="Domestic Transport (BDT)">
+                        <BatchNumberInput
+                          value={item.foreignLocalTransportCost}
+                          onChange={(value) =>
+                            onChange(item.id, { foreignLocalTransportCost: value })
+                          }
+                        />
+                      </MiniField>
+                      <MiniField label="Warehouse to Project (BDT, Optional)">
+                        <BatchNumberInput
+                          value={item.domesticTransportCost}
+                          onChange={(value) => onChange(item.id, { domesticTransportCost: value })}
+                        />
+                      </MiniField>
+                      <MiniField label="Total Price (BDT)">
+                        <ReadOnlyCostValue
+                          value={formatCompactMoney(preview.foreignLanded)}
+                          emphasized
+                        />
+                      </MiniField>
+                    </div>
                   </div>
                 </div>
               )}
