@@ -59,9 +59,9 @@ export function SidebarItem({
           )}
         />
       </span>
-      <span className="min-w-0 flex-1 truncate">
+      <span className="min-w-0 flex-1 whitespace-normal break-words leading-4" title={label}>
         {label}
-        {subtitle && <span className="block truncate text-[11px] font-normal text-white/55">{subtitle}</span>}
+        {subtitle && <span className="block break-words pt-0.5 text-[11px] font-normal leading-3.5 text-white/55">{subtitle}</span>}
       </span>
       {badge !== undefined && badge > 0 && (
         <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-biz-orange px-1.5 text-[11px] font-semibold text-white shadow-[0_0_0_3px_rgba(255,124,44,0.18)]">

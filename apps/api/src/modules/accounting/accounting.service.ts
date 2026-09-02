@@ -126,6 +126,34 @@ export class AccountingService {
     if (!row) throw new NotFoundException(`System account ${key} not found`);
     return row;
   }
+  async ensureCustomAccount(
+    tx: Tx,
+    org: string,
+    input: { code: string; name: string; parentSystemKey: string; accountType: string; normalBalance: "DEBIT" | "CREDIT" },
+  ) {
+    this.assertValidNormalBalance(input.accountType, input.normalBalance);
+    const existing = await tx.ledgerAccount.findFirst({ where: { organizationId: org, code: input.code } });
+    if (existing) {
+      if (existing.isSystem || existing.accountType !== input.accountType || existing.normalBalance !== input.normalBalance) {
+        throw new BadRequestException(`Account code ${input.code} is already reserved by an incompatible ledger`);
+      }
+      if (!existing.isActive) throw new BadRequestException(`Account ${input.code} is inactive`);
+      return existing;
+    }
+    const parent = await this.systemAccount(tx, org, input.parentSystemKey);
+    return tx.ledgerAccount.create({
+      data: {
+        organizationId: org,
+        code: input.code,
+        name: input.name,
+        parentId: parent.id,
+        accountType: input.accountType,
+        normalBalance: input.normalBalance,
+        isSystem: false,
+        isControlAccount: false,
+      },
+    });
+  }
   async bankLedgerAccount(tx: Tx, org: string, bankAccountId: string) {
     const bank = await tx.bankAccount.findFirst({
       where: { id: bankAccountId, organizationId: org },
@@ -310,6 +338,9 @@ export class AccountingService {
   async updateAccount(org: string, userId: string, id: string, dto: Partial<CreateAccountDto>) {
     const old = await this.prisma.ledgerAccount.findFirst({ where: { id, organizationId: org } });
     if (!old) throw new NotFoundException("Account not found");
+    if (old.isSystem) {
+      throw new BadRequestException("Protected system accounts cannot be changed");
+    }
     this.assertValidNormalBalance(dto.accountType ?? old.accountType, dto.normalBalance ?? old.normalBalance);
     const row = await this.prisma.ledgerAccount.update({ where: { id, organizationId: org }, data: dto });
     await this.log(org, userId, "ACCOUNT_UPDATED", id, row.code);

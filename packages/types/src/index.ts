@@ -50,3 +50,6 @@ export * from "./supplier-payment";
 export * from "./supplier-ledger";
 export * from "./sales-quotation";
 export * from "./work-iou";
+export * from "./fixed-asset";
+export * from "./hr";
+export * from "./lc";

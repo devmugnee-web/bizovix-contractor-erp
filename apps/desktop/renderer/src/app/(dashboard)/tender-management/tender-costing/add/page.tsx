@@ -260,11 +260,11 @@ function normalizedSourcingType(
 }
 
 function formatMoney(value: number): string {
-  return `BDT ${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `BDT ${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatCompactMoney(value: number): string {
-  return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
 function roundMoney(value: number): number {

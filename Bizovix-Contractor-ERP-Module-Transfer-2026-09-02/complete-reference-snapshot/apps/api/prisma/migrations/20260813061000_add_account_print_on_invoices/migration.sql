@@ -1,0 +1,2 @@
+ALTER TABLE "Account"
+ADD COLUMN "printOnInvoices" BOOLEAN NOT NULL DEFAULT false;

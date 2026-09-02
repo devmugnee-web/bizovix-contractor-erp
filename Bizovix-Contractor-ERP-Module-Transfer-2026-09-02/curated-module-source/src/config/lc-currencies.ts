@@ -1,0 +1,20 @@
+export const LC_CURRENCIES = [
+  { code: "USD", name: "US Dollar" },
+  { code: "EUR", name: "Euro" },
+  { code: "GBP", name: "British Pound" },
+  { code: "CNY", name: "Chinese Yuan" },
+  { code: "JPY", name: "Japanese Yen" },
+  { code: "INR", name: "Indian Rupee" },
+  { code: "SGD", name: "Singapore Dollar" },
+  { code: "AED", name: "UAE Dirham" },
+  { code: "SAR", name: "Saudi Riyal" },
+  { code: "MYR", name: "Malaysian Ringgit" },
+  { code: "THB", name: "Thai Baht" },
+  { code: "KRW", name: "South Korean Won" },
+  { code: "AUD", name: "Australian Dollar" },
+  { code: "CAD", name: "Canadian Dollar" },
+  { code: "CHF", name: "Swiss Franc" },
+  { code: "HKD", name: "Hong Kong Dollar" },
+  { code: "BDT", name: "Bangladeshi Taka" },
+] as const;
+

@@ -12,10 +12,15 @@ export interface GeneralExpense {
   expenseDate: string;
   amount: string;
   description: string | null;
-  status: "PENDING" | "APPROVED" | "REJECTED";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED" | "AMENDED";
+  expenseNature: "DIRECT" | "INDIRECT";
+  paymentMode: "CASH_BANK" | "PAYABLE";
   expenseHead: ExpenseHeadOption;
   expenseBy: ExpensePersonOption;
-  paidFromAccount: { id: string; accountName: string; accountNumber: string | null };
+  paidFromAccount: { id: string; accountName: string; accountNumber: string | null } | null;
+  expenseLedger: { id: string; code: string; name: string } | null;
+  payableParty: { id: string; code: string; name: string } | null;
+  payable: { id: string; status: string; amount: string; paidAmount: string } | null;
   attachments: GeneralExpenseAttachment[];
 }
 
@@ -35,7 +40,11 @@ export interface SaveGeneralExpenseInput {
   expenseHeadId: string;
   amount: number;
   expenseById: string;
-  paidFromAccountId: string;
+  paidFromAccountId?: string;
+  paymentMode?: "CASH_BANK" | "PAYABLE";
+  expenseNature?: "DIRECT" | "INDIRECT";
+  expenseLedgerAccountId?: string;
+  payablePartyId?: string;
   description?: string;
 }
 

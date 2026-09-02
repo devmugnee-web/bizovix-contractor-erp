@@ -33,7 +33,7 @@ import {
   TextInput,
   type StatusBadgeTone,
 } from "@bizovix/ui";
-import { formatBDTCompact, formatDate } from "@bizovix/utils";
+import { formatDate } from "@bizovix/utils";
 import type { TenderCostingQuery, TenderCostingRecord, TenderCostingStatus } from "@bizovix/types";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
@@ -64,10 +64,17 @@ const EMPTY_FILTERS: FilterDraft = {
 
 function formatBDTLakh(value: number): string {
   if (!Number.isFinite(value)) return "BDT 0.00 Lakh";
-  return `BDT ${(value / 100_000).toLocaleString("en-IN", {
+  return `BDT ${(value / 100_000).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })} Lakh`;
+}
+
+function formatCostingNumber(value: number): string {
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function toCsv(rows: string[][]): string {
@@ -424,36 +431,19 @@ export default function TenderCostingPage() {
               key: "value",
               header: "Estimated Value (BDT)",
               className: "w-[14%] overflow-hidden whitespace-normal px-1.5 text-right leading-tight xl:w-[10%] xl:px-2",
-              render: (record) => (
-                <>
-                  <span className="xl:hidden">{formatBDTCompact(Number(record.estimatedValue))}</span>
-                  <span className="hidden xl:inline">
-                    {Number(record.estimatedValue).toLocaleString("en-IN", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </span>
-                </>
-              ),
+              render: (record) => formatCostingNumber(Number(record.estimatedValue)),
             },
             {
               key: "estimated",
               header: "Estimated Cost (BDT)",
               className: "hidden w-[10%] overflow-hidden whitespace-normal px-2 text-right leading-tight lg:table-cell",
-              render: (record) =>
-                Number(record.estimatedCost).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+              render: (record) => formatCostingNumber(Number(record.estimatedCost)),
             },
             {
               key: "ourCost",
               header: "Our Cost (BDT)",
               className: "w-[14%] overflow-hidden whitespace-normal px-1.5 text-right leading-tight xl:w-[10%] xl:px-2",
-              render: (record) => (
-                <>
-                  <span className="xl:hidden">{formatBDTCompact(Number(record.ourCost))}</span>
-                  <span className="hidden xl:inline">
-                    {Number(record.ourCost).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </span>
-                </>
-              ),
+              render: (record) => formatCostingNumber(Number(record.ourCost)),
             },
             {
               key: "margin",

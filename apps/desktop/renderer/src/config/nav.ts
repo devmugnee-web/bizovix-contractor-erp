@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { Permission } from "@bizovix/types";
 import {
   Activity,
   AlarmClock,
@@ -56,7 +57,6 @@ import {
   Truck,
   Users,
   Wallet,
-  Wallet2,
 } from "lucide-react";
 
 export interface NavLeaf {
@@ -70,6 +70,7 @@ export interface NavLeaf {
   indent?: boolean;
   /** Nested submenu items owned by this row. */
   children?: NavLeaf[];
+  permissions?: Permission[];
 }
 
 export interface NavItem {
@@ -79,10 +80,12 @@ export interface NavItem {
   icon: LucideIcon;
   badgeKey?: "reminders";
   children?: NavLeaf[];
+  permissions?: Permission[];
 }
 
 export function isNavRouteActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
+  const route = href.split("?", 1)[0] ?? href;
+  return pathname === route || pathname.startsWith(`${route}/`);
 }
 
 // Sidebar structure follows the Sir-approved primary navigation exactly:
@@ -128,6 +131,17 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
+    label: "LC Management",
+    href: "/lc-management",
+    icon: Landmark,
+    permissions: ["lc.view", "lc.create", "lc.configure"],
+    children: [
+      { label: "LC Register", href: "/lc-management", icon: ClipboardList, permissions: ["lc.view"] },
+      { label: "Open New LC", href: "/lc-management/create", icon: FileText, permissions: ["lc.create"] },
+      { label: "Cost Heads", href: "/lc-management/cost-heads", icon: Tags, permissions: ["lc.configure"] },
+    ],
+  },
+  {
     label: "Projects",
     subtitle: "Contract Management System",
     icon: FileText,
@@ -156,11 +170,16 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    label: "Expenses",
+    label: "Purchases & Expenses",
     icon: Wallet,
     children: [
       { label: "Project Expense", href: "/expenses/project-expense", icon: Briefcase },
-      { label: "General Expense", href: "/expenses/general-expense", icon: Wallet2 },
+      {
+        label: "General Expense",
+        href: "/expenses/general-expense",
+        icon: ReceiptText,
+        permissions: ["general_expense.read", "general_expense.create"],
+      },
       {
         label: "IOU",
         href: "/expenses/iou",
@@ -170,6 +189,34 @@ export const NAV_ITEMS: NavItem[] = [
           { label: "Personal IOU", icon: Users, disabled: true },
         ],
       },
+    ],
+  },
+  {
+    label: "Assets Management",
+    href: "/assets-management",
+    icon: PackageCheck,
+    permissions: ["asset.read", "asset.create", "asset.depreciation.post"],
+    children: [
+      { label: "Asset Register", href: "/assets-management", icon: ClipboardList, permissions: ["asset.read"] },
+      { label: "Acquire Asset", href: "/assets-management?action=new", icon: Package2, permissions: ["asset.create"] },
+      { label: "Depreciation", href: "/assets-management?view=depreciation", icon: Calculator, permissions: ["asset.depreciation.post"] },
+    ],
+  },
+  {
+    label: "HR & Payroll",
+    href: "/hr-payroll",
+    icon: Users,
+    permissions: ["hr.employee.view", "hr.payroll.manage", "hr.leave.view", "hr.expense.view", "hr.loan.view", "hr.recruitment.view"],
+    children: [
+      { label: "Employees", href: "/hr-payroll", icon: Users, permissions: ["hr.employee.view"] },
+      { label: "Organization Structure", href: "/hr-payroll/organization-structure", icon: ListTree, permissions: ["hr.employee.view"] },
+      { label: "Employee Lifecycle", href: "/hr-payroll/employee-lifecycle", icon: History, permissions: ["hr.employee.view"] },
+      { label: "Attendance", href: "/hr-payroll/attendance", icon: CalendarClock, permissions: ["hr.employee.view"] },
+      { label: "Payroll", href: "/hr-payroll/run-payroll", icon: Banknote, permissions: ["hr.payroll.manage"] },
+      { label: "Leave & Claims", href: "/hr-payroll/leave", icon: ClipboardList, permissions: ["hr.leave.view"] },
+      { label: "Recruitment", href: "/hr-payroll/recruitment", icon: Briefcase, permissions: ["hr.recruitment.view"] },
+      { label: "Shifts & Holidays", href: "/hr-payroll/shifts-holidays", icon: AlarmClock, permissions: ["hr.employee.view"] },
+      { label: "HR Reports", href: "/hr-payroll/reports", icon: BarChart3, permissions: ["hr.employee.view"] },
     ],
   },
   {

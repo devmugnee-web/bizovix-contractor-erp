@@ -1,0 +1,19 @@
+import { apiRequest } from "@/services/api-client";
+
+export type WarehouseType = "GENERAL" | "RAW_MATERIAL" | "WIP" | "FINISHED_GOODS" | "REJECTED" | "SCRAP" | "SHOWROOM";
+export interface WarehouseRecord { id: string; name: string; code: string; address: string | null; description: string | null; type: WarehouseType; allowGrn: boolean; allowSales: boolean; allowMaterialIssue: boolean; isDefault: boolean; isActive: boolean; createdAt: string; }
+export interface WarehouseStockRow { warehouseId: string; warehouseName: string; warehouseCode: string; inventoryItemId: string; itemCode: string; itemName: string; category: string; unit: string; quantity: number; averageCost: number; stockValue: number; }
+export interface StockLedgerRow { id: string; workspaceId: string; warehouseId: string; inventoryItemId: string; transactionType: string; transactionId: string; transactionLineId: string; referenceNo: string | null; movementType: "IN" | "OUT"; quantity: number; inputUnitCost: number | null; unitCost: number; movementValue: number; balanceQuantity: number; balanceValue: number; averageCost: number; transactionDate: string; createdAt: string; warehouse: WarehouseRecord; inventoryItem: { itemCode: string; itemName: string; unit: string }; }
+export interface ManufacturingSaleSerial { id: string; serialNumber: string; status: "RELEASED" | "CONSUMED"; }
+export interface ManufacturingSaleLot { id: string; lotNumber: string; inventoryItemId: string; itemCode: string; itemName: string; unit: string; warehouse: { id: string; code: string; name: string; allowSales: boolean }; location: { id: string; code: string; name: string }; availableQuantity: number; reservedQuantity: number; serialTracked: boolean; serials: ManufacturingSaleSerial[]; }
+export interface ManufacturingSaleTrackedItem { id: string; itemCode: string; itemName: string; serialTracked: boolean; }
+export interface ManufacturingSaleProvenance { trackedItemIds: string[]; trackedItems: ManufacturingSaleTrackedItem[]; lots: ManufacturingSaleLot[]; }
+
+export function listWarehouses(workspaceId: string, activeOnly = false) { return apiRequest<WarehouseRecord[]>(`/inventory/warehouses?workspaceId=${encodeURIComponent(workspaceId)}&activeOnly=${activeOnly}`); }
+export function listManufacturingSaleProvenance(workspaceId: string) { return apiRequest<ManufacturingSaleProvenance>(`/inventory/manufacturing-sale-provenance?workspaceId=${encodeURIComponent(workspaceId)}`); }
+export function createWarehouse(workspaceId: string, input: Omit<WarehouseRecord, "id" | "createdAt">) { return apiRequest<WarehouseRecord>(`/inventory/warehouses?workspaceId=${encodeURIComponent(workspaceId)}`, { method: "POST", body: JSON.stringify(input) }); }
+export function updateWarehouse(id: string, input: Omit<WarehouseRecord, "id" | "createdAt">) { return apiRequest<WarehouseRecord>(`/inventory/warehouses/${id}`, { method: "PUT", body: JSON.stringify(input) }); }
+export function deleteWarehouse(id: string) { return apiRequest<{ success: true }>(`/inventory/warehouses/${id}`, { method: "DELETE" }); }
+export function listWarehouseStock(workspaceId: string, warehouseId?: string) { const filter = warehouseId ? `&warehouseId=${encodeURIComponent(warehouseId)}` : ""; return apiRequest<WarehouseStockRow[]>(`/inventory/warehouse-stock?workspaceId=${encodeURIComponent(workspaceId)}${filter}`); }
+export function createWarehouseTransfer(input: { workspaceId: string; transferDate: string; fromWarehouseId: string; toWarehouseId: string; notes?: string; lines: Array<{ inventoryItemId: string; quantity: number }> }) { return apiRequest("/inventory/warehouse-transfers", { method: "POST", body: JSON.stringify(input) }); }
+export function listStockLedger(workspaceId: string) { return apiRequest<StockLedgerRow[]>(`/inventory/stock-ledger?workspaceId=${encodeURIComponent(workspaceId)}`); }

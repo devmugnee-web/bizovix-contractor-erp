@@ -70,6 +70,9 @@ import { SupplierLedgerModule } from "./modules/supplier-ledger/supplier-ledger.
 import { VendorLicensingModule } from "./modules/vendor-licensing/vendor-licensing.module";
 import { SalesQuotationsModule } from "./modules/sales-quotations/sales-quotations.module";
 import { WorkIousModule } from "./modules/work-ious/work-ious.module";
+import { FixedAssetsModule } from "./modules/fixed-assets/fixed-assets.module";
+import { HrModule } from "./modules/hr/hr.module";
+import { LcModule } from "./modules/lc/lc.module";
 
 @Module({
   imports: [
@@ -138,6 +141,9 @@ import { WorkIousModule } from "./modules/work-ious/work-ious.module";
     VendorLicensingModule,
     SalesQuotationsModule,
     WorkIousModule,
+    FixedAssetsModule,
+    HrModule,
+    LcModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

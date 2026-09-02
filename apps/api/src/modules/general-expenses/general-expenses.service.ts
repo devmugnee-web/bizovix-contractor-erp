@@ -9,11 +9,15 @@ import { UpdateGeneralExpenseDto } from "./dto/update-general-expense.dto";
 import { CashBankService } from "../cash-bank/cash-bank.service";
 import { AccountingService } from "../accounting/accounting.service";
 import { NumberingService } from "../settings-numbering/numbering.service";
+import { buildGeneralExpenseJournalLines } from "./general-expense.calculations";
 
 const includeRelations = {
   expenseHead: { select: { id: true, name: true } },
   expenseBy: { select: { id: true, name: true } },
   paidFromAccount: { select: { id: true, accountName: true, accountNumber: true } },
+  expenseLedger: { select: { id: true, code: true, name: true } },
+  payableParty: { select: { id: true, code: true, name: true } },
+  payable: { select: { id: true, status: true, amount: true, paidAmount: true } },
   attachments: { select: { id: true, fileName: true, mimeType: true, fileSize: true } },
 } satisfies Prisma.ExpenseInclude;
 
@@ -35,6 +39,11 @@ function toDto(record: ExpenseRecord) {
     expenseHead: record.expenseHead!,
     expenseBy: record.expenseBy!,
     paidFromAccount: record.paidFromAccount!,
+    expenseNature: record.expenseNature,
+    paymentMode: record.paymentMode,
+    expenseLedger: record.expenseLedger,
+    payableParty: record.payableParty,
+    payable: record.payable ? { ...record.payable, amount: record.payable.amount.toFixed(2), paidAmount: record.payable.paidAmount.toFixed(2) } : null,
     attachments: record.attachments,
   };
 }
@@ -65,15 +74,23 @@ export class GeneralExpensesService {
   }
 
   private async assertReferences(organizationId: string, dto: SaveGeneralExpenseDto) {
-    const [head, person, account] = await Promise.all([
+    const paymentMode = dto.paymentMode ?? "CASH_BANK";
+    if (paymentMode === "CASH_BANK" && !dto.paidFromAccountId) throw new BadRequestException("Payment account is required");
+    if (paymentMode === "PAYABLE" && !dto.payablePartyId) throw new BadRequestException("Payable party is required");
+    const [head, person, account, party] = await Promise.all([
       this.prisma.expenseHead.findFirst({ where: { id: dto.expenseHeadId, organizationId, isActive: true } }),
       this.prisma.organizationUser.findFirst({ where: { organizationId, userId: dto.expenseById, user: { isActive: true } } }),
-      this.prisma.bankAccount.findFirst({ where: { id: dto.paidFromAccountId, organizationId } }),
+      dto.paidFromAccountId ? this.prisma.bankAccount.findFirst({ where: { id: dto.paidFromAccountId, organizationId } }) : null,
+      dto.payablePartyId ? this.prisma.party.findFirst({ where: { id: dto.payablePartyId, organizationId, status: "ACTIVE" } }) : null,
     ]);
     if (!head) throw new NotFoundException("Expense head not found");
     if (!person) throw new NotFoundException("Expense person not found");
-    if (!account) throw new NotFoundException("Payment account not found");
-    return { head };
+    if (paymentMode === "CASH_BANK" && !account) throw new NotFoundException("Payment account not found");
+    if (paymentMode === "PAYABLE" && !party) throw new NotFoundException("Payable party not found");
+    const ledgerId = dto.expenseLedgerAccountId ?? head.ledgerAccountId;
+    const ledger = ledgerId ? await this.prisma.ledgerAccount.findFirst({ where: { id: ledgerId, organizationId, isActive: true, accountType: "EXPENSE", isControlAccount: false } }) : null;
+    if (ledgerId && !ledger) throw new NotFoundException("Expense ledger account not found");
+    return { head, account, party, ledger, paymentMode };
   }
 
   async findAll(organizationId: string, query: QueryGeneralExpenseDto) {
@@ -94,16 +111,18 @@ export class GeneralExpensesService {
   }
 
   async create(organizationId: string, userId: string, dto: SaveGeneralExpenseDto) {
-    const { head } = await this.assertReferences(organizationId, dto);
+    const { head, account, party, ledger, paymentMode } = await this.assertReferences(organizationId, dto);
     const record = await this.prisma.$transaction(async (tx) => {
       const referenceNo = await this.numbering.next(organizationId, "EXPENSE", tx);
+      const payable = paymentMode === "PAYABLE" ? await tx.payable.create({ data: { organizationId, partyId: party!.id, partyName: party!.name, partyType: "VENDOR", billNo: referenceNo, billDate: new Date(dto.expenseDate), amount: dto.amount, description: dto.description?.trim() || head.name, createdById: userId } }) : null;
       const expense = await tx.expense.create({ data: {
         organizationId, workId: null, expenseHeadId: dto.expenseHeadId, expenseById: dto.expenseById,
-        paidFromAccountId: dto.paidFromAccountId, category: head.name, description: dto.description?.trim() || null,
+        paidFromAccountId: account?.id, expenseLedgerAccountId: ledger?.id, payablePartyId: party?.id, payableId: payable?.id,
+        expenseNature: dto.expenseNature ?? head.nature, paymentMode, category: head.name, description: dto.description?.trim() || null,
         amount: dto.amount, expenseDate: new Date(dto.expenseDate), status: "APPROVED", referenceNo, createdById: userId,
       }, include: includeRelations });
-      await this.cashBank.post(tx, { organizationId, accountId: dto.paidFromAccountId, direction: "OUT", amount: dto.amount, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, referenceNo, description: dto.description?.trim() || head.name, transactionDate: expense.expenseDate, createdById: userId });
-      await this.accounting.post(tx, { organizationId, userId, journalDate: expense.expenseDate, referenceNo, description: dto.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, lines: [{ systemKey: "GENERAL_EXPENSE", debit: dto.amount, credit: 0 }, { bankAccountId: dto.paidFromAccountId, debit: 0, credit: dto.amount }] });
+      if (paymentMode === "CASH_BANK") await this.cashBank.post(tx, { organizationId, accountId: account!.id, direction: "OUT", amount: dto.amount, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, referenceNo, description: dto.description?.trim() || head.name, transactionDate: expense.expenseDate, createdById: userId });
+      await this.accounting.post(tx, { organizationId, userId, journalDate: expense.expenseDate, referenceNo, description: dto.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, lines: buildGeneralExpenseJournalLines({ amount: dto.amount, paymentMode, expenseLedgerAccountId: ledger?.id, bankAccountId: account?.id, partyName: party?.name }) });
       return expense;
     });
     await this.auditLogService.record({ organizationId, userId, action: "create", entityType: "GeneralExpense", entityId: record.id, newValue: toDto(record) });
@@ -113,7 +132,7 @@ export class GeneralExpensesService {
   async update(organizationId: string, userId: string, id: string, dto: UpdateGeneralExpenseDto) {
     const existing = await this.findOne(organizationId, id);
     if (["CANCELLED", "AMENDED"].includes(existing.status)) throw new BadRequestException("Cancelled or amended expense cannot be edited");
-    const financialChange = dto.expenseDate !== undefined || dto.expenseHeadId !== undefined || dto.amount !== undefined || dto.expenseById !== undefined || dto.paidFromAccountId !== undefined;
+    const financialChange = dto.expenseDate !== undefined || dto.expenseHeadId !== undefined || dto.amount !== undefined || dto.expenseById !== undefined || dto.paidFromAccountId !== undefined || dto.paymentMode !== undefined || dto.expenseNature !== undefined || dto.expenseLedgerAccountId !== undefined || dto.payablePartyId !== undefined;
     if (!financialChange) {
       const metadata = await this.prisma.expense.update({ where: { id, organizationId }, data: { description: dto.description?.trim() || null }, include: includeRelations });
       await this.auditLogService.record({ organizationId, userId, action: "EXPENSE_METADATA_UPDATED", entityType: "GeneralExpense", entityId: id, oldValue: existing, newValue: toDto(metadata) });
@@ -123,18 +142,33 @@ export class GeneralExpensesService {
       expenseDate: dto.expenseDate ?? new Date(existing.expenseDate).toISOString().slice(0, 10),
       expenseHeadId: dto.expenseHeadId ?? existing.expenseHead.id,
       amount: dto.amount ?? Number(existing.amount), expenseById: dto.expenseById ?? existing.expenseBy.id,
-      paidFromAccountId: dto.paidFromAccountId ?? existing.paidFromAccount.id,
+      paidFromAccountId: dto.paidFromAccountId ?? existing.paidFromAccount?.id ?? undefined,
+      paymentMode: dto.paymentMode ?? existing.paymentMode,
+      expenseNature: dto.expenseNature ?? existing.expenseNature,
+      expenseLedgerAccountId: dto.expenseLedgerAccountId ?? existing.expenseLedger?.id ?? undefined,
+      payablePartyId: dto.payablePartyId ?? existing.payableParty?.id ?? undefined,
       description: dto.description ?? existing.description ?? undefined,
     };
-    const { head } = await this.assertReferences(organizationId, merged);
+    if (merged.paymentMode === "CASH_BANK") merged.payablePartyId = undefined;
+    if (merged.paymentMode === "PAYABLE") merged.paidFromAccountId = undefined;
+    const { head, account, party, ledger, paymentMode } = await this.assertReferences(organizationId, merged);
     const record = await this.prisma.$transaction(async (tx) => {
+      if (existing.payable) {
+        const supplierPayments = await tx.supplierPayment.count({ where: { organizationId, payableId: existing.payable.id } });
+        if (supplierPayments || Number(existing.payable.paidAmount) > 0) throw new BadRequestException("A paid payable expense cannot be amended");
+      }
       await this.accounting.reverseSource(tx, organizationId, userId, "GENERAL_EXPENSE", id);
-      await this.cashBank.reverseSource(tx, { organizationId, sourceModule: "GENERAL_EXPENSE", sourceId: id, userId, reason: "Expense amendment" });
+      if (existing.paymentMode === "CASH_BANK") await this.cashBank.reverseSource(tx, { organizationId, sourceModule: "GENERAL_EXPENSE", sourceId: id, userId, reason: "Expense amendment" });
+      if (existing.payable) {
+        await tx.expense.update({ where: { id, organizationId }, data: { payableId: null } });
+        await tx.payable.delete({ where: { id: existing.payable.id } });
+      }
       await tx.expense.update({ where: { id, organizationId }, data: { status: "AMENDED", cancelledAt: new Date(), cancelledById: userId, cancellationReason: "Replaced by financial amendment" } });
       const referenceNo = await this.numbering.next(organizationId, "EXPENSE", tx);
-      const replacement = await tx.expense.create({ data: { organizationId, workId: null, expenseHeadId: merged.expenseHeadId, expenseById: merged.expenseById, paidFromAccountId: merged.paidFromAccountId, category: head.name, description: merged.description?.trim() || null, amount: merged.amount, expenseDate: new Date(merged.expenseDate), status: "APPROVED", referenceNo, createdById: userId, replacesExpenseId: id }, include: includeRelations });
-      await this.cashBank.post(tx, { organizationId, accountId: merged.paidFromAccountId, direction: "OUT", amount: merged.amount, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, referenceNo, description: merged.description?.trim() || head.name, transactionDate: replacement.expenseDate, createdById: userId });
-      await this.accounting.post(tx, { organizationId, userId, journalDate: replacement.expenseDate, referenceNo, description: merged.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, lines: [{ systemKey: "GENERAL_EXPENSE", debit: merged.amount, credit: 0 }, { bankAccountId: merged.paidFromAccountId, debit: 0, credit: merged.amount }] });
+      const payable = paymentMode === "PAYABLE" ? await tx.payable.create({ data: { organizationId, partyId: party!.id, partyName: party!.name, partyType: "VENDOR", billNo: referenceNo, billDate: new Date(merged.expenseDate), amount: merged.amount, description: merged.description?.trim() || head.name, createdById: userId } }) : null;
+      const replacement = await tx.expense.create({ data: { organizationId, workId: null, expenseHeadId: merged.expenseHeadId, expenseById: merged.expenseById, paidFromAccountId: account?.id, expenseLedgerAccountId: ledger?.id, payablePartyId: party?.id, payableId: payable?.id, expenseNature: merged.expenseNature ?? head.nature, paymentMode, category: head.name, description: merged.description?.trim() || null, amount: merged.amount, expenseDate: new Date(merged.expenseDate), status: "APPROVED", referenceNo, createdById: userId, replacesExpenseId: id }, include: includeRelations });
+      if (paymentMode === "CASH_BANK") await this.cashBank.post(tx, { organizationId, accountId: account!.id, direction: "OUT", amount: merged.amount, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, referenceNo, description: merged.description?.trim() || head.name, transactionDate: replacement.expenseDate, createdById: userId });
+      await this.accounting.post(tx, { organizationId, userId, journalDate: replacement.expenseDate, referenceNo, description: merged.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, lines: buildGeneralExpenseJournalLines({ amount: merged.amount, paymentMode, expenseLedgerAccountId: ledger?.id, bankAccountId: account?.id, partyName: party?.name }) });
       return replacement;
     });
     await this.auditLogService.record({ organizationId, userId, action: "EXPENSE_AMENDED", entityType: "GeneralExpense", entityId: id, oldValue: existing, newValue: toDto(record) });
@@ -155,8 +189,16 @@ export class GeneralExpensesService {
     const existing = await this.findOne(organizationId, id);
     if (["CANCELLED", "AMENDED"].includes(existing.status)) return existing;
     const row = await this.prisma.$transaction(async (tx) => {
+      if (existing.payable) {
+        const supplierPayments = await tx.supplierPayment.count({ where: { organizationId, payableId: existing.payable.id } });
+        if (supplierPayments || Number(existing.payable.paidAmount) > 0) throw new BadRequestException("A paid payable expense cannot be cancelled");
+      }
       await this.accounting.reverseSource(tx, organizationId, userId, "GENERAL_EXPENSE", id);
-      await this.cashBank.reverseSource(tx, { organizationId, sourceModule: "GENERAL_EXPENSE", sourceId: id, userId, reason: "Expense cancellation" });
+      if (existing.paymentMode === "CASH_BANK") await this.cashBank.reverseSource(tx, { organizationId, sourceModule: "GENERAL_EXPENSE", sourceId: id, userId, reason: "Expense cancellation" });
+      if (existing.payable) {
+        await tx.expense.update({ where: { id, organizationId }, data: { payableId: null } });
+        await tx.payable.delete({ where: { id: existing.payable.id } });
+      }
       return tx.expense.update({ where: { id, organizationId }, data: { status: "CANCELLED", cancelledAt: new Date(), cancelledById: userId, cancellationReason: "Cancelled by user" }, include: includeRelations });
     });
     await this.auditLogService.record({ organizationId, userId, action: "EXPENSE_CANCELLED", entityType: "GeneralExpense", entityId: id, oldValue: existing, newValue: toDto(row) });
@@ -168,7 +210,7 @@ export class GeneralExpensesService {
     const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const lines = [
       ["SL", "Expense Date", "Expense Head / Category", "Amount (BDT)", "Expense By / Through", "Paid From", "Description / Remarks"].map(escape).join(","),
-      ...rows.map((row, index) => [String(index + 1), row.expenseDate.toISOString().slice(0, 10), row.expenseHead!.name, row.amount.toFixed(2), row.expenseBy!.name, row.paidFromAccount!.accountName, row.description ?? ""].map(escape).join(",")),
+      ...rows.map((row, index) => [String(index + 1), row.expenseDate.toISOString().slice(0, 10), row.expenseHead!.name, row.amount.toFixed(2), row.expenseBy!.name, row.paidFromAccount?.accountName ?? row.payableParty?.name ?? "Payable", row.description ?? ""].map(escape).join(",")),
     ];
     await this.auditLogService.record({ organizationId, userId, action: "export", entityType: "GeneralExpense", newValue: { rowCount: rows.length } });
     return { filename: `general-expenses-${new Date().toISOString().slice(0, 10)}.csv`, content: `\uFEFF${lines.join("\r\n")}` };

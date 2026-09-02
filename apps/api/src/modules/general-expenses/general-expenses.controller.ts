@@ -16,20 +16,20 @@ const allowedMimeTypes = new Set(["application/pdf", "image/jpeg", "image/png"])
 export class GeneralExpensesController {
   constructor(private readonly service: GeneralExpensesService) {}
 
-  @Get() @RequirePermissions("project_expense.read")
+  @Get() @RequirePermissions("general_expense.read")
   findAll(@Query() query: QueryGeneralExpenseDto, @CurrentUser() user: AuthUser) { return this.service.findAll(user.organizationId, query); }
 
-  @Get("export") @RequirePermissions("project_expense.export")
+  @Get("export") @RequirePermissions("general_expense.export")
   exportCsv(@Query() query: QueryGeneralExpenseDto, @CurrentUser() user: AuthUser) { return this.service.exportCsv(user.organizationId, user.id, query); }
 
-  @Get(":id") @RequirePermissions("project_expense.read")
+  @Get(":id") @RequirePermissions("general_expense.read")
   findOne(@Param("id") id: string, @CurrentUser() user: AuthUser) { return this.service.findOne(user.organizationId, id); }
 
-  @Post() @RequirePermissions("project_expense.create") @ResponseMessage("General expense saved successfully")
+  @Post() @RequirePermissions("general_expense.create") @ResponseMessage("General expense saved successfully")
   create(@Body() dto: SaveGeneralExpenseDto, @CurrentUser() user: AuthUser) { return this.service.create(user.organizationId, user.id, dto); }
 
   @Post(":id/attachments")
-  @RequirePermissions("project_expense.create")
+  @RequirePermissions("general_expense.create")
   @UseInterceptors(FilesInterceptor("files", 10, {
     limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (_request, file, callback) => callback(allowedMimeTypes.has(file.mimetype) ? null : new Error("Only PDF, JPG and PNG files are allowed"), allowedMimeTypes.has(file.mimetype)),
@@ -39,9 +39,9 @@ export class GeneralExpensesController {
     return this.service.addAttachments(user.organizationId, user.id, id, files ?? []);
   }
 
-  @Patch(":id") @RequirePermissions("project_expense.update") @ResponseMessage("General expense updated successfully")
+  @Patch(":id") @RequirePermissions("general_expense.update") @ResponseMessage("General expense updated successfully")
   update(@Param("id") id: string, @Body() dto: UpdateGeneralExpenseDto, @CurrentUser() user: AuthUser) { return this.service.update(user.organizationId, user.id, id, dto); }
 
-  @Delete(":id") @RequirePermissions("project_expense.delete") @ResponseMessage("General expense deleted successfully")
+  @Delete(":id") @RequirePermissions("general_expense.delete") @ResponseMessage("General expense deleted successfully")
   remove(@Param("id") id: string, @CurrentUser() user: AuthUser) { return this.service.remove(user.organizationId, user.id, id); }
 }

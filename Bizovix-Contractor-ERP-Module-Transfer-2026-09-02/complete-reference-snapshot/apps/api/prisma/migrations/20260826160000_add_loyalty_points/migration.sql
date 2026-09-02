@@ -1,0 +1,5 @@
+ALTER TABLE "VoucherEntry"
+ADD COLUMN "loyaltyPointsEarned" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "loyaltyPointsRedeemed" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "loyaltyDiscountAmount" DECIMAL(18,4) NOT NULL DEFAULT 0;
+

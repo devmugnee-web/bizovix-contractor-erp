@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
+import { useMe } from "@bizovix/api-client";
+import type { Permission } from "@bizovix/types";
 import { TrialCard } from "@bizovix/ui";
 import { isNavRouteActive, NAV_ITEMS, NAV_ITEMS_LOWER, type NavItem, type NavLeaf } from "@/config/nav";
 import { SidebarItem } from "./SidebarItem";
@@ -15,13 +17,31 @@ function containsActiveRoute(pathname: string, items: NavLeaf[]): boolean {
   );
 }
 
-function findActiveGroup(pathname: string): string | null {
-  const group = [...NAV_ITEMS, ...NAV_ITEMS_LOWER].find(
+function findActiveGroup(pathname: string, items: NavItem[]): string | null {
+  const group = items.find(
     (item) =>
       (!!item.href && isNavRouteActive(pathname, item.href)) ||
       (item.children ? containsActiveRoute(pathname, item.children) : false),
   );
   return group?.label ?? null;
+}
+
+function filterLeaves(items: NavLeaf[], permissions: Set<Permission>): NavLeaf[] {
+  return items.flatMap((item) => {
+    if (item.permissions?.length && !item.permissions.some((permission) => permissions.has(permission))) return [];
+    const children = item.children ? filterLeaves(item.children, permissions) : undefined;
+    if (item.children && !children?.length && !item.href) return [];
+    return [{ ...item, children }];
+  });
+}
+
+function filterItems(items: NavItem[], permissions: Set<Permission>): NavItem[] {
+  return items.flatMap((item) => {
+    if (item.permissions?.length && !item.permissions.some((permission) => permissions.has(permission))) return [];
+    const children = item.children ? filterLeaves(item.children, permissions) : undefined;
+    if (item.children && !children?.length && !item.href) return [];
+    return [{ ...item, children }];
+  });
 }
 
 interface SidebarProps {
@@ -42,7 +62,11 @@ export function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
-  const activeGroup = findActiveGroup(pathname);
+  const me = useMe();
+  const permissionSet = React.useMemo(() => new Set(me.data?.permissions ?? []), [me.data?.permissions]);
+  const upperItems = React.useMemo(() => filterItems(NAV_ITEMS, permissionSet), [permissionSet]);
+  const lowerItems = React.useMemo(() => filterItems(NAV_ITEMS_LOWER, permissionSet), [permissionSet]);
+  const activeGroup = findActiveGroup(pathname, [...upperItems, ...lowerItems]);
 
   const [menuState, setMenuState] = React.useState<{ pathname: string; openGroup: string | null }>(
     () => ({
@@ -108,12 +132,12 @@ export function Sidebar({
         />
       )}
       <aside
-        className={`${mobileOpen ? "fixed bottom-0 left-0 top-7 z-40 flex" : "hidden"} ${collapsed ? "md:hidden" : "md:static md:flex"} h-[calc(100vh-1.75rem)] w-[236px] shrink-0 flex-col bg-biz-navy md:h-full`}
+        className={`${mobileOpen ? "fixed bottom-0 left-0 top-7 z-40 flex" : "hidden"} ${collapsed ? "md:hidden" : "md:static md:flex"} h-[calc(100vh-1.75rem)] w-[256px] max-w-[88vw] shrink-0 flex-col bg-biz-navy md:h-full md:max-w-none`}
       >
         <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-4">
-          <ul className="flex flex-col gap-1">{NAV_ITEMS.map(renderItem)}</ul>
+          <ul className="flex flex-col gap-1">{upperItems.map(renderItem)}</ul>
           <div className="my-3 border-t border-white/10" />
-          <ul className="flex flex-col gap-1">{NAV_ITEMS_LOWER.map(renderItem)}</ul>
+          <ul className="flex flex-col gap-1">{lowerItems.map(renderItem)}</ul>
         </nav>
         {trial && (
           <div className="mx-3 mb-3">

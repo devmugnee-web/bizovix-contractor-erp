@@ -1,0 +1,6 @@
+Source repository commit: df421ec2350d54d6422ca7b4ba0c0e71f9849084
+Packaged on: 2026-09-02 (Asia/Dhaka)
+
+The source worktree was dirty at packaging time and contained user-owned modified/untracked files. The package intentionally captures the live source files requested by the user, including current modifications in relevant module/integration files. Generated build output, logs, artifacts, .git metadata, credentials, and runtime data were excluded.
+
+Treat this package as a live behavioral/source reference, not as a clean tagged release. The SHA-256 file manifest records the exact bytes supplied.

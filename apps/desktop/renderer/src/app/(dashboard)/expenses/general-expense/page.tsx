@@ -3,9 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { ArrowLeft, Download, Filter, Pencil, Save, Search, Trash2, UploadCloud, X } from "lucide-react";
-import { useBankAccounts, useCreateGeneralExpense, useDeleteGeneralExpense, useExpenseHeads, useExpensePeople, useExportGeneralExpenses, useGeneralExpenses, useMe, useUpdateGeneralExpense, useUploadGeneralExpenseAttachments } from "@bizovix/api-client";
+import { useBankAccounts, useChartOfAccounts, useCreateGeneralExpense, useDeleteGeneralExpense, useExpenseHeads, useExpensePeople, useExportGeneralExpenses, useGeneralExpenses, useMe, useParties, useUpdateGeneralExpense, useUploadGeneralExpenseAttachments } from "@bizovix/api-client";
 import type { GeneralExpense, GeneralExpenseQuery, SaveGeneralExpenseInput } from "@bizovix/types";
 import { generalExpenseSchema, type GeneralExpenseFormValues } from "@bizovix/validation";
 import { FormField, PrimaryButton, SecondaryButton, SelectInput, TextInput, cn } from "@bizovix/ui";
@@ -50,6 +50,8 @@ export default function GeneralExpensePage() {
   const heads = useExpenseHeads();
   const people = useExpensePeople();
   const accounts = useBankAccounts();
+  const parties = useParties({ roles: "VENDOR,SUPPLIER,SERVICE_PROVIDER", status: "ACTIVE", limit: 200 });
+  const chart = useChartOfAccounts();
   const [page, setPage] = React.useState(1);
   const [search, setSearch] = React.useState("");
   const deferredSearch = React.useDeferredValue(search.trim());
@@ -67,20 +69,21 @@ export default function GeneralExpensePage() {
   const deleteExpense = useDeleteGeneralExpense();
   const uploadAttachments = useUploadGeneralExpenseAttachments();
   const exportExpenses = useExportGeneralExpenses();
-  const form = useForm<GeneralExpenseFormValues>({ resolver: zodResolver(generalExpenseSchema), defaultValues: { expenseDate: "2026-08-15", expenseHeadId: "", amount: 5500, expenseById: "", paidFromAccountId: "", description: "Stationery and office supplies" } });
+  const form = useForm<GeneralExpenseFormValues>({ resolver: zodResolver(generalExpenseSchema), defaultValues: { expenseDate: new Date().toISOString().slice(0, 10), expenseHeadId: "", amount: 0, expenseById: "", paymentMode: "CASH_BANK", expenseNature: "INDIRECT", paidFromAccountId: "", payablePartyId: "", expenseLedgerAccountId: "", description: "" } });
+  const paymentMode = useWatch({ control: form.control, name: "paymentMode" });
   const defaultsSet = React.useRef(false);
 
   React.useEffect(() => {
     if (defaultsSet.current || !heads.data?.length || !people.data?.length || !accounts.data?.length) return;
     defaultsSet.current = true;
-    form.reset({ expenseDate: "2026-08-15", expenseHeadId: heads.data.find((item) => item.name === "Office Supplies")?.id ?? heads.data[0]!.id, amount: 5500, expenseById: people.data.find((item) => item.name.includes("Shajib"))?.id ?? people.data[0]!.id, paidFromAccountId: accounts.data.find((item) => item.accountName.includes("Islami Bank"))?.id ?? accounts.data[0]!.id, description: "Stationery and office supplies" });
+    form.reset({ expenseDate: new Date().toISOString().slice(0, 10), expenseHeadId: heads.data[0]!.id, amount: 0, expenseById: people.data[0]!.id, paymentMode: "CASH_BANK", expenseNature: "INDIRECT", paidFromAccountId: accounts.data[0]!.id, payablePartyId: "", expenseLedgerAccountId: "", description: "" });
   }, [accounts.data, form, heads.data, people.data]);
 
   const permissions = me.data?.permissions ?? [];
-  const canCreate = permissions.includes("project_expense.create");
-  const canUpdate = permissions.includes("project_expense.update");
-  const canDelete = permissions.includes("project_expense.delete");
-  const canExport = permissions.includes("project_expense.export");
+  const canCreate = permissions.includes("general_expense.create");
+  const canUpdate = permissions.includes("general_expense.update");
+  const canDelete = permissions.includes("general_expense.delete");
+  const canExport = permissions.includes("general_expense.export");
   const rows = expenses.data?.items ?? [];
   const meta = expenses.data?.meta ?? { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 };
   const saving = createExpense.isPending || updateExpense.isPending || uploadAttachments.isPending;
@@ -93,7 +96,7 @@ export default function GeneralExpensePage() {
   function resetForm() {
     setEditingId(null);
     setFiles([]);
-    form.reset({ expenseDate: "2026-08-15", expenseHeadId: heads.data?.find((item) => item.name === "Office Supplies")?.id ?? heads.data?.[0]?.id ?? "", amount: 5500, expenseById: people.data?.find((item) => item.name.includes("Shajib"))?.id ?? people.data?.[0]?.id ?? "", paidFromAccountId: accounts.data?.find((item) => item.accountName.includes("Islami Bank"))?.id ?? accounts.data?.[0]?.id ?? "", description: "Stationery and office supplies" });
+    form.reset({ expenseDate: new Date().toISOString().slice(0, 10), expenseHeadId: heads.data?.[0]?.id ?? "", amount: 0, expenseById: people.data?.[0]?.id ?? "", paymentMode: "CASH_BANK", expenseNature: "INDIRECT", paidFromAccountId: accounts.data?.[0]?.id ?? "", payablePartyId: "", expenseLedgerAccountId: "", description: "" });
   }
 
   function acceptFiles(selected: File[]) {
@@ -115,7 +118,7 @@ export default function GeneralExpensePage() {
   function editRow(expense: GeneralExpense) {
     setEditingId(expense.id);
     setFiles([]);
-    form.reset({ expenseDate: new Date(expense.expenseDate).toISOString().slice(0, 10), expenseHeadId: expense.expenseHead.id, amount: Number(expense.amount), expenseById: expense.expenseBy.id, paidFromAccountId: expense.paidFromAccount.id, description: expense.description ?? "" });
+    form.reset({ expenseDate: new Date(expense.expenseDate).toISOString().slice(0, 10), expenseHeadId: expense.expenseHead.id, amount: Number(expense.amount), expenseById: expense.expenseBy.id, paymentMode: expense.paymentMode, expenseNature: expense.expenseNature, paidFromAccountId: expense.paidFromAccount?.id ?? "", payablePartyId: expense.payableParty?.id ?? "", expenseLedgerAccountId: expense.expenseLedger?.id ?? "", description: expense.description ?? "" });
     document.getElementById("general-expense-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -141,7 +144,10 @@ export default function GeneralExpensePage() {
         <FormField label="Expense Head / Category" required error={form.formState.errors.expenseHeadId?.message}><SelectInput placeholder="Select expense head" options={(heads.data ?? []).map((item) => ({ label: item.name, value: item.id }))} {...form.register("expenseHeadId")} /></FormField>
         <FormField label="Amount (BDT)" required error={form.formState.errors.amount?.message}><TextInput type="number" min="0.01" step="0.01" placeholder="5,500.00" {...form.register("amount")} /></FormField>
         <FormField label="Expense By / Through" required error={form.formState.errors.expenseById?.message}><SelectInput placeholder="Select person" options={(people.data ?? []).map((item) => ({ label: item.name, value: item.id }))} {...form.register("expenseById")} /></FormField>
-        <FormField label="Paid From" required error={form.formState.errors.paidFromAccountId?.message}><SelectInput placeholder="Select account" options={(accounts.data ?? []).map((item) => ({ label: `${item.accountName}${item.accountNumber ? ` (${item.accountNumber})` : ""}`, value: item.id }))} {...form.register("paidFromAccountId")} /></FormField>
+        <FormField label="Expense Nature" required error={form.formState.errors.expenseNature?.message}><SelectInput options={[{ label: "Indirect / General", value: "INDIRECT" }, { label: "Direct", value: "DIRECT" }]} {...form.register("expenseNature")} /></FormField>
+        <FormField label="Payment Mode" required error={form.formState.errors.paymentMode?.message}><SelectInput options={[{ label: "Cash / Bank", value: "CASH_BANK" }, { label: "Create Payable", value: "PAYABLE" }]} {...form.register("paymentMode")} /></FormField>
+        {paymentMode === "CASH_BANK" ? <FormField label="Paid From" required error={form.formState.errors.paidFromAccountId?.message}><SelectInput placeholder="Select account" options={(accounts.data ?? []).map((item) => ({ label: `${item.accountName}${item.accountNumber ? ` (${item.accountNumber})` : ""}`, value: item.id }))} {...form.register("paidFromAccountId")} /></FormField> : <FormField label="Payable Party" required error={form.formState.errors.payablePartyId?.message}><SelectInput placeholder="Select vendor / supplier" options={(parties.data?.items ?? []).map((item) => ({ label: `${item.code} - ${item.name}`, value: item.id }))} {...form.register("payablePartyId")} /></FormField>}
+        <FormField label="Expense Ledger"><SelectInput placeholder="Default from expense head" options={(chart.data ?? []).filter((account) => account.isActive && account.accountType === "EXPENSE").map((account) => ({ label: `${account.code} - ${account.name}`, value: account.id }))} {...form.register("expenseLedgerAccountId")} /></FormField>
         <FormField label="Description / Remarks" error={form.formState.errors.description?.message}><TextInput placeholder="Stationery and office supplies" {...form.register("description")} /></FormField>
       </fieldset><div className="mt-5 flex justify-end gap-3"><SecondaryButton type="button" onClick={resetForm}>Reset</SecondaryButton><PrimaryButton type="submit" disabled={saving || (!editingId && !canCreate) || (!!editingId && !canUpdate)} className="min-w-36"><Save className="h-4 w-4" /> {saving ? "Saving..." : editingId ? "Update Expense" : "Save Expense"}</PrimaryButton></div></form>
     </section>
@@ -157,7 +163,7 @@ export default function GeneralExpensePage() {
     </div></div>
       {expenses.isError && <div className="mx-4 mb-3 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-biz-danger"><span>Could not load general expenses.</span><button type="button" className="font-semibold underline" onClick={() => expenses.refetch()}>Retry</button></div>}
       <div className="overflow-x-auto px-4"><table className="w-full min-w-[1080px] border-collapse text-left"><thead className="bg-[#f4f7fb] text-[11px] font-semibold text-biz-text"><tr><th className="w-12 px-3 py-2.5">SL</th><th className="w-28 px-3 py-2.5">Expense Date</th><th className="w-44 px-3 py-2.5">Expense Head / Category</th><th className="w-32 px-3 py-2.5 text-right">Amount (BDT)</th><th className="w-44 px-3 py-2.5">Expense By / Through</th><th className="w-40 px-3 py-2.5">Paid From</th><th className="px-3 py-2.5">Description / Remarks</th><th className="w-24 px-3 py-2.5 text-center">Action</th></tr></thead><tbody className="text-[11px] text-biz-text">
-        {expenses.isLoading ? Array.from({ length: 5 }).map((_, index) => <tr key={index}><td colSpan={8} className="px-3 py-2"><div className="h-6 animate-pulse rounded bg-slate-100" /></td></tr>) : rows.length === 0 ? <tr><td colSpan={8} className="px-3 py-10 text-center text-[12px] text-biz-muted">No general expenses found.</td></tr> : rows.map((expense, index) => <tr key={expense.id} className="border-b border-biz-border last:border-0 hover:bg-biz-bg/60"><td className="px-3 py-2.5 text-biz-muted">{(meta.page - 1) * meta.limit + index + 1}</td><td className="px-3 py-2.5">{shortDate(expense.expenseDate)}</td><td className="px-3 py-2.5 font-semibold">{expense.expenseHead.name}</td><td className="px-3 py-2.5 text-right font-semibold tabular-nums">{money(expense.amount)}</td><td className="px-3 py-2.5">{expense.expenseBy.name}</td><td className="px-3 py-2.5">{expense.paidFromAccount.accountName}</td><td className="max-w-64 truncate px-3 py-2.5">{expense.description || "--"}</td><td className="px-3 py-2 text-center"><div className="inline-flex gap-1.5">{canUpdate && <button type="button" aria-label="Edit expense" title="Edit" onClick={() => editRow(expense)} className="flex h-7 w-7 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-biz-blue"><Pencil className="h-3.5 w-3.5" /></button>}{canDelete && <button type="button" aria-label="Delete expense" title="Delete" onClick={() => removeRow(expense.id)} disabled={deleteExpense.isPending} className="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-red-50 text-biz-danger"><Trash2 className="h-3.5 w-3.5" /></button>}</div></td></tr>)}
+        {expenses.isLoading ? Array.from({ length: 5 }).map((_, index) => <tr key={index}><td colSpan={8} className="px-3 py-2"><div className="h-6 animate-pulse rounded bg-slate-100" /></td></tr>) : rows.length === 0 ? <tr><td colSpan={8} className="px-3 py-10 text-center text-[12px] text-biz-muted">No general expenses found.</td></tr> : rows.map((expense, index) => <tr key={expense.id} className="border-b border-biz-border last:border-0 hover:bg-biz-bg/60"><td className="px-3 py-2.5 text-biz-muted">{(meta.page - 1) * meta.limit + index + 1}</td><td className="px-3 py-2.5">{shortDate(expense.expenseDate)}</td><td className="px-3 py-2.5 font-semibold">{expense.expenseHead.name}</td><td className="px-3 py-2.5 text-right font-semibold tabular-nums">{money(expense.amount)}</td><td className="px-3 py-2.5">{expense.expenseBy.name}</td><td className="px-3 py-2.5">{expense.paidFromAccount?.accountName ?? expense.payableParty?.name ?? "Payable"}</td><td className="max-w-64 truncate px-3 py-2.5">{expense.description || "--"}</td><td className="px-3 py-2 text-center"><div className="inline-flex gap-1.5">{canUpdate && <button type="button" aria-label="Edit expense" title="Edit" onClick={() => editRow(expense)} className="flex h-7 w-7 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-biz-blue"><Pencil className="h-3.5 w-3.5" /></button>}{canDelete && <button type="button" aria-label="Delete expense" title="Delete" onClick={() => removeRow(expense.id)} disabled={deleteExpense.isPending} className="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-red-50 text-biz-danger"><Trash2 className="h-3.5 w-3.5" /></button>}</div></td></tr>)}
       </tbody></table></div>
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 text-[11px] font-medium text-biz-muted"><span>Showing {meta.total === 0 ? 0 : (meta.page - 1) * meta.limit + 1} to {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} entries</span><div className="flex gap-1.5"><button type="button" disabled={meta.page <= 1} onClick={() => setPage(1)} className="h-8 min-w-8 rounded-md border border-biz-border bg-white disabled:text-slate-300">&lt;&lt;</button><button type="button" disabled={meta.page <= 1} onClick={() => setPage(meta.page - 1)} className="h-8 min-w-8 rounded-md border border-biz-border bg-white disabled:text-slate-300">&lt;</button>{visiblePages(meta.page, meta.totalPages).map((item, index) => item === "ellipsis" ? <span key={`ellipsis-${index}`} className="flex h-8 min-w-8 items-center justify-center">...</span> : <button key={item} type="button" onClick={() => setPage(item)} className={cn("h-8 min-w-8 rounded-md border px-2 font-semibold", item === meta.page ? "border-biz-blue bg-biz-blue text-white" : "border-biz-border bg-white text-biz-text")}>{item}</button>)}<button type="button" disabled={meta.page >= meta.totalPages} onClick={() => setPage(meta.page + 1)} className="h-8 min-w-8 rounded-md border border-biz-border bg-white disabled:text-slate-300">&gt;</button><button type="button" disabled={meta.page >= meta.totalPages} onClick={() => setPage(meta.totalPages)} className="h-8 min-w-8 rounded-md border border-biz-border bg-white disabled:text-slate-300">&gt;&gt;</button></div></div>
     </section>

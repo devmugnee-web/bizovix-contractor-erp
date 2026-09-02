@@ -38,6 +38,10 @@ export const NUMBERING_MODULE_KEYS = [
   "SUPPLIER_PAYMENT",
   "SALES_QUOTATION",
   "WORK_IOU",
+  "ASSET",
+  "LC",
+  "LC_GRN",
+  "EMPLOYEE",
 ] as const;
 export type NumberingModuleKey = (typeof NUMBERING_MODULE_KEYS)[number];
 
@@ -75,6 +79,10 @@ const DEFAULT_PREFIX: Record<NumberingModuleKey, string> = {
   SUPPLIER_PAYMENT: "SPY",
   SALES_QUOTATION: "QT",
   WORK_IOU: "WIOU",
+  ASSET: "AST",
+  LC: "LC",
+  LC_GRN: "LCGRN",
+  EMPLOYEE: "EMP",
 };
 
 /** RECEIPT keeps its pre-existing 5-digit format (the live ReceiptSequence counter

@@ -1,0 +1,32 @@
+-- Align legacy physical names with the current Prisma schema. This changes no
+-- rows or business data; it only removes cosmetic schema drift.
+ALTER TABLE "ManufacturingOperationResourceRequirement"
+  RENAME CONSTRAINT "ManufacturingOperationResourceRequirement_routingOperationId_fk"
+  TO "ManufacturingOperationResourceRequirement_routingOperation_fkey";
+
+ALTER INDEX "ManufacturingActualCostPosting_order_snapshot_idx"
+  RENAME TO "ManufacturingActualCostPosting_orderId_finalizedSnapshotId_idx";
+ALTER INDEX "ManufacturingActualCostPosting_workspace_idempotency_key"
+  RENAME TO "ManufacturingActualCostPosting_workspaceId_idempotencyKey_key";
+ALTER INDEX "ManufacturingActualCostPosting_workspace_order_date_idx"
+  RENAME TO "ManufacturingActualCostPosting_workspaceId_orderId_transact_idx";
+ALTER INDEX "ManufacturingControlRecord_workspaceId_kind_code_versionNumber_"
+  RENAME TO "ManufacturingControlRecord_workspaceId_kind_code_versionNum_key";
+ALTER INDEX "ManufacturingCostAllocation_snapshot_movement_key"
+  RENAME TO "ManufacturingCostAllocation_costSnapshotId_stockMovementId_key";
+ALTER INDEX "ManufacturingCostAllocation_workspace_movement_idx"
+  RENAME TO "ManufacturingCostAllocation_workspaceId_stockMovementId_idx";
+ALTER INDEX "ManufacturingDocumentNumber_workspaceId_documentKind_issuedAt_i"
+  RENAME TO "ManufacturingDocumentNumber_workspaceId_documentKind_issued_idx";
+ALTER INDEX "ManufacturingOperationResourceRequirement_routingOperationId_re"
+  RENAME TO "ManufacturingOperationResourceRequirement_routingOperationI_key";
+ALTER INDEX "ManufacturingPackagingEvent_packagingOrderId_eventType_transact"
+  RENAME TO "ManufacturingPackagingEvent_packagingOrderId_eventType_tran_idx";
+ALTER INDEX "ManufacturingPackagingOrder_workspaceId_packagingOrderNumber_ke"
+  RENAME TO "ManufacturingPackagingOrder_workspaceId_packagingOrderNumbe_key";
+ALTER INDEX "ManufacturingPackagingReconciliation_packagingOrderId_inventory"
+  RENAME TO "ManufacturingPackagingReconciliation_packagingOrderId_inven_key";
+ALTER INDEX "ManufacturingStandardCostVersion_workspace_item_status_effectiv"
+  RENAME TO "ManufacturingStandardCostVersion_workspaceId_inventoryItemI_idx";
+ALTER INDEX "ManufacturingStandardCostVersion_workspace_item_version_key"
+  RENAME TO "ManufacturingStandardCostVersion_workspaceId_inventoryItemI_key";

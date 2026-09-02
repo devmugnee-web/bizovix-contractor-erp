@@ -55,3 +55,6 @@ export * from "./hooks/use-grns";
 export * from "./hooks/use-supplier-bills";
 export * from "./hooks/use-supplier-payments";
 export * from "./hooks/use-sales-quotations";
+export * from "./hooks/use-fixed-assets";
+export * from "./hooks/use-hr";
+export * from "./hooks/use-lc";

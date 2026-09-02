@@ -9,3 +9,4 @@ process.env.DATABASE_URL = raw;
 process.env.APP_ENV = "test";
 process.env.JWT_ACCESS_SECRET ||= "bizovix-integration-access-secret";
 process.env.JWT_REFRESH_SECRET ||= "bizovix-integration-refresh-secret";
+process.env.VENDOR_ADMIN_JWT_SECRET ||= "bizovix-integration-vendor-secret";
