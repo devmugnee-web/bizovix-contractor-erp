@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, MoreVertical, Plus, Save, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, MoreVertical, Plus, Save, Trash2, X } from "lucide-react";
 import {
   ApiError,
   useSaveTenderCosting,
@@ -314,8 +314,7 @@ function calculateItemPreview(item: CostingItemForm) {
       Number(item.foreignInsuranceCost) > 0 ||
       Number(item.cnfCharge) > 0 ||
       Number(item.portHandlingCharge) > 0 ||
-      Number(item.bankLcCharge) > 0 ||
-      Number(item.foreignOtherCost) > 0);
+      Number(item.bankLcCharge) > 0);
   const usesLegacyDetailedShipping = isLc
     ? item.shippingRateBasis !== "FLAT"
     : usesLegacyDetailedDoorShipping;
@@ -369,13 +368,15 @@ function calculateItemPreview(item: CostingItemForm) {
     (Number(item.portHandlingCharge) || 0) +
     (Number(item.foreignFreightCost) || 0) +
     (Number(item.cnfCharge) || 0) +
-    (Number(item.foreignLocalTransportCost) || 0);
+    (Number(item.foreignLocalTransportCost) || 0) +
+    (Number(item.foreignOtherCost) || 0);
   const simplifiedDoorCostBeforeProfit =
     foreignProductValue +
     foreignTransportBdt +
     internationalShippingBdt +
     (Number(item.foreignLocalTransportCost) || 0) +
-    (Number(item.domesticTransportCost) || 0);
+    (Number(item.domesticTransportCost) || 0) +
+    (Number(item.foreignOtherCost) || 0);
   const simplifiedCostBeforeProfit = isLc
     ? simplifiedLcCostBeforeProfit
     : simplifiedDoorCostBeforeProfit;
@@ -497,7 +498,6 @@ export default function TenderCostingEditorPage() {
   const [budgetActionsOpen, setBudgetActionsOpen] = React.useState(false);
   const [budgetEditorOpen, setBudgetEditorOpen] = React.useState(false);
   const [isDirty, setIsDirty] = React.useState(false);
-  const [completeReviewOpen, setCompleteReviewOpen] = React.useState(false);
   const [profitSettingsOpen, setProfitSettingsOpen] = React.useState(false);
   const [localTargetMargin, setLocalTargetMargin] = React.useState("10");
   const [foreignTargetMargin, setForeignTargetMargin] = React.useState("10");
@@ -694,6 +694,12 @@ export default function TenderCostingEditorPage() {
     };
   }, [isDirty]);
 
+  React.useEffect(() => {
+    if (!foreignCostingNotice) return;
+    const timer = window.setTimeout(() => setForeignCostingNotice(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [foreignCostingNotice]);
+
   function updateItem(id: string, patch: Partial<CostingItemForm>) {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
     setIsDirty(true);
@@ -768,7 +774,6 @@ export default function TenderCostingEditorPage() {
           : ""
         : item.foreignLocalTransportCost,
       domesticTransportCost: isLc ? "" : item.domesticTransportCost,
-      foreignOtherCost: "",
     };
   }
 
@@ -912,7 +917,7 @@ export default function TenderCostingEditorPage() {
       return;
     }
     if (item.sourcingType === "LOCAL") {
-      markItemCosted(item);
+      void markItemCosted(item);
       return;
     }
     setForeignEditReturnIds((current) => {
@@ -1036,11 +1041,9 @@ export default function TenderCostingEditorPage() {
     const updatedItems: CostingItemForm[] = items.map((item) =>
       pricingReadyIds.has(item.id) ? { ...item, costingStatus: "COSTED" } : item,
     );
-    const saved = await save(
-      costing.data?.status === "COMPLETED" ? "COMPLETED" : "IN_PROGRESS",
-      updatedItems,
-      { showSuccess: false },
-    );
+    const allItemsCosted = updatedItems.every((item) => item.costingStatus === "COSTED");
+    const nextStatus = allItemsCosted ? "COMPLETED" : "IN_PROGRESS";
+    const saved = await save(nextStatus, updatedItems, { showSuccess: false });
     if (!saved) return;
     setItems(updatedItems);
     setSelectedItemIds((current) => {
@@ -1064,7 +1067,62 @@ export default function TenderCostingEditorPage() {
     );
   }
 
-  function markItemCosted(item: CostingItemForm) {
+  async function saveAllLocalCosting() {
+    const localItemsToSave = items.filter(
+      (item) => item.sourcingType === "LOCAL" && item.costingStatus !== "COSTED",
+    );
+    if (localItemsToSave.length === 0) return;
+
+    const hasIncompleteLocalItem = localItemsToSave.some(
+      (item) =>
+        !item.costingDate ||
+        !preparedByForItem(item) ||
+        !item.description.trim() ||
+        !item.unit.trim() ||
+        Number(item.quantity) <= 0 ||
+        Number(item.localUnitPrice) <= 0,
+    );
+    if (hasIncompleteLocalItem) {
+      setSaveError(
+        "Complete Product Name, Unit, Quantity and Unit Price for every Local item before saving.",
+      );
+      return;
+    }
+
+    const localItemIds = new Set(localItemsToSave.map((item) => item.id));
+    const updatedItems: CostingItemForm[] = items.map((item) =>
+      localItemIds.has(item.id)
+        ? {
+            ...item,
+            selectedSource: "LOCAL",
+            costingStatus: "COSTED",
+          }
+        : item,
+    );
+    const allItemsCosted = updatedItems.every((item) => item.costingStatus === "COSTED");
+    const nextStatus = allItemsCosted ? "COMPLETED" : "IN_PROGRESS";
+    const saved = await save(nextStatus, updatedItems, { showSuccess: false });
+    if (!saved) return;
+
+    setItems(updatedItems);
+    setSelectedItemIds((current) => {
+      const next = new Set(current);
+      localItemsToSave.forEach((item) => next.delete(item.id));
+      return next;
+    });
+    setSaveError("");
+    setIsDirty(false);
+    setSuccess({
+      title: "Local Costing Saved",
+      message: `${localItemsToSave.length} local item(s) saved successfully.`,
+    });
+    window.setTimeout(
+      () => costedItemsListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      0,
+    );
+  }
+
+  async function markItemCosted(item: CostingItemForm) {
     const source =
       item.sourcingType === "LOCAL"
         ? "LOCAL"
@@ -1085,8 +1143,18 @@ export default function TenderCostingEditorPage() {
       setSaveError(`Enter a Foreign unit price for ${item.description || "this item"}.`);
       return;
     }
-    setSaveError("");
-    updateItem(item.id, { selectedSource: source, costingStatus: "COSTED" });
+    const updatedItems: CostingItemForm[] = items.map((current) =>
+      current.id === item.id
+        ? { ...current, selectedSource: source, costingStatus: "COSTED" }
+        : current,
+    );
+    const allItemsCosted = updatedItems.every((current) => current.costingStatus === "COSTED");
+    const saved = await save(allItemsCosted ? "COMPLETED" : "IN_PROGRESS", updatedItems, {
+      showSuccess: item.sourcingType !== "LOCAL",
+    });
+    if (!saved) return;
+
+    setItems(updatedItems);
     setActiveCostingIds((current) => {
       const next = new Set(current);
       next.delete(item.id);
@@ -1097,6 +1165,18 @@ export default function TenderCostingEditorPage() {
       next.delete(item.id);
       return next;
     });
+    setSaveError("");
+    setIsDirty(false);
+    if (item.sourcingType === "LOCAL") {
+      setSuccess({
+        title: "Local Costing Saved",
+        message: `${item.description || "Local item"} saved successfully.`,
+      });
+      window.setTimeout(
+        () => costedItemsListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        0,
+      );
+    }
   }
 
   function editCostedItem(item: CostingItemForm) {
@@ -1235,7 +1315,6 @@ export default function TenderCostingEditorPage() {
       const saved = await saveCosting.mutateAsync({ id: record.id, payload });
       hydratedId.current = undefined;
       setIsDirty(false);
-      setCompleteReviewOpen(false);
       const isCompletedUpdate = record.status === "COMPLETED" && status === "COMPLETED";
       if (saveOptions.showSuccess !== false) {
         setSuccess({
@@ -1305,6 +1384,9 @@ export default function TenderCostingEditorPage() {
       item.sourcingType === "FOREIGN" &&
       item.costingStatus === "DRAFT" &&
       !activeCostingIds.has(item.id),
+  );
+  const pendingLocalItems = items.filter(
+    (item) => item.sourcingType === "LOCAL" && item.costingStatus !== "COSTED",
   );
   const hasCalculatedCost = costedItemCount > 0;
   const isPartialCosting = hasCalculatedCost && costedItemCount < items.length;
@@ -1399,22 +1481,9 @@ export default function TenderCostingEditorPage() {
   }
 
   const record = costing.data;
-  const isCompleted = record.status === "COMPLETED";
   const isReadOnly = record.status === "CANCELLED";
   const costingBudget = Number(record.costingBudget) || 0;
   const hasCostingBudget = costingBudget > 0;
-  const canComplete =
-    hasCostingBudget &&
-    items.length > 0 &&
-    items.every(
-      (item) =>
-        item.costingDate &&
-        preparedByForItem(item) &&
-        item.description.trim() &&
-        item.unit.trim() &&
-        Number(item.quantity) > 0 &&
-        item.costingStatus === "COSTED",
-    );
 
   return (
     <div className="flex flex-col gap-3">
@@ -1902,6 +1971,7 @@ export default function TenderCostingEditorPage() {
                             <button
                               type="button"
                               className="h-8 rounded border border-biz-blue px-2 text-[9px] font-semibold text-biz-blue hover:bg-biz-blue hover:text-white"
+                              disabled={saveCosting.isPending}
                               onClick={() => openItemCosting(item)}
                             >
                               {item.sourcingType === "LOCAL"
@@ -1968,6 +2038,18 @@ export default function TenderCostingEditorPage() {
                 selected
               </span>
               <div className="flex flex-wrap items-center gap-2">
+                {pendingLocalItems.length > 0 && activeForeignItems.length === 0 && (
+                  <PrimaryButton
+                    className="h-9 bg-biz-success hover:bg-biz-success/90"
+                    disabled={saveCosting.isPending}
+                    onClick={saveAllLocalCosting}
+                  >
+                    <Save className="h-4 w-4" />
+                    {saveCosting.isPending
+                      ? "Saving..."
+                      : `Save All Local (${pendingLocalItems.length})`}
+                  </PrimaryButton>
+                )}
                 {pricingReadyItems.length > 0 && activeForeignItems.length === 0 && (
                   <PrimaryButton
                     className="h-9 bg-biz-success hover:bg-biz-success/90"
@@ -2024,11 +2106,6 @@ export default function TenderCostingEditorPage() {
                 {errors.items}
               </p>
             )}
-            {foreignCostingNotice && (
-              <p className="border-t border-biz-success/20 bg-biz-success/5 px-4 py-2 text-[11px] text-biz-success">
-                {foreignCostingNotice}
-              </p>
-            )}
           </div>
 
           {items.some((item) => activeCostingIds.has(item.id)) && (
@@ -2041,7 +2118,7 @@ export default function TenderCostingEditorPage() {
                 </p>
               </div>
               {activeForeignItems.length > 0 && (
-                <div className="rounded-lg border border-biz-blue/25 bg-biz-blue/5 p-3">
+                <div className="rounded-lg border border-biz-warning/35 border-l-4 border-l-biz-warning bg-gradient-to-r from-biz-warning/10 via-biz-surface to-biz-blue/5 p-3 shadow-card">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <h3 className="text-[12px] font-semibold text-biz-text">
@@ -2051,7 +2128,10 @@ export default function TenderCostingEditorPage() {
                         Set the shared country, currency, shipping method and exchange rate once.
                       </p>
                     </div>
-                    <SecondaryButton className="h-9" onClick={applyBulkForeignSettings}>
+                    <SecondaryButton
+                      className="h-9 border-biz-warning bg-biz-warning font-semibold text-white shadow-sm hover:border-biz-warning/90 hover:bg-biz-warning/90 hover:text-white"
+                      onClick={applyBulkForeignSettings}
+                    >
                       Apply Common Settings
                     </SecondaryButton>
                   </div>
@@ -2150,72 +2230,6 @@ export default function TenderCostingEditorPage() {
           {saveError}
         </div>
       )}
-
-      <div className="flex flex-wrap items-center justify-end gap-2 rounded-lg border border-biz-border bg-biz-surface px-4 py-3">
-        <SecondaryButton
-          disabled={isReadOnly || !hasCostingBudget || !isDirty || saveCosting.isPending}
-          title={
-            isDirty
-              ? isCompleted
-                ? "Save changes and keep this costing completed"
-                : "Save current costing progress"
-              : "No unsaved changes"
-          }
-          onClick={() => save(isCompleted ? "COMPLETED" : "IN_PROGRESS")}
-        >
-          <Save className="h-4 w-4" />
-          {saveCosting.isPending ? "Saving..." : isCompleted ? "Save Changes" : "Save Progress"}
-        </SecondaryButton>
-        {!isCompleted && (
-          <PrimaryButton
-            disabled={isReadOnly || !canComplete || saveCosting.isPending}
-            title={
-              !canComplete
-                ? "Complete costing and select Prepared By for every item first"
-                : "Save and complete this costing"
-            }
-            onClick={() => setCompleteReviewOpen(true)}
-          >
-            <Send className="h-4 w-4" />
-            {saveCosting.isPending ? "Saving..." : "Save & Complete"}
-          </PrimaryButton>
-        )}
-      </div>
-
-      <Modal
-        open={completeReviewOpen}
-        onClose={() => setCompleteReviewOpen(false)}
-        title="Review & Complete Costing"
-      >
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-2">
-            <CostingKpi label="Total Items" value={String(items.length)} />
-            <CostingKpi
-              label="Costed Items"
-              value={`${costedItemCount}/${items.length}`}
-              tone="success"
-            />
-            <CostingKpi label="Total Costing Budget" value={formatMoney(costingBudget)} />
-            <CostingKpi label="Estimated Cost" value={formatMoney(estimatedTotal)} tone="blue" />
-          </div>
-          <p className="rounded-md border border-biz-warning/25 bg-biz-warning/5 px-3 py-2.5 text-[11.5px] text-biz-text">
-            All items are costed and ready to complete. You can reopen the costing later if an
-            update is needed.
-          </p>
-          <div className="flex justify-end gap-2">
-            <SecondaryButton
-              disabled={saveCosting.isPending}
-              onClick={() => setCompleteReviewOpen(false)}
-            >
-              Back
-            </SecondaryButton>
-            <PrimaryButton disabled={saveCosting.isPending} onClick={() => save("COMPLETED")}>
-              <Send className="h-4 w-4" />
-              {saveCosting.isPending ? "Completing..." : "Confirm & Complete"}
-            </PrimaryButton>
-          </div>
-        </div>
-      </Modal>
 
       <Modal
         open={profitSettingsOpen}
@@ -2340,11 +2354,41 @@ export default function TenderCostingEditorPage() {
         title={success?.title ?? "Success"}
         message={success?.message ?? ""}
         onClose={() => setSuccess(null)}
+        showControls={success?.title !== "Local Costing Saved"}
+        autoDismissMs={success?.title === "Local Costing Saved" ? 2000 : undefined}
+        dismissOnBackdrop={success?.title !== "Local Costing Saved"}
+        dismissOnEscape={success?.title !== "Local Costing Saved"}
         primaryLabel="Back to Costing List"
         onPrimary={() => router.push(`/tender-management/tender-costing?costingId=${record.id}`)}
         secondaryLabel={success?.title === "Costing Completed" ? undefined : "Continue Editing"}
         onSecondary={() => setSuccess(null)}
       />
+
+      {foreignCostingNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed left-1/2 top-1/2 z-[120] flex w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 items-start gap-3 rounded-lg border border-biz-success/30 bg-white p-3.5 shadow-2xl"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-biz-success-soft text-biz-success">
+            <CheckCircle2 className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-bold text-biz-text">Foreign Costing Saved</p>
+            <p className="mt-0.5 text-[11.5px] leading-4 text-biz-muted">
+              {foreignCostingNotice}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Close foreign costing notification"
+            onClick={() => setForeignCostingNotice("")}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-biz-muted hover:bg-biz-bg hover:text-biz-text"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2465,8 +2509,8 @@ function ForeignBatchTable({
     <div className="overflow-hidden rounded-lg border border-biz-border bg-biz-surface shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-biz-border px-3 py-2.5">
         <div>
-          <h3 className="text-[12px] font-semibold text-biz-text">Foreign Product Costing</h3>
-          <p className="text-[9.5px] text-biz-muted">
+          <h3 className="text-[14px] font-semibold text-biz-text">Foreign Product Costing</h3>
+          <p className="mt-0.5 text-[11px] leading-4 text-biz-muted">
             Foreign-currency purchase costs are converted automatically. Shipping and local
             transport costs are entered in BDT.
           </p>
@@ -2502,34 +2546,45 @@ function ForeignBatchTable({
                 className={`mb-3 grid grid-cols-2 gap-2 rounded-md border px-3 py-2 sm:grid-cols-4 ${headerTone}`}
               >
                 <div>
-                  <span className="block text-[9px] text-biz-muted">SL</span>
-                  <strong className="text-[11px] text-biz-text">{index + 1}</strong>
+                  <span className="block text-[10.5px] font-medium text-biz-muted">SL</span>
+                  <strong className="text-[12px] text-biz-text">{index + 1}</strong>
                 </div>
                 <div>
-                  <span className="block text-[9px] text-biz-muted">Product Name</span>
+                  <span className="block text-[10.5px] font-medium text-biz-muted">
+                    Product Name
+                  </span>
                   <strong
-                    className="block truncate text-[11px] text-biz-text"
+                    className="block text-[12px] font-semibold text-biz-text"
                     title={item.description}
                   >
                     {item.description}
                   </strong>
                 </div>
                 <div>
-                  <span className="block text-[9px] text-biz-muted">Qty</span>
-                  <strong className="text-[11px] text-biz-text">{item.quantity}</strong>
+                  <span className="block text-[10.5px] font-medium text-biz-muted">Qty</span>
+                  <strong className="text-[12px] text-biz-text">{item.quantity}</strong>
                 </div>
                 <div>
-                  <span className="block text-[9px] text-biz-muted">Unit</span>
-                  <strong className="text-[11px] text-biz-text">{item.unit}</strong>
+                  <span className="block text-[10.5px] font-medium text-biz-muted">Unit</span>
+                  <strong className="text-[12px] text-biz-text">{item.unit}</strong>
                 </div>
               </div>
 
               <div className="mb-3">
-                <h4 className="mb-2 text-[10.5px] font-semibold text-biz-text">
+                <h4 className="mb-2 text-[12px] font-semibold text-biz-text">
                   Foreign Currency Cost
                 </h4>
-                <div className="overflow-x-auto pb-1">
-                  <div className="grid min-w-[900px] grid-cols-7 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-[1.1fr_1fr_1fr_1fr_0.85fr_1fr_1.55fr_1fr]">
+                    <MiniField label="Supplier Name">
+                      <TextInput
+                        className="h-9 px-2 text-[11px]"
+                        placeholder="Optional"
+                        value={item.foreignSupplierName}
+                        onChange={(event) =>
+                          onChange(item.id, { foreignSupplierName: event.target.value })
+                        }
+                      />
+                    </MiniField>
                     <MiniField label={`Unit Price (${currency})`} required>
                       <BatchNumberInput
                         value={item.foreignUnitPrice}
@@ -2544,7 +2599,7 @@ function ForeignBatchTable({
                     </MiniField>
                     <MiniField label="Currency" required>
                       <SelectInput
-                        className="h-9 text-[10px]"
+                        className="h-9 text-[11px]"
                         value={item.foreignCurrency}
                         options={CURRENCY_OPTIONS}
                         onChange={(event) =>
@@ -2552,9 +2607,15 @@ function ForeignBatchTable({
                         }
                       />
                     </MiniField>
+                    <MiniField label="Exchange Rate (BDT)" required>
+                      <BatchNumberInput
+                        value={item.foreignExchangeRate}
+                        onChange={(value) => onChange(item.id, { foreignExchangeRate: value })}
+                      />
+                    </MiniField>
                     <MiniField label="Shipping Method" required>
                       <SelectInput
-                        className="h-9 text-[9px]"
+                        className="h-9 text-[10.5px]"
                         value={item.foreignShippingMethod}
                         options={SHIPPING_METHOD_OPTIONS}
                         onChange={(event) => {
@@ -2585,28 +2646,18 @@ function ForeignBatchTable({
                     <MiniField label="Total (BDT)">
                       <ReadOnlyCostValue value={formatCompactMoney(preview.foreignProductValue)} />
                     </MiniField>
-                    {!isLc && (
-                      <MiniField label={`Foreign Transport Fee (${currency})`}>
-                        <BatchNumberInput
-                          value={item.foreignTransportCharge}
-                          onChange={(value) => onChange(item.id, { foreignTransportCharge: value })}
-                        />
-                      </MiniField>
-                    )}
-                  </div>
                 </div>
               </div>
 
               {isLc ? (
                 <div>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="text-[10.5px] font-semibold text-biz-text">LC Charges (BDT)</h4>
-                    <span className="text-[9px] text-biz-muted">
+                    <h4 className="text-[12px] font-semibold text-biz-text">LC Charges (BDT)</h4>
+                    <span className="text-[10.5px] leading-4 text-biz-muted">
                       Enter only applicable charges. Blank fields are treated as BDT 0.
                     </span>
                   </div>
-                  <div className="overflow-x-auto pb-1">
-                    <div className="grid min-w-[780px] grid-cols-6 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
                       <MiniField label="Bank LC Fee (BDT)">
                         <BatchNumberInput
                           value={item.bankLcCharge}
@@ -2639,27 +2690,39 @@ function ForeignBatchTable({
                           }
                         />
                       </MiniField>
+                      <MiniField label="Other Cost (BDT)">
+                        <BatchNumberInput
+                          value={item.foreignOtherCost}
+                          onChange={(value) => onChange(item.id, { foreignOtherCost: value })}
+                        />
+                      </MiniField>
                       <MiniField label="Total Price (BDT)">
                         <ReadOnlyCostValue
                           value={formatCompactMoney(preview.foreignLanded)}
                           emphasized
                         />
                       </MiniField>
-                    </div>
                   </div>
                 </div>
               ) : (
                 <div>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="text-[10.5px] font-semibold text-biz-text">
+                    <h4 className="text-[12px] font-semibold text-biz-text">
                       Shipping & Bangladesh Cost (BDT)
                     </h4>
-                    <span className="text-[9px] text-biz-muted">
+                    <span className="text-[10.5px] leading-4 text-biz-muted">
                       Default: {isAir ? "Air BDT 800/KG" : "Sea BDT 400/KG"} — editable
                     </span>
                   </div>
-                  <div className="overflow-x-auto pb-1">
-                    <div className="grid min-w-[780px] grid-cols-6 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+                      <MiniField label={`Foreign Transport Fee (${currency})`}>
+                        <BatchNumberInput
+                          value={item.foreignTransportCharge}
+                          onChange={(value) =>
+                            onChange(item.id, { foreignTransportCharge: value })
+                          }
+                        />
+                      </MiniField>
                       <MiniField label="Shipping Weight (KG)" required>
                         <BatchNumberInput
                           value={item.shippingWeightKg}
@@ -2699,13 +2762,18 @@ function ForeignBatchTable({
                           onChange={(value) => onChange(item.id, { domesticTransportCost: value })}
                         />
                       </MiniField>
+                      <MiniField label="Other Cost (BDT)">
+                        <BatchNumberInput
+                          value={item.foreignOtherCost}
+                          onChange={(value) => onChange(item.id, { foreignOtherCost: value })}
+                        />
+                      </MiniField>
                       <MiniField label="Total Price (BDT)">
                         <ReadOnlyCostValue
                           value={formatCompactMoney(preview.foreignLanded)}
                           emphasized
                         />
                       </MiniField>
-                    </div>
                   </div>
                 </div>
               )}
@@ -2735,7 +2803,7 @@ function BatchNumberInput({
 }) {
   return (
     <TextInput
-      className={`h-8 min-w-0 px-1 text-right text-[8.5px] ${NUMBER_INPUT_CLASS}`}
+      className={`h-9 min-w-0 px-2 text-right text-[10.5px] ${NUMBER_INPUT_CLASS}`}
       type="number"
       min="0"
       step="any"
@@ -3024,7 +3092,10 @@ function MiniField({
 }) {
   return (
     <label className="min-w-0">
-      <span className="mb-1 block truncate text-[10px] text-biz-muted" title={label}>
+      <span
+        className="mb-1.5 block min-h-[28px] whitespace-normal text-[11px] font-medium leading-[14px] text-biz-text/75"
+        title={label}
+      >
         {label} {required && <RequiredMark />}
       </span>
       {children}

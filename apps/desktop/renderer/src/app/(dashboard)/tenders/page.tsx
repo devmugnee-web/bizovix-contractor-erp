@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Award,
@@ -102,6 +102,7 @@ export default function TendersListPage() {
     { label: "Tender List" },
   ]);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [draft, setDraft] = React.useState<FilterDraft>(EMPTY_DRAFT);
   const [query, setQuery] = React.useState<TenderQuery>({ page: 1, limit: 10 });
@@ -134,6 +135,18 @@ export default function TendersListPage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  React.useEffect(() => {
+    if (searchParams.get("addTender") !== "1") return;
+    const timer = window.setTimeout(() => {
+      setCreateTenderOpen(true);
+      const params = new URLSearchParams(window.location.search);
+      params.delete("addTender");
+      const queryString = params.toString();
+      window.history.replaceState(null, "", `/tenders${queryString ? `?${queryString}` : ""}`);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [searchParams]);
 
   function closeSuccess() {
     setSuccessMessage("");

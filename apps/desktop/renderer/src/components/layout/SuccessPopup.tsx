@@ -14,6 +14,8 @@ export interface SuccessPopupProps {
   onSecondary?: () => void;
   dismissOnBackdrop?: boolean;
   dismissOnEscape?: boolean;
+  showControls?: boolean;
+  autoDismissMs?: number;
 }
 
 export function SuccessPopup({
@@ -27,6 +29,8 @@ export function SuccessPopup({
   onSecondary,
   dismissOnBackdrop = true,
   dismissOnEscape = true,
+  showControls = true,
+  autoDismissMs,
 }: SuccessPopupProps) {
   const dialogRef = React.useRef<HTMLDivElement>(null);
 
@@ -70,6 +74,12 @@ export function SuccessPopup({
     };
   }, [dismissOnEscape, onClose, open]);
 
+  React.useEffect(() => {
+    if (!open || !autoDismissMs) return;
+    const timer = window.setTimeout(onClose, autoDismissMs);
+    return () => window.clearTimeout(timer);
+  }, [autoDismissMs, onClose, open]);
+
   if (!open) return null;
 
   return (
@@ -87,42 +97,49 @@ export function SuccessPopup({
         className="relative w-full max-w-sm rounded-xl border border-biz-success/20 bg-white px-6 py-7 text-center shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <button
-          type="button"
-          aria-label="Close success message"
-          onClick={onClose}
-          className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-biz-muted hover:bg-biz-bg hover:text-biz-text"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {showControls && (
+          <button
+            type="button"
+            aria-label="Close success message"
+            onClick={onClose}
+            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-biz-muted hover:bg-biz-bg hover:text-biz-text"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-biz-success-soft text-biz-success">
           <CheckCircle2 className="h-8 w-8" />
         </span>
         <h2 id="success-popup-title" className="mt-4 text-[18px] font-bold text-biz-navy">
           {title}
         </h2>
-        <p id="success-popup-message" className="mt-2 text-[13px] font-medium leading-5 text-biz-text">
+        <p
+          id="success-popup-message"
+          className="mt-2 text-[13px] font-medium leading-5 text-biz-text"
+        >
           {message}
         </p>
-        <div className="mt-5 flex flex-col-reverse justify-center gap-2 sm:flex-row">
-          {secondaryLabel && (
+        {showControls && (
+          <div className="mt-5 flex flex-col-reverse justify-center gap-2 sm:flex-row">
+            {secondaryLabel && (
+              <button
+                type="button"
+                onClick={onSecondary ?? onClose}
+                className="h-9 rounded-md border border-biz-border bg-white px-5 text-[12px] font-semibold text-biz-navy hover:bg-biz-bg"
+              >
+                {secondaryLabel}
+              </button>
+            )}
             <button
               type="button"
-              onClick={onSecondary ?? onClose}
-              className="h-9 rounded-md border border-biz-border bg-white px-5 text-[12px] font-semibold text-biz-navy hover:bg-biz-bg"
+              autoFocus
+              onClick={onPrimary ?? onClose}
+              className="h-9 rounded-md bg-biz-blue px-5 text-[12px] font-semibold text-white hover:bg-biz-blue/90"
             >
-              {secondaryLabel}
+              {primaryLabel}
             </button>
-          )}
-          <button
-            type="button"
-            autoFocus
-            onClick={onPrimary ?? onClose}
-            className="h-9 rounded-md bg-biz-blue px-5 text-[12px] font-semibold text-white hover:bg-biz-blue/90"
-          >
-            {primaryLabel}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

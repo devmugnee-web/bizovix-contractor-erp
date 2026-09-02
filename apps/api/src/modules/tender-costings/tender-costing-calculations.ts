@@ -1,9 +1,6 @@
 import { BadRequestException } from "@nestjs/common";
 import { Prisma } from "@bizovix/database";
-import type {
-  TenderCostingShippingMethod,
-  TenderCostingShippingRateBasis,
-} from "@bizovix/types";
+import type { TenderCostingShippingMethod, TenderCostingShippingRateBasis } from "@bizovix/types";
 
 interface CostingItemInput {
   quantity: string | number;
@@ -83,9 +80,7 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
   const localOtherCost = amount(item.localOtherCost, "Local other cost");
   const localBase = quantity.mul(localUnitPrice);
   const localTaxable = localBase.minus(localBase.mul(localDiscountPercent).div(HUNDRED));
-  const localCostBeforeProfit = localTaxable
-    .plus(localTransportCost)
-    .plus(localOtherCost);
+  const localCostBeforeProfit = localTaxable.plus(localTransportCost).plus(localOtherCost);
   const localProfit = localCostBeforeProfit.mul(marginPercent).div(HUNDRED);
   const localSubtotal = localCostBeforeProfit.plus(localProfit);
   const localTotalCost = localSubtotal
@@ -107,27 +102,23 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
   );
   const foreignImportDutyIncluded = item.foreignImportDutyIncluded ?? false;
   const isDoorToDoor = foreignShippingMethod.startsWith("DOOR_TO_DOOR");
-  const foreignTransportCharge = amount(
-    item.foreignTransportCharge,
-    "Foreign transport charge",
-  );
+  const foreignTransportCharge = amount(item.foreignTransportCharge, "Foreign transport charge");
   const customsDeclarationCharge = amount(
     item.customsDeclarationCharge,
     "Customs declaration charge",
   );
   const shippingWeightKg = amount(item.shippingWeightKg, "Shipping weight");
   const shippingVolumeCbm = amount(item.shippingVolumeCbm, "Shipping volume");
-  const shippingRateBasis = item.shippingRateBasis ?? (
-    foreignShippingMethod.endsWith("AIR") ? "PER_KG" : "PER_CBM"
-  );
+  const shippingRateBasis =
+    item.shippingRateBasis ?? (foreignShippingMethod.endsWith("AIR") ? "PER_KG" : "PER_CBM");
   const shippingRate = amount(item.shippingRate, "Shipping rate");
-  const domesticTransportCost = amount(
-    item.domesticTransportCost,
-    "Domestic transport cost",
-  );
+  const domesticTransportCost = amount(item.domesticTransportCost, "Domestic transport cost");
   const shippingCostBdt = shippingWeightKg.mul(shippingRate);
   const customsDutyPercent = percentage(item.customsDutyPercent, "Customs duty percentage");
-  const regulatoryDutyPercent = percentage(item.regulatoryDutyPercent, "Regulatory duty percentage");
+  const regulatoryDutyPercent = percentage(
+    item.regulatoryDutyPercent,
+    "Regulatory duty percentage",
+  );
   const supplementaryDutyPercent = percentage(
     item.supplementaryDutyPercent,
     "Supplementary duty percentage",
@@ -160,8 +151,7 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
       foreignInsuranceCost.gt(0) ||
       cnfCharge.gt(0) ||
       portHandlingCharge.gt(0) ||
-      bankLcCharge.gt(0) ||
-      foreignOtherCost.gt(0));
+      bankLcCharge.gt(0));
   const usesLegacyDetailedLcShipping = !isDoorToDoor && shippingRateBasis !== "FLAT";
   const usesLegacyDetailedShipping = isDoorToDoor
     ? usesLegacyDetailedDoorShipping
@@ -169,10 +159,7 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
   // Door rows use submitted BDT/kg shipping. FLAT is an explicit marker for
   // the new fixed-fee LC model; older PER_CBM/PER_KG LC rows remain legacy.
   const hasSubmittedKgShipping =
-    isDoorToDoor &&
-    !usesLegacyDetailedDoorShipping &&
-    shippingWeightKg.gt(0) &&
-    shippingRate.gt(0);
+    isDoorToDoor && !usesLegacyDetailedDoorShipping && shippingWeightKg.gt(0) && shippingRate.gt(0);
   const foreignOriginTransportBdt = foreignTransportCharge.mul(foreignExchangeRate);
   const legacyInternationalShippingBdt = isDoorToDoor
     ? foreignDoorToDoorCharge
@@ -185,6 +172,7 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
     .plus(internationalShippingBdt)
     .plus(foreignLocalTransportCost)
     .plus(domesticTransportCost)
+    .plus(foreignOtherCost)
     .toDecimalPlaces(2);
   const simplifiedLcCostBeforeProfit = foreignProductValueBdt
     .plus(bankLcCharge)
@@ -192,6 +180,7 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
     .plus(foreignFreightCost)
     .plus(cnfCharge)
     .plus(foreignLocalTransportCost)
+    .plus(foreignOtherCost)
     .toDecimalPlaces(2);
 
   const legacyShippingCharge =
@@ -210,18 +199,15 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
     ? foreignProductValueBdt.plus(legacyShippingSubtotalBdt)
     : foreignProductValueBdt.plus(foreignFreightCost).plus(foreignInsuranceCost);
   const legacyCustomsDuty = legacyAssessableValue.mul(customsDutyPercent).div(HUNDRED);
-  const legacyRegulatoryDuty = legacyAssessableValue
-    .mul(regulatoryDutyPercent)
-    .div(HUNDRED);
-  const legacySupplementaryDuty = legacyAssessableValue
-    .mul(supplementaryDutyPercent)
-    .div(HUNDRED);
-  const legacyTaxBase = isDoorToDoor && foreignImportDutyIncluded
-    ? legacyAssessableValue
-    : legacyAssessableValue
-        .plus(legacyCustomsDuty)
-        .plus(legacyRegulatoryDuty)
-        .plus(legacySupplementaryDuty);
+  const legacyRegulatoryDuty = legacyAssessableValue.mul(regulatoryDutyPercent).div(HUNDRED);
+  const legacySupplementaryDuty = legacyAssessableValue.mul(supplementaryDutyPercent).div(HUNDRED);
+  const legacyTaxBase =
+    isDoorToDoor && foreignImportDutyIncluded
+      ? legacyAssessableValue
+      : legacyAssessableValue
+          .plus(legacyCustomsDuty)
+          .plus(legacyRegulatoryDuty)
+          .plus(legacySupplementaryDuty);
   const legacyCostBeforeProfit = isDoorToDoor
     ? legacyTaxBase.plus(domesticTransportCost).plus(foreignOtherCost)
     : legacyTaxBase
@@ -256,7 +242,9 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
       throw new BadRequestException("Local unit price must be greater than zero for a costed item");
     }
     if (selectedSource === "FOREIGN" && foreignUnitPrice.lte(0)) {
-      throw new BadRequestException("Foreign unit price must be greater than zero for a costed item");
+      throw new BadRequestException(
+        "Foreign unit price must be greater than zero for a costed item",
+      );
     }
     if (sourcingType === "LOCAL_AND_FOREIGN" && !selectedSource) {
       throw new BadRequestException("Select Local or Foreign for every compared costed item");
@@ -397,11 +385,12 @@ export function calculateTenderCostingTotals(input: CostingTotalsInput) {
   const estimatedCost = preContingency.plus(contingencyAmount).toDecimalPlaces(2);
   const hasSourcingItems = input.items.some((item) => !!item.sourcingType);
   const ourCost = itemOurCost.plus(additionalCost).toDecimalPlaces(2);
-  const marginPercent = hasSourcingItems && itemOurCost.gt(0)
-    ? itemProfit.mul(HUNDRED).div(itemOurCost).toDecimalPlaces(4)
-    : estimatedCost.gt(0)
-      ? estimatedCost.minus(ourCost).mul(HUNDRED).div(estimatedCost).toDecimalPlaces(4)
-      : ZERO;
+  const marginPercent =
+    hasSourcingItems && itemOurCost.gt(0)
+      ? itemProfit.mul(HUNDRED).div(itemOurCost).toDecimalPlaces(4)
+      : estimatedCost.gt(0)
+        ? estimatedCost.minus(ourCost).mul(HUNDRED).div(estimatedCost).toDecimalPlaces(4)
+        : ZERO;
 
   return {
     calculatedItems,

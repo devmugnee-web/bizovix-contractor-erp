@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { Prisma, TenderCostingStatus } from "@bizovix/database";
 import type { PaginationMeta } from "@bizovix/types";
 import { buildPaginationMeta } from "@bizovix/utils";
@@ -180,7 +185,13 @@ export class TenderCostingsService {
             OR: [
               { tender: { egpTenderId: { contains: query.search, mode: "insensitive" } } },
               { tender: { workName: { contains: query.search, mode: "insensitive" } } },
-              { tender: { organizationMaster: { shortName: { contains: query.search, mode: "insensitive" } } } },
+              {
+                tender: {
+                  organizationMaster: {
+                    shortName: { contains: query.search, mode: "insensitive" },
+                  },
+                },
+              },
               { preparedByName: { contains: query.search, mode: "insensitive" } },
               { assignedToName: { contains: query.search, mode: "insensitive" } },
             ],
@@ -250,7 +261,8 @@ export class TenderCostingsService {
       where: { organizationId, userId, user: { isActive: true } },
       include: { user: { select: { id: true, name: true } } },
     });
-    if (!membership) throw new BadRequestException("Selected user is not an active organization member");
+    if (!membership)
+      throw new BadRequestException("Selected user is not an active organization member");
     return membership.user;
   }
 
@@ -266,7 +278,9 @@ export class TenderCostingsService {
     });
     if (!existing) throw new NotFoundException("Tender costing not found");
     if (existing.status === "CANCELLED") {
-      throw new BadRequestException(`A ${existing.status.toLowerCase()} costing budget cannot be edited`);
+      throw new BadRequestException(
+        `A ${existing.status.toLowerCase()} costing budget cannot be edited`,
+      );
     }
 
     const costingBudget = new Prisma.Decimal(dto.costingBudget).toDecimalPlaces(2);
@@ -275,7 +289,9 @@ export class TenderCostingsService {
       data: { costingBudget, version: { increment: 1 } },
     });
     if (updated.count !== 1) {
-      throw new ConflictException("Tender costing changed in another session. Reload and try again.");
+      throw new ConflictException(
+        "Tender costing changed in another session. Reload and try again.",
+      );
     }
 
     const saved = await this.prisma.tenderCosting.findFirstOrThrow({
@@ -307,8 +323,8 @@ export class TenderCostingsService {
     if (existing.status === "CANCELLED") {
       throw new BadRequestException(`A ${existing.status.toLowerCase()} costing cannot be edited`);
     }
-    if (existing.status === "COMPLETED" && dto.status !== TenderCostingStatus.COMPLETED) {
-      throw new BadRequestException("A completed costing must remain completed when it is updated");
+    if (existing.status === "COMPLETED" && dto.status === TenderCostingStatus.READY) {
+      throw new BadRequestException("A completed costing can only be reopened as In Progress");
     }
     if (!existing.costingBudget || existing.costingBudget.lte(0)) {
       throw new BadRequestException(
@@ -320,7 +336,9 @@ export class TenderCostingsService {
       dto.status !== TenderCostingStatus.IN_PROGRESS &&
       dto.status !== TenderCostingStatus.COMPLETED
     ) {
-      throw new BadRequestException("Costing can only be saved as Ready, In Progress, or Completed");
+      throw new BadRequestException(
+        "Costing can only be saved as Ready, In Progress, or Completed",
+      );
     }
     if (dto.status !== TenderCostingStatus.READY && dto.items.length === 0) {
       throw new BadRequestException("At least one costing item is required before submission");
@@ -329,7 +347,9 @@ export class TenderCostingsService {
       dto.status === TenderCostingStatus.COMPLETED &&
       dto.items.some((item) => item.costingStatus !== "COSTED")
     ) {
-      throw new BadRequestException("Complete and select the source for every item before finalizing");
+      throw new BadRequestException(
+        "Complete and select the source for every item before finalizing",
+      );
     }
     if (
       dto.status === TenderCostingStatus.COMPLETED &&
@@ -396,7 +416,9 @@ export class TenderCostingsService {
         },
       });
       if (updated.count !== 1) {
-        throw new ConflictException("Tender costing changed in another session. Reload and try again.");
+        throw new ConflictException(
+          "Tender costing changed in another session. Reload and try again.",
+        );
       }
 
       await tx.tenderCostingItem.deleteMany({ where: { organizationId, costingId: id } });

@@ -181,7 +181,7 @@ describe("calculateTenderCostingTotals", () => {
   });
 
   it.each(["DOOR_TO_DOOR_SEA", "DOOR_TO_DOOR_AIR"] as const)(
-    "adds each simplified Door-to-Door logistics stage exactly once for %s",
+    "adds each simplified Door-to-Door logistics stage and optional other cost once for %s",
     (foreignShippingMethod) => {
       const result = calculateTenderCostingTotals({
         items: [
@@ -199,6 +199,7 @@ describe("calculateTenderCostingTotals", () => {
             shippingRate: 500,
             foreignLocalTransportCost: 400,
             domesticTransportCost: 500,
+            foreignOtherCost: 600,
           },
         ],
         freightCost: 0,
@@ -207,14 +208,14 @@ describe("calculateTenderCostingTotals", () => {
         contingencyPercent: 0,
       });
 
-      expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("3200.00");
-      expect(result.ourCost.toFixed(2)).toBe("3200.00");
-      expect(result.estimatedCost.toFixed(2)).toBe("3200.00");
+      expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("3800.00");
+      expect(result.ourCost.toFixed(2)).toBe("3800.00");
+      expect(result.estimatedCost.toFixed(2)).toBe("3800.00");
     },
   );
 
   it.each(["LC_SEA", "LC_AIR"] as const)(
-    "uses exactly the five simplified LC fees for %s",
+    "uses the simplified LC fees and optional other cost for %s",
     (foreignShippingMethod) => {
       const result = calculateTenderCostingTotals({
         items: [
@@ -237,7 +238,7 @@ describe("calculateTenderCostingTotals", () => {
             foreignTaxPercent: 2,
             foreignTransportCharge: 90000,
             foreignInsuranceCost: 90000,
-            foreignOtherCost: 90000,
+            foreignOtherCost: 600,
             domesticTransportCost: 90000,
             customsDutyPercent: 50,
             regulatoryDutyPercent: 50,
@@ -252,10 +253,10 @@ describe("calculateTenderCostingTotals", () => {
 
       const item = result.calculatedItems[0]!;
       expect(item.foreignProductValueBdt.toFixed(2)).toBe("10000.00");
-      expect(item.foreignLandedCost.toFixed(2)).toBe("11500.00");
-      expect(item.ourCost.toFixed(2)).toBe("11500.00");
-      expect(item.profitAmount.toFixed(2)).toBe("1150.00");
-      expect(result.estimatedCost.toFixed(2)).toBe("13535.50");
+      expect(item.foreignLandedCost.toFixed(2)).toBe("12100.00");
+      expect(item.ourCost.toFixed(2)).toBe("12100.00");
+      expect(item.profitAmount.toFixed(2)).toBe("1210.00");
+      expect(result.estimatedCost.toFixed(2)).toBe("14241.70");
     },
   );
 
