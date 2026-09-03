@@ -36,6 +36,8 @@ describe("SaveTenderCostingDto", () => {
       installationCost: 0,
       otherCost: 0,
       contingencyPercent: 0,
+      lcContainerFee: 90000,
+      lcContainerAllocationMethod: "EQUAL",
       validityDays: 30,
       items: [
         {
@@ -74,6 +76,28 @@ describe("SaveTenderCostingDto", () => {
     });
 
     expect(errors).toEqual([]);
+  });
+
+  it("rejects an invalid LC container allocation", async () => {
+    const payload = plainToInstance(SaveTenderCostingDto, {
+      version: 1,
+      status: "IN_PROGRESS",
+      costingDate: "2026-09-03",
+      currency: "BDT",
+      exchangeRate: 1,
+      costingVersion: 1,
+      freightCost: 0,
+      installationCost: 0,
+      otherCost: 0,
+      contingencyPercent: 0,
+      lcContainerFee: -1,
+      lcContainerAllocationMethod: "BY_QUANTITY",
+      items: [],
+    });
+
+    const errors = await validate(payload);
+    expect(errors.some((error) => error.property === "lcContainerFee")).toBe(true);
+    expect(errors.some((error) => error.property === "lcContainerAllocationMethod")).toBe(true);
   });
 
   it("rejects an unsupported shipping rate basis and negative Door-to-Door costs", async () => {

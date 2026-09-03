@@ -1200,39 +1200,41 @@ model Tender {
 }
 
 model TenderCosting {
-  id                     String              @id @default(cuid())
-  organizationId         String
-  tenderId               String
-  status                 TenderCostingStatus @default(READY)
-  costingDate            DateTime            @default(now())
-  source                 String?
-  currency               String              @default("BDT")
-  exchangeRate           Decimal             @default(1) @db.Decimal(18, 6)
-  costingVersion         Int                 @default(1)
-  remarks                String?
-  preparedByUserId       String?
-  preparedByName         String?
-  costingBudget          Decimal?            @db.Decimal(18, 2)
-  estimatedValue         Decimal             @default(0) @db.Decimal(18, 2)
-  estimatedCost          Decimal             @default(0) @db.Decimal(18, 2)
-  ourCost                Decimal             @default(0) @db.Decimal(18, 2)
-  marginPercent          Decimal             @default(0) @db.Decimal(7, 4)
-  freightCost            Decimal             @default(0) @db.Decimal(18, 2)
-  installationCost       Decimal             @default(0) @db.Decimal(18, 2)
-  otherCost              Decimal             @default(0) @db.Decimal(18, 2)
-  contingencyPercent     Decimal             @default(0) @db.Decimal(7, 4)
-  contingencyAmount      Decimal             @default(0) @db.Decimal(18, 2)
-  validityDays           Int?
-  paymentTermId          String?
-  deliveryTime           String?
-  warranty               String?
-  assignedToUserId       String?
-  assignedToName         String?
-  approvedForCostingAt   DateTime
-  approvedForCostingById String?
-  version                Int                 @default(1)
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
+  id                          String              @id @default(cuid())
+  organizationId              String
+  tenderId                    String
+  status                      TenderCostingStatus @default(READY)
+  costingDate                 DateTime            @default(now())
+  source                      String?
+  currency                    String              @default("BDT")
+  exchangeRate                Decimal             @default(1) @db.Decimal(18, 6)
+  costingVersion              Int                 @default(1)
+  remarks                     String?
+  preparedByUserId            String?
+  preparedByName              String?
+  costingBudget               Decimal?            @db.Decimal(18, 2)
+  lcContainerFee              Decimal             @default(0) @db.Decimal(18, 2)
+  lcContainerAllocationMethod String              @default("EQUAL")
+  estimatedValue              Decimal             @default(0) @db.Decimal(18, 2)
+  estimatedCost               Decimal             @default(0) @db.Decimal(18, 2)
+  ourCost                     Decimal             @default(0) @db.Decimal(18, 2)
+  marginPercent               Decimal             @default(0) @db.Decimal(7, 4)
+  freightCost                 Decimal             @default(0) @db.Decimal(18, 2)
+  installationCost            Decimal             @default(0) @db.Decimal(18, 2)
+  otherCost                   Decimal             @default(0) @db.Decimal(18, 2)
+  contingencyPercent          Decimal             @default(0) @db.Decimal(7, 4)
+  contingencyAmount           Decimal             @default(0) @db.Decimal(18, 2)
+  validityDays                Int?
+  paymentTermId               String?
+  deliveryTime                String?
+  warranty                    String?
+  assignedToUserId            String?
+  assignedToName              String?
+  approvedForCostingAt        DateTime
+  approvedForCostingById      String?
+  version                     Int                 @default(1)
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
 
   organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tender               Tender              @relation(fields: [organizationId, tenderId], references: [organizationId, id], onDelete: Restrict)

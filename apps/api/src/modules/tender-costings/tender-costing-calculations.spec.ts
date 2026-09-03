@@ -289,4 +289,64 @@ describe("calculateTenderCostingTotals", () => {
     expect(result.calculatedItems[0]?.foreignLandedCost.toFixed(2)).toBe("12000.00");
     expect(result.ourCost.toFixed(2)).toBe("12000.00");
   });
+
+  it("allocates one LC container fee equally without changing Door-to-Door rows", () => {
+    const result = calculateTenderCostingTotals({
+      items: [
+        ...[1, 2, 3].map((quantity) => ({
+          quantity,
+          sourcingType: "FOREIGN" as const,
+          foreignShippingMethod: "LC_SEA" as const,
+          shippingRateBasis: "FLAT" as const,
+          foreignUnitPrice: 10,
+          foreignExchangeRate: 10,
+        })),
+        {
+          quantity: 1,
+          sourcingType: "FOREIGN",
+          foreignShippingMethod: "DOOR_TO_DOOR_SEA",
+          shippingRateBasis: "PER_KG",
+          foreignFreightCost: 25,
+        } as const,
+      ],
+      lcContainerFee: 100,
+      lcContainerAllocationMethod: "EQUAL",
+      freightCost: 0,
+      installationCost: 0,
+      otherCost: 0,
+      contingencyPercent: 0,
+    });
+
+    expect(result.calculatedItems.slice(0, 3).map((item) => item.foreignFreightCost.toFixed(2))).toEqual([
+      "33.33",
+      "33.33",
+      "33.34",
+    ]);
+    expect(result.calculatedItems[3]?.foreignFreightCost.toFixed(2)).toBe("25.00");
+  });
+
+  it.each([
+    ["WEIGHT", [1, 3], ["25.00", "75.00"]],
+    ["VALUE", [1, 3], ["25.00", "75.00"]],
+  ] as const)("allocates an LC container fee by %s", (method, bases, expected) => {
+    const result = calculateTenderCostingTotals({
+      items: bases.map((basis) => ({
+        quantity: method === "VALUE" ? basis : 1,
+        sourcingType: "FOREIGN",
+        foreignShippingMethod: "LC_SEA",
+        shippingRateBasis: "FLAT",
+        shippingWeightKg: method === "WEIGHT" ? basis : 0,
+        foreignUnitPrice: 10,
+        foreignExchangeRate: 10,
+      })),
+      lcContainerFee: 100,
+      lcContainerAllocationMethod: method,
+      freightCost: 0,
+      installationCost: 0,
+      otherCost: 0,
+      contingencyPercent: 0,
+    });
+
+    expect(result.calculatedItems.map((item) => item.foreignFreightCost.toFixed(2))).toEqual(expected);
+  });
 });

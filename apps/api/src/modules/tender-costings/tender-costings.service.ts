@@ -55,6 +55,8 @@ function toListDto(record: ListRecord) {
     preparedByUserId: record.preparedByUserId,
     preparedByName: record.preparedBy?.name ?? record.preparedByName,
     costingBudget: record.costingBudget ? decimal(record.costingBudget) : null,
+    lcContainerFee: decimal(record.lcContainerFee),
+    lcContainerAllocationMethod: record.lcContainerAllocationMethod,
     estimatedValue: decimal(record.estimatedValue),
     estimatedCost: decimal(record.estimatedCost),
     ourCost: decimal(record.ourCost),
@@ -397,6 +399,9 @@ export class TenderCostingsService {
           remarks: dto.remarks?.trim() || null,
           preparedByUserId: preparedBy?.id ?? null,
           preparedByName: preparedBy?.name ?? dto.preparedByName?.trim() ?? null,
+          lcContainerFee: new Prisma.Decimal(dto.lcContainerFee ?? existing.lcContainerFee),
+          lcContainerAllocationMethod:
+            dto.lcContainerAllocationMethod ?? existing.lcContainerAllocationMethod,
           estimatedValue: existing.tender.contractValue,
           estimatedCost: totals.estimatedCost,
           ourCost: totals.ourCost,

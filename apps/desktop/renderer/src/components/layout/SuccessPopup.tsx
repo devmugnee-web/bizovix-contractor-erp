@@ -15,6 +15,7 @@ export interface SuccessPopupProps {
   dismissOnBackdrop?: boolean;
   dismissOnEscape?: boolean;
   showControls?: boolean;
+  showActions?: boolean;
   autoDismissMs?: number;
 }
 
@@ -30,6 +31,7 @@ export function SuccessPopup({
   dismissOnBackdrop = true,
   dismissOnEscape = true,
   showControls = true,
+  showActions = true,
   autoDismissMs,
 }: SuccessPopupProps) {
   const dialogRef = React.useRef<HTMLDivElement>(null);
@@ -81,6 +83,7 @@ export function SuccessPopup({
   }, [autoDismissMs, onClose, open]);
 
   if (!open) return null;
+  const compact = !showActions;
 
   return (
     <div
@@ -94,7 +97,11 @@ export function SuccessPopup({
         aria-modal="true"
         aria-labelledby="success-popup-title"
         aria-describedby="success-popup-message"
-        className="relative w-full max-w-sm rounded-xl border border-biz-success/20 bg-white px-6 py-7 text-center shadow-2xl"
+        className={`relative w-full border border-biz-success/20 bg-white shadow-2xl ${
+          compact
+            ? "aspect-square max-w-[300px] rounded-xl px-6 py-6"
+            : "max-w-sm rounded-xl px-6 py-7 text-center"
+        }`}
         onClick={(event) => event.stopPropagation()}
       >
         {showControls && (
@@ -102,24 +109,47 @@ export function SuccessPopup({
             type="button"
             aria-label="Close success message"
             onClick={onClose}
-            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-biz-muted hover:bg-biz-bg hover:text-biz-text"
+            className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full text-biz-muted transition-colors hover:bg-biz-bg hover:text-biz-text"
           >
             <X className="h-4 w-4" />
           </button>
         )}
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-biz-success-soft text-biz-success">
-          <CheckCircle2 className="h-8 w-8" />
-        </span>
-        <h2 id="success-popup-title" className="mt-4 text-[18px] font-bold text-biz-navy">
-          {title}
-        </h2>
-        <p
-          id="success-popup-message"
-          className="mt-2 text-[13px] font-medium leading-5 text-biz-text"
+        <div
+          className={
+            compact ? "flex h-full flex-col items-center justify-center px-2 text-center" : ""
+          }
         >
-          {message}
-        </p>
-        {showControls && (
+          <span
+            className={`flex shrink-0 items-center justify-center rounded-full bg-biz-success-soft text-biz-success ${
+              compact ? "h-14 w-14 ring-4 ring-biz-success/5" : "mx-auto h-14 w-14"
+            }`}
+          >
+            <CheckCircle2 className="h-8 w-8" />
+          </span>
+          <div className={compact ? "min-w-0" : ""}>
+            <h2
+              id="success-popup-title"
+              className={
+                compact
+                  ? "mt-4 text-[17px] font-bold text-biz-navy"
+                  : "mt-4 text-[18px] font-bold text-biz-navy"
+              }
+            >
+              {title}
+            </h2>
+            <p
+              id="success-popup-message"
+              className={
+                compact
+                  ? "mt-2 text-[12.5px] leading-5 text-biz-muted"
+                  : "mt-2 text-[13px] font-medium leading-5 text-biz-text"
+              }
+            >
+              {message}
+            </p>
+          </div>
+        </div>
+        {showControls && showActions && (
           <div className="mt-5 flex flex-col-reverse justify-center gap-2 sm:flex-row">
             {secondaryLabel && (
               <button

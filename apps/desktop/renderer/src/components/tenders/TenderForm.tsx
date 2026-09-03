@@ -390,7 +390,7 @@ export function TenderForm({
                 render={({ field }) => (
                   <SelectInput
                     {...field}
-                    placeholder="Select tender type"
+                    placeholder="Select procurement nature"
                     options={TENDER_TYPE_OPTIONS}
                   />
                 )}

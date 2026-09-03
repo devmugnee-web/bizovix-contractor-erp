@@ -9,6 +9,7 @@ export type TenderCostingShippingMethod =
   | "LC_SEA"
   | "LC_AIR";
 export type TenderCostingShippingRateBasis = "PER_CBM" | "PER_KG" | "FLAT";
+export type TenderCostingLcAllocationMethod = "EQUAL" | "WEIGHT" | "VALUE";
 
 export interface TenderCostingUser {
   id: string;
@@ -95,6 +96,8 @@ export interface TenderCostingRecord {
   preparedByUserId: string | null;
   preparedByName: string | null;
   costingBudget: string | null;
+  lcContainerFee: string;
+  lcContainerAllocationMethod: TenderCostingLcAllocationMethod;
   estimatedValue: string;
   estimatedCost: string;
   ourCost: string;
@@ -208,6 +211,8 @@ export interface SaveTenderCostingInput {
   warranty?: string;
   assignedToUserId?: string;
   assignedToName?: string;
+  lcContainerFee?: number;
+  lcContainerAllocationMethod?: TenderCostingLcAllocationMethod;
   items: SaveTenderCostingItemInput[];
 }
 

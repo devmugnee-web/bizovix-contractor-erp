@@ -440,6 +440,17 @@ export class SaveTenderCostingDto {
   @MaxLength(200)
   assignedToName?: string | null;
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  lcContainerFee?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["EQUAL", "WEIGHT", "VALUE"])
+  lcContainerAllocationMethod?: "EQUAL" | "WEIGHT" | "VALUE";
+
   @IsArray()
   @ArrayMaxSize(200)
   @ValidateNested({ each: true })

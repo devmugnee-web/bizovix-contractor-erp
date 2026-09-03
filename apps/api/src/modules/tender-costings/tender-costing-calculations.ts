@@ -1,6 +1,10 @@
 import { BadRequestException } from "@nestjs/common";
 import { Prisma } from "@bizovix/database";
-import type { TenderCostingShippingMethod, TenderCostingShippingRateBasis } from "@bizovix/types";
+import type {
+  TenderCostingLcAllocationMethod,
+  TenderCostingShippingMethod,
+  TenderCostingShippingRateBasis,
+} from "@bizovix/types";
 
 interface CostingItemInput {
   quantity: string | number;
@@ -48,11 +52,61 @@ interface CostingTotalsInput {
   otherCost: string | number;
   contingencyPercent: string | number;
   costingBudget?: string | number | Prisma.Decimal | null;
+  lcContainerFee?: string | number;
+  lcContainerAllocationMethod?: TenderCostingLcAllocationMethod;
 }
 
 const HUNDRED = new Prisma.Decimal(100);
 const ZERO = new Prisma.Decimal(0);
 const ONE = new Prisma.Decimal(1);
+
+function allocateLcContainerFee(input: CostingTotalsInput): CostingItemInput[] {
+  const containerFee = amount(input.lcContainerFee, "LC container fee").toDecimalPlaces(2);
+  if (containerFee.lte(0)) return input.items;
+
+  const allocationMethod = input.lcContainerAllocationMethod ?? "EQUAL";
+  const lcRows = input.items.flatMap((item, index) => {
+    const isForeign =
+      item.sourcingType === "FOREIGN" ||
+      (item.sourcingType === "LOCAL_AND_FOREIGN" && item.selectedSource === "FOREIGN");
+    const isLc = item.foreignShippingMethod?.startsWith("LC_") ?? false;
+    if (!isForeign || !isLc) return [];
+
+    let basis = ONE;
+    if (allocationMethod === "WEIGHT") {
+      basis = amount(item.shippingWeightKg, "Shipping weight");
+    } else if (allocationMethod === "VALUE") {
+      basis = new Prisma.Decimal(item.quantity)
+        .mul(amount(item.foreignUnitPrice, "Foreign unit price"))
+        .mul(new Prisma.Decimal(item.foreignExchangeRate ?? 1));
+    }
+    return [{ index, basis }];
+  });
+  if (lcRows.length === 0) return input.items;
+
+  const submittedBasisTotal = lcRows.reduce((sum, row) => sum.plus(row.basis), ZERO);
+  const useEqualFallback = submittedBasisTotal.lte(0);
+  const basisTotal = useEqualFallback ? new Prisma.Decimal(lcRows.length) : submittedBasisTotal;
+  const allocations = new Map<number, Prisma.Decimal>();
+  let allocated = ZERO;
+
+  lcRows.forEach((row, allocationIndex) => {
+    const isLast = allocationIndex === lcRows.length - 1;
+    const basis = useEqualFallback ? ONE : row.basis;
+    const share = isLast
+      ? containerFee.minus(allocated)
+      : containerFee.mul(basis).div(basisTotal).toDecimalPlaces(2);
+    allocations.set(row.index, share);
+    allocated = allocated.plus(share);
+  });
+
+  return input.items.map((item, index) => {
+    const allocatedFee = allocations.get(index);
+    return allocatedFee
+      ? { ...item, foreignFreightCost: allocatedFee.toFixed(2), shippingRateBasis: "FLAT" }
+      : item;
+  });
+}
 
 function amount(value: string | number | undefined, label: string) {
   const decimal = new Prisma.Decimal(value ?? 0);
@@ -317,7 +371,8 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
 }
 
 export function calculateTenderCostingTotals(input: CostingTotalsInput) {
-  const calculatedItems = input.items.map((item) => {
+  const allocatedItems = allocateLcContainerFee(input);
+  const calculatedItems = allocatedItems.map((item) => {
     const quantity = new Prisma.Decimal(item.quantity);
     if (quantity.lte(0)) throw new BadRequestException("Item quantity must be greater than zero");
     if (item.sourcingType) return calculateSourcingItem(item, quantity);
