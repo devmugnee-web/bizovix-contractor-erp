@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import type { AuthUser } from "@bizovix/types";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequirePermissions } from "../../common/decorators/require-permissions.decorator";
@@ -13,6 +26,11 @@ import {
   TenderCostingVersionDto,
 } from "./dto/tender-costing-action.dto";
 import { TendersService } from "./tenders.service";
+import {
+  extractTenderPdf,
+  MAX_TENDER_PDF_BYTES,
+  type UploadedTenderPdf,
+} from "./tender-pdf-extraction";
 
 @Controller("tenders")
 export class TendersController {
@@ -53,6 +71,15 @@ export class TendersController {
   @ResponseMessage("Tender created successfully")
   create(@Body() dto: CreateTenderDto, @CurrentUser() user: AuthUser) {
     return this.tendersService.create(user.organizationId, user.id, dto);
+  }
+
+  @Post("extract-pdf")
+  @HttpCode(200)
+  @RequirePermissions("tender.create")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_TENDER_PDF_BYTES } }))
+  @ResponseMessage("Tender PDF read successfully")
+  extractPdf(@UploadedFile() file: UploadedTenderPdf | undefined) {
+    return extractTenderPdf(file);
   }
 
   @Patch(":id")

@@ -1073,18 +1073,26 @@ export default function TenderCostingEditorPage() {
     );
     if (localItemsToSave.length === 0) return;
 
-    const hasIncompleteLocalItem = localItemsToSave.some(
-      (item) =>
-        !item.costingDate ||
-        !preparedByForItem(item) ||
-        !item.description.trim() ||
-        !item.unit.trim() ||
-        Number(item.quantity) <= 0 ||
-        Number(item.localUnitPrice) <= 0,
-    );
-    if (hasIncompleteLocalItem) {
+    const firstIncompleteLocalItem = localItemsToSave
+      .map((item) => {
+        const missingFields: string[] = [];
+        if (!item.costingDate) missingFields.push("Costing Date");
+        if (!preparedByForItem(item)) missingFields.push("Prepared By");
+        if (!item.description.trim()) missingFields.push("Product Name");
+        if (!item.unit.trim()) missingFields.push("Unit");
+        if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
+          missingFields.push("Quantity");
+        }
+        if (!Number.isFinite(Number(item.localUnitPrice)) || Number(item.localUnitPrice) <= 0) {
+          missingFields.push("Unit Price");
+        }
+        return { item, missingFields };
+      })
+      .find(({ missingFields }) => missingFields.length > 0);
+    if (firstIncompleteLocalItem) {
+      const rowNumber = items.findIndex((item) => item.id === firstIncompleteLocalItem.item.id) + 1;
       setSaveError(
-        "Complete Product Name, Unit, Quantity and Unit Price for every Local item before saving.",
+        `Local row ${rowNumber}: enter ${firstIncompleteLocalItem.missingFields.join(", ")} before saving.`,
       );
       return;
     }

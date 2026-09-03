@@ -567,8 +567,8 @@ export class TendersService {
       },
     });
     if (!existing) throw new NotFoundException("Tender not found");
-    if (existing.status !== "DRAFT" || existing.costingApprovalStatus !== "DRAFT") {
-      throw new BadRequestException("Only an unused draft tender can be deleted");
+    if (existing.costingApprovalStatus === TenderCostingApprovalStatus.APPROVED) {
+      throw new BadRequestException("An approved tender cannot be deleted");
     }
 
     const linkedCount = Object.values(existing._count).reduce((sum, count) => sum + count, 0);
@@ -580,6 +580,16 @@ export class TendersService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        const deleted = await tx.tender.deleteMany({
+          where: {
+            id,
+            organizationId,
+            costingApprovalStatus: { not: TenderCostingApprovalStatus.APPROVED },
+          },
+        });
+        if (deleted.count !== 1) {
+          throw new BadRequestException("An approved tender cannot be deleted");
+        }
         await this.auditLogService.record(
           {
             organizationId,
@@ -592,15 +602,13 @@ export class TendersService {
               tenderId: existing.egpTenderId,
               workName: existing.workName,
               status: existing.status,
+              costingApprovalStatus: existing.costingApprovalStatus,
               createdById: existing.createdById,
               createdAt: existing.createdAt,
             },
           },
           tx,
         );
-        await tx.tender.delete({
-          where: { organizationId_id: { organizationId, id } },
-        });
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {

@@ -9,6 +9,7 @@ import type {
   TenderCostingApprovalResult,
   TenderDetail,
   TenderOptions,
+  TenderPdfExtractionResult,
   TenderQuery,
   TenderRecord,
   TenderStats,
@@ -45,6 +46,15 @@ export function useTenderOptions() {
   return useQuery({
     queryKey: queryKeys.tenderOptions,
     queryFn: () => apiRequest<TenderOptions>("/tenders/options"),
+  });
+}
+
+export function extractTenderPdf(file: File) {
+  const body = new FormData();
+  body.append("file", file);
+  return apiRequest<TenderPdfExtractionResult>("/tenders/extract-pdf", {
+    method: "POST",
+    body,
   });
 }
 

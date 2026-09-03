@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import { Building2, Check, Save } from "lucide-react";
+import { Building2, Check, FileCheck2, LoaderCircle, Save, UploadCloud } from "lucide-react";
 import {
   ApiError,
+  extractTenderPdf,
   useCreateTender,
   useSubmitTenderForCostingApproval,
   useTenderOptions,
@@ -117,11 +118,17 @@ export function TenderForm({
 
   const [duplicate, setDuplicate] = React.useState<DuplicateTenderState | null>(null);
   const [saveError, setSaveError] = React.useState("");
+  const [pdfImportError, setPdfImportError] = React.useState("");
+  const [pdfImportNotice, setPdfImportNotice] = React.useState("");
+  const [isReadingPdf, setIsReadingPdf] = React.useState(false);
+  const pdfInputRef = React.useRef<HTMLInputElement>(null);
 
   const {
     control,
     register,
     handleSubmit,
+    clearErrors,
+    setValue,
     formState: { errors },
   } = useForm<TenderFormInput, unknown, CreateTenderFormValues>({
     resolver: zodResolver(createTenderSchema),
@@ -139,6 +146,70 @@ export function TenderForm({
   });
 
   const users = tenderOptions.data?.users ?? [];
+
+  async function readTenderPdf(file: File | undefined) {
+    if (!file || isReadingPdf) return;
+    setPdfImportError("");
+    setPdfImportNotice("");
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      setPdfImportError("Only PDF files can be imported.");
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setPdfImportError("Tender PDF must be 10 MB or smaller.");
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+      return;
+    }
+
+    setIsReadingPdf(true);
+    try {
+      const result = await extractTenderPdf(file);
+      const { data } = result;
+      if (data.egpTenderId) {
+        setValue("egpTenderId", data.egpTenderId, { shouldDirty: true, shouldValidate: true });
+        clearErrors("egpTenderId");
+      }
+      if (data.workName) {
+        setValue("workName", data.workName, { shouldDirty: true, shouldValidate: true });
+        clearErrors("workName");
+      }
+      if (data.tenderType) {
+        setValue("tenderType", data.tenderType, { shouldDirty: true, shouldValidate: true });
+        clearErrors("tenderType");
+      }
+      if (data.procurementMethod) {
+        setValue("procurementMethod", data.procurementMethod, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        clearErrors("procurementMethod");
+      }
+      if (data.submissionDeadline) {
+        setValue("submissionDeadline", data.submissionDeadline, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        clearErrors("submissionDeadline");
+      }
+      if (data.remarks) {
+        setValue("remarks", data.remarks, { shouldDirty: true, shouldValidate: true });
+        clearErrors("remarks");
+      }
+
+      const warningText = result.warnings.length > 0 ? ` ${result.warnings.join(". ")}.` : "";
+      setPdfImportNotice(
+        `${result.extractedFieldCount} field${result.extractedFieldCount === 1 ? "" : "s"} filled from ${result.totalPages} PDF page${result.totalPages === 1 ? "" : "s"}. The PDF was not saved.${warningText}`,
+      );
+    } catch (error) {
+      setPdfImportError(
+        error instanceof ApiError ? error.message : "Could not read this tender PDF.",
+      );
+    } finally {
+      setIsReadingPdf(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  }
 
   function finish(message: string) {
     if (onCompleted) {
@@ -237,6 +308,58 @@ export function TenderForm({
             : "rounded-lg border border-biz-border bg-biz-surface p-6"
         }
       >
+        {mode === "create" && (
+          <div className="mb-6 rounded-md border border-dashed border-blue-300 bg-blue-50/50 p-3">
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              className="hidden"
+              onChange={(event) => void readTenderPdf(event.target.files?.[0])}
+            />
+            <button
+              type="button"
+              disabled={isReadingPdf}
+              onClick={() => pdfInputRef.current?.click()}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                void readTenderPdf(event.dataTransfer.files?.[0]);
+              }}
+              className="flex w-full items-center justify-center gap-3 rounded-sm px-3 py-3 text-left transition-colors hover:bg-blue-100/60 disabled:cursor-wait disabled:opacity-70"
+            >
+              {isReadingPdf ? (
+                <LoaderCircle className="h-6 w-6 shrink-0 animate-spin text-biz-blue" />
+              ) : (
+                <UploadCloud className="h-6 w-6 shrink-0 text-biz-blue" />
+              )}
+              <span>
+                <span className="block text-[13px] font-semibold text-biz-text">
+                  {isReadingPdf ? "Reading tender PDF..." : "Import Tender PDF"}
+                </span>
+                <span className="block text-[11px] text-biz-muted">
+                  Drop a PDF here or click to browse. It fills this form temporarily and is never
+                  saved. Max 10 MB.
+                </span>
+              </span>
+            </button>
+            {pdfImportNotice && (
+              <p
+                aria-live="polite"
+                className="mt-2 flex items-start gap-2 rounded-sm bg-emerald-50 px-3 py-2 text-[11px] font-medium text-emerald-700"
+              >
+                <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{pdfImportNotice} Please review the filled information before saving.</span>
+              </p>
+            )}
+            {pdfImportError && (
+              <p aria-live="polite" className="mt-2 text-[12px] font-medium text-biz-danger">
+                {pdfImportError}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-x-5 gap-y-6 lg:grid-cols-12">
           <div className="lg:col-span-4">
             <FormField
@@ -260,7 +383,7 @@ export function TenderForm({
           </div>
 
           <div className="lg:col-span-4">
-            <FormField label="Tender Type" error={errors.tenderType?.message}>
+            <FormField label="Procurement Nature" error={errors.tenderType?.message}>
               <Controller
                 control={control}
                 name="tenderType"

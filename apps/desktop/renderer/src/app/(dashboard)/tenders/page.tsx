@@ -620,18 +620,20 @@ export default function TendersListPage() {
               <FileEdit className="h-3.5 w-3.5" />
               Edit
             </Link>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-biz-danger hover:bg-biz-danger/5"
-              onClick={() => {
-                setDeleteError("");
-                setDeleteTender(menuAnchor.tender);
-                setMenuAnchor(null);
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </button>
+            {menuAnchor.tender.costingApprovalStatus !== "APPROVED" && (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-biz-danger hover:bg-biz-danger/5"
+                onClick={() => {
+                  setDeleteError("");
+                  setDeleteTender(menuAnchor.tender);
+                  setMenuAnchor(null);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            )}
           </div>
         </>
       )}
@@ -648,13 +650,13 @@ export default function TendersListPage() {
                 {deleteTender.egpTenderId} · {deleteTender.workName}
               </p>
               <p className="mt-1 text-biz-muted">
-                Only an unused draft tender can be deleted. This action cannot be undone.
+                This tender has not been approved for costing. It can be deleted if no workflow
+                records are linked. This action cannot be undone.
               </p>
             </div>
-            {(deleteTender.status !== "DRAFT" ||
-              deleteTender.costingApprovalStatus !== "DRAFT") && (
+            {deleteTender.costingApprovalStatus === "APPROVED" && (
               <p className="text-[12px] font-medium text-biz-danger">
-                This tender has already entered the workflow and cannot be deleted.
+                This tender is already approved for costing and cannot be deleted.
               </p>
             )}
             {deleteError && <p className="text-[12px] text-biz-danger">{deleteError}</p>}
@@ -669,8 +671,7 @@ export default function TendersListPage() {
                 className="bg-biz-danger hover:bg-biz-danger/90"
                 disabled={
                   deleteTenderMutation.isPending ||
-                  deleteTender.status !== "DRAFT" ||
-                  deleteTender.costingApprovalStatus !== "DRAFT"
+                  deleteTender.costingApprovalStatus === "APPROVED"
                 }
                 onClick={deleteSelectedTender}
               >

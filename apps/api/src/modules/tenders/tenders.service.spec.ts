@@ -56,7 +56,7 @@ function setup() {
   const tx = {
     tender: {
       create: jest.fn(),
-      delete: jest.fn(),
+      deleteMany: jest.fn(),
       findFirst: jest.fn(),
       updateMany: jest.fn(),
     },
@@ -291,7 +291,7 @@ describe("TendersService costing intake workflow", () => {
     );
   });
 
-  it("deletes only an unused tenant-scoped draft tender and records the audit", async () => {
+  it("deletes an unused tenant-scoped tender before costing approval and records the audit", async () => {
     const { service, prisma, tx, audit } = setup();
     prisma.tender.findFirst.mockResolvedValue(
       tenderFixture({
@@ -311,13 +311,17 @@ describe("TendersService costing intake workflow", () => {
         },
       }),
     );
-    tx.tender.delete.mockResolvedValue({ id: "tender-1" });
+    tx.tender.deleteMany.mockResolvedValue({ count: 1 });
 
     await expect(service.remove("org-1", "user-1", "tender-1")).resolves.toEqual({
       id: "tender-1",
     });
-    expect(tx.tender.delete).toHaveBeenCalledWith({
-      where: { organizationId_id: { organizationId: "org-1", id: "tender-1" } },
+    expect(tx.tender.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: "tender-1",
+        organizationId: "org-1",
+        costingApprovalStatus: { not: TenderCostingApprovalStatus.APPROVED },
+      },
     });
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: "TENDER_DELETED", entityId: "tender-1" }),
@@ -325,14 +329,94 @@ describe("TendersService costing intake workflow", () => {
     );
   });
 
-  it("refuses to delete a tender that has already entered the workflow", async () => {
+  it("allows deletion while costing approval is pending", async () => {
     const { service, prisma, tx } = setup();
-    prisma.tender.findFirst.mockResolvedValue(tenderFixture({ status: "ONGOING" }));
+    prisma.tender.findFirst.mockResolvedValue(
+      tenderFixture({
+        status: "DRAFT",
+        costingApprovalStatus: TenderCostingApprovalStatus.PENDING_APPROVAL,
+        costing: null,
+        _count: {
+          documentPurchases: 0,
+          tenderSecurities: 0,
+          creditCommitments: 0,
+          performanceGuarantees: 0,
+          receipts: 0,
+          cmsWorks: 0,
+          documents: 0,
+          contracts: 0,
+          workIous: 0,
+        },
+      }),
+    );
+    tx.tender.deleteMany.mockResolvedValue({ count: 1 });
+
+    await expect(service.remove("org-1", "user-1", "tender-1")).resolves.toEqual({
+      id: "tender-1",
+    });
+  });
+
+  it("refuses to delete a tender after costing approval", async () => {
+    const { service, prisma, tx } = setup();
+    prisma.tender.findFirst.mockResolvedValue(
+      tenderFixture({ costingApprovalStatus: TenderCostingApprovalStatus.APPROVED }),
+    );
 
     await expect(service.remove("org-1", "user-1", "tender-1")).rejects.toThrow(
-      "Only an unused draft tender can be deleted",
+      "An approved tender cannot be deleted",
     );
-    expect(tx.tender.delete).not.toHaveBeenCalled();
+    expect(tx.tender.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete an unapproved tender with linked workflow records", async () => {
+    const { service, prisma, tx } = setup();
+    prisma.tender.findFirst.mockResolvedValue(
+      tenderFixture({
+        costing: null,
+        _count: {
+          documentPurchases: 1,
+          tenderSecurities: 0,
+          creditCommitments: 0,
+          performanceGuarantees: 0,
+          receipts: 0,
+          cmsWorks: 0,
+          documents: 0,
+          contracts: 0,
+          workIous: 0,
+        },
+      }),
+    );
+
+    await expect(service.remove("org-1", "user-1", "tender-1")).rejects.toThrow(
+      "This tender has linked workflow records and cannot be deleted",
+    );
+    expect(tx.tender.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("fails closed if the tender becomes approved during deletion", async () => {
+    const { service, prisma, tx, audit } = setup();
+    prisma.tender.findFirst.mockResolvedValue(
+      tenderFixture({
+        costing: null,
+        _count: {
+          documentPurchases: 0,
+          tenderSecurities: 0,
+          creditCommitments: 0,
+          performanceGuarantees: 0,
+          receipts: 0,
+          cmsWorks: 0,
+          documents: 0,
+          contracts: 0,
+          workIous: 0,
+        },
+      }),
+    );
+    tx.tender.deleteMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.remove("org-1", "user-1", "tender-1")).rejects.toThrow(
+      "An approved tender cannot be deleted",
+    );
+    expect(audit.record).not.toHaveBeenCalled();
   });
 
   it("uses versioned tenant-scoped CAS when submitting for costing approval", async () => {

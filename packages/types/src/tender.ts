@@ -165,6 +165,22 @@ export interface CreateTenderInput {
   remarks?: string;
 }
 
+export interface TenderPdfExtractedData {
+  egpTenderId?: string;
+  workName?: string;
+  tenderType?: string;
+  procurementMethod?: TenderProcurementMethod;
+  submissionDeadline?: string;
+  remarks?: string;
+}
+
+export interface TenderPdfExtractionResult {
+  data: TenderPdfExtractedData;
+  extractedFieldCount: number;
+  totalPages: number;
+  warnings: string[];
+}
+
 export type UpdateTenderInput = Partial<CreateTenderInput>;
 
 export interface SubmitTenderForCostingInput {
