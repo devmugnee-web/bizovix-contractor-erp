@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { CheckCircle2, FileEdit, Receipt, Send, ThumbsDown, XCircle } from "lucide-react";
+import { Suspense, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { CheckCircle2, FileEdit, Printer, Receipt, Send, ThumbsDown, XCircle } from "lucide-react";
 import {
   useCancelProjectBill,
   useCertifyProjectBill,
@@ -15,6 +16,7 @@ import { PrimaryButton, SecondaryButton, StatusBadge } from "@bizovix/ui";
 import { formatBDT, formatDate } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { BILL_STATUS_META, BILL_TYPE_META } from "@/lib/project-bills";
+import { billPrintHtml } from "@/lib/bill-print";
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
@@ -35,7 +37,13 @@ function SummaryRow({ label, value, emphasis }: { label: string; value: string; 
 }
 
 export default function BillDetailPage() {
+  return <Suspense fallback={<p>Loading bill…</p>}><BillDetailContent /></Suspense>;
+}
+
+function BillDetailContent() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const [printError, setPrintError] = useState("");
   const bill = useProjectBill(params.id);
   const submitMutation = useSubmitProjectBill();
   const reviewMutation = useStartReviewProjectBill();
@@ -52,8 +60,21 @@ export default function BillDetailPage() {
   const statusMeta = BILL_STATUS_META[b.status];
   const outstanding = Number(b.netCertifiedAmount) - Number(b.receivedAmount);
 
+  function printBill() {
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) { setPrintError("Allow popups to print or save the bill as PDF."); return; }
+    setPrintError("");
+    printWindow.document.write(billPrintHtml(b));
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.requestAnimationFrame(() => printWindow.print());
+  }
+
   return (
     <div className="flex flex-col gap-6">
+      <Link href="/cms/documentation/bill-submission" className="text-xs font-semibold text-biz-blue">← Bill Submission</Link>
+      {searchParams.get("submissionFailed") === "1" && b.status === "DRAFT" && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Your bill was saved as a draft, but submission did not complete. Review it and use Submit to retry.</p>}
+      {(printError || submitMutation.error) && <p role="alert" className="text-sm text-biz-danger">{printError || submitMutation.error?.message}</p>}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
@@ -65,6 +86,7 @@ export default function BillDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <SecondaryButton onClick={printBill}><Printer className="h-4 w-4" />Print / PDF</SecondaryButton>
           {b.status === "DRAFT" && (
             <>
               <Link href={`/cms/bills/${b.id}/edit`}>

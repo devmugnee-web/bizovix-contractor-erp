@@ -9,6 +9,7 @@ import { ContractsService } from "../src/modules/contracts/contracts.service";
 import { ProjectBudgetsService } from "../src/modules/project-budgets/project-budgets.service";
 import { BoqService } from "../src/modules/boq/boq.service";
 import { ProjectBillsService } from "../src/modules/project-bills/project-bills.service";
+import { BillWorkspaceService } from "../src/modules/project-bills/bill-workspace.service";
 import { ReceiptsService } from "../src/modules/receipts/receipts.service";
 import { ProjectClosingService } from "../src/modules/project-closing/project-closing.service";
 import { AccountingService } from "../src/modules/accounting/accounting.service";
@@ -59,6 +60,29 @@ describe("Full service-driven Tender to Project Close lifecycle", () => {
     const budget = await budgets.saveDraft(f.organization.id, f.user.id, work.id, { lines: [{ category: "Execution", description: "Approved execution budget", amount: 800_000 }] });
     await budgets.approve(f.organization.id, f.user.id, work.id, budget.id);
     const item = await boq.create(f.organization.id, f.user.id, work.id, { itemCode: "BOQ-E2E", description: "Complete works", unit: "Lot", contractQty: 10, unitRate: 100_000 });
+
+    // Exercise the Bill Submission path using the same real, service-created project.
+    const workspace = app.get(BillWorkspaceService);
+    expect((await workspace.preparation(f.organization.id, work.id)).ready).toBe(true);
+    const payload = { contractId: contract.id, billDate: "2026-02-01", items: [{ boqItemId: item.id, currentQty: 6 }] };
+    const countBeforePreview = await prisma.projectBill.count({ where: { organizationId: f.organization.id } });
+    expect((await bills.preview(f.organization.id, payload)).grossWorkValue).toBe("600000.00");
+    expect(await prisma.projectBill.count({ where: { organizationId: f.organization.id } })).toBe(countBeforePreview);
+    const concurrent = await Promise.allSettled([
+      bills.saveDraft(f.organization.id, f.user.id, null, payload),
+      bills.saveDraft(f.organization.id, f.user.id, null, payload),
+    ]);
+    expect(concurrent.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(concurrent.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const reserved = concurrent.find((result) => result.status === "fulfilled");
+    if (!reserved || reserved.status !== "fulfilled") throw new Error("Expected one saved draft");
+    expect((await workspace.preparation(f.organization.id, work.id)).items[0]?.remainingQty).toBe("4.000");
+    expect((await workspace.preparation(f.organization.id, work.id, reserved.value.id)).items[0]?.remainingQty).toBe("10.000");
+    await bills.saveDraft(f.organization.id, f.user.id, reserved.value.id, { ...payload, items: [{ boqItemId: item.id, currentQty: 5 }] });
+    expect((await workspace.preparation(f.organization.id, work.id)).items[0]?.pendingQty).toBe("5.000");
+    await bills.cancel(f.organization.id, f.user.id, reserved.value.id);
+    expect((await workspace.preparation(f.organization.id, work.id)).items[0]?.remainingQty).toBe("10.000");
+    expect((await prisma.boqItem.findUniqueOrThrow({ where: { id: item.id } })).executedQty.toString()).toBe("0");
 
     const certifyAndCollect = async (billType: "RUNNING" | "FINAL", qty: number, date: string) => {
       const draft = await bills.saveDraft(f.organization.id, f.user.id, null, { contractId: contract.id, billType, billDate: date, items: [{ boqItemId: item.id, currentQty: qty }] });

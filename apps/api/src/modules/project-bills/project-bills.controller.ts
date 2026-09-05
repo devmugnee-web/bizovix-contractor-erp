@@ -6,10 +6,36 @@ import { ResponseMessage } from "../../common/decorators/response-message.decora
 import { ProjectBillsService } from "./project-bills.service";
 import { SaveProjectBillDto } from "./dto/save-project-bill.dto";
 import { QueryProjectBillDto } from "./dto/query-project-bill.dto";
+import { QueryBillSourceDto } from "./dto/query-bill-source.dto";
+import { BillWorkspaceService } from "./bill-workspace.service";
 
 @Controller("project-bills")
 export class ProjectBillsController {
-  constructor(private readonly service: ProjectBillsService) {}
+  constructor(private readonly service: ProjectBillsService, private readonly workspace: BillWorkspaceService) {}
+
+  @Get("sources")
+  @RequirePermissions("project_bill.read")
+  sources(@Query() query: QueryBillSourceDto, @CurrentUser() user: AuthUser) {
+    return this.workspace.sources(user.organizationId, query);
+  }
+
+  @Get("sources/:tenderId/items")
+  @RequirePermissions("project_bill.read")
+  costingItems(@Param("tenderId") tenderId: string, @CurrentUser() user: AuthUser) {
+    return this.workspace.costingItems(user.organizationId, tenderId);
+  }
+
+  @Get("preparation/:cmsWorkId")
+  @RequirePermissions("project_bill.read")
+  preparation(@Param("cmsWorkId") cmsWorkId: string, @Query("excludeBillId") excludeBillId: string | undefined, @CurrentUser() user: AuthUser) {
+    return this.workspace.preparation(user.organizationId, cmsWorkId, excludeBillId);
+  }
+
+  @Post("preview")
+  @RequirePermissions("project_bill.read")
+  preview(@Body() dto: SaveProjectBillDto, @Query("excludeBillId") excludeBillId: string | undefined, @CurrentUser() user: AuthUser) {
+    return this.service.preview(user.organizationId, dto, excludeBillId);
+  }
 
   @Get()
   @RequirePermissions("project_bill.read")

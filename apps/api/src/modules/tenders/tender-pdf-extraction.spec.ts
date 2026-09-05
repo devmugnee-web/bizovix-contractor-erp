@@ -106,6 +106,72 @@ describe("Tender PDF extraction", () => {
     expect(data).toMatchObject({ paName: "Ms. Ayesha", paDesignation: "Assistant Engineer", paAddress: "12 Main Road", paPhone: "01800123456" });
   });
 
+  it("reads the official PA fields instead of the preceding e-GP office-table headings", () => {
+    const data = parseTenderPdfText(`
+      Office Name PE Name Designation Lead Office
+      Ministry of Public Administration MD. ALAMGIR KABIR Deputy Secretary Yes
+      Procuring Entity Details:
+      Name of Official Inviting
+      Tender/Proposal :
+      MD. ALAMGIR KABIR Designation of Official Inviting Tender/Proposal : Deputy Secretary
+      Address of Official Inviting
+      Tender/Proposal :
+      Address : Bangladesh Secretariat. Dhaka-1000
+      City : Dhaka
+      Contact details of Official Inviting Tender/Proposal : Phone No : 02-9540540
+      Fax No : 02-9545056
+    `);
+    expect(data).toMatchObject({
+      paName: "MD. ALAMGIR KABIR", paDesignation: "Deputy Secretary",
+      paAddress: "Bangladesh Secretariat. Dhaka-1000", paPhone: "02-9540540",
+    });
+  });
+
+  it("does not treat an office table on its own as labelled PA fields", () => {
+    const data = parseTenderPdfText(`Office Name PE Name Designation Lead Office
+      Ministry of Public Administration MD. ALAMGIR KABIR Deputy Secretary Yes`);
+    expect(data.paName).toBeUndefined();
+    expect(data.paDesignation).toBeUndefined();
+  });
+
+  it.each([
+    "Name of Official Inviting Tender/Proposal : Designation of Official Inviting Tender/Proposal : Lead Office",
+    "PA Name : PA Designation : Lead Office",
+    "PE Name : Designation : Lead Office",
+    "Official Inviting Tender/Proposal : Name : Designation : Lead Office",
+  ])("does not copy the next labelled field into an empty PA name: %s", (text) => {
+    const data = parseTenderPdfText(text + " Phone No : 02-9540540");
+    expect(data.paName).toBeUndefined();
+    expect(data.paDesignation).toBe("Lead Office");
+    expect(data.paPhone).toBe("02-9540540");
+  });
+
+  it("keeps missing official names empty instead of falling back to another office", () => {
+    const data = parseTenderPdfText(`PE Name : Another office contact Designation : Director
+      Procuring Entity Details:
+      Name of Official Inviting Tender/Proposal :
+      Designation of Official Inviting Tender/Proposal : Deputy Secretary
+      Phone No : 02-9540540`);
+    expect(data.paName).toBeUndefined();
+    expect(data.paDesignation).toBe("Deputy Secretary");
+  });
+
+  it("preserves name words and ignores unrelated earlier contact labels", () => {
+    const data = parseTenderPdfText(`PE Name : Earlier Contact Designation : Earlier Role
+      Name of Official Inviting Tender/Proposal : Md. City Ali
+      Designation of Official Inviting Tender/Proposal : Director of City Planning
+      Address of Official Inviting Tender/Proposal : Address : City Road, Dhaka
+      Phone No : 02-9540540`);
+    expect(data).toMatchObject({
+      paName: "Md. City Ali", paDesignation: "Director of City Planning",
+      paAddress: "City Road, Dhaka",
+    });
+  });
+
+  it.each(["N/A", "None", "Not applicable", "—"])("does not import a placeholder as a PA name: %s", (name) => {
+    expect(parseTenderPdfText(`PA Name : ${name} Designation : Engineer`).paName).toBeUndefined();
+  });
+
   it("keeps zero fees but does not guess percentages or different lot amounts", () => {
     expect(parseTenderPdfText("Document Fee: 0").documentFee).toBe(0);
     expect(parseTenderPdfText("Security Amount: 2 %").estimatedTenderSecurityAmount).toBeUndefined();

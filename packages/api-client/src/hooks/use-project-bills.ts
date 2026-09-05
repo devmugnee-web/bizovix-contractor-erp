@@ -3,11 +3,11 @@ import type { ProjectBillQuery, ProjectBillRecord, ProjectBillStats, ProjectProg
 import { apiRequest, apiRequestPaginated } from "../http-client";
 import { queryKeys } from "./query-keys";
 
-export function useProjectBills(query: ProjectBillQuery) {
+export function useProjectBills(query: ProjectBillQuery, enabled = true) {
   return useQuery({
     queryKey: queryKeys.projectBills(query),
+    enabled,
     queryFn: () => apiRequestPaginated<ProjectBillRecord>("/project-bills", { params: { ...query } }),
-    placeholderData: (previous) => previous,
   });
 }
 
@@ -19,9 +19,10 @@ export function useProjectBill(id: string | undefined) {
   });
 }
 
-export function useProjectBillStats(cmsWorkId?: string) {
+export function useProjectBillStats(cmsWorkId?: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.projectBillStats(cmsWorkId),
+    enabled,
     queryFn: () => apiRequest<ProjectBillStats>("/project-bills/stats", { params: cmsWorkId ? { cmsWorkId } : undefined }),
   });
 }

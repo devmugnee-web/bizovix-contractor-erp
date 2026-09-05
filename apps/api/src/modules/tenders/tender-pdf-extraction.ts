@@ -256,6 +256,25 @@ const NOTICE_LABELS = {
   noticeOrganization: /(?:Organi[sz]ation(?:\s+Name)?|Agency)/i,
 };
 
+// e-GP notices can include an office table headed "PE Name Designation Lead Office".
+// Those are column headings, not labelled PA values. Prefer the official-details
+// section and require a colon so a header cannot become a person's name.
+function capturePaField(text: string, labels: RegExp[], stop: RegExp, nestedAddress = false): string | undefined {
+  const compact = singleLineText(text);
+  for (const label of labels) {
+    const match = new RegExp(`(?:${label.source})\\s*:\\s*`, "i").exec(compact);
+    if (!match) continue;
+    let remainder = compact.slice(match.index + match[0].length);
+    if (nestedAddress) remainder = remainder.replace(/^Address\s*:\s*/i, "");
+    const end = new RegExp(`(?:^|\\s)(?:${stop.source})\\s*:`, "i").exec(remainder);
+    const footer = /\b(?:The procuring entity reserves|Documents\b|Note\s*:)/i.exec(remainder);
+    const value = truncate(remainder.slice(0, Math.min(end?.index ?? remainder.length, footer?.index ?? remainder.length)), nestedAddress ? 1000 : 300);
+    // An explicitly empty field must stay empty, not consume the next label.
+    return value && !/^(?:n\/a|not applicable|none|not provided|[-–—]+)$/i.test(value) ? value : undefined;
+  }
+  return undefined;
+}
+
 function extractPaPhone(text: string): string | undefined {
   const compact = singleLineText(text);
   const officialStart = compact.search(/Procuring\s+Entity\s+Details|Contact\s+details\s+of\s+Official/i);
@@ -335,23 +354,28 @@ function extractNoticeDetails(text: string): TenderPdfExtractedData {
     "Document\\s+Fee", "Tender(?:\\/Proposal)?\\s+Document\\s+Price", "Pre[-\\s]?Tender", "Pre[-\\s]?Bid", "Meeting\\s+End",
     "Brief\\s+Description", "Eligibility", "Invitation\\s+Reference", "Lot\\s+No",
   ].join("|"), "i");
-  for (const key of Object.keys(NOTICE_LABELS) as Array<keyof typeof NOTICE_LABELS>) {
-    if (key === "paPhone") continue;
-    const value = captureBetween(text, NOTICE_LABELS[key], stop);
-    if (value && !/^(?:n\/a|not applicable|none)$/i.test(value)) {
-      result[key] = truncate(value, key === "paAddress" ? 1000 : 300);
-    }
+  const organization = captureBetween(text, NOTICE_LABELS.noticeOrganization, stop);
+  if (organization && !/^(?:n\/a|not applicable|none)$/i.test(organization)) {
+    result.noticeOrganization = truncate(organization, 300);
   }
-  // Some e-GP exports put Name/Designation under a separate official-contact heading.
-  const officialSection = /\bOfficial\s+Inviting\s+Tender(?:\/Proposal)?\s*:\s*(Name\s*:[\s\S]+)/i.exec(text)?.[1];
-  if (officialSection) {
-    const name = captureBetween(officialSection, /\bName/i, stop);
-    if (name) result.paName = truncate(name, 300);
-    for (const key of ["paDesignation", "paAddress"] as const) {
-      const value = captureBetween(officialSection, NOTICE_LABELS[key], stop);
-      if (value) result[key] = truncate(value, key === "paAddress" ? 1000 : 300);
-    }
-  }
+  const officialStart = text.search(/\bProcuring\s+Entity\s+Details\s*:/i);
+  const paScope = officialStart >= 0 ? text.slice(officialStart) : text;
+  const paStop = new RegExp(`${stop.source}|\\bName`, "i");
+  result.paName = capturePaField(paScope, [
+    /\bName\s+of\s+Official\s+Inviting\s+Tender(?:\/Proposal)?/i,
+    /\b(?:PA|PE)\s+Name/i,
+    /\bOfficial\s+Inviting\s+Tender(?:\/Proposal)?\s*:\s*Name/i,
+  ], paStop);
+  result.paDesignation = capturePaField(paScope, [
+    /\bDesignation\s+of\s+Official\s+Inviting\s+Tender(?:\/Proposal)?/i,
+    /\bPA\s+Designation/i,
+    /\bDesignation/i,
+  ], paStop);
+  result.paAddress = capturePaField(paScope, [
+    /\bAddress\s+of\s+Official\s+Inviting\s+Tender(?:\/Proposal)?/i,
+    /\bPA\s+Address/i,
+    /\bAddress/i,
+  ], paStop, true);
   result.paPhone = extractPaPhone(text);
   const amount = (label: string) => {
     const matches = [...singleLineText(text).matchAll(new RegExp(

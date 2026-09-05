@@ -1,9 +1,10 @@
 "use client";
 
+export { ProjectCostingWorkspace as BillSubmissionWorkspace } from "./ProjectCostingWorkspace";
+
 import * as React from "react";
 import Link from "next/link";
 import {
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
@@ -11,12 +12,12 @@ import {
   FileCheck2,
   FileText,
   Pencil,
-  Plus,
   RotateCcw,
   Search,
   WalletCards,
 } from "lucide-react";
-import { useCmsWorks, useProjectBillStats, useProjectBills } from "@bizovix/api-client";
+import { useProjectBillStats, useProjectBills } from "@bizovix/api-client";
+import { BillSourcePicker } from "./BillSourcePicker";
 import { cn } from "@bizovix/ui";
 import type { BillStatus, BillType, ProjectBillRecord } from "@bizovix/types";
 import { formatBDT, formatDate } from "@bizovix/utils";
@@ -34,12 +35,11 @@ const CONTROL_CLASS =
 
 type FilterState = {
   search: string;
-  project: string;
   billType: BillType | "";
   status: BillStatus | "";
 };
 
-const EMPTY_FILTERS: FilterState = { search: "", project: "", billType: "", status: "" };
+const EMPTY_FILTERS: FilterState = { search: "", billType: "", status: "" };
 
 const STATUS_CLASS: Record<BillStatus, string> = {
   DRAFT: "bg-[#f1f4f8] text-[#53627a]",
@@ -117,29 +117,29 @@ function BillActions({ row }: { row: ProjectBillRecord }) {
   );
 }
 
-export function BillSubmissionWorkspace() {
+export function SavedBillHistoryWorkspace() {
   useSetBreadcrumb([
     { label: "Projects", href: "/cms/ongoing-works" },
     { label: "Project Documentation", href: "/cms/documentation" },
     { label: "Bill Submission" },
   ]);
 
-  const cmsProjects = useCmsWorks({ page: 1, limit: 100, includeClosed: true });
-  const realProjects = React.useMemo(() => cmsProjects.data?.items ?? [], [cmsProjects.data?.items]);
-  const [selectedCmsProjectId, setSelectedCmsProjectId] = React.useState("");
+  const [selectedWorkId, setSelectedWorkId] = React.useState("");
+  const [hasSelection, setHasSelection] = React.useState(false);
   const [filterDraft, setFilterDraft] = React.useState<FilterState>(EMPTY_FILTERS);
   const [filters, setFilters] = React.useState<FilterState>(EMPTY_FILTERS);
   const [page, setPage] = React.useState(1);
+  const historyEnabled = !hasSelection || !!selectedWorkId;
 
   const projectBills = useProjectBills({
     page,
     limit: PAGE_SIZE,
     search: filters.search.trim() || undefined,
-    cmsWorkId: filters.project || undefined,
+    cmsWorkId: selectedWorkId || undefined,
     billType: filters.billType || undefined,
     status: filters.status || undefined,
-  });
-  const billStats = useProjectBillStats(filters.project || undefined);
+  }, historyEnabled);
+  const billStats = useProjectBillStats(selectedWorkId || undefined, historyEnabled);
 
   const rows = projectBills.data?.items ?? [];
   const meta = projectBills.data?.meta;
@@ -147,9 +147,6 @@ export function BillSubmissionWorkspace() {
   const pageCount = meta?.totalPages ?? 1;
   const startEntry = totalRows ? (page - 1) * PAGE_SIZE + 1 : 0;
   const endEntry = Math.min(page * PAGE_SIZE, totalRows);
-  const effectiveCmsProjectId = selectedCmsProjectId || realProjects[0]?.id || "";
-  const selectedCmsProject = realProjects.find((project) => project.id === effectiveCmsProjectId);
-  const createHref = selectedCmsProject ? `/cms/bills/create?cmsWorkId=${selectedCmsProject.id}` : null;
 
   function applyFilters() {
     setFilters({ ...filterDraft, search: filterDraft.search.trim() });
@@ -176,50 +173,12 @@ export function BillSubmissionWorkspace() {
           <h1 className="text-[25px] font-bold leading-tight tracking-[-0.02em] text-[#071b49]">Bill Submission</h1>
           <p className="mt-1 text-[12px] text-[#40577f]">Create, review and track real project bills</p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <label className="relative block h-[48px] w-full rounded-[6px] border border-[#dce4ef] bg-white px-4 pt-[7px] shadow-[0_1px_3px_rgba(20,39,74,0.03)] sm:w-[270px]">
-            <span className="block text-[9px] font-medium text-[#60718e]">New Bill for Project</span>
-            <select
-              aria-label="Select project for new bill"
-              value={effectiveCmsProjectId}
-              disabled={cmsProjects.isLoading || realProjects.length === 0}
-              onChange={(event) => setSelectedCmsProjectId(event.target.value)}
-              className="absolute inset-0 h-full w-full appearance-none bg-transparent px-4 pb-1 pt-[18px] text-[12px] font-bold text-[#10244c] outline-none disabled:text-[#8b98ab]"
-            >
-              {cmsProjects.isLoading && <option value="">Loading projects...</option>}
-              {!cmsProjects.isLoading && realProjects.length === 0 && <option value="">No projects available</option>}
-              {realProjects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.workName}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#071b49]" />
-          </label>
-          {createHref ? (
-            <Link
-              href={createHref}
-              className="inline-flex h-[38px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[5px] border border-[#d7e0ec] bg-white px-4 text-[12px] font-semibold text-[#075ed7] shadow-[0_1px_2px_rgba(13,31,70,0.03)] hover:border-[#0b63e5] hover:bg-[#f5f9ff]"
-            >
-              <Plus className="h-4 w-4" />
-              New Bill Submission
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              title="Create a project before adding a bill"
-              className="inline-flex h-[38px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[5px] border border-[#d7e0ec] bg-white px-4 text-[12px] font-semibold text-[#9aa7b9]"
-            >
-              <Plus className="h-4 w-4" />
-              New Bill Submission
-            </button>
-          )}
-        </div>
       </div>
-
+      <BillSourcePicker onSelect={(id, selected) => { setSelectedWorkId(id); setHasSelection(selected); resetFilters(); }} />
+      {historyEnabled && <>
+      <h2 className="mb-3 text-sm font-semibold">{hasSelection ? "Project Bill History" : "All Bill History"}</h2>
       <section className="rounded-[7px] border border-[#dfe6f1] bg-white px-[18px] py-[17px] shadow-[0_1px_2px_rgba(15,34,70,0.02)]">
-        <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 xl:grid-cols-[1.3fr_1fr_0.9fr_1fr_auto_auto]">
+        <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-2 xl:grid-cols-[1.3fr_0.9fr_1fr_auto_auto]">
           <label className="block min-w-0">
             <span className="mb-[7px] block text-[10px] font-medium text-[#33496f]">Search Bill / Tender ID</span>
             <span className="relative block">
@@ -232,21 +191,6 @@ export function BillSubmissionWorkspace() {
               />
               <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#31476d]" />
             </span>
-          </label>
-          <label className="block min-w-0">
-            <span className="mb-[7px] block text-[10px] font-medium text-[#33496f]">Project</span>
-            <select
-              value={filterDraft.project}
-              onChange={(event) => setFilterDraft((current) => ({ ...current, project: event.target.value }))}
-              className={CONTROL_CLASS}
-            >
-              <option value="">All Projects</option>
-              {realProjects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.workName}
-                </option>
-              ))}
-            </select>
           </label>
           <label className="block min-w-0">
             <span className="mb-[7px] block text-[10px] font-medium text-[#33496f]">Bill Type</span>
@@ -500,6 +444,7 @@ export function BillSubmissionWorkspace() {
           </div>
         </div>
       </section>
+      </>}
     </div>
   );
 }

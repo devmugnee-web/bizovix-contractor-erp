@@ -9,7 +9,8 @@ import { DeductionConfigsService } from "../deduction-configs/deduction-configs.
 import { NumberingService } from "../settings-numbering/numbering.service";
 import { SaveProjectBillDto, BillAdjustmentInputDto, BillItemInputDto } from "./dto/save-project-bill.dto";
 import { QueryProjectBillDto } from "./dto/query-project-bill.dto";
-import { calculateBillItem, CERTIFIED_BILL_HISTORY_STATUSES, summarizeBill } from "./bill-calculations";
+import { calculateBillItem, summarizeBill } from "./bill-calculations";
+import { assertBillQuantities, billQuantities, COMMITTED_BILL_STATUSES } from "./bill-availability";
 
 type Tx = Prisma.TransactionClient;
 const D = (v: Prisma.Decimal | number | string) => new Prisma.Decimal(v);
@@ -94,10 +95,18 @@ export class ProjectBillsService {
     return work;
   }
 
-  private async assertContract(organizationId: string, contractId: string) {
-    const contract = await this.prisma.projectContract.findFirst({ where: { id: contractId, organizationId } });
+  private async assertContract(organizationId: string, contractId: string, client: PrismaService | Tx = this.prisma) {
+    const contract = await client.projectContract.findFirst({ where: { id: contractId, organizationId } });
     if (!contract) throw new NotFoundException("Contract not found");
+    if (contract.status !== "ACTIVE") throw new BadRequestException("An active contract is required for billing");
+    if (contract.currency !== "BDT") throw new BadRequestException("Project billing currently requires a BDT contract");
     return contract;
+  }
+
+  private async lockWork(tx: Tx, organizationId: string, cmsWorkId: string) {
+    // Serialize quantity reservations and certification for this project.
+    await tx.$queryRaw`SELECT id FROM cms_works WHERE id = ${cmsWorkId} AND "organizationId" = ${organizationId} FOR UPDATE`;
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, cmsWorkId, "changing project bills", tx);
   }
 
   async findAll(organizationId: string, query: QueryProjectBillDto) {
@@ -174,7 +183,7 @@ export class ProjectBillsService {
     items: BillItemInputDto[],
     excludeBillId: string | null,
   ) {
-    if (!items.length) throw new BadRequestException("At least one BOQ item is required");
+    assertBillQuantities(items);
     const boqItemIds = items.map((i) => i.boqItemId);
     const boqItems = await tx.boqItem.findMany({ where: { id: { in: boqItemIds }, organizationId, cmsWorkId } });
     if (boqItems.length !== new Set(boqItemIds).size) throw new NotFoundException("One or more BOQ items were not found on this project");
@@ -183,19 +192,16 @@ export class ProjectBillsService {
     const certifiedRows = await tx.projectBillItem.findMany({
       where: {
         boqItemId: { in: boqItemIds },
-        bill: { status: { in: [...CERTIFIED_BILL_HISTORY_STATUSES] }, ...(excludeBillId ? { id: { not: excludeBillId } } : {}) },
+        bill: { organizationId, cmsWorkId, status: { in: COMMITTED_BILL_STATUSES }, ...(excludeBillId ? { id: { not: excludeBillId } } : {}) },
       },
-      select: { boqItemId: true, currentQty: true },
+      select: { boqItemId: true, currentQty: true, bill: { select: { status: true } } },
     });
-    const previousByBoq = new Map<string, Prisma.Decimal>();
-    for (const row of certifiedRows) {
-      previousByBoq.set(row.boqItemId, (previousByBoq.get(row.boqItemId) ?? D(0)).add(row.currentQty));
-    }
 
     return items.map((item) => {
       const boqItem = boqById.get(item.boqItemId)!;
-      const previousQty = previousByBoq.get(item.boqItemId) ?? D(0);
-      return calculateBillItem(boqItem, previousQty, item.currentQty);
+      const quantities = billQuantities(boqItem.contractQty, certifiedRows.filter((row) => row.boqItemId === item.boqItemId));
+      if (D(item.currentQty).gt(quantities.remaining)) throw new BadRequestException(`Billing quantity exceeds the available quantity for "${boqItem.description}". Check existing draft and submitted bills.`);
+      return calculateBillItem(boqItem, quantities.previous, item.currentQty);
     });
   }
 
@@ -235,6 +241,19 @@ export class ProjectBillsService {
     return summarizeBill(items, adjustments, retentionPct, vatRate, aitRate);
   }
 
+  async preview(organizationId: string, dto: SaveProjectBillDto, excludeBillId?: string) {
+    const contract = await this.assertContract(organizationId, dto.contractId);
+    await this.lifecycle.assertOperationalMutationAllowed(organizationId, contract.cmsWorkId, "preparing project bills");
+    if (excludeBillId && !await this.prisma.projectBill.findFirst({ where: { id: excludeBillId, organizationId, cmsWorkId: contract.cmsWorkId, status: "DRAFT" }, select: { id: true } })) throw new NotFoundException("Draft bill not found on this project");
+    const totals = await this.prisma.$transaction(async (tx) => {
+      const items = await this.calculateItems(tx, organizationId, contract.cmsWorkId, dto.items, excludeBillId ?? null);
+      const vat = await this.deductionConfigs.effectiveConfig(organizationId, "VAT", new Date(dto.billDate));
+      const ait = await this.deductionConfigs.effectiveConfig(organizationId, "AIT", new Date(dto.billDate));
+      return this.summarize(items, this.calculateAdjustments(dto.adjustments), dto.retentionPctOverride !== undefined ? D(dto.retentionPctOverride) : contract.retentionPct, vat ? D(vat.rate) : null, ait ? D(ait.rate) : null);
+    });
+    return { grossWorkValue: money(totals.grossWorkValue), grossBillAmount: money(totals.grossBillAmount), retentionAmount: money(totals.retentionAmount), vatAmount: money(totals.vatAmount), aitAmount: money(totals.aitAmount), otherDeductionAmount: money(totals.otherDeductionAmount), netCertifiedAmount: money(totals.netCertifiedAmount) };
+  }
+
   async saveDraft(organizationId: string, userId: string, id: string | null, dto: SaveProjectBillDto) {
     const contract = await this.assertContract(organizationId, dto.contractId);
     await this.lifecycle.assertOperationalMutationAllowed(organizationId, contract.cmsWorkId, "changing project bills");
@@ -244,6 +263,7 @@ export class ProjectBillsService {
       ? await this.prisma.projectBill.findFirst({ where: { id, organizationId } })
       : null;
     if (id && !existing) throw new NotFoundException("Running Bill not found");
+    if (existing && existing.cmsWorkId !== contract.cmsWorkId) throw new BadRequestException("A bill cannot be moved to another project");
     if (existing && !EDITABLE_STATUSES.has(existing.status)) {
       throw new BadRequestException("Only a Draft bill can be edited");
     }
@@ -262,6 +282,15 @@ export class ProjectBillsService {
     }
 
     const record = await this.prisma.$transaction(async (tx) => {
+      await this.lockWork(tx, organizationId, contract.cmsWorkId);
+      await this.assertContract(organizationId, contract.id, tx);
+      if (existing) {
+        const current = await tx.projectBill.findFirst({ where: { id: existing.id, organizationId } });
+        if (current?.status !== "DRAFT") throw new BadRequestException("Only a Draft bill can be edited");
+      }
+      if (dto.billType === "FINAL" && await tx.projectBill.findFirst({ where: { organizationId, cmsWorkId: contract.cmsWorkId, billType: "FINAL", status: { notIn: ["CANCELLED", "REJECTED"] }, ...(existing ? { id: { not: existing.id } } : {}) }, select: { id: true } })) {
+        throw new BadRequestException("Only one active Final Bill is allowed for a project");
+      }
       const calculatedItems = await this.calculateItems(tx, organizationId, contract.cmsWorkId, dto.items, existing?.id ?? null);
       const calculatedAdjustments = this.calculateAdjustments(dto.adjustments);
       const adjustmentAccountIds = calculatedAdjustments.map((item) => item.ledgerAccountId).filter((id): id is string => Boolean(id));
@@ -352,10 +381,13 @@ export class ProjectBillsService {
     await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "submitting project bills");
     if (existing.status !== "DRAFT") throw new BadRequestException("Only a Draft bill can be submitted");
 
-    const record = await this.prisma.projectBill.update({
-      where: { id },
-      data: { status: "SUBMITTED", submissionDate: new Date(), submittedById: userId },
-      include: includeRelations,
+    const record = await this.prisma.$transaction(async (tx) => {
+      await this.lockWork(tx, organizationId, existing.cmsWorkId);
+      const current = await tx.projectBill.findFirst({ where: { id, organizationId }, include: { items: true } });
+      if (current?.status !== "DRAFT") throw new BadRequestException("Only a Draft bill can be submitted");
+      await this.assertContract(organizationId, current.contractId, tx);
+      await this.calculateItems(tx, organizationId, current.cmsWorkId, current.items.map((item) => ({ boqItemId: item.boqItemId, currentQty: Number(item.currentQty) })), id);
+      return tx.projectBill.update({ where: { id }, data: { status: "SUBMITTED", submissionDate: new Date(), submittedById: userId }, include: includeRelations });
     });
 
     await this.auditLogService.record({
@@ -446,6 +478,7 @@ export class ProjectBillsService {
     }
 
     const record = await this.prisma.$transaction(async (tx) => {
+      await this.lockWork(tx, organizationId, existing.cmsWorkId);
       const alreadyPosted = await tx.journalEntry.findFirst({
         where: { organizationId, sourceModule: "PROJECT_BILL", sourceType: "CERTIFICATION", sourceId: id },
       });
@@ -453,6 +486,10 @@ export class ProjectBillsService {
         const already = await tx.projectBill.findFirst({ where: { id }, include: includeRelations });
         return already!;
       }
+
+      const current = await tx.projectBill.findFirst({ where: { id, organizationId } });
+      if (!current || !["SUBMITTED", "UNDER_REVIEW"].includes(current.status)) throw new BadRequestException("Only a Submitted or Under Review bill can be certified");
+      await this.assertContract(organizationId, current.contractId, tx);
 
       const itemInputs: BillItemInputDto[] = existing.items.map((i) => ({ boqItemId: i.boqItemId, currentQty: Number(i.currentQty) }));
       const calculatedItems = await this.calculateItems(tx, organizationId, existing.cmsWorkId, itemInputs, existing.id);
