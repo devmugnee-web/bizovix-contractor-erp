@@ -15,7 +15,14 @@ type Tx = Prisma.TransactionClient;
 const D = (v: Prisma.Decimal | number | string) => new Prisma.Decimal(v);
 
 const includeRelations = {
-  cmsWork: { select: { id: true, workName: true, organizationMaster: { select: { id: true, shortName: true } } } },
+  cmsWork: {
+    select: {
+      id: true,
+      workName: true,
+      organizationMaster: { select: { id: true, shortName: true } },
+      tender: { select: { id: true, egpTenderId: true } },
+    },
+  },
   contract: { select: { id: true, contractNo: true, retentionPct: true, currentContractValue: true } },
   items: { include: { boqItem: { select: { id: true, itemCode: true } } }, orderBy: { boqItem: { sortOrder: "asc" as const } } },
   adjustments: { orderBy: { sortOrder: "asc" as const } },
@@ -99,12 +106,14 @@ export class ProjectBillsService {
     const where: Prisma.ProjectBillWhereInput = {
       organizationId,
       ...(query.cmsWorkId ? { cmsWorkId: query.cmsWorkId } : {}),
+      ...(query.billType ? { billType: query.billType } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.search
         ? {
             OR: [
               { billNo: { contains: query.search, mode: "insensitive" } },
               { cmsWork: { workName: { contains: query.search, mode: "insensitive" } } },
+              { cmsWork: { tender: { egpTenderId: { contains: query.search, mode: "insensitive" } } } },
             ],
           }
         : {}),

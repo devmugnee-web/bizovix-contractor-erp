@@ -8,7 +8,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "turbo run dev --filter=@bizovix/api --filter=@bizovix/renderer",
+    "dev": "node scripts/start-local-dev.mjs",
+    "dev:turbo": "turbo run dev --filter=@bizovix/api --filter=@bizovix/renderer",
     "dev:all": "turbo run dev",
     "dev:electron": "pnpm --filter @bizovix/electron dev",
     "build": "turbo run build",

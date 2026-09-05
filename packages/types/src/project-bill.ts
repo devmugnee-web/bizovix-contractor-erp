@@ -57,7 +57,12 @@ export interface ReceivableEntry {
 export interface ProjectBillRecord {
   id: string;
   cmsWorkId: string;
-  cmsWork: { id: string; workName: string; organizationMaster: { id: string; shortName: string } };
+  cmsWork: {
+    id: string;
+    workName: string;
+    organizationMaster: { id: string; shortName: string };
+    tender: { id: string; egpTenderId: string | null } | null;
+  };
   contractId: string;
   contract: { id: string; contractNo: string; retentionPct: string | null; currentContractValue: string };
   billNo: string;
@@ -127,6 +132,7 @@ export interface ProjectBillQuery {
   limit?: number;
   search?: string;
   cmsWorkId?: string;
+  billType?: BillType;
   status?: BillStatus;
 }
 

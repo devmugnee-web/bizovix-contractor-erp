@@ -11,6 +11,7 @@ export const queryKeys = {
   tenderCostings: (params?: unknown) => ["tender-costings", "list", params ?? {}] as const,
   tenderCosting: (id: string) => ["tender-costings", "one", id] as const,
   tenderCostingStats: ["tender-costings", "stats"] as const,
+  itemPriceHistory: ["tender-costings", "item-price-history"] as const,
   documents: (params?: unknown) => ["documents", params ?? {}] as const,
   document: (id: string) => ["documents", id] as const,
   documentCategories: ["documents", "categories"] as const,

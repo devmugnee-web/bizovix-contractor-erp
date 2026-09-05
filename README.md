@@ -115,7 +115,8 @@ Electron since all business logic lives behind the REST API.
 
 | Command | Description |
 | --- | --- |
-| `pnpm dev` | Run the browser ERP API and renderer via Turborepo |
+| `pnpm dev` | Reuse healthy local services and start only the missing API/renderer |
+| `pnpm dev:turbo` | Force the original API + renderer Turborepo dev tasks |
 | `pnpm dev:electron` | Launch the Electron shell after the web stack is running |
 | `pnpm dev:all` | Run every app's `dev` script, including Electron |
 | `pnpm build` | Build every app/package |

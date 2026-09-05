@@ -6,15 +6,19 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CheckCircle2,
+  FileCheck2,
+  LoaderCircle,
   LockKeyhole,
   MoreVertical,
   Plus,
   Save,
   Trash2,
+  UploadCloud,
   X,
 } from "lucide-react";
 import {
   ApiError,
+  extractTenderCostingPdfs,
   useSaveTenderCosting,
   useSetTenderCostingBudget,
   useTenderCosting,
@@ -451,6 +455,23 @@ function compactInputNumber(value: string | number | null | undefined, blankZero
   return text.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
 }
 
+function costingImportKey(item: Pick<CostingItemForm, "description" | "unit" | "quantity">) {
+  return [
+    item.description.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""),
+    item.unit.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""),
+    compactInputNumber(item.quantity, true),
+  ].join("|");
+}
+
+function isBlankCostingPlaceholder(item: CostingItemForm): boolean {
+  return (
+    !item.description.trim() &&
+    !compactInputNumber(item.quantity, true) &&
+    !compactInputNumber(item.localUnitPrice, true) &&
+    !compactInputNumber(item.foreignUnitPrice, true)
+  );
+}
+
 const NUMBER_INPUT_CLASS =
   "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
@@ -698,7 +719,7 @@ export default function TenderCostingEditorPage() {
     deliveryTime: "",
     warranty: "",
   });
-  const [items, setItems] = React.useState<CostingItemForm[]>([blankItem()]);
+  const [items, setItems] = React.useState<CostingItemForm[]>([]);
   const [sourceFilter, setSourceFilter] = React.useState("ALL");
   const [bulkSourcingType, setBulkSourcingType] = React.useState<TenderCostingSourcingType | "">(
     "",
@@ -706,6 +727,9 @@ export default function TenderCostingEditorPage() {
   const [selectedItemIds, setSelectedItemIds] = React.useState<Set<string>>(new Set());
   const [activeCostingIds, setActiveCostingIds] = React.useState<Set<string>>(new Set());
   const [foreignEditReturnIds, setForeignEditReturnIds] = React.useState<Set<string>>(new Set());
+  const [intakeValidationAttemptedIds, setIntakeValidationAttemptedIds] = React.useState<
+    Set<string>
+  >(new Set());
   const [lastPreparedByUserId, setLastPreparedByUserId] = React.useState("");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [saveError, setSaveError] = React.useState("");
@@ -737,8 +761,12 @@ export default function TenderCostingEditorPage() {
   const [lcEditorAttempted, setLcEditorAttempted] = React.useState(false);
   const [pendingLcAction, setPendingLcAction] = React.useState<PendingLcAction>(null);
   const [foreignCostingNotice, setForeignCostingNotice] = React.useState("");
+  const [isReadingCostingPdfs, setIsReadingCostingPdfs] = React.useState(false);
+  const [costingPdfNotice, setCostingPdfNotice] = React.useState("");
+  const [costingPdfError, setCostingPdfError] = React.useState("");
   const [success, setSuccess] = React.useState<{ title: string; message: string } | null>(null);
   const hydratedId = React.useRef<string | undefined>(undefined);
+  const costingPdfInputRef = React.useRef<HTMLInputElement | null>(null);
   const intakeSectionRef = React.useRef<HTMLDivElement | null>(null);
   const costingWorkspaceRef = React.useRef<HTMLDivElement | null>(null);
   const costedItemsListRef = React.useRef<HTMLDivElement | null>(null);
@@ -840,7 +868,7 @@ export default function TenderCostingEditorPage() {
             foreignOtherCost: compactInputNumber(item.foreignOtherCost, true),
             remarks: item.remarks ?? "",
           }))
-        : [blankItem(record.tender.workName)];
+        : [];
     setItems(hydratedItems);
     const persistedContainerFee = Number(record.lcContainerFee) || 0;
     setLcContainerFee(compactInputNumber(String(persistedContainerFee), true));
@@ -918,6 +946,9 @@ export default function TenderCostingEditorPage() {
     setActiveCostingIds(new Set());
     setSelectedItemIds(new Set());
     setForeignEditReturnIds(new Set());
+    setIntakeValidationAttemptedIds(new Set());
+    setCostingPdfNotice("");
+    setCostingPdfError("");
     setIsDirty(false);
   }, [costing.data]);
 
@@ -1162,6 +1193,124 @@ export default function TenderCostingEditorPage() {
     setIsDirty(true);
   }
 
+  async function importCostingPdfFiles(selectedFiles: File[]) {
+    if (selectedFiles.length === 0 || isReadingCostingPdfs) return;
+    setCostingPdfNotice("");
+    setCostingPdfError("");
+
+    if (selectedFiles.length > 10) {
+      setCostingPdfError("Select up to 10 BOQ PDF files at a time.");
+      if (costingPdfInputRef.current) costingPdfInputRef.current.value = "";
+      return;
+    }
+    const invalidFile = selectedFiles.find(
+      (file) => file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf"),
+    );
+    if (invalidFile) {
+      setCostingPdfError(`${invalidFile.name} is not a PDF file.`);
+      if (costingPdfInputRef.current) costingPdfInputRef.current.value = "";
+      return;
+    }
+    const oversizedFile = selectedFiles.find((file) => file.size > 10 * 1024 * 1024);
+    if (oversizedFile) {
+      setCostingPdfError(`${oversizedFile.name} must be 10 MB or smaller.`);
+      if (costingPdfInputRef.current) costingPdfInputRef.current.value = "";
+      return;
+    }
+    if (selectedFiles.reduce((total, file) => total + file.size, 0) > 50 * 1024 * 1024) {
+      setCostingPdfError("The selected BOQ PDFs cannot exceed 50 MB in total.");
+      if (costingPdfInputRef.current) costingPdfInputRef.current.value = "";
+      return;
+    }
+
+    setIsReadingCostingPdfs(true);
+    try {
+      const result = await extractTenderCostingPdfs(selectedFiles);
+      const replacePlaceholder = items.length === 1 && isBlankCostingPlaceholder(items[0]!);
+      const existingItems = replacePlaceholder ? [] : items;
+      const templateItem = items.at(-1) ?? blankItem();
+      const existingKeys = new Set(existingItems.map(costingImportKey));
+      let existingDuplicatesSkipped = 0;
+      const importedItems = result.rows.flatMap((row) => {
+        const key = costingImportKey({
+          description: row.description,
+          unit: row.unit ?? "Nos",
+          quantity: row.quantity === undefined ? "" : String(row.quantity),
+        });
+        if (existingKeys.has(key)) {
+          existingDuplicatesSkipped += 1;
+          return [];
+        }
+        existingKeys.add(key);
+
+        const imported = blankItem(
+          row.description,
+          lastPreparedByUserId || effectivePreparedByUserId,
+          header.costingDate || localDate(),
+          templateItem.sourcingType,
+        );
+        const extractedUnitPrice =
+          row.unitPrice ??
+          (row.totalPrice && row.quantity ? row.totalPrice / row.quantity : undefined);
+        return [
+          {
+            ...imported,
+            unit: row.unit ?? templateItem.unit ?? "Nos",
+            quantity:
+              row.quantity === undefined ? "" : compactInputNumber(String(row.quantity), true),
+            marginPercent:
+              templateItem.sourcingType === "FOREIGN"
+                ? foreignTargetMargin
+                : localTargetMargin,
+            localVatPercent: commonVatPercent,
+            localTaxPercent: commonTaxPercent,
+            foreignVatPercent: commonVatPercent,
+            foreignTaxPercent: commonTaxPercent,
+            ...(templateItem.sourcingType === "FOREIGN" ? currentForeignDefaults() : {}),
+            ...(extractedUnitPrice
+              ? templateItem.sourcingType === "FOREIGN"
+                ? { foreignUnitPrice: compactInputNumber(extractedUnitPrice.toFixed(4), true) }
+                : { localUnitPrice: compactInputNumber(extractedUnitPrice.toFixed(4), true) }
+              : {}),
+          },
+        ];
+      });
+
+      if (importedItems.length === 0) {
+        setCostingPdfNotice("No new product row was added; matching rows already exist.");
+        return;
+      }
+      setItems(
+        allocateLcContainerFee(
+          [...existingItems, ...importedItems],
+          lcContainerFee,
+          lcContainerAllocationMethod,
+        ),
+      );
+      setSourceFilter("ALL");
+      setSaveError("");
+      setErrors({});
+      setIsDirty(true);
+
+      const failedFiles = result.files.filter((file) => file.error).length;
+      const duplicateCount = result.duplicateRowsSkipped + existingDuplicatesSkipped;
+      const details = [
+        `${importedItems.length} product row${importedItems.length === 1 ? "" : "s"} added`,
+        `${result.files.length - failedFiles} PDF${result.files.length - failedFiles === 1 ? "" : "s"} read`,
+        ...(duplicateCount > 0 ? [`${duplicateCount} duplicate${duplicateCount === 1 ? "" : "s"} skipped`] : []),
+        ...(failedFiles > 0 ? [`${failedFiles} PDF${failedFiles === 1 ? "" : "s"} could not be read`] : []),
+      ];
+      setCostingPdfNotice(`${details.join(" · ")}. Review the rows before saving.`);
+    } catch (error) {
+      setCostingPdfError(
+        error instanceof ApiError ? error.message : "Could not read the selected BOQ PDF files.",
+      );
+    } finally {
+      setIsReadingCostingPdfs(false);
+      if (costingPdfInputRef.current) costingPdfInputRef.current.value = "";
+    }
+  }
+
   function updateCommonCostingDate(costingDate: string) {
     setHeader((current) => ({ ...current, costingDate }));
     setItems((current) => current.map((item) => ({ ...item, costingDate })));
@@ -1272,10 +1421,31 @@ export default function TenderCostingEditorPage() {
   }
 
   function openItemCosting(item: CostingItemForm) {
-    if (!item.description.trim() || !item.unit.trim() || Number(item.quantity) <= 0) {
-      setSaveError("Enter Product Name, Quantity and Unit before opening costing.");
+    const missingRequiredFields = [
+      { column: "product", missing: !item.description.trim() },
+      { column: "unit", missing: !item.unit.trim() },
+      { column: "quantity", missing: Number(item.quantity) <= 0 },
+    ].filter((field) => field.missing);
+    if (missingRequiredFields.length > 0) {
+      setSaveError("");
+      setIntakeValidationAttemptedIds((current) => new Set(current).add(item.id));
+      window.setTimeout(() => {
+        const row = Array.from(
+          intakeSectionRef.current?.querySelectorAll<HTMLElement>("[data-costing-row]") ?? [],
+        ).find((candidate) => candidate.dataset.costingRowId === item.id);
+        const firstMissingField = row?.querySelector<HTMLInputElement | HTMLSelectElement>(
+          `[data-costing-column="${missingRequiredFields[0]?.column}"]`,
+        );
+        row?.scrollIntoView({ behavior: "smooth", block: "center" });
+        firstMissingField?.focus();
+      }, 0);
       return;
     }
+    setIntakeValidationAttemptedIds((current) => {
+      const next = new Set(current);
+      next.delete(item.id);
+      return next;
+    });
     if (!item.costingDate || !preparedByForItem(item)) {
       setSaveError("Select the common Costing Date and Prepared By first.");
       return;
@@ -1587,26 +1757,11 @@ export default function TenderCostingEditorPage() {
     );
   }
 
-  async function removeCostingItem(itemId: string) {
-    const record = costing.data;
-    if (!record || items.length <= 1 || saveCosting.isPending) return;
-
-    const remainingItems = allocateLcContainerFee(
-      items.filter((item) => item.id !== itemId),
-      lcContainerFee,
-      lcContainerAllocationMethod,
-    );
-    const allRemainingItemsCosted = remainingItems.every(
-      (item) => item.costingStatus === "COSTED",
-    );
-    const nextStatus: TenderCostingStatus = allRemainingItemsCosted
-      ? "COMPLETED"
-      : record.status === "READY"
-        ? "READY"
-        : "IN_PROGRESS";
-    const saved = await save(nextStatus, remainingItems, { showSuccess: false });
-    if (!saved) return;
-
+  function finishCostingItemRemoval(
+    itemId: string,
+    remainingItems: CostingItemForm[],
+    markSaved: boolean,
+  ) {
     setItems(remainingItems);
     setSelectedItemIds((current) => {
       const next = new Set(current);
@@ -1623,8 +1778,48 @@ export default function TenderCostingEditorPage() {
       next.delete(itemId);
       return next;
     });
+    setIntakeValidationAttemptedIds((current) => {
+      const next = new Set(current);
+      next.delete(itemId);
+      return next;
+    });
+    setErrors((current) => {
+      if (!current.items) return current;
+      const next = { ...current };
+      delete next.items;
+      return next;
+    });
     setSaveError("");
-    setIsDirty(false);
+    if (markSaved) setIsDirty(false);
+  }
+
+  async function removeCostingItem(itemId: string) {
+    const record = costing.data;
+    if (!record || items.length <= 1 || saveCosting.isPending) return;
+
+    const remainingItems = allocateLcContainerFee(
+      items.filter((item) => item.id !== itemId),
+      lcContainerFee,
+      lcContainerAllocationMethod,
+    );
+    const isPersistedItem = record.items.some((item) => item.id === itemId);
+    if (!isPersistedItem) {
+      finishCostingItemRemoval(itemId, remainingItems, false);
+      return;
+    }
+
+    const allRemainingItemsCosted = remainingItems.every(
+      (item) => item.costingStatus === "COSTED",
+    );
+    const nextStatus: TenderCostingStatus = allRemainingItemsCosted
+      ? "COMPLETED"
+      : record.status === "READY"
+        ? "READY"
+        : "IN_PROGRESS";
+    const saved = await save(nextStatus, remainingItems, { showSuccess: false });
+    if (!saved) return;
+
+    finishCostingItemRemoval(itemId, remainingItems, true);
   }
 
   function validate(status: TenderCostingStatus, candidateItems = items): boolean {
@@ -2046,12 +2241,51 @@ export default function TenderCostingEditorPage() {
                   options={SOURCE_FILTER_OPTIONS}
                   onChange={(event) => setSourceFilter(event.target.value)}
                 />
+                <input
+                  ref={costingPdfInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  multiple
+                  className="hidden"
+                  onChange={(event) =>
+                    void importCostingPdfFiles(Array.from(event.target.files ?? []))
+                  }
+                />
+                <SecondaryButton
+                  disabled={isReadingCostingPdfs}
+                  onClick={() => costingPdfInputRef.current?.click()}
+                  title="Import product rows from one or more BOQ PDFs"
+                >
+                  {isReadingCostingPdfs ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UploadCloud className="h-4 w-4" />
+                  )}
+                  {isReadingCostingPdfs ? "Reading PDF..." : "Upload BOQ PDF"}
+                </SecondaryButton>
                 <PrimaryButton onClick={addAnotherItem}>
                   <Plus className="h-4 w-4" />
                   Add Another Row
                 </PrimaryButton>
               </div>
             </div>
+            {costingPdfNotice && (
+              <p
+                aria-live="polite"
+                className="flex items-center gap-2 border-b border-biz-success/20 bg-biz-success/5 px-4 py-2 text-[10.5px] font-medium text-biz-success"
+              >
+                <FileCheck2 className="h-4 w-4 shrink-0" />
+                <span>{costingPdfNotice}</span>
+              </p>
+            )}
+            {costingPdfError && (
+              <p
+                role="alert"
+                className="border-b border-biz-danger/20 bg-biz-danger/5 px-4 py-2 text-[10.5px] font-medium text-biz-danger"
+              >
+                {costingPdfError}
+              </p>
+            )}
             <div className="overflow-hidden">
               <table className="w-full table-fixed text-left text-[9px] xl:text-[10px]">
                 <thead className="bg-biz-bg text-biz-muted">
@@ -2104,9 +2338,15 @@ export default function TenderCostingEditorPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredItems.map((item) => {
+                  {filteredItems.map((item, visibleIndex) => {
                     const originalIndex = items.findIndex((row) => row.id === item.id);
                     const preview = calculateItemPreview(item);
+                    const showRequiredErrors = intakeValidationAttemptedIds.has(item.id);
+                    const productRequiredError =
+                      showRequiredErrors && !item.description.trim();
+                    const unitRequiredError = showRequiredErrors && !item.unit.trim();
+                    const quantityRequiredError =
+                      showRequiredErrors && Number(item.quantity) <= 0;
                     return (
                       <tr
                         key={item.id}
@@ -2126,13 +2366,19 @@ export default function TenderCostingEditorPage() {
                             />
                           )}
                         </td>
-                        <td className="px-1 py-2">{originalIndex + 1}</td>
+                        <td className="px-1 py-2">{visibleIndex + 1}</td>
                         <td className="px-1 py-2">
                           <RequiredRowField>
                             <TextInput
                               data-costing-field
                               data-costing-column="product"
-                              className="h-9 min-w-0 px-1.5 text-[10px]"
+                              aria-invalid={productRequiredError}
+                              hasError={productRequiredError}
+                              className={`h-9 min-w-0 px-1.5 text-[10px] ${
+                                productRequiredError
+                                  ? "bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
+                                  : ""
+                              }`}
                               value={item.description}
                               placeholder="Enter product"
                               onChange={(event) =>
@@ -2195,7 +2441,12 @@ export default function TenderCostingEditorPage() {
                             <SelectInput
                               data-costing-field
                               data-costing-column="unit"
-                              className="h-9 min-w-0 px-1 pr-4 text-[9px] xl:text-[10px]"
+                              aria-invalid={unitRequiredError}
+                              className={`h-9 min-w-0 px-1 pr-4 text-[9px] xl:text-[10px] ${
+                                unitRequiredError
+                                  ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
+                                  : ""
+                              }`}
                               value={item.unit}
                               options={
                                 UNIT_OPTIONS.some((option) => option.value === item.unit)
@@ -2214,7 +2465,13 @@ export default function TenderCostingEditorPage() {
                             <TextInput
                               data-costing-field
                               data-costing-column="quantity"
-                              className={`h-9 min-w-0 px-1 text-[10px] ${NUMBER_INPUT_CLASS}`}
+                              aria-invalid={quantityRequiredError}
+                              hasError={quantityRequiredError}
+                              className={`h-9 min-w-0 px-1 text-[10px] ${NUMBER_INPUT_CLASS} ${
+                                quantityRequiredError
+                                  ? "bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
+                                  : ""
+                              }`}
                               type="number"
                               min="0.001"
                               step="any"
@@ -2386,8 +2643,9 @@ export default function TenderCostingEditorPage() {
                   {filteredItems.length === 0 && (
                     <tr className="border-t border-biz-border">
                       <td colSpan={15} className="px-4 py-8 text-center text-[11px] text-biz-muted">
-                        No pending items. Add another row or edit an item from the Costed Items
-                        List.
+                        {items.length === 0
+                          ? "No items added yet."
+                          : "No pending items. Add another row or edit an item from the Costed Items List."}
                       </td>
                     </tr>
                   )}

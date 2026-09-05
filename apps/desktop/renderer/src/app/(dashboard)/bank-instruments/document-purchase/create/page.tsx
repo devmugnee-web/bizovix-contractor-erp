@@ -105,6 +105,8 @@ function AddDocumentPurchaseForm() {
       });
     }
     setValue("tenderWorkName", linkedTender.data.workName);
+    if (linkedTender.data.documentFee != null) setValue("documentPrice", Number(linkedTender.data.documentFee), { shouldDirty: false });
+    if (linkedTender.data.submissionDeadline) setValue("submissionDate", linkedTender.data.submissionDeadline.slice(0, 10), { shouldDirty: false });
     if (linkedTender.data.egpTenderId) setValue("tenderId", linkedTender.data.egpTenderId);
   }, [linkedTender.data, setValue]);
 

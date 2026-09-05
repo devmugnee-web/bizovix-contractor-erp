@@ -46,6 +46,13 @@ export interface TenderRecord {
   publishedDate: string | null;
   documentPurchaseDeadline: string | null;
   preBidDate: string | null;
+  preBidEndDate: string | null;
+  documentFee: string | null;
+  paName: string | null;
+  paDesignation: string | null;
+  paPhone: string | null;
+  paAddress: string | null;
+  noticeOrganization: string | null;
   submissionDeadline: string | null;
   openingDate: string | null;
   tenderSecurityRequired: boolean;
@@ -150,10 +157,17 @@ export interface CreateTenderInput {
   publishedDate?: string;
   documentPurchaseDeadline?: string;
   preBidDate?: string;
+  preBidEndDate?: string | null;
+  documentFee?: number | null;
+  paName?: string;
+  paDesignation?: string;
+  paPhone?: string;
+  paAddress?: string;
+  noticeOrganization?: string;
   submissionDeadline?: string;
   openingDate?: string;
   tenderSecurityRequired?: boolean;
-  estimatedTenderSecurityAmount?: number;
+  estimatedTenderSecurityAmount?: number | null;
   assignedToUserId?: string;
   assignedToName?: string;
   description?: string;
@@ -166,6 +180,14 @@ export interface CreateTenderInput {
 }
 
 export interface TenderPdfExtractedData {
+  preBidEndDate?: string;
+  documentFee?: number;
+  estimatedTenderSecurityAmount?: number;
+  paName?: string;
+  paDesignation?: string;
+  paPhone?: string;
+  paAddress?: string;
+  noticeOrganization?: string;
   egpTenderId?: string;
   workName?: string;
   tenderType?: string;

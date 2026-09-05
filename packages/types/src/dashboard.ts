@@ -2,7 +2,7 @@ export interface DashboardKpis {
   ongoingWorks: { count: number; contractValue: string };
   tenderSecurity: { amount: string; instruments: number };
   pgBg: { amount: string; instruments: number };
-  /** available=false: no authoritative Security Deposit source exists yet — do not show a figure. */
+  /** Outstanding held amount derived from configured project contracts. */
   securityDeposit: { amount: string; projects: number; available: boolean };
   receivables: { amount: string; overdue: string };
   /** Derived from the real Payable model (amount - paidAmount), not Expense.status. */

@@ -5,6 +5,14 @@ const optionalTrimmedText = (max: number) =>
   z.string().trim().max(max).optional().or(z.literal(""));
 
 export const createTenderSchema = z.object({
+  preBidEndDate: z.string().optional(),
+  documentFee: z.number().nonnegative().nullable().optional(),
+  estimatedTenderSecurityAmount: z.number().nonnegative().nullable().optional(),
+  paName: optionalTrimmedText(300),
+  paDesignation: optionalTrimmedText(300),
+  paPhone: optionalTrimmedText(100),
+  paAddress: optionalTrimmedText(1000),
+  noticeOrganization: optionalTrimmedText(300),
   egpTenderId: z.string().trim().min(1, "Tender ID is required").max(100, "Tender ID is too long"),
   workName: z.string().trim().min(1, "Product / work name is required").max(300),
   tenderType: optionalTrimmedText(100),

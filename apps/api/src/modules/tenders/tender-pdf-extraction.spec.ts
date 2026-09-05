@@ -1,6 +1,7 @@
 import { BadRequestException } from "@nestjs/common";
 import {
   assertTenderPdf,
+  extractTenderSecurityFromTable,
   hasValidTenderPdfSignature,
   parseTenderPdfText,
   type UploadedTenderPdf,
@@ -12,6 +13,107 @@ function file(content: string, mimetype = "application/pdf"): UploadedTenderPdf 
 }
 
 describe("Tender PDF extraction", () => {
+  const tableItem = (str: string, x: number, y: number, width: number) => ({ str, x, y, width, fontSize: 7 });
+  const securityTableHeader = [
+    tableItem("Lot No.", 40, 65, 23),
+    tableItem("Identification of Lot", 180, 65, 63),
+    tableItem("Location", 369, 65, 28),
+    tableItem("Tender/Proposal", 413, 77, 53),
+    tableItem("security", 427, 69, 26),
+    tableItem("(Amount in", 422, 61, 36),
+    tableItem("BDT)", 432, 53, 16),
+    tableItem("Tentative Start Date", 473, 65, 47),
+    tableItem("Tentative Completion Date", 531, 65, 38),
+  ];
+  const singleLotRow = [
+    tableItem("1", 50, 38, 4),
+    tableItem("Repair of electrical equipment", 71, 38, 270),
+    tableItem("Premises", 361, 38, 43),
+    tableItem("100000", 428, 38, 23),
+    tableItem("01-Sep-2026", 477, 38, 39),
+    tableItem("01-Dec-2026", 530, 38, 39),
+  ];
+
+  it("reads a wrapped security table header from the correct column across a two-page single-lot notice", () => {
+    expect(extractTenderSecurityFromTable([
+      [...securityTableHeader, ...singleLotRow, tableItem("1/2", 577, 16, 11)],
+      [tableItem("Procuring Entity Details:", 40, 720, 120)],
+    ], "Invitation for : Tender - Single Lot")).toBe(100000);
+  });
+
+  it("does not substitute the lot number, location number or adjacent date for a missing amount", () => {
+    expect(extractTenderSecurityFromTable([[...securityTableHeader, ...singleLotRow.filter((item) => item.str !== "100000")]], "")).toBeUndefined();
+  });
+
+  it("does not choose or total multiple security lots even when amounts are the same", () => {
+    const secondLot = singleLotRow.map((item) => ({ ...item, str: item.str === "1" ? "2" : item.str, y: item.y - 14 }));
+    expect(extractTenderSecurityFromTable([[...securityTableHeader, ...singleLotRow, ...secondLot]], "")).toBeUndefined();
+    expect(extractTenderSecurityFromTable([[...securityTableHeader, ...singleLotRow], []], "Invitation for: Tender - Multiple Lots")).toBeUndefined();
+  });
+
+  it("reads the wrapped In BDT fee label and skips telephone words in category descriptions", () => {
+    const data = parseTenderPdfText(`
+      Category: Television cameras;Mobile telephones;Telephone equipment
+      Document Fees : Package wise
+      Tender/Proposal Document Price (In
+      BDT) :
+      1500
+      Mode of Payment : Payment through Bank
+      Procuring Entity Details:
+      Contact details of Official Inviting Tender/Proposal : Phone No : 031-2510830
+      Fax No : 031-2510889
+    `);
+    expect(data.documentFee).toBe(1500);
+    expect(data.paPhone).toBe("031-2510830");
+  });
+
+  it("does not read category text or fax numbers as a PA phone number", () => {
+    expect(parseTenderPdfText("Category: Mobile telephones;Telephone equipment;12345678 parts Fax No: 031-2510889").paPhone).toBeUndefined();
+    expect(parseTenderPdfText("PA Phone Number : +880 (2) 55 66 77 88 Fax No : 0123456789").paPhone).toBe("+880 (2) 55 66 77 88");
+    expect(parseTenderPdfText("Phone No : Fax No : 031-2510889").paPhone).toBeUndefined();
+  });
+
+  it("extracts notice costs, meeting time and PA information without merging adjacent fields", () => {
+    const data = parseTenderPdfText(`
+      Organization : Chattogram Port Authority
+      Procuring Entity Name : Engineering Division
+      Tender/Proposal Document Price (BDT) : 2,000.00
+      Tender Security Amount (BDT) : 150,000.50
+      Pre-Tender/Proposal Meeting End Date and Time : 10-Sep-2026 3:30 PM
+      Name of Official Inviting Tender/Proposal : Md. Karim
+      Designation of Official Inviting Tender/Proposal : Executive Engineer
+      Address of Official Inviting Tender/Proposal : Port Road, Chattogram
+      Phone No. : 01700123456
+      Fax No. : 031123456
+    `);
+    expect(data).toMatchObject({
+      noticeOrganization: "Chattogram Port Authority", documentFee: 2000,
+      estimatedTenderSecurityAmount: 150000.5, preBidEndDate: "2026-09-10T15:30:00+06:00",
+      paName: "Md. Karim", paDesignation: "Executive Engineer",
+      paAddress: "Port Road, Chattogram", paPhone: "01700123456",
+    });
+  });
+
+  it("supports a separate official-contact section and split-line values", () => {
+    const data = parseTenderPdfText(`Official Inviting Tender/Proposal :
+      Name :
+      Ms. Ayesha
+      Designation : Assistant Engineer
+      Address : 12 Main Road
+      Phone Number : 01800123456
+      Email : office@example.test
+    `);
+    expect(data).toMatchObject({ paName: "Ms. Ayesha", paDesignation: "Assistant Engineer", paAddress: "12 Main Road", paPhone: "01800123456" });
+  });
+
+  it("keeps zero fees but does not guess percentages or different lot amounts", () => {
+    expect(parseTenderPdfText("Document Fee: 0").documentFee).toBe(0);
+    expect(parseTenderPdfText("Security Amount: 2 %").estimatedTenderSecurityAmount).toBeUndefined();
+    expect(parseTenderPdfText("Security Amount: 20000 Security Amount: 30000").estimatedTenderSecurityAmount).toBeUndefined();
+    expect(parseTenderPdfText("Name of Procuring Entity: Engineering Division").paName).toBeUndefined();
+    expect(parseTenderPdfText("Meeting End Date and Time: 31-Feb-2026 15:30").preBidEndDate).toBeUndefined();
+  });
+
   it("validates PDF content instead of trusting the extension", () => {
     const pdf = file("%PDF-1.7 test");
     expect(hasValidTenderPdfSignature(pdf)).toBe(true);

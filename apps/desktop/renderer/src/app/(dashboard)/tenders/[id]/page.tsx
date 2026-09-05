@@ -176,6 +176,26 @@ export default function TenderDetailPage() {
         </div>
       </section>
 
+      <section className="rounded-lg border border-biz-border bg-biz-surface p-4 shadow-card" aria-labelledby="notice-details-title">
+        <h2 id="notice-details-title" className="mb-3 text-[14px] font-semibold">Notice & PA Information</h2>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            ["Document Fee", t.documentFee != null ? formatBDT(t.documentFee) : "Not set"],
+            ["Tender Security Amount", t.estimatedTenderSecurityAmount != null ? formatBDT(t.estimatedTenderSecurityAmount) : "Not set"],
+            ["Meeting End (Bangladesh Time)", t.preBidEndDate ? new Date(t.preBidEndDate).toLocaleString("en-GB", { timeZone: "Asia/Dhaka", weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Not set"],
+            ["PA Name", t.paName || "Not set"],
+            ["PA Designation", t.paDesignation || "Not set"],
+            ["PA Phone", t.paPhone || "Not set"],
+            ["PA Address", t.paAddress || "Not set"],
+          ].map(([label, value]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-xs text-biz-muted">{label}</dt>
+              <dd className="mt-1 break-words text-sm font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
       <section aria-labelledby="tender-summary-title">
         <h2 id="tender-summary-title" className="mb-2 text-[14px] font-semibold text-biz-text">
           Tender Summary

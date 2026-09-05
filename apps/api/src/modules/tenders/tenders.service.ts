@@ -36,6 +36,7 @@ function toDto(record: TenderRecord) {
   return {
     ...record,
     contractValue: record.contractValue.toFixed(2),
+    documentFee: record.documentFee?.toFixed(2) ?? null,
     payOrderAmount: record.payOrderAmount?.toFixed(2) ?? null,
     estimatedTenderSecurityAmount: record.estimatedTenderSecurityAmount?.toFixed(2) ?? null,
     quotedAmount: record.quotedAmount?.toFixed(2) ?? null,
@@ -335,6 +336,38 @@ export class TendersService {
     throw error;
   }
 
+  private noticeFields(dto: Partial<CreateTenderDto>) {
+    return {
+      ...(dto.documentFee !== undefined ? { documentFee: dto.documentFee } : {}),
+      ...(dto.preBidEndDate !== undefined ? { preBidEndDate: dto.preBidEndDate ? new Date(dto.preBidEndDate) : null } : {}),
+      ...Object.fromEntries(
+        (["paName", "paDesignation", "paPhone", "paAddress", "noticeOrganization"] as const)
+          .filter((key) => dto[key] !== undefined)
+          .map((key) => [key, dto[key]?.trim() || null]),
+      ),
+    };
+  }
+
+  private async resolveNoticeOrganization(tx: Prisma.TransactionClient, organizationId: string, name?: string) {
+    const normalized = name?.trim();
+    if (!normalized) return null;
+    const matches = await tx.organizationMaster.findMany({
+      where: { organizationId, OR: [
+        { fullName: { equals: normalized, mode: "insensitive" } },
+        { shortName: { equals: normalized, mode: "insensitive" } },
+      ] },
+      take: 2,
+    });
+    if (matches.length > 1) throw new BadRequestException("Multiple organizations match this name. Enter the exact organization short name.");
+    if (matches[0]) return matches[0].id;
+    const master = await tx.organizationMaster.upsert({
+      where: { organizationId_shortName: { organizationId, shortName: normalized } },
+      update: {},
+      create: { organizationId, shortName: normalized, fullName: normalized },
+    });
+    return master.id;
+  }
+
   async create(organizationId: string, userId: string, dto: CreateTenderDto) {
     if (dto.status && dto.status !== "DRAFT") {
       throw new BadRequestException("A new tender must be saved as Draft before workflow actions");
@@ -361,7 +394,9 @@ export class TendersService {
         const created = await tx.tender.create({
           data: {
             organizationId,
-            organizationMasterId: dto.organizationMasterId?.trim() || null,
+            organizationMasterId: dto.organizationMasterId?.trim()
+              || await this.resolveNoticeOrganization(tx, organizationId, dto.noticeOrganization),
+            ...this.noticeFields(dto),
             egpTenderId: dto.egpTenderId.trim(),
             tenderIdNormalized,
             workName: dto.workName.trim(),
@@ -453,87 +488,94 @@ export class TendersService {
     }
 
     try {
-      const record = await this.prisma.tender.update({
-        where: { id, organizationId },
-        data: {
-          ...(dto.organizationMasterId !== undefined
-            ? { organizationMasterId: dto.organizationMasterId.trim() || null }
-            : {}),
-          ...(dto.egpTenderId !== undefined
-            ? { egpTenderId: dto.egpTenderId.trim(), tenderIdNormalized }
-            : {}),
-          ...(dto.workName ? { workName: dto.workName.trim() } : {}),
-          ...(dto.category !== undefined ? { category: dto.category.trim() || null } : {}),
-          ...(dto.tenderType !== undefined ? { tenderType: dto.tenderType.trim() || null } : {}),
-          ...(dto.procurementMethod !== undefined
-            ? { procurementMethod: dto.procurementMethod }
-            : {}),
-          ...(dto.tenderMethod !== undefined
-            ? { tenderMethod: dto.tenderMethod.trim() || null }
-            : {}),
-          ...(dto.contractValue !== undefined ? { contractValue: dto.contractValue } : {}),
-          ...(dto.status ? { status: dto.status } : {}),
-          ...(dto.publishedDate !== undefined
-            ? { publishedDate: dto.publishedDate ? new Date(dto.publishedDate) : null }
-            : {}),
-          ...(dto.documentPurchaseDeadline !== undefined
-            ? {
-                documentPurchaseDeadline: dto.documentPurchaseDeadline
-                  ? new Date(dto.documentPurchaseDeadline)
-                  : null,
-              }
-            : {}),
-          ...(dto.preBidDate !== undefined
-            ? { preBidDate: dto.preBidDate ? new Date(dto.preBidDate) : null }
-            : {}),
-          ...(dto.submissionDeadline !== undefined
-            ? {
-                submissionDeadline: dto.submissionDeadline
-                  ? new Date(dto.submissionDeadline)
-                  : null,
-              }
-            : {}),
-          ...(dto.openingDate !== undefined
-            ? { openingDate: dto.openingDate ? new Date(dto.openingDate) : null }
-            : {}),
-          ...(dto.tenderSecurityRequired !== undefined
-            ? { tenderSecurityRequired: dto.tenderSecurityRequired }
-            : {}),
-          ...(dto.payOrderRequired !== undefined || dto.payOrderAmount !== undefined
-            ? {
-                payOrderRequired: nextPayOrderRequired,
-                payOrderAmount: nextPayOrderAmount,
-              }
-            : {}),
-          ...(dto.estimatedTenderSecurityAmount !== undefined
-            ? { estimatedTenderSecurityAmount: dto.estimatedTenderSecurityAmount }
-            : {}),
-          ...(foundByChanged
-            ? { foundByUserId: nextFoundByUserId, foundByName: nextFoundByName }
-            : {}),
-          ...(dto.findingDate !== undefined
-            ? { findingDate: dto.findingDate ? new Date(dto.findingDate) : null }
-            : {}),
-          ...(dto.assignedToUserId !== undefined ? { assignedToUserId: dto.assignedToUserId } : {}),
-          ...(dto.assignedToName !== undefined
-            ? { assignedToName: dto.assignedToName.trim() || null }
-            : {}),
-          ...(dto.description !== undefined ? { description: dto.description.trim() || null } : {}),
-          ...(dto.remarks !== undefined ? { remarks: dto.remarks.trim() || null } : {}),
-          version: { increment: 1 },
-        },
-        include: includeRelations,
-      });
+      const record = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.tender.update({
+          where: { id, organizationId },
+          data: {
+            ...this.noticeFields(dto),
+            ...(dto.noticeOrganization !== undefined && dto.organizationMasterId === undefined
+              ? { organizationMasterId: await this.resolveNoticeOrganization(tx, organizationId, dto.noticeOrganization) }
+              : {}),
+            ...(dto.organizationMasterId !== undefined
+              ? { organizationMasterId: dto.organizationMasterId.trim() || null }
+              : {}),
+            ...(dto.egpTenderId !== undefined
+              ? { egpTenderId: dto.egpTenderId.trim(), tenderIdNormalized }
+              : {}),
+            ...(dto.workName ? { workName: dto.workName.trim() } : {}),
+            ...(dto.category !== undefined ? { category: dto.category.trim() || null } : {}),
+            ...(dto.tenderType !== undefined ? { tenderType: dto.tenderType.trim() || null } : {}),
+            ...(dto.procurementMethod !== undefined
+              ? { procurementMethod: dto.procurementMethod }
+              : {}),
+            ...(dto.tenderMethod !== undefined
+              ? { tenderMethod: dto.tenderMethod.trim() || null }
+              : {}),
+            ...(dto.contractValue !== undefined ? { contractValue: dto.contractValue } : {}),
+            ...(dto.status ? { status: dto.status } : {}),
+            ...(dto.publishedDate !== undefined
+              ? { publishedDate: dto.publishedDate ? new Date(dto.publishedDate) : null }
+              : {}),
+            ...(dto.documentPurchaseDeadline !== undefined
+              ? {
+                  documentPurchaseDeadline: dto.documentPurchaseDeadline
+                    ? new Date(dto.documentPurchaseDeadline)
+                    : null,
+                }
+              : {}),
+            ...(dto.preBidDate !== undefined
+              ? { preBidDate: dto.preBidDate ? new Date(dto.preBidDate) : null }
+              : {}),
+            ...(dto.submissionDeadline !== undefined
+              ? {
+                  submissionDeadline: dto.submissionDeadline
+                    ? new Date(dto.submissionDeadline)
+                    : null,
+                }
+              : {}),
+            ...(dto.openingDate !== undefined
+              ? { openingDate: dto.openingDate ? new Date(dto.openingDate) : null }
+              : {}),
+            ...(dto.tenderSecurityRequired !== undefined
+              ? { tenderSecurityRequired: dto.tenderSecurityRequired }
+              : {}),
+            ...(dto.payOrderRequired !== undefined || dto.payOrderAmount !== undefined
+              ? {
+                  payOrderRequired: nextPayOrderRequired,
+                  payOrderAmount: nextPayOrderAmount,
+                }
+              : {}),
+            ...(dto.estimatedTenderSecurityAmount !== undefined
+              ? { estimatedTenderSecurityAmount: dto.estimatedTenderSecurityAmount }
+              : {}),
+            ...(foundByChanged
+              ? { foundByUserId: nextFoundByUserId, foundByName: nextFoundByName }
+              : {}),
+            ...(dto.findingDate !== undefined
+              ? { findingDate: dto.findingDate ? new Date(dto.findingDate) : null }
+              : {}),
+            ...(dto.assignedToUserId !== undefined ? { assignedToUserId: dto.assignedToUserId } : {}),
+            ...(dto.assignedToName !== undefined
+              ? { assignedToName: dto.assignedToName.trim() || null }
+              : {}),
+            ...(dto.description !== undefined ? { description: dto.description.trim() || null } : {}),
+            ...(dto.remarks !== undefined ? { remarks: dto.remarks.trim() || null } : {}),
+            version: { increment: 1 },
+          },
+          include: includeRelations,
+        });
 
-      await this.auditLogService.record({
-        organizationId,
-        userId,
-        action: "TENDER_UPDATED",
-        entityType: "Tender",
-        entityId: id,
-        referenceNo: record.egpTenderId,
-        oldValue: toDto(existing),
-        newValue: toDto(record),
+        await this.auditLogService.record({
+          organizationId,
+          userId,
+          action: "TENDER_UPDATED",
+          entityType: "Tender",
+          entityId: id,
+          referenceNo: updated.egpTenderId,
+          oldValue: toDto(existing),
+          newValue: toDto(updated),
+        }, tx);
+        return updated;
       });
 
       return toDto(record);

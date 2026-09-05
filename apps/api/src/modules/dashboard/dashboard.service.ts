@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import type { DashboardResponse } from "@bizovix/types";
-import type { TenderStatus } from "@bizovix/database";
+import { Prisma, type TenderStatus } from "@bizovix/database";
 import { PrismaService } from "../prisma/prisma.service";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -52,7 +52,7 @@ export class DashboardService {
       receivables,
       outstandingPayables,
       bankAccounts,
-      ongoingProjectMasters,
+      securityDepositContracts,
     ] = await Promise.all([
       this.prisma.cmsWork.aggregate({
         where: { organizationId, status: "ONGOING" },
@@ -77,10 +77,19 @@ export class DashboardService {
         select: { amount: true, paidAmount: true, dueDate: true },
       }),
       this.prisma.bankAccount.findMany({ where: { organizationId, isActive: true }, select: { currentBalance: true } }),
-      this.prisma.cmsWork.findMany({
-        where: { organizationId, status: "ONGOING" },
-        select: { organizationMasterId: true },
-        distinct: ["organizationMasterId"],
+      this.prisma.projectContract.findMany({
+        where: {
+          organizationId,
+          status: { not: "CANCELLED" },
+          securityDepositPct: { gt: 0 },
+        },
+        select: {
+          cmsWorkId: true,
+          currentContractValue: true,
+          securityDepositPct: true,
+          securityDepositStatus: true,
+          securityDepositReleasedAmount: true,
+        },
       }),
     ]);
 
@@ -97,6 +106,20 @@ export class DashboardService {
     const overduePayableTotal = outstandingPayables
       .filter((p) => p.dueDate && p.dueDate < now)
       .reduce((sum, p) => sum + (Number(p.amount) - Number(p.paidAmount)), 0);
+    const heldSecurityDeposits = securityDepositContracts.map((contract) => {
+      const total = contract.currentContractValue.mul(contract.securityDepositPct!).div(100);
+      const released = contract.securityDepositReleasedAmount ?? new Prisma.Decimal(0);
+      const outstanding =
+        contract.securityDepositStatus === "RELEASED"
+          ? new Prisma.Decimal(0)
+          : Prisma.Decimal.max(0, total.sub(released));
+      return { cmsWorkId: contract.cmsWorkId, outstanding };
+    });
+    const activeSecurityDeposits = heldSecurityDeposits.filter((row) => row.outstanding.gt(0));
+    const securityDepositTotal = activeSecurityDeposits.reduce(
+      (sum, row) => sum.add(row.outstanding),
+      new Prisma.Decimal(0),
+    );
 
     return {
       ongoingWorks: {
@@ -111,12 +134,10 @@ export class DashboardService {
         amount: (pgBgAgg._sum.amount ?? 0).toString(),
         instruments: pgBgAgg._count,
       },
-      // No dedicated Security Deposit module/data source exists yet (see Reports > Tender >
-      // Security Deposit, which honestly reports the same gap). Never fabricate a figure here.
       securityDeposit: {
-        amount: "0.00",
-        projects: ongoingProjectMasters.length,
-        available: false,
+        amount: securityDepositTotal.toFixed(2),
+        projects: new Set(activeSecurityDeposits.map((row) => row.cmsWorkId)).size,
+        available: true,
       },
       receivables: {
         amount: receivableTotal.toFixed(2),
@@ -242,7 +263,7 @@ export class DashboardService {
         id: t.id,
         type: "TENDER_SECURITY",
         title: "Tender Security Issued",
-        reference: t.instrumentNo ?? `TS-${t.id.slice(-6).toUpperCase()}`,
+        reference: t.instrumentNo || `TS-${t.id.slice(-6).toUpperCase()}`,
         amount: t.amount.toString(),
         status: "Issued",
         occurredAt: t.issueDate,
@@ -251,7 +272,7 @@ export class DashboardService {
         id: e.id,
         type: "EXPENSE",
         title: "Expense Added",
-        reference: e.referenceNo ?? `EXP-${e.id.slice(-6).toUpperCase()}`,
+        reference: e.referenceNo || `EXP-${e.id.slice(-6).toUpperCase()}`,
         amount: e.amount.toString(),
         status: e.status.charAt(0) + e.status.slice(1).toLowerCase(),
         occurredAt: e.expenseDate,
@@ -260,7 +281,7 @@ export class DashboardService {
         id: r.id,
         type: "RECEIPT",
         title: "Receipt Received",
-        reference: r.referenceNo ?? `REC-${r.id.slice(-6).toUpperCase()}`,
+        reference: r.referenceNo || `REC-${r.id.slice(-6).toUpperCase()}`,
         amount: r.amount.toString(),
         status: r.status.charAt(0) + r.status.slice(1).toLowerCase(),
         occurredAt: r.receiptDate,
@@ -269,7 +290,7 @@ export class DashboardService {
         id: g.id,
         type: "PG_BG",
         title: `${g.type} Issued`,
-        reference: g.instrumentNo ?? `${g.type}-${g.id.slice(-6).toUpperCase()}`,
+        reference: g.instrumentNo || `${g.type}-${g.id.slice(-6).toUpperCase()}`,
         amount: g.amount.toString(),
         status: "Issued",
         occurredAt: g.issueDate,
@@ -292,18 +313,43 @@ export class DashboardService {
   }
 
   private async getTopProjects(organizationId: string) {
-    const projects = await this.prisma.tender.findMany({
+    const projects = await this.prisma.cmsWork.findMany({
       where: { organizationId, status: "ONGOING" },
       orderBy: { contractValue: "desc" },
       take: 5,
-      select: { id: true, workName: true, contractValue: true, progressPercentage: true },
+      select: { id: true, workName: true, contractValue: true },
     });
 
-    return projects.map((p) => ({
-      id: p.id,
-      name: p.workName,
-      contractValue: p.contractValue.toString(),
-      progressPercentage: p.progressPercentage,
-    }));
+    const boqItems = projects.length
+      ? await this.prisma.boqItem.findMany({
+          where: { organizationId, cmsWorkId: { in: projects.map((project) => project.id) } },
+          select: { cmsWorkId: true, contractAmount: true, executedValue: true },
+        })
+      : [];
+    const progressByProject = new Map<
+      string,
+      { contract: Prisma.Decimal; executed: Prisma.Decimal }
+    >();
+    for (const item of boqItems) {
+      const current = progressByProject.get(item.cmsWorkId) ?? {
+        contract: new Prisma.Decimal(0),
+        executed: new Prisma.Decimal(0),
+      };
+      current.contract = current.contract.add(item.contractAmount);
+      current.executed = current.executed.add(item.executedValue);
+      progressByProject.set(item.cmsWorkId, current);
+    }
+
+    return projects.map((project) => {
+      const progress = progressByProject.get(project.id);
+      return {
+        id: project.id,
+        name: project.workName,
+        contractValue: project.contractValue.toString(),
+        progressPercentage: progress?.contract.gt(0)
+          ? Number(progress.executed.div(progress.contract).mul(100).toFixed(2))
+          : 0,
+      };
+    });
   }
 }

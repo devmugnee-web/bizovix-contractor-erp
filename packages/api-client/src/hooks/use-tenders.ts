@@ -60,7 +60,12 @@ export function extractTenderPdf(file: File) {
 
 function useInvalidateTenders() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ["tenders"] });
+  return async () => {
+    await Promise.all([
+      ["tenders"], ["organizations"], ["tender-securities", "pending"],
+      ["pg-bg", "eligible"], ["cms-works"],
+    ].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+  };
 }
 
 export function useCreateTender() {

@@ -53,8 +53,11 @@ function costingFixture(overrides: Record<string, unknown> = {}) {
 }
 
 function setup() {
+  const update = jest.fn();
   const tx = {
+    organizationMaster: { findMany: jest.fn().mockResolvedValue([]), upsert: jest.fn().mockResolvedValue({ id: "new-master" }) },
     tender: {
+      update,
       create: jest.fn(),
       deleteMany: jest.fn(),
       findFirst: jest.fn(),
@@ -70,7 +73,7 @@ function setup() {
     },
     tender: {
       findFirst: jest.fn(),
-      update: jest.fn(),
+      update,
     },
     $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
   };
@@ -80,6 +83,38 @@ function setup() {
 }
 
 describe("TendersService costing intake workflow", () => {
+  it("saves imported PA details, fees and meeting time with the tender in the same transaction", async () => {
+    const { service, prisma, tx } = setup();
+    prisma.tender.findFirst.mockResolvedValue(null);
+    tx.tender.create.mockResolvedValue(tenderFixture({ documentFee: new Prisma.Decimal(2000) }));
+    await service.create("org-1", "user-1", {
+      egpTenderId: "123456", workName: "Equipment", noticeOrganization: "Port Authority",
+      documentFee: 2000, estimatedTenderSecurityAmount: 50000,
+      preBidEndDate: "2026-09-10T15:30:00+06:00", paName: "  Md Karim  ",
+      paDesignation: "Engineer", paPhone: "01700123456", paAddress: "Port Road",
+    });
+    expect(tx.organizationMaster.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ organizationId: "org-1" }),
+    }));
+    expect(tx.tender.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      organizationId: "org-1", organizationMasterId: "new-master", documentFee: 2000,
+      estimatedTenderSecurityAmount: 50000, preBidEndDate: new Date("2026-09-10T09:30:00Z"),
+      paName: "Md Karim", paPhone: "01700123456", paAddress: "Port Road",
+    }) }));
+  });
+
+  it("reuses a tenant organization and explicitly clears optional notice values on edit", async () => {
+    const { service, prisma, tx } = setup();
+    prisma.tender.findFirst.mockResolvedValue(tenderFixture());
+    tx.organizationMaster.findMany.mockResolvedValue([{ id: "master-1" }]);
+    tx.tender.update.mockResolvedValue(tenderFixture());
+    await service.update("org-1", "user-1", "tender-1", { noticeOrganization: "Client", paName: "", documentFee: null, preBidEndDate: null });
+    expect(tx.organizationMaster.upsert).not.toHaveBeenCalled();
+    expect(tx.tender.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      organizationMasterId: "master-1", paName: null, documentFee: null, preBidEndDate: null,
+    }) }));
+  });
+
   it("returns only active tenant users and the exact procurement whitelist", async () => {
     const { service, prisma } = setup();
     prisma.organizationUser.findMany.mockResolvedValue([

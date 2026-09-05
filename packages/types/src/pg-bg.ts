@@ -1,6 +1,7 @@
 export type PgBgWorkflowStatus = "DRAFT" | "NOA_ACCEPTED" | "NOA_REJECTED" | "FINALIZED";
 
 export interface EligiblePgBgTender {
+  paContact?: OrganizationContactInput | null;
   id: string;
   tenderId: string | null;
   tenderWorkName: string;

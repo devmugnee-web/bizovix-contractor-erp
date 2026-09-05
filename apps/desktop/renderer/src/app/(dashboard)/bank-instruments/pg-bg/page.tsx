@@ -99,13 +99,20 @@ function initialGuarantee(): GuaranteeDraft {
   };
 }
 
+function initialContact(contact?: EligiblePgBgTender["paContact"]) {
+  return {
+    name: contact?.name ?? "", designation: contact?.designation ?? "",
+    mobile: contact?.mobile ?? "", email: contact?.email ?? "", address: contact?.address ?? "",
+  };
+}
+
 function initialForm(tender?: EligiblePgBgTender | null): PgBgWorkflowFormValues {
   return {
     documentPurchaseId: tender?.id ?? "",
     noaDate: "",
     noaAmount: 0,
     workCategory: tender?.category ?? "",
-    contact: { name: "", designation: "", mobile: "", email: "", address: "" },
+    contact: initialContact(tender?.paContact),
     acceptNoa: true,
     pgBgRequired: true,
     currentStep: 1,
@@ -247,7 +254,7 @@ export default function PgBgPage() {
               email: draft.contact.email ?? "",
               address: draft.contact.address,
             }
-          : { name: "", designation: "", mobile: "", email: "", address: "" },
+          : initialContact(selected.paContact),
         acceptNoa: draft.acceptNoa ?? true,
         pgBgRequired: draft.pgBgRequired ?? true,
         currentStep: draft.currentStep,

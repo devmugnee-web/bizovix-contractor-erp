@@ -5,7 +5,11 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { Prisma, TenderCostingStatus } from "@bizovix/database";
-import type { PaginationMeta } from "@bizovix/types";
+import type {
+  ItemPriceHistoryChangeType,
+  ItemPriceHistoryRecord,
+  PaginationMeta,
+} from "@bizovix/types";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -38,6 +42,38 @@ type DetailRecord = Prisma.TenderCostingGetPayload<{ include: typeof detailInclu
 
 function decimal(value: Prisma.Decimal) {
   return value.toFixed(2);
+}
+
+const PRICE_HISTORY_PERSON_COLORS = [
+  "#2563EB",
+  "#059669",
+  "#F97316",
+  "#7C3AED",
+  "#64748B",
+] as const;
+
+function normalizedPriceHistoryKey(
+  description: string,
+  secondaryDescription: string | null,
+  unit: string,
+) {
+  return [description, secondaryDescription ?? "", unit]
+    .map((value) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase())
+    .join("|");
+}
+
+function priceHistoryPerson(name: string | null) {
+  const resolvedName = name?.trim() || "Unknown User";
+  const initial = resolvedName.charAt(0).toLocaleUpperCase() || "U";
+  const colorIndex = Array.from(resolvedName).reduce(
+    (sum, character) => sum + character.charCodeAt(0),
+    0,
+  );
+  return {
+    name: resolvedName,
+    initial,
+    color: PRICE_HISTORY_PERSON_COLORS[colorIndex % PRICE_HISTORY_PERSON_COLORS.length]!,
+  };
 }
 
 function toListDto(record: ListRecord) {
@@ -168,6 +204,63 @@ export class TenderCostingsService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
   ) {}
+
+  async itemPriceHistory(organizationId: string): Promise<ItemPriceHistoryRecord[]> {
+    const items = await this.prisma.tenderCostingItem.findMany({
+      where: {
+        organizationId,
+        costingStatus: "COSTED",
+        unitCost: { gt: 0 },
+      },
+      select: {
+        id: true,
+        description: true,
+        secondaryDescription: true,
+        unit: true,
+        unitCost: true,
+        selectedSource: true,
+        localSupplierName: true,
+        foreignSupplierName: true,
+        preparedByName: true,
+        costingDate: true,
+        createdAt: true,
+      },
+      orderBy: [{ costingDate: "asc" }, { createdAt: "asc" }],
+    });
+
+    const previousPriceByItem = new Map<string, number>();
+    const history = items.map((item): ItemPriceHistoryRecord => {
+      const key = normalizedPriceHistoryKey(item.description, item.secondaryDescription, item.unit);
+      const currentPrice = Number(item.unitCost);
+      const previousPrice = previousPriceByItem.get(key) ?? currentPrice;
+      previousPriceByItem.set(key, currentPrice);
+
+      const changeType: ItemPriceHistoryChangeType =
+        currentPrice > previousPrice
+          ? "Increased"
+          : currentPrice < previousPrice
+            ? "Decreased"
+            : "No Change";
+      const supplier =
+        item.selectedSource === "FOREIGN" ? item.foreignSupplierName : item.localSupplierName;
+
+      return {
+        id: item.id,
+        itemDescription: item.description,
+        brandModel: item.secondaryDescription ?? "",
+        supplier: supplier?.trim() || "Not specified",
+        uom: item.unit,
+        previousPrice,
+        currentPrice,
+        changeType,
+        priceDate: item.costingDate.toISOString(),
+        updatedBy: priceHistoryPerson(item.preparedByName),
+        source: "Tender Costing",
+      };
+    });
+
+    return history.reverse();
+  }
 
   async findAll(
     organizationId: string,

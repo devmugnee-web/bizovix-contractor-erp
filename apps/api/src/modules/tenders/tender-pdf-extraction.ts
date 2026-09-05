@@ -5,7 +5,7 @@ import {
   type TenderPdfExtractionResult,
   type TenderProcurementMethod,
 } from "@bizovix/types";
-import { extractText, getDocumentProxy } from "unpdf";
+import { extractText, extractTextItems, getDocumentProxy } from "unpdf";
 
 export const MAX_TENDER_PDF_BYTES = 10 * 1024 * 1024;
 export const MAX_TENDER_PDF_PAGES = 50;
@@ -248,9 +248,140 @@ function extractRemarks(text: string): string | undefined {
   return value ? truncate(value, 2_000) : undefined;
 }
 
+const NOTICE_LABELS = {
+  paName: /(?:Name\s+of\s+Official\s+Inviting\s+Tender(?:\/Proposal)?|PA\s+Name|PE\s+Name)/i,
+  paDesignation: /(?:Designation\s+of\s+Official\s+Inviting\s+Tender(?:\/Proposal)?|PA\s+Designation|Designation)/i,
+  paPhone: /\b(?:(?:PA\s+)?Phone|Telephone|Mobile|Tel\.?)(?:\s+(?:Number|No\.?))?(?=\s*:)/i,
+  paAddress: /(?:Address\s+of\s+Official\s+Inviting\s+Tender(?:\/Proposal)?|PA\s+Address|Address)/i,
+  noticeOrganization: /(?:Organi[sz]ation(?:\s+Name)?|Agency)/i,
+};
+
+function extractPaPhone(text: string): string | undefined {
+  const compact = singleLineText(text);
+  const officialStart = compact.search(/Procuring\s+Entity\s+Details|Contact\s+details\s+of\s+Official/i);
+  const scope = officialStart >= 0 ? compact.slice(officialStart) : compact;
+  const phone = "\\+?[\\d(][\\d ()-]*\\d";
+  const matches = scope.matchAll(new RegExp(
+    NOTICE_LABELS.paPhone.source + "\\s*:\\s*(" + phone + "(?:\\s*[,;/]\\s*" + phone + ")*)", "gi",
+  ));
+  for (const match of matches) {
+    const value = match[1].trim();
+    if (value.length <= 100 && value.split(/[,;/]/).every((number) => {
+      const digits = number.replace(/\D/g, "").length;
+      return digits >= 7 && digits <= 15;
+    })) return value;
+  }
+  return undefined;
+}
+
+interface NoticeTextItem {
+  str: string;
+  x: number;
+  y: number;
+  width: number;
+  fontSize: number;
+}
+
+// Read the amount from its actual table column, never from adjacent dates or lot numbers.
+export function extractTenderSecurityFromTable(pages: NoticeTextItem[][], text: string): number | undefined {
+  // Multi-page tables without an explicit single-lot notice may contain unseen continuation rows.
+  if (pages.length > 1 && !/Invitation\s+for\s*:\s*Tender\s*[-–—]\s*Single\s+Lot\b/i.test(singleLineText(text))) return undefined;
+  const rows: Array<number | undefined> = [];
+  for (const page of pages) {
+    const items = page.filter((item) => item.str.trim());
+    for (const security of items.filter((item) => /\bsecurity\b/i.test(item.str))) {
+      const center = security.x + security.width / 2;
+      const tolerance = Math.max(3, security.fontSize * 0.65);
+      const header = items.filter((item) =>
+        Math.abs(item.x + item.width / 2 - center) <= Math.max(10, security.fontSize * 1.5)
+        && Math.abs(item.y - security.y) <= security.fontSize * 5
+        && /[A-Za-z]/.test(item.str),
+      ).sort((a, b) => b.y - a.y);
+      const label = header.map((item) => item.str).join(" ");
+      if (!/Tender\s*\/\s*Proposal\s+security\s*\(\s*Amount\s+in\s+BDT\s*\)/i.test(label)) continue;
+      const top = Math.max(...header.map((item) => item.y));
+      const bottom = Math.min(...header.map((item) => item.y));
+      const left = Math.min(...header.map((item) => item.x));
+      const right = Math.max(...header.map((item) => item.x + item.width));
+      const lotHeader = items.find((item) => /^Lot\s+No\.?$/i.test(item.str.trim()) && item.y >= bottom - tolerance && item.y <= top + tolerance);
+      if (!lotHeader) continue;
+      const sectionEnd = items.filter((item) => item.y < bottom && /Procuring\s+Entity\s+Details|Official\s+Inviting/i.test(item.str));
+      const endY = sectionEnd.length ? Math.max(...sectionEnd.map((item) => item.y)) : 0;
+      const lotRows = items.filter((item) => /^\d+$/.test(item.str.trim())
+        && item.y < bottom - tolerance && item.y > endY
+        && item.x + item.width / 2 >= lotHeader.x - tolerance
+        && item.x + item.width / 2 <= lotHeader.x + lotHeader.width + tolerance);
+      for (const lot of lotRows) {
+        const cells = items.filter((item) => Math.abs(item.y - lot.y) <= tolerance
+          && item.x >= left - tolerance && item.x + item.width <= right + tolerance
+          && /^\d[\d,]*(?:\.\d{1,2})?$/.test(item.str.trim()));
+        rows.push(cells.length === 1 ? Number(cells[0].str.replace(/,/g, "")) : undefined);
+      }
+    }
+  }
+  // Do not silently choose one lot or assume how multiple lots should be combined.
+  return rows.length === 1 && Number.isFinite(rows[0]) ? rows[0] : undefined;
+}
+
+function extractNoticeDetails(text: string): TenderPdfExtractedData {
+  const result: TenderPdfExtractedData = {};
+  const stop = new RegExp([
+    ...Object.values(NOTICE_LABELS).map((label) => label.source),
+    "Ministry(?:\\s*\\/\\s*Division)?", "Procuring\\s+Entity(?:\\s+Name)?",
+    "District", "Country", "City", "Thana", "Postal\\s+Code", "Fax(?:\\s+No\\.?)?",
+    "E-?mail", "Contact\\s+[Dd]etails", "Tender\\/Proposal\\s+ID",
+    "Tender\\/Proposal\\s+Package", "Tender\\/Proposal\\s+Closing", "Tender\\/Proposal\\s+Opening",
+    "Procurement\\s+Nature", "Procurement\\s+Method", "Tender\\s+Security",
+    "Document\\s+Fee", "Tender(?:\\/Proposal)?\\s+Document\\s+Price", "Pre[-\\s]?Tender", "Pre[-\\s]?Bid", "Meeting\\s+End",
+    "Brief\\s+Description", "Eligibility", "Invitation\\s+Reference", "Lot\\s+No",
+  ].join("|"), "i");
+  for (const key of Object.keys(NOTICE_LABELS) as Array<keyof typeof NOTICE_LABELS>) {
+    if (key === "paPhone") continue;
+    const value = captureBetween(text, NOTICE_LABELS[key], stop);
+    if (value && !/^(?:n\/a|not applicable|none)$/i.test(value)) {
+      result[key] = truncate(value, key === "paAddress" ? 1000 : 300);
+    }
+  }
+  // Some e-GP exports put Name/Designation under a separate official-contact heading.
+  const officialSection = /\bOfficial\s+Inviting\s+Tender(?:\/Proposal)?\s*:\s*(Name\s*:[\s\S]+)/i.exec(text)?.[1];
+  if (officialSection) {
+    const name = captureBetween(officialSection, /\bName/i, stop);
+    if (name) result.paName = truncate(name, 300);
+    for (const key of ["paDesignation", "paAddress"] as const) {
+      const value = captureBetween(officialSection, NOTICE_LABELS[key], stop);
+      if (value) result[key] = truncate(value, key === "paAddress" ? 1000 : 300);
+    }
+  }
+  result.paPhone = extractPaPhone(text);
+  const amount = (label: string) => {
+    const matches = [...singleLineText(text).matchAll(new RegExp(
+      label + "\\s*(?:\\(\\s*(?:(?:Amount\\s+)?In\\s+)?(?:BDT|Tk\\.?|Taka)\\s*\\))?\\s*:?\\s*(?:BDT|Tk\\.?|Taka)?\\s*([\\d,]+(?:\\.\\d{1,2})?)(?![\\d,.]|\\s*%)", "gi",
+    ))];
+    // Multiple different lot amounts require review; do not guess their total.
+    const values = [...new Set(matches.map((m) => Number(m[1].replace(/,/g, ""))))];
+    return values.length === 1 && Number.isFinite(values[0]) ? values[0] : undefined;
+  };
+  result.documentFee = amount("(?:Tender(?:\\/Proposal)?\\s+Document\\s+Price|Price\\s+of\\s+(?:Tender\\s+)?Document|Document\\s+(?:Fee|Price))");
+  result.estimatedTenderSecurityAmount = amount("(?:Tender(?:\\/Proposal)?\\s+Security(?:\\s+Amount)?|Security\\s+Amount)");
+  const meeting = new RegExp(
+    "(?:Pre[-\\s]?(?:Tender|Bid)(?:\\/Proposal)?\\s+Meeting\\s+End|Meeting\\s+End)(?:\\s+Date(?:\\s+(?:and|&)\\s+Time)?)?\\s*:?\\s*(" + DATE_VALUE_PATTERN + ")", "i",
+  ).exec(singleLineText(text))?.[1];
+  const date = parseDate(meeting);
+  if (date && meeting) {
+    const time = /(\d{1,2})[:.](\d{2})(?:\s*([AP]M))?\s*$/i.exec(meeting);
+    let hour = Number(time?.[1] ?? 0);
+    const minute = Number(time?.[2] ?? 0);
+    if (time?.[3]) hour = hour % 12 + (time[3].toUpperCase() === "PM" ? 12 : 0);
+    if (hour < 24 && minute < 60 && (!time?.[3] || (Number(time[1]) >= 1 && Number(time[1]) <= 12))) {
+      result.preBidEndDate = date + "T" + String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0") + ":00+06:00";
+    }
+  }
+  return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== undefined));
+}
+
 export function parseTenderPdfText(rawText: string): TenderPdfExtractedData {
   const text = compactText(rawText);
-  const data: TenderPdfExtractedData = {};
+  const data: TenderPdfExtractedData = extractNoticeDetails(text);
   const egpTenderId = extractTenderId(text);
   const workName = extractWorkName(text);
   const tenderType = extractTenderType(text);
@@ -330,7 +461,12 @@ export async function extractTenderPdf(
     }
 
     const data = parseTenderPdfText(text);
-    const extractedFieldCount = Object.values(data).filter(Boolean).length;
+    if (data.estimatedTenderSecurityAmount === undefined) {
+      const positioned = await withTimeout(extractTextItems(pdf), "Tender PDF took too long to read");
+      const securityAmount = extractTenderSecurityFromTable(positioned.items, text);
+      if (securityAmount !== undefined) data.estimatedTenderSecurityAmount = securityAmount;
+    }
+    const extractedFieldCount = Object.values(data).filter((value) => value !== undefined && value !== "").length;
     if (extractedFieldCount === 0) {
       throw new BadRequestException("No supported tender information was found in this PDF");
     }

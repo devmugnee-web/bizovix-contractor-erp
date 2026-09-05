@@ -11,6 +11,28 @@ export type TenderCostingShippingMethod =
 export type TenderCostingShippingRateBasis = "PER_CBM" | "PER_KG" | "FLAT";
 export type TenderCostingLcAllocationMethod = "EQUAL" | "WEIGHT" | "VALUE";
 
+export interface TenderCostingPdfExtractedRow {
+  description: string;
+  unit?: string;
+  quantity?: number;
+  unitPrice?: number;
+  totalPrice?: number;
+}
+
+export interface TenderCostingPdfFileResult {
+  fileName: string;
+  totalPages: number;
+  extractedRowCount: number;
+  error?: string;
+}
+
+export interface TenderCostingPdfExtractionResult {
+  rows: TenderCostingPdfExtractedRow[];
+  files: TenderCostingPdfFileResult[];
+  totalPages: number;
+  duplicateRowsSkipped: number;
+}
+
 export interface TenderCostingUser {
   id: string;
   name: string;
@@ -242,4 +264,27 @@ export interface TenderCostingStats {
   totalCostingBudget: string;
   totalEstimatedCost: string;
   totalOurCost: string;
+}
+
+export type ItemPriceHistoryChangeType = "Increased" | "Decreased" | "No Change";
+export type ItemPriceHistorySource = "Tender Costing";
+
+export interface ItemPriceHistoryPerson {
+  name: string;
+  initial: string;
+  color: string;
+}
+
+export interface ItemPriceHistoryRecord {
+  id: string;
+  itemDescription: string;
+  brandModel: string;
+  supplier: string;
+  uom: string;
+  previousPrice: number;
+  currentPrice: number;
+  changeType: ItemPriceHistoryChangeType;
+  priceDate: string;
+  updatedBy: ItemPriceHistoryPerson;
+  source: ItemPriceHistorySource;
 }

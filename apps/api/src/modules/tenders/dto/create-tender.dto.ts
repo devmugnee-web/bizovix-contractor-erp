@@ -14,6 +14,27 @@ import {
 } from "class-validator";
 
 export class CreateTenderDto {
+  @IsOptional() @IsDateString()
+  preBidEndDate?: string | null;
+
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0)
+  documentFee?: number | null;
+
+  @IsOptional() @IsString() @MaxLength(300)
+  paName?: string;
+
+  @IsOptional() @IsString() @MaxLength(300)
+  paDesignation?: string;
+
+  @IsOptional() @IsString() @MaxLength(100)
+  paPhone?: string;
+
+  @IsOptional() @IsString() @MaxLength(1000)
+  paAddress?: string;
+
+  @IsOptional() @IsString() @MaxLength(300)
+  noticeOrganization?: string;
+
   @IsOptional()
   @IsString()
   @Matches(/\S/, { message: "organizationMasterId must contain text" })
@@ -99,7 +120,7 @@ export class CreateTenderDto {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  estimatedTenderSecurityAmount?: number;
+  estimatedTenderSecurityAmount?: number | null;
 
   @IsOptional()
   @IsString()

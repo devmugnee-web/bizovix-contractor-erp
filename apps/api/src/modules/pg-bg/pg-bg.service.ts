@@ -6,6 +6,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AcceptNoaDto, FinalizePgBgDto, SavePgBgWorkflowDto } from "./dto/save-pg-bg-workflow.dto";
 import { QueryPgBgDto } from "./dto/query-pg-bg.dto";
 import type { CompletePgBgReleaseDto, RequestPgBgReleaseDto } from "./dto/release-pg-bg.dto";
+import { readPaSnapshot, tenderPaContact, tenderPaSelect } from "../tenders/tender-pa";
 
 const workflowInclude = { contact: true } satisfies Prisma.PgBgWorkflowInclude;
 type WorkflowRecord = Prisma.PgBgWorkflowGetPayload<{ include: typeof workflowInclude }>;
@@ -13,6 +14,7 @@ type WorkflowRecord = Prisma.PgBgWorkflowGetPayload<{ include: typeof workflowIn
 function workflowToDto(record: WorkflowRecord) {
   return {
     ...record,
+    contact: readPaSnapshot(record.contactSnapshot) ?? record.contact,
     // Retained in the response for older clients; the current NOA/PG-BG flow does not use it.
     tenderSecurityAmount: record.tenderSecurityAmount.toFixed(2),
     noaAmount: record.noaAmount?.toFixed(2) ?? null,
@@ -53,6 +55,7 @@ export class PgBgService {
       ],
     };
     const relation = {
+      linkedTender: { select: tenderPaSelect },
       organizationMaster: { select: { id: true, shortName: true, fullName: true } },
     } as const;
     const [items, total] = await Promise.all([
@@ -70,6 +73,7 @@ export class PgBgService {
       tenderId: item.egpTenderId,
       tenderWorkName: item.tenderWorkName,
       category: item.category,
+      paContact: tenderPaContact(item.linkedTender),
       organizationMaster: item.organizationMaster,
     }));
     return {
@@ -98,7 +102,7 @@ export class PgBgService {
   async saveDraft(organizationId: string, userId: string, dto: SavePgBgWorkflowDto) {
     const purchase = await this.prisma.documentPurchase.findFirst({
       where: { id: dto.documentPurchaseId, organizationId },
-      include: { cmsWork: { select: { id: true } } },
+      include: { cmsWork: { select: { id: true } }, linkedTender: { select: tenderPaSelect } },
     });
     if (!purchase) throw new NotFoundException("Eligible tender not found");
     if (purchase.purchaseType !== "EGP") {
@@ -109,7 +113,7 @@ export class PgBgService {
     }
     const existingWorkflow = await this.prisma.pgBgWorkflow.findFirst({
       where: { documentPurchaseId: purchase.id, organizationId },
-      select: { status: true },
+      select: { status: true, contact: true, contactSnapshot: true },
     });
     if (
       existingWorkflow?.status === "FINALIZED" ||
@@ -124,38 +128,42 @@ export class PgBgService {
       );
     }
     const record = await this.prisma.$transaction(async (tx) => {
+      const baseContact = readPaSnapshot(existingWorkflow?.contactSnapshot)
+        ?? existingWorkflow?.contact ?? tenderPaContact(purchase.linkedTender);
+      const pa = dto.contact ? { ...baseContact, ...dto.contact } : baseContact;
+      const snapshot = pa ? {
+        id: baseContact?.id ?? purchase.id,
+        name: pa.name ?? "", designation: pa.designation ?? "", mobile: pa.mobile ?? "",
+        address: pa.address ?? "", email: pa.email || null,
+      } : undefined;
       let contactId: string | undefined;
       if (
-        dto.contact?.mobile &&
-        dto.contact.name &&
-        dto.contact.designation &&
-        dto.contact.address
+        snapshot?.mobile &&
+        snapshot.name &&
+        snapshot.designation &&
+        snapshot.address
       ) {
         const contact = await tx.organizationContact.upsert({
           where: {
             organizationId_organizationMasterId_mobile: {
               organizationId,
               organizationMasterId: purchase.organizationMasterId,
-              mobile: dto.contact.mobile,
+              mobile: snapshot.mobile,
             },
           },
-          update: {
-            name: dto.contact.name,
-            designation: dto.contact.designation,
-            email: dto.contact.email || null,
-            address: dto.contact.address,
-          },
+          update: {},
           create: {
             organizationId,
             organizationMasterId: purchase.organizationMasterId,
-            name: dto.contact.name,
-            designation: dto.contact.designation,
-            mobile: dto.contact.mobile,
-            email: dto.contact.email || null,
-            address: dto.contact.address,
+            name: snapshot.name,
+            designation: snapshot.designation,
+            mobile: snapshot.mobile,
+            email: snapshot.email,
+            address: snapshot.address,
           },
         });
         contactId = contact.id;
+        snapshot.id = contact.id;
       }
 
       return tx.pgBgWorkflow.upsert({
@@ -168,6 +176,7 @@ export class PgBgService {
           ...(dto.pgBgRequired !== undefined ? { pgBgRequired: dto.pgBgRequired } : {}),
           ...(dto.currentStep !== undefined ? { currentStep: dto.currentStep } : {}),
           ...(contactId ? { contactId } : {}),
+          ...(snapshot ? { contactSnapshot: snapshot } : {}),
         },
         create: {
           organizationId,
@@ -180,6 +189,7 @@ export class PgBgService {
           pgBgRequired: dto.pgBgRequired,
           currentStep: dto.currentStep ?? 1,
           contactId,
+          contactSnapshot: snapshot,
           createdById: userId,
         },
         include: workflowInclude,
@@ -203,6 +213,10 @@ export class PgBgService {
       include: { contact: true, cmsWork: { select: { id: true } } },
     });
     if (!existing) throw new NotFoundException("PG/BG workflow not found");
+    const pa = readPaSnapshot(existing.contactSnapshot) ?? existing.contact;
+    if (!pa || ![pa.name, pa.designation, pa.mobile, pa.address].every((value) => value?.trim())) {
+      throw new BadRequestException("Complete PE contact information before proceeding");
+    }
     if (!existing.noaDate || !existing.noaAmount || !existing.workCategory || !existing.contactId) {
       throw new BadRequestException("Complete NOA and PE contact information before proceeding");
     }

@@ -1132,6 +1132,13 @@ model Tender {
   publishedDate                 DateTime?
   documentPurchaseDeadline      DateTime?
   preBidDate                    DateTime?
+  preBidEndDate                 DateTime?
+  documentFee                   Decimal? @db.Decimal(18, 2)
+  paName                        String?
+  paDesignation                 String?
+  paPhone                       String?
+  paAddress                     String?
+  noticeOrganization            String?
   submissionDeadline            DateTime?
   openingDate                   DateTime?
   tenderSecurityRequired        Boolean   @default(false)
@@ -1547,6 +1554,7 @@ model PgBgWorkflow {
   documentPurchaseId   String             @unique
   organizationMasterId String
   contactId            String?
+  contactSnapshot      Json?
   tenderSecurityAmount Decimal            @default(0) @db.Decimal(18, 2)
   noaDate              DateTime?
   noaAmount            Decimal?           @db.Decimal(18, 2)

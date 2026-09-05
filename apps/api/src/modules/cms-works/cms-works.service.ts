@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, type CmsWorkStatus } from "@bizovix/database";
+import { readPaSnapshot, tenderPaContact, tenderPaSelect } from "../tenders/tender-pa";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -78,6 +79,7 @@ export class CmsWorksService {
       include: {
         organizationMaster: { select: { id: true, shortName: true, fullName: true } },
         pgBgWorkflow: { include: { contact: true } },
+        tender: { select: tenderPaSelect },
         contracts: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     });
@@ -99,7 +101,8 @@ export class CmsWorksService {
       }),
     ]);
 
-    const primaryContact = work.pgBgWorkflow?.contact ?? contacts[0] ?? null;
+    const primaryContact = readPaSnapshot(work.pgBgWorkflow?.contactSnapshot)
+      ?? work.pgBgWorkflow?.contact ?? tenderPaContact(work.tender) ?? contacts[0] ?? null;
     const otherContacts = contacts.filter((contact) => contact.id !== primaryContact?.id);
     const contract = work.contracts[0] ?? null;
     const securityRate = contract?.securityDepositPct ?? null;

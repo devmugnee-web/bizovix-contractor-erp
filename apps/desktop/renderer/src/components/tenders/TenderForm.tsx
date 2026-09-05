@@ -3,12 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Building2, Check, FileCheck2, LoaderCircle, Save, UploadCloud } from "lucide-react";
 import {
   ApiError,
   extractTenderPdf,
+  useOrganizations,
   useCreateTender,
   useSubmitTenderForCostingApproval,
   useTenderOptions,
@@ -134,6 +135,14 @@ export function TenderForm({
     resolver: zodResolver(createTenderSchema),
     defaultValues: {
       egpTenderId: tender?.egpTenderId ?? "",
+      documentFee: tender?.documentFee == null ? null : Number(tender.documentFee),
+      estimatedTenderSecurityAmount: tender?.estimatedTenderSecurityAmount == null ? null : Number(tender.estimatedTenderSecurityAmount),
+      preBidEndDate: tender?.preBidEndDate ? new Date(new Date(tender.preBidEndDate).getTime() + 6 * 60 * 60 * 1000).toISOString().slice(0, 16) : "",
+      paName: tender?.paName ?? "",
+      paDesignation: tender?.paDesignation ?? "",
+      paPhone: tender?.paPhone ?? "",
+      paAddress: tender?.paAddress ?? "",
+      noticeOrganization: tender?.noticeOrganization ?? tender?.organizationMaster?.fullName ?? "",
       workName: tender?.workName ?? "",
       tenderType: tender?.tenderType ?? "",
       procurementMethod: tender?.procurementMethod ?? "OTM",
@@ -145,6 +154,9 @@ export function TenderForm({
     },
   });
 
+  const organizationName = useWatch({ control, name: "noticeOrganization" }) ?? "";
+  const organizations = useOrganizations(organizationName);
+  const meetingEnd = useWatch({ control, name: "preBidEndDate" });
   const users = tenderOptions.data?.users ?? [];
 
   async function readTenderPdf(file: File | undefined) {
@@ -166,6 +178,12 @@ export function TenderForm({
     try {
       const result = await extractTenderPdf(file);
       const { data } = result;
+      for (const key of ["paName", "paDesignation", "paPhone", "paAddress", "noticeOrganization", "documentFee", "estimatedTenderSecurityAmount"] as const) {
+        if (data[key] !== undefined) setValue(key, data[key], { shouldDirty: true, shouldValidate: true });
+      }
+      if (data.preBidEndDate) {
+        setValue("preBidEndDate", new Date(new Date(data.preBidEndDate).getTime() + 6 * 60 * 60 * 1000).toISOString().slice(0, 16), { shouldDirty: true });
+      }
       if (data.egpTenderId) {
         setValue("egpTenderId", data.egpTenderId, { shouldDirty: true, shouldValidate: true });
         clearErrors("egpTenderId");
@@ -232,6 +250,14 @@ export function TenderForm({
         : undefined);
     const payload = {
       egpTenderId: values.egpTenderId.trim(),
+      documentFee: values.documentFee,
+      estimatedTenderSecurityAmount: values.estimatedTenderSecurityAmount,
+      preBidEndDate: values.preBidEndDate ? values.preBidEndDate + ":00+06:00" : null,
+      paName: values.paName ?? "",
+      paDesignation: values.paDesignation ?? "",
+      paPhone: values.paPhone ?? "",
+      paAddress: values.paAddress ?? "",
+      noticeOrganization: values.noticeOrganization ?? "",
       workName: values.workName,
       tenderType: values.tenderType || undefined,
       procurementMethod: values.procurementMethod,
@@ -464,6 +490,32 @@ export function TenderForm({
           </div>
 
           <div className="lg:col-span-12">
+            <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {([{ key: "estimatedTenderSecurityAmount", label: "Tender Security (BDT)" }, { key: "documentFee", label: "Document Fee (BDT)" }] as const).map(({ key, label }) => (
+                <FormField key={key} label={label} htmlFor={key} error={errors[key]?.message}>
+                  <Controller control={control} name={key} render={({ field }) => (
+                    <TextInput id={key} name={field.name} type="number" min="0" step="0.01" value={field.value ?? ""} onBlur={field.onBlur} ref={field.ref}
+                      onChange={(event) => field.onChange(event.target.value === "" ? null : Number(event.target.value))} />
+                  )} />
+                </FormField>
+              ))}
+              <FormField label="Meeting End Date & Time (BD)" htmlFor="preBidEndDate" error={errors.preBidEndDate?.message}>
+                <TextInput id="preBidEndDate" type="datetime-local" {...register("preBidEndDate")} />
+                {meetingEnd && !Number.isNaN(Date.parse(meetingEnd)) && <span className="text-xs text-biz-muted">{new Date(meetingEnd).toLocaleDateString("en-GB", { weekday: "long" })}</span>}
+              </FormField>
+              <FormField label="Organization" htmlFor="noticeOrganization" error={errors.noticeOrganization?.message}>
+                <TextInput id="noticeOrganization" list="tender-notice-organizations" {...register("noticeOrganization")} />
+                <datalist id="tender-notice-organizations">
+                  {(organizations.data ?? []).map((org) => <option key={org.id} value={org.fullName}>{org.shortName}</option>)}
+                </datalist>
+              </FormField>
+              <FormField label="PA Name" htmlFor="paName" error={errors.paName?.message}><TextInput id="paName" {...register("paName")} /></FormField>
+              <FormField label="PA Designation" htmlFor="paDesignation" error={errors.paDesignation?.message}><TextInput id="paDesignation" {...register("paDesignation")} /></FormField>
+              <FormField label="PA Phone Number" htmlFor="paPhone" error={errors.paPhone?.message}><TextInput id="paPhone" type="tel" {...register("paPhone")} /></FormField>
+              <div className="sm:col-span-2">
+                <FormField label="PA Address" htmlFor="paAddress" error={errors.paAddress?.message}><TextInput id="paAddress" {...register("paAddress")} /></FormField>
+              </div>
+            </div>
             <FormField label="Remarks" error={errors.remarks?.message}>
               <textarea
                 rows={3}

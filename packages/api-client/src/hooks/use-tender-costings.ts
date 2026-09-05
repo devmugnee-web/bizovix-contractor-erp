@@ -1,14 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  ItemPriceHistoryRecord,
   SaveTenderCostingInput,
   SetTenderCostingBudgetInput,
   TenderCostingDetail,
+  TenderCostingPdfExtractionResult,
   TenderCostingQuery,
   TenderCostingRecord,
   TenderCostingStats,
 } from "@bizovix/types";
 import { apiRequest, apiRequestPaginated } from "../http-client";
 import { queryKeys } from "./query-keys";
+
+export function extractTenderCostingPdfs(files: File[]) {
+  const body = new FormData();
+  files.forEach((file) => body.append("files", file));
+  return apiRequest<TenderCostingPdfExtractionResult>("/tender-costings/extract-pdfs", {
+    method: "POST",
+    body,
+  });
+}
 
 export function useTenderCostings(query: TenderCostingQuery) {
   return useQuery({
@@ -30,6 +41,13 @@ export function useTenderCostingStats() {
   return useQuery({
     queryKey: queryKeys.tenderCostingStats,
     queryFn: () => apiRequest<TenderCostingStats>("/tender-costings/stats"),
+  });
+}
+
+export function useItemPriceHistory() {
+  return useQuery({
+    queryKey: queryKeys.itemPriceHistory,
+    queryFn: () => apiRequest<ItemPriceHistoryRecord[]>("/tender-costings/item-price-history"),
   });
 }
 
