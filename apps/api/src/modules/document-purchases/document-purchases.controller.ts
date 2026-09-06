@@ -35,6 +35,12 @@ export class DocumentPurchasesController {
     return this.documentPurchasesService.findRequests(user.organizationId, query);
   }
 
+  @Get("workflow-requests/stats")
+  @RequirePermissions("document_purchase.read")
+  requestStats(@CurrentUser() user: AuthUser) {
+    return this.documentPurchasesService.requestStats(user.organizationId);
+  }
+
   @Post("workflow-requests/:id/approve")
   @RequirePermissions("document_purchase.approve")
   @ResponseMessage("Document purchase request approved successfully")

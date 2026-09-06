@@ -6,6 +6,7 @@ import type {
   DocumentPurchaseRequest,
   DocumentPurchaseRequestActionInput,
   DocumentPurchaseRequestQuery,
+  DocumentPurchaseRequestStats,
   DocumentPurchaseStats,
   RejectDocumentPurchaseRequestInput,
   UpdateDocumentPurchaseInput,
@@ -47,6 +48,13 @@ export function useDocumentPurchaseRequests(query: DocumentPurchaseRequestQuery)
         params: { ...query },
       }),
     placeholderData: (previous) => previous,
+  });
+}
+
+export function useDocumentPurchaseRequestStats() {
+  return useQuery({
+    queryKey: queryKeys.documentPurchaseRequestStats,
+    queryFn: () => apiRequest<DocumentPurchaseRequestStats>("/document-purchases/workflow-requests/stats"),
   });
 }
 

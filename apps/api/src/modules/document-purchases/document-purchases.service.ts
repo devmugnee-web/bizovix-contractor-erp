@@ -83,6 +83,27 @@ export class DocumentPurchasesService {
     private readonly auditLogService: AuditLogService,
   ) {}
 
+  async requestStats(organizationId: string) {
+    const grouped = await this.prisma.documentPurchaseRequest.groupBy({
+      by: ["status"],
+      where: { organizationId },
+      _count: { _all: true },
+    });
+    const counts = new Map(grouped.map((row) => [row.status, row._count._all]));
+    const pendingApproval = counts.get(DocumentPurchaseRequestStatus.PENDING_APPROVAL) ?? 0;
+    const approved = counts.get(DocumentPurchaseRequestStatus.APPROVED) ?? 0;
+    const rejected = counts.get(DocumentPurchaseRequestStatus.REJECTED) ?? 0;
+    const purchased = counts.get(DocumentPurchaseRequestStatus.PURCHASED) ?? 0;
+
+    return {
+      total: pendingApproval + approved + rejected + purchased,
+      pendingApproval,
+      approved,
+      rejected,
+      purchased,
+    };
+  }
+
   async findRequests(
     organizationId: string,
     query: QueryDocumentPurchaseRequestDto,

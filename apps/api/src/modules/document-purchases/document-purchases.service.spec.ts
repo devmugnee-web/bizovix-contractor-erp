@@ -97,6 +97,7 @@ function setup() {
   const prisma = {
     organizationMaster: { findFirst: jest.fn().mockResolvedValue({ id: "master-1" }) },
     bankAccount: { findFirst: jest.fn().mockResolvedValue({ id: "account-1" }) },
+    documentPurchaseRequest: { groupBy: jest.fn() },
     tender: { findFirst: jest.fn() },
     $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
   };
@@ -106,6 +107,26 @@ function setup() {
 }
 
 describe("DocumentPurchasesService Tender business ID compatibility", () => {
+  it("returns workflow status counts for the current organization", async () => {
+    const { service, prisma } = setup();
+    prisma.documentPurchaseRequest.groupBy.mockResolvedValue([
+      { status: "PENDING_APPROVAL", _count: { _all: 4 } },
+      { status: "APPROVED", _count: { _all: 2 } },
+      { status: "PURCHASED", _count: { _all: 7 } },
+    ]);
+
+    await expect(service.requestStats("org-1")).resolves.toEqual({
+      total: 13,
+      pendingApproval: 4,
+      approved: 2,
+      rejected: 0,
+      purchased: 7,
+    });
+    expect(prisma.documentPurchaseRequest.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: "org-1" } }),
+    );
+  });
+
   it("approves a pending request with optimistic concurrency and an audit trail", async () => {
     const { service, tx, audit } = setup();
     tx.documentPurchaseRequest.findFirst

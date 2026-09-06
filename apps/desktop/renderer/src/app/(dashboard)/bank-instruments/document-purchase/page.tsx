@@ -9,6 +9,7 @@ import {
   useAllOrganizations,
   useBankAccounts,
   useDocumentPurchaseStats,
+  useDocumentPurchaseRequestStats,
   useDocumentPurchaseRequests,
   useDocumentPurchases,
   useMe,
@@ -37,6 +38,7 @@ import {
 } from "@bizovix/types";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { Modal } from "@/components/layout/Modal";
+import { SuccessPopup } from "@/components/layout/SuccessPopup";
 
 interface FilterDraft {
   purchaseType: string;
@@ -65,6 +67,13 @@ const REQUEST_STATUS_META = {
   REJECTED: { label: "Rejected", tone: "danger" },
   PURCHASED: { label: "Purchased", tone: "success" },
 } as const;
+
+const REQUEST_STATUS_TABS = [
+  { status: DocumentPurchaseRequestStatus.PENDING_APPROVAL, label: "Pending", countKey: "pendingApproval" },
+  { status: DocumentPurchaseRequestStatus.APPROVED, label: "Approved", countKey: "approved" },
+  { status: DocumentPurchaseRequestStatus.REJECTED, label: "Rejected", countKey: "rejected" },
+  { status: DocumentPurchaseRequestStatus.PURCHASED, label: "Purchased", countKey: "purchased" },
+] as const;
 
 export default function DocumentPurchaseListPage() {
   useSetBreadcrumb([{ label: "Bank Instruments" }, { label: "Document Purchase" }]);
@@ -101,19 +110,36 @@ export default function DocumentPurchaseListPage() {
   const [requestPage, setRequestPage] = React.useState(1);
   const [requestLimit, setRequestLimit] = React.useState(5);
   const requests = useDocumentPurchaseRequests({ page: requestPage, limit: requestLimit, status: requestStatus });
+  const requestStats = useDocumentPurchaseRequestStats();
   const approveRequest = useApproveDocumentPurchaseRequest();
   const rejectRequest = useRejectDocumentPurchaseRequest();
   const [rejecting, setRejecting] = React.useState<DocumentPurchaseRequest | null>(null);
   const [rejectionReason, setRejectionReason] = React.useState("");
   const [workflowError, setWorkflowError] = React.useState("");
+  const [approvedRequest, setApprovedRequest] = React.useState<DocumentPurchaseRequest | null>(null);
 
   async function approve(row: DocumentPurchaseRequest) {
     setWorkflowError("");
     try {
-      await approveRequest.mutateAsync({ id: row.id, payload: { version: row.version } });
+      const approved = await approveRequest.mutateAsync({ id: row.id, payload: { version: row.version } });
+      setApprovedRequest(approved);
     } catch {
       setWorkflowError("Could not approve the request. Reload the list and try again.");
     }
+  }
+
+  function showApprovedRequests() {
+    setApprovedRequest(null);
+    setRequestStatus(DocumentPurchaseRequestStatus.APPROVED);
+    setRequestPage(1);
+  }
+
+  function purchaseApprovedDocument() {
+    if (!approvedRequest) return;
+    router.push(
+      `/bank-instruments/document-purchase/create?tenderId=${approvedRequest.tenderId}&requestId=${approvedRequest.id}`,
+    );
+    setApprovedRequest(null);
   }
 
   async function reject() {
@@ -195,26 +221,38 @@ export default function DocumentPurchaseListPage() {
       </div>
 
       <section className="overflow-hidden rounded-lg border border-biz-border bg-biz-surface shadow-card">
-        <div className="flex flex-col gap-2 border-b border-biz-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-biz-border px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-[15px] font-semibold text-biz-text">Costing to Document Purchase Workflow</h2>
             <p className="mt-0.5 text-[12px] text-biz-muted">
               Tenders approved for costing appear here automatically before any purchase is recorded.
             </p>
           </div>
-          <SelectInput
-            aria-label="Document purchase request status"
-            className="h-9 w-full sm:w-[190px]"
-            value={requestStatus}
-            onChange={(event) => {
-              setRequestStatus(event.target.value as DocumentPurchaseRequestStatus);
-              setRequestPage(1);
-            }}
-            options={Object.entries(REQUEST_STATUS_META).map(([value, meta]) => ({
-              value,
-              label: meta.label,
-            }))}
-          />
+          <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-biz-bg p-1" role="tablist" aria-label="Document purchase request status">
+            {REQUEST_STATUS_TABS.map((tab) => {
+              const active = requestStatus === tab.status;
+              return (
+                <button
+                  key={tab.status}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => {
+                    setRequestStatus(tab.status);
+                    setRequestPage(1);
+                  }}
+                  className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[11px] font-semibold transition-colors ${
+                    active ? "bg-white text-biz-blue shadow-sm" : "text-biz-muted hover:text-biz-text"
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? "bg-biz-blue-soft text-biz-blue" : "bg-white text-biz-muted"}`}>
+                    {requestStats.isLoading ? "–" : (requestStats.data?.[tab.countKey] ?? 0)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {workflowError && <p role="alert" className="border-b border-biz-border px-4 py-2 text-[12px] text-biz-danger">{workflowError}</p>}
@@ -240,6 +278,30 @@ export default function DocumentPurchaseListPage() {
               },
             },
             {
+              key: "decision",
+              header: "Decision",
+              render: (row) => {
+                if (row.status === DocumentPurchaseRequestStatus.APPROVED || row.status === DocumentPurchaseRequestStatus.PURCHASED) {
+                  return (
+                    <div className="text-[11px]">
+                      <p className="font-medium text-biz-text">{row.approvedBy?.name ?? "Approved"}</p>
+                      <p className="text-biz-muted">{row.approvedAt ? formatDate(row.approvedAt) : "Date not available"}</p>
+                    </div>
+                  );
+                }
+                if (row.status === DocumentPurchaseRequestStatus.REJECTED) {
+                  return (
+                    <div className="max-w-48 text-[11px]">
+                      <p className="font-medium text-biz-danger">{row.rejectedBy?.name ?? "Rejected"}</p>
+                      <p className="text-biz-muted">{row.rejectedAt ? formatDate(row.rejectedAt) : "Date not available"}</p>
+                      {row.rejectionReason && <p className="mt-1 break-words text-biz-text">Reason: {row.rejectionReason}</p>}
+                    </div>
+                  );
+                }
+                return <span className="text-[11px] text-biz-muted">Awaiting decision</span>;
+              },
+            },
+            {
               key: "workflow-action",
               header: "Action",
               render: (row) => (
@@ -253,7 +315,7 @@ export default function DocumentPurchaseListPage() {
                         onClick={() => void approve(row)}
                         className="inline-flex h-8 items-center gap-1 rounded-md bg-biz-blue px-2.5 text-[11px] font-semibold text-white disabled:opacity-50"
                       >
-                        <Check className="h-3.5 w-3.5" /> Approve
+                        <Check className="h-3.5 w-3.5" /> Approve for Purchase
                       </button>
                     )}
                   {row.status === DocumentPurchaseRequestStatus.PENDING_APPROVAL && canApprove && (
@@ -284,9 +346,6 @@ export default function DocumentPurchaseListPage() {
                     >
                       <Eye className="h-3.5 w-3.5" /> View Purchase
                     </Link>
-                  )}
-                  {row.status === DocumentPurchaseRequestStatus.REJECTED && row.rejectionReason && (
-                    <span className="text-[11px] text-biz-muted" title={row.rejectionReason}>Reason: {row.rejectionReason}</span>
                   )}
                 </div>
               ),
@@ -449,6 +508,22 @@ export default function DocumentPurchaseListPage() {
           />
         </div>
       </div>
+
+      <SuccessPopup
+        open={approvedRequest !== null}
+        title="Document Purchase Approved"
+        message={
+          approvedRequest
+            ? `Tender ${approvedRequest.tender.egpTenderId ?? approvedRequest.tenderId} is approved and ready for document purchase.`
+            : "The request is approved and ready for document purchase."
+        }
+        primaryLabel={canCreate ? "Purchase Document Now" : "View Approved Requests"}
+        onPrimary={canCreate ? purchaseApprovedDocument : showApprovedRequests}
+        secondaryLabel={canCreate ? "Purchase Later" : undefined}
+        onSecondary={showApprovedRequests}
+        onClose={showApprovedRequests}
+        dismissOnBackdrop={false}
+      />
 
       <Modal
         open={!!rejecting}

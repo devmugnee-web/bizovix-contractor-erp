@@ -96,6 +96,14 @@ export interface DocumentPurchaseRequestQuery {
   status?: DocumentPurchaseRequestStatus;
 }
 
+export interface DocumentPurchaseRequestStats {
+  total: number;
+  pendingApproval: number;
+  approved: number;
+  rejected: number;
+  purchased: number;
+}
+
 export interface DocumentPurchaseRequestActionInput {
   version: number;
 }

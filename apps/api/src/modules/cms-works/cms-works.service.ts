@@ -46,7 +46,10 @@ export class CmsWorksService {
       this.prisma.cmsWork.findMany({
         where,
         include: includeRelations,
-        orderBy: query.status === "ARCHIVED" ? [{ completionDate: "desc" }, { id: "asc" }] : { id: "asc" },
+        orderBy:
+          query.status === "ARCHIVED"
+            ? [{ completionDate: "desc" }, { id: "asc" }]
+            : [{ createdAt: "desc" }, { id: "asc" }],
         skip: (page - 1) * limit,
         take: limit,
       }),

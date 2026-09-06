@@ -17,6 +17,7 @@ export const queryKeys = {
   documentCategories: ["documents", "categories"] as const,
   documentPurchases: (params?: unknown) => ["document-purchases", params ?? {}] as const,
   documentPurchaseRequests: (params?: unknown) => ["document-purchase-requests", params ?? {}] as const,
+  documentPurchaseRequestStats: ["document-purchase-requests", "stats"] as const,
   documentPurchaseStats: ["document-purchases", "stats"] as const,
   documentPurchase: (id: string) => ["document-purchases", id] as const,
   tenderSecurityPending: (params?: unknown) => ["tender-securities", "pending", params ?? {}] as const,
