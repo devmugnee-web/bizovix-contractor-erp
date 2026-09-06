@@ -153,7 +153,12 @@ function AddDocumentPurchaseForm() {
   function continueAfterPurchase() {
     if (!savedPurchase) return;
     setSavedPurchase(null);
-    router.push(savedPurchase.linkedTenderId ? "/bank-instruments/tender-security" : `/bank-instruments/document-purchase/${savedPurchase.id}`);
+    const tenderSearch = savedPurchase.tenderId ?? savedPurchase.tenderWorkName;
+    router.push(
+      savedPurchase.linkedTenderId
+        ? `/bank-instruments/tender-security?tenderId=${encodeURIComponent(tenderSearch)}`
+        : `/bank-instruments/document-purchase/${savedPurchase.id}`,
+    );
   }
 
   function viewPurchaseContext() {

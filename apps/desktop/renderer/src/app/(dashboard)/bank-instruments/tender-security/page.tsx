@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Building2,
@@ -36,7 +37,7 @@ type SelectedTender = PendingTenderSecurity & {
   referenceNo: string;
 };
 
-const DEFAULT_QUERY: TenderSecurityPendingQuery = { page: 1, limit: 5 };
+const DEFAULT_QUERY: TenderSecurityPendingQuery = { page: 1, limit: 5, securityStatus: "PENDING" };
 const ACTIVE_TENDER_STATUS_OPTIONS: Array<{ label: string; value: TenderStatus }> = [
   { label: "Draft", value: "DRAFT" },
   { label: "Published", value: "PUBLISHED" },
@@ -145,10 +146,23 @@ function RadioCard({
 }
 
 export default function TenderSecurityPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <TenderSecurityWorkspace />
+    </React.Suspense>
+  );
+}
+
+function TenderSecurityWorkspace() {
   useSetBreadcrumb([{ label: "Bank Instruments" }, { label: "Tender Security" }]);
 
-  const [query, setQuery] = React.useState<TenderSecurityPendingQuery>(DEFAULT_QUERY);
-  const [search, setSearch] = React.useState("");
+  const searchParams = useSearchParams();
+  const incomingTenderId = searchParams.get("tenderId")?.trim() ?? "";
+  const [query, setQuery] = React.useState<TenderSecurityPendingQuery>(() => ({
+    ...DEFAULT_QUERY,
+    ...(incomingTenderId ? { search: incomingTenderId } : {}),
+  }));
+  const [search, setSearch] = React.useState(incomingTenderId);
   const [filtersOpen, setFiltersOpen] = React.useState(false);
   const pendingQuery = usePendingTenderSecurities(query);
   const organizations = useAllOrganizations();
@@ -161,8 +175,7 @@ export default function TenderSecurityPage() {
   const markNotRequired = useMarkTenderSecurityNotRequired();
 
   const [securityType, setSecurityType] = React.useState<SecurityType>("PAY_ORDER");
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
-  const [selectedRows, setSelectedRows] = React.useState<SelectedTender[]>([]);
+  const [selectedRowsOverride, setSelectedRowsOverride] = React.useState<SelectedTender[] | null>(null);
   const [showDetails, setShowDetails] = React.useState(false);
   const [fundingType, setFundingType] = React.useState<FundingType>("LOAN");
   const [companyAccountId, setCompanyAccountId] = React.useState("");
@@ -182,6 +195,14 @@ export default function TenderSecurityPage() {
 
   const pendingItems = pendingQuery.data?.items ?? [];
   const meta = pendingQuery.data?.meta ?? { page: 1, limit: 5, total: 0, totalPages: 1 };
+  const guidedRow = incomingTenderId
+    ? pendingItems.find((item) => item.tenderId === incomingTenderId) ?? pendingItems[0] ?? null
+    : null;
+  const selectedRows = selectedRowsOverride
+    ?? (guidedRow?.eligible && guidedRow.documentPurchaseId
+      ? [toSelectedTender(guidedRow, securityType, defaultMarginPct)]
+      : []);
+  const selectedIds = new Set(selectedRows.map((row) => row.id));
   const expiryDate = addMonths(issueDate, Number(validityMonths || 0));
   const activeBankAccounts = React.useMemo(
     () => (bankAccounts.data ?? []).filter((account) => account.accountType === "BANK" && account.isActive && account.bankName?.trim()),
@@ -192,15 +213,13 @@ export default function TenderSecurityPage() {
     : activeBankAccounts[0]?.id ?? "";
   const section2Ref = React.useRef<HTMLDivElement>(null);
 
+  function updateSelectedRows(updater: (rows: SelectedTender[]) => SelectedTender[]) {
+    setSelectedRowsOverride((current) => updater(current ?? selectedRows));
+  }
+
   function toggleRow(row: PendingTenderSecurity) {
     if (!row.eligible || !row.documentPurchaseId) return;
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(row.id)) next.delete(row.id);
-      else next.add(row.id);
-      return next;
-    });
-    setSelectedRows((rows) => {
+    updateSelectedRows((rows) => {
       if (rows.some((item) => item.id === row.id)) return rows.filter((item) => item.id !== row.id);
       return [...rows, toSelectedTender(row, securityType, defaultMarginPct)];
     });
@@ -211,11 +230,9 @@ export default function TenderSecurityPage() {
     const allSelected = eligibleItems.length > 0 && eligibleItems.every((item) => selectedIds.has(item.id));
     if (allSelected) {
       const pageIds = new Set(eligibleItems.map((item) => item.id));
-      setSelectedIds((current) => new Set([...current].filter((id) => !pageIds.has(id))));
-      setSelectedRows((rows) => rows.filter((row) => !pageIds.has(row.id)));
+      updateSelectedRows((rows) => rows.filter((row) => !pageIds.has(row.id)));
     } else {
-      setSelectedIds((current) => new Set([...current, ...eligibleItems.map((item) => item.id)]));
-      setSelectedRows((rows) => [
+      updateSelectedRows((rows) => [
         ...rows,
         ...eligibleItems
           .filter((item) => !rows.some((row) => row.id === item.id))
@@ -225,12 +242,12 @@ export default function TenderSecurityPage() {
   }
 
   function setSelectedValue(id: string, key: keyof Pick<SelectedTender, "securityAmount" | "marginPercentage" | "referenceNo">, value: string) {
-    setSelectedRows((rows) => rows.map((row) => (row.id === id ? { ...row, [key]: value } : row)));
+    updateSelectedRows((rows) => rows.map((row) => (row.id === id ? { ...row, [key]: value } : row)));
   }
 
   function updateSecurityType(next: SecurityType) {
     setSecurityType(next);
-    setSelectedRows((rows) => rows.map((row) => ({ ...row, referenceNo: makeReference(row.tenderId, next) })));
+    updateSelectedRows((rows) => rows.map((row) => ({ ...row, referenceNo: makeReference(row.tenderId, next) })));
   }
 
   function openDetails() {
@@ -272,12 +289,7 @@ export default function TenderSecurityPage() {
     && !hasInvalidInterest;
 
   function removeSelectedTender(id: string) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
-    setSelectedRows((rows) => rows.filter((row) => row.id !== id));
+    updateSelectedRows((rows) => rows.filter((row) => row.id !== id));
   }
 
   async function save() {
@@ -301,8 +313,7 @@ export default function TenderSecurityPage() {
         })),
       });
       setMessage({ type: "success", text: "Tender security saved successfully." });
-      setSelectedIds(new Set());
-      setSelectedRows([]);
+      setSelectedRowsOverride([]);
       setShowDetails(false);
       await pendingQuery.refetch();
     } catch (error) {
@@ -315,8 +326,7 @@ export default function TenderSecurityPage() {
     try {
       await markNotRequired.mutateAsync({ documentPurchaseIds: selectedRows.map((row) => row.documentPurchaseId!) });
       setMessage({ type: "success", text: "Selected tenders marked as not required." });
-      setSelectedIds(new Set());
-      setSelectedRows([]);
+      setSelectedRowsOverride([]);
       setShowDetails(false);
       await pendingQuery.refetch();
     } catch (error) {
@@ -334,7 +344,7 @@ export default function TenderSecurityPage() {
       <div>
         <h1 className="text-[22px] font-bold leading-7 text-biz-navy">Tender Security</h1>
         <p className="text-[13px] text-biz-muted">
-          Select one or more tenders to create Tender Security (Pay Order / Bank Guarantee)
+          Select a ready tender, then create its Pay Order or Bank Guarantee.
         </p>
       </div>
 
@@ -344,10 +354,34 @@ export default function TenderSecurityPage() {
         </div>
       )}
 
+      {incomingTenderId && (
+        <div className="rounded-lg border border-biz-blue/25 bg-biz-blue-soft/60 px-4 py-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-biz-blue">Next Step: Create Tender Security</p>
+          {pendingQuery.isLoading ? (
+            <p className="mt-1 text-[13px] text-biz-muted">Finding tender {incomingTenderId}...</p>
+          ) : guidedRow ? (
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[14px] font-bold text-biz-navy">Tender {guidedRow.tenderId ?? incomingTenderId}</p>
+                <p className="text-[12px] text-biz-text">{guidedRow.tenderWorkName}</p>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="text-[11px] text-biz-muted">Security Amount</p>
+                <p className="text-[14px] font-bold text-biz-blue">BDT {money(guidedRow.securityAmount)}</p>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1 text-[13px] font-medium text-biz-danger">
+              Tender {incomingTenderId} is no longer waiting for Tender Security.
+            </p>
+          )}
+        </div>
+      )}
+
       <section className="overflow-hidden rounded-lg border border-biz-border bg-white shadow-card">
         <div className="flex items-center justify-between px-4 py-3">
           <h2 className="text-[15px] font-bold text-biz-navy">
-            1. Active Tenders <span className="ml-2 rounded-md bg-biz-blue-soft px-2 py-1 text-[12px] text-biz-blue">{meta.total}</span>
+            1. Ready for Tender Security <span className="ml-2 rounded-md bg-biz-blue-soft px-2 py-1 text-[12px] text-biz-blue">{meta.total}</span>
           </h2>
           <div className="flex items-center gap-2">
             <IconButton aria-label="Refresh" onClick={() => pendingQuery.refetch()}>
@@ -389,7 +423,7 @@ export default function TenderSecurityPage() {
         </div>
 
         {filtersOpen && (
-          <div className="grid grid-cols-1 gap-3 border-t border-biz-border bg-white px-4 py-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 border-t border-biz-border bg-white px-4 py-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-[11px] font-medium text-biz-muted">Organization</label>
               <SelectInput
@@ -408,17 +442,30 @@ export default function TenderSecurityPage() {
                 options={ACTIVE_TENDER_STATUS_OPTIONS}
               />
             </div>
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-biz-muted">Security Status</label>
-              <SelectInput
-                placeholder="All Security Statuses"
-                value={query.securityStatus ?? ""}
-                onChange={(event) => setQuery((current) => ({ ...current, page: 1, securityStatus: (event.target.value || undefined) as TenderSecurityPendingQuery["securityStatus"] }))}
-                options={Object.entries(SECURITY_STATUS_META).map(([value, meta]) => ({ value, label: meta.label }))}
-              />
-            </div>
           </div>
         )}
+
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-y border-biz-border bg-white/95 px-4 py-2.5 shadow-sm backdrop-blur">
+          <div>
+            <p className="text-[12px] font-semibold text-biz-navy">
+              {selectedRows.length > 0 ? `${selectedRows.length} tender selected` : "Select a tender to continue"}
+            </p>
+            <p className="text-[11px] text-biz-muted">
+              {selectedRows.length > 0 ? `Total security: BDT ${money(totals.security)}` : "Only document-purchased tenders waiting for security are shown."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" disabled={selectedRows.length === 0 || markNotRequired.isPending} onClick={markSelectedNotRequired}>
+              <CircleX className="h-4 w-4" />
+              Mark as Not Required
+            </Button>
+            <Button size="sm" disabled={selectedRows.length === 0} onClick={openDetails}>
+              <FileText className="h-4 w-4" />
+              Create Tender Security
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1040px] border-t border-biz-border text-[12px]">
@@ -450,7 +497,7 @@ export default function TenderSecurityPage() {
                 <tr><td colSpan={10} className="px-4 py-8 text-center text-biz-muted">No active tenders match the selected filters.</td></tr>
               ) : (
                 pendingItems.map((row, index) => (
-                  <tr key={row.id} className="border-b border-biz-border last:border-b-0">
+                  <tr key={row.id} className={cn("border-b border-biz-border last:border-b-0", selectedIds.has(row.id) && "bg-biz-blue-soft/45")}>
                     <td className="px-4 py-2">
                       <Checkbox
                         checked={selectedIds.has(row.id)}
@@ -470,7 +517,7 @@ export default function TenderSecurityPage() {
                     <td className="px-3 py-2 text-right font-semibold">{money(row.securityAmount)}</td>
                     <td className="px-3 py-2">
                       <span className={cn("rounded-md px-2 py-1 text-[11px] font-medium", SECURITY_STATUS_META[row.securityStatus].className)}>
-                        {SECURITY_STATUS_META[row.securityStatus].label}
+                        Ready
                       </span>
                       {!row.eligible && row.ineligibleReason && <p className="mt-1 text-[10px] text-biz-muted">{row.ineligibleReason}</p>}
                     </td>
@@ -492,22 +539,6 @@ export default function TenderSecurityPage() {
               ? "No active tender records found."
               : `Showing ${(meta.page - 1) * meta.limit + 1} to ${Math.min(meta.page * meta.limit, meta.total)} of ${meta.total} entries`}
           </span>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-md bg-biz-blue-soft px-4 py-2 font-semibold text-biz-blue">{selectedRows.length} Selected</span>
-            <Button variant="outline" size="sm" disabled={selectedRows.length === 0 || markNotRequired.isPending} onClick={markSelectedNotRequired}>
-              <CircleX className="h-4 w-4" />
-              Mark as Not Required
-            </Button>
-            <Button
-              size="sm"
-              disabled={selectedRows.length === 0}
-              onClick={openDetails}
-            >
-              <FileText className="h-4 w-4" />
-              Create Tender Security
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"

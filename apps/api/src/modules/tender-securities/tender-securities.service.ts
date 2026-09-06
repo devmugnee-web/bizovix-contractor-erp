@@ -120,13 +120,14 @@ export class TenderSecuritiesService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 5;
     const settings = await this.tenderBankSettings.get(organizationId);
-    const securityWhere: Prisma.TenderWhereInput = query.securityStatus === "PENDING"
+    const securityStatus = query.securityStatus ?? "PENDING";
+    const securityWhere: Prisma.TenderWhereInput = securityStatus === "PENDING"
       ? { documentPurchases: { some: { tenderSecurityStatus: "PENDING" }, none: { tenderSecurityStatus: "CREATED" } } }
-      : query.securityStatus === "CREATED"
+      : securityStatus === "CREATED"
         ? { documentPurchases: { some: { tenderSecurityStatus: "CREATED" } } }
-        : query.securityStatus === "NOT_REQUIRED"
+        : securityStatus === "NOT_REQUIRED"
           ? { documentPurchases: { some: { tenderSecurityStatus: "NOT_REQUIRED" }, none: { tenderSecurityStatus: { in: ["PENDING", "CREATED"] } } } }
-          : query.securityStatus === "NO_DOCUMENT_PURCHASE"
+          : securityStatus === "NO_DOCUMENT_PURCHASE"
             ? { documentPurchases: { none: {} } }
             : {};
     const where: Prisma.TenderWhereInput = {
