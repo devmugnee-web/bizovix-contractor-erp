@@ -48,6 +48,7 @@ import type {
 } from "@bizovix/types";
 import { cn } from "@bizovix/ui";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
+import { ChallanPdfActions } from "./ChallanPdfActions";
 
 type WorkflowStage = "Draft" | "Submitted" | "Under Review" | "Approved" | "Payment Released";
 
@@ -364,6 +365,12 @@ function ChallanSubmissionEditor({ initialRecord }: { initialRecord?: ChallanSub
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const record = savedRecord ?? initialRecord ?? null;
+  // Never silently export older saved goods while the user is editing newer ones.
+  const pdfHasUnsavedChanges = !record || selectedProjectId !== record.cmsWorkId ||
+    selectedContractId !== (record.contractId ?? "") ||
+    form.challanDate !== initialForm(record).challanDate || form.receivedAt !== record.receivedAt ||
+    JSON.stringify(items.map(({ description, unit, quantity }) => ({ description, unit, quantity }))) !==
+      JSON.stringify(initialItems(record).map(({ description, unit, quantity }) => ({ description, unit, quantity })));
   const selectedContract =
     contractOptions.find((contract) => contract.id === selectedContractId) ??
     (record?.contractId === selectedContractId ? record.contract : null);
@@ -825,6 +832,7 @@ function ChallanSubmissionEditor({ initialRecord }: { initialRecord?: ChallanSub
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to Challan Submissions
           </Link>
+          <ChallanPdfActions key={record?.id ?? "new"} challanId={record?.id} disabled={isBusy || pdfHasUnsavedChanges || !record?.items.length} />
         </div>
       </header>
 

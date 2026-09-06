@@ -1197,6 +1197,7 @@ model Tender {
   documents             Document[]
   contracts             ProjectContract[]
   workIous              WorkIou[]
+  vatTaxEntries         TenderVatTaxEntry[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, tenderIdNormalized])
@@ -2002,6 +2003,43 @@ model ChallanSubmissionStatusHistory {
 
   @@index([organizationId, challanSubmissionId, createdAt])
   @@map("challan_submission_status_history")
+}
+
+enum TenderVatTaxEntryKind {
+  SELF_DEPOSIT
+  BILL_DEDUCTION
+}
+
+// A register of actual deposits/deductions, not costing estimates or cash postings.
+// Supporting certificates never contribute a second amount to these totals.
+model TenderVatTaxEntry {
+  id             String @id @default(cuid())
+  organizationId String
+  tenderId       String
+  taxType        VatTaxCertificateType
+  entryKind      TenderVatTaxEntryKind
+  entryDate      DateTime @db.Date
+  amount         Decimal @db.Decimal(18, 2)
+  referenceNo    String
+  referenceKey   String
+  notes          String?
+  requestId      String
+  requestHash    String
+  version        Int @default(1)
+  voidedAt       DateTime?
+  voidReason     String?
+  createdById    String
+  updatedById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tender Tender @relation(fields: [organizationId, tenderId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, requestId])
+  @@index([organizationId, tenderId, entryDate])
+  @@index([organizationId, entryDate, voidedAt])
+  // Active reference uniqueness and amount constraints are enforced in SQL.
+  @@map("tender_vat_tax_entries")
 }
 
 model VatTaxCertificate {

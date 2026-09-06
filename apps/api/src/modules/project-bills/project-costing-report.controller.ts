@@ -6,6 +6,8 @@ import { RequirePermissions } from "../../common/decorators/require-permissions.
 import { ProjectCostingReportService } from "./project-costing-report.service";
 import { generateProjectCostingPdf } from "./project-costing-pdf";
 import { PaginationQueryDto } from "../../common/dto/pagination-query.dto";
+import { generateBillLetterWord } from "./bill-letter-word";
+import { sendWordDocument } from "../../common/documents/word-letter";
 
 @Controller("project-bills/projects")
 @RequirePermissions("cms.work.read", "project_bill.read", "boq.read")
@@ -60,5 +62,13 @@ export class TenderBillCostingController {
     response.setHeader("Content-Length", String(buffer.length));
     response.setHeader("Cache-Control", "private, no-store");
     response.send(buffer);
+  }
+
+  @Get(":costingId/word")
+  async word(@Param("costingId") costingId: string, @CurrentUser() user: AuthUser, @Res() response: Response) {
+    const report = await this.service.tenderReport(user.organizationId, costingId);
+    const context = await this.service.tenderPdfContext(user.organizationId, costingId, report.project.id);
+    const buffer = await generateBillLetterWord(report, context);
+    sendWordDocument(response, buffer, `bill-${report.tenderNumber || costingId}.docx`);
   }
 }

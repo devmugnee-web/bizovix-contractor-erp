@@ -4,9 +4,9 @@ export interface PdfPrintJob {
 }
 
 /** Print the server-generated PDF, not the surrounding application page. */
-export function createPdfPrintJob(blob: Blob): PdfPrintJob {
+export function createPdfPrintJob(blob: Blob, title = "Bill print document"): PdfPrintJob {
   const frame = document.createElement("iframe");
-  frame.title = "Bill print document";
+  frame.title = title;
   frame.dataset.billPrint = "true";
   frame.setAttribute("aria-hidden", "true");
   frame.tabIndex = -1;

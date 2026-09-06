@@ -1,5 +1,5 @@
-import { VatTaxCertificatesWorkspace } from "@/components/projects/VatTaxCertificatesWorkspace";
+import { TenderVatTaxWorkspace } from "@/components/projects/TenderVatTaxWorkspace";
 
 export default function VatTaxCertificatePage() {
-  return <VatTaxCertificatesWorkspace />;
+  return <TenderVatTaxWorkspace />;
 }

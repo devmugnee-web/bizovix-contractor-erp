@@ -728,7 +728,7 @@ export default function ProjectDocumentationPage() {
             onSearchChange={setChallanSearch}
             addLabel="New Challan Submission"
             addButtonClassName="bg-biz-blue hover:bg-biz-blue-hover"
-            onAdd={() => router.push("/cms/documentation/challan-submission")}
+            onAdd={() => router.push("/cms/documentation/challan-submission?mode=create")}
             data={challanRows}
             rowKey={(row) => row.id}
             columns={challanColumns}

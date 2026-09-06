@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, Printer, Search } from "lucide-react";
-import { downloadTenderBillCostingPdf, useCostedTendersForBills, useTenderBillCostingReport } from "@bizovix/api-client";
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileText, Printer, Search } from "lucide-react";
+import { downloadTenderBillCostingPdf, downloadTenderBillCostingWord, useCostedTendersForBills, useTenderBillCostingReport } from "@bizovix/api-client";
 import type { CostedTenderBillSummary } from "@bizovix/types";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { createPdfPrintJob, type PdfPrintJob } from "@/lib/print-pdf";
@@ -12,14 +12,14 @@ const money = (value: string, digits = 2) => Number(value).toLocaleString("en-US
 
 function ProjectCosting({ project, onBack }: { project: CostedTenderBillSummary; onBack: () => void }) {
   const report = useTenderBillCostingReport(project.id);
-  const [downloading, setDownloading] = React.useState(false);
+  const [downloading, setDownloading] = React.useState<"pdf" | "word" | null>(null);
   const [printing, setPrinting] = React.useState(false);
   const [downloadError, setDownloadError] = React.useState("");
   const downloadLock = React.useRef(false);
   const printJob = React.useRef<PdfPrintJob | null>(null);
   const mounted = React.useRef(true);
   const data = report.data;
-  const pdfDisabled = downloading || printing || !data?.rows.length || report.isError;
+  const pdfDisabled = !!downloading || printing || !data?.rows.length || report.isError;
 
   React.useEffect(() => {
     mounted.current = true;
@@ -44,19 +44,20 @@ function ProjectCosting({ project, onBack }: { project: CostedTenderBillSummary;
     } finally { downloadLock.current = false; if (mounted.current) setPrinting(false); }
   }
 
-  async function download() {
+  async function download(format: "pdf" | "word" = "pdf") {
     if (downloadLock.current) return;
     downloadLock.current = true;
-    setDownloading(true); setDownloadError("");
+    setDownloading(format); setDownloadError("");
     try {
-      const { blob, fileName } = await downloadTenderBillCostingPdf(project.id);
+      const { blob, fileName } = await (format === "word" ? downloadTenderBillCostingWord(project.id) : downloadTenderBillCostingPdf(project.id));
+      if (!mounted.current) return;
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url; link.download = fileName || `tender-costing-${project.tenderNumber || project.id}.pdf`;
+      link.href = url; link.download = fileName || `tender-costing-${project.tenderNumber || project.id}.${format === "word" ? "docx" : "pdf"}`;
       document.body.appendChild(link); link.click(); link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) { setDownloadError(error instanceof Error ? error.message : "Could not download the PDF. Please try again."); }
-    finally { downloadLock.current = false; setDownloading(false); }
+    } catch (error) { if (mounted.current) setDownloadError(error instanceof Error ? error.message : "Could not download the document. Please try again."); }
+    finally { downloadLock.current = false; if (mounted.current) setDownloading(null); }
   }
 
   return <section className="overflow-hidden rounded-xl border border-biz-border bg-white shadow-sm">
@@ -64,7 +65,8 @@ function ProjectCosting({ project, onBack }: { project: CostedTenderBillSummary;
       <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-xs font-semibold text-biz-blue"><ArrowLeft className="h-4 w-4" />All Tenders</button>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => void print()} disabled={pdfDisabled} className="inline-flex items-center gap-2 rounded-lg border border-biz-border bg-white px-4 py-2.5 text-xs font-semibold text-biz-text hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-biz-blue/40 disabled:cursor-not-allowed disabled:opacity-40"><Printer className="h-4 w-4" />{printing ? "Preparing Print…" : "Print"}</button>
-        <button type="button" onClick={() => void download()} disabled={pdfDisabled} className="inline-flex items-center gap-2 rounded-lg bg-biz-blue px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-4 w-4" />{downloading ? "Downloading…" : "Download PDF"}</button>
+        <button type="button" onClick={() => void download()} disabled={pdfDisabled} className="inline-flex items-center gap-2 rounded-lg bg-biz-blue px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-4 w-4" />{downloading === "pdf" ? "Downloading…" : "Download PDF"}</button>
+        <button type="button" onClick={() => void download("word")} disabled={pdfDisabled} className="inline-flex items-center gap-2 rounded-lg border border-biz-border bg-white px-4 py-2.5 text-xs font-semibold text-biz-blue disabled:cursor-not-allowed disabled:opacity-40"><FileText className="h-4 w-4" />{downloading === "word" ? "Downloading…" : "Download Word"}</button>
       </div>
     </div>
     <div className="space-y-1 p-4">

@@ -20,6 +20,10 @@ export function downloadTenderBillCostingPdf(costingId: string) {
   return apiRequestBlob(`/project-bills/costing/tenders/${costingId}/pdf`);
 }
 
+export function downloadTenderBillCostingWord(costingId: string) {
+  return apiRequestBlob(`/project-bills/costing/tenders/${encodeURIComponent(costingId)}/word`);
+}
+
 export function useProjectCostingReport(workId?: string) {
   return useQuery({
     // Keep the former tender-costing response out of the project BOQ/PA view's cache.

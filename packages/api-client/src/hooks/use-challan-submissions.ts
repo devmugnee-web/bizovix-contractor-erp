@@ -9,7 +9,7 @@ import type {
   RejectChallanSubmissionInput,
   SaveChallanSubmissionInput,
 } from "@bizovix/types";
-import { apiRequest, apiRequestPaginated } from "../http-client";
+import { apiRequest, apiRequestBlob, apiRequestPaginated } from "../http-client";
 import { queryKeys } from "./query-keys";
 
 export function useChallanSubmissions(query: ChallanSubmissionQuery) {
@@ -29,6 +29,14 @@ export function useChallanSubmission(id: string | undefined) {
     queryFn: () => apiRequest<ChallanSubmissionRecord>(`/challan-submissions/${id}`),
     enabled: !!id,
   });
+}
+
+export function downloadChallanSubmissionPdf(id: string) {
+  return apiRequestBlob(`/challan-submissions/${encodeURIComponent(id)}/pdf`);
+}
+
+export function downloadChallanSubmissionWord(id: string) {
+  return apiRequestBlob(`/challan-submissions/${encodeURIComponent(id)}/word`);
 }
 
 export function useChallanSubmissionStats(cmsWorkId?: string) {
