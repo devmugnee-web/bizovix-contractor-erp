@@ -65,6 +65,13 @@ enum TenderCostingStatus {
   CANCELLED
 }
 
+enum DocumentPurchaseRequestStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PURCHASED
+}
+
 enum ExpenseStatus {
   PENDING
   APPROVED
@@ -492,6 +499,7 @@ model Organization {
   tenders                        Tender[]
   tenderCostings                 TenderCosting[]
   tenderCostingItems             TenderCostingItem[]
+  documentPurchaseRequests       DocumentPurchaseRequest[]
   documentPurchases              DocumentPurchase[]
   tenderSecurities               TenderSecurity[]
   creditCommitments              CreditCommitment[]
@@ -661,6 +669,9 @@ model User {
   tenderCostingsPrepared       TenderCosting[]               @relation("TenderCostingPreparedBy")
   tenderCostingsAssigned       TenderCosting[]               @relation("TenderCostingAssignedTo")
   tenderCostingsApproved       TenderCosting[]               @relation("TenderCostingApprovedForBy")
+  documentPurchaseRequestsRequested DocumentPurchaseRequest[] @relation("DocumentPurchaseRequestRequestedBy")
+  documentPurchaseRequestsApproved  DocumentPurchaseRequest[] @relation("DocumentPurchaseRequestApprovedBy")
+  documentPurchaseRequestsRejected  DocumentPurchaseRequest[] @relation("DocumentPurchaseRequestRejectedBy")
 
   @@map("users")
 }
@@ -1187,6 +1198,7 @@ model Tender {
   costingApprovedBy  User?               @relation("TenderCostingApprovedBy", fields: [costingApprovedById], references: [id], onDelete: SetNull)
   costingRejectedBy  User?               @relation("TenderCostingRejectedBy", fields: [costingRejectedById], references: [id], onDelete: SetNull)
   costing            TenderCosting?
+  documentPurchaseRequest DocumentPurchaseRequest?
 
   documentPurchases     DocumentPurchase[]
   tenderSecurities      TenderSecurity[]
@@ -1251,6 +1263,7 @@ model TenderCosting {
   assignedTo           User?               @relation("TenderCostingAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   approvedForCostingBy User?               @relation("TenderCostingApprovedForBy", fields: [approvedForCostingById], references: [id], onDelete: SetNull)
   items                TenderCostingItem[]
+  documentPurchaseRequest DocumentPurchaseRequest?
 
   @@unique([organizationId, id])
   @@unique([organizationId, tenderId])
@@ -1381,9 +1394,43 @@ model DocumentPurchase {
   creditCommitmentItems CreditCommitmentItem[]
   pgBgWorkflow          PgBgWorkflow?
   cmsWork               CmsWork?
+  workflowRequest       DocumentPurchaseRequest?
 
   @@index([organizationId, linkedTenderId])
   @@map("document_purchases")
+}
+
+model DocumentPurchaseRequest {
+  id                 String                        @id @default(cuid())
+  organizationId     String
+  tenderId           String
+  costingId          String
+  status             DocumentPurchaseRequestStatus @default(PENDING_APPROVAL)
+  requestedById      String?
+  requestedAt        DateTime                      @default(now())
+  approvedById       String?
+  approvedAt         DateTime?
+  rejectedById       String?
+  rejectedAt         DateTime?
+  rejectionReason    String?
+  documentPurchaseId String?                       @unique
+  version            Int                           @default(1)
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tender           Tender            @relation(fields: [organizationId, tenderId], references: [organizationId, id], onDelete: Restrict)
+  costing          TenderCosting     @relation(fields: [organizationId, costingId], references: [organizationId, id], onDelete: Restrict)
+  requestedBy      User?             @relation("DocumentPurchaseRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  approvedBy       User?             @relation("DocumentPurchaseRequestApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  rejectedBy       User?             @relation("DocumentPurchaseRequestRejectedBy", fields: [rejectedById], references: [id], onDelete: SetNull)
+  documentPurchase DocumentPurchase? @relation(fields: [documentPurchaseId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, tenderId])
+  @@unique([organizationId, costingId])
+  @@index([organizationId, status, updatedAt])
+  @@map("document_purchase_requests")
 }
 
 model TenderSecurity {

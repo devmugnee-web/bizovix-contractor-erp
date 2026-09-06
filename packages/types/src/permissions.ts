@@ -12,6 +12,7 @@ export const PERMISSIONS = [
 
   "document_purchase.create",
   "document_purchase.read",
+  "document_purchase.approve",
   "document_purchase.update",
   "document_purchase.delete",
   "document_purchase.export",

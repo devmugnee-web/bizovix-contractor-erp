@@ -77,6 +77,15 @@ export const TenderCostingStatus = {
 } as const;
 export type TenderCostingStatus = (typeof TenderCostingStatus)[keyof typeof TenderCostingStatus];
 
+export const DocumentPurchaseRequestStatus = {
+  PENDING_APPROVAL: "PENDING_APPROVAL",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  PURCHASED: "PURCHASED",
+} as const;
+export type DocumentPurchaseRequestStatus =
+  (typeof DocumentPurchaseRequestStatus)[keyof typeof DocumentPurchaseRequestStatus];
+
 export const ContractType = {
   WORK_ORDER: "WORK_ORDER",
   CONTRACT_AGREEMENT: "CONTRACT_AGREEMENT",

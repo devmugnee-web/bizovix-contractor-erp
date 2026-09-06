@@ -1,2 +1,2 @@
-cd D:\bizovix-contractor-erp
+cd "D:\bizovix-contractor-erp"
 pnpm dev

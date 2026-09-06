@@ -3,7 +3,11 @@ import type {
   CreateDocumentPurchaseInput,
   DocumentPurchase,
   DocumentPurchaseQuery,
+  DocumentPurchaseRequest,
+  DocumentPurchaseRequestActionInput,
+  DocumentPurchaseRequestQuery,
   DocumentPurchaseStats,
+  RejectDocumentPurchaseRequestInput,
   UpdateDocumentPurchaseInput,
 } from "@bizovix/types";
 import { apiRequest, apiRequestPaginated } from "../http-client";
@@ -35,11 +39,47 @@ export function useDocumentPurchaseStats() {
   });
 }
 
+export function useDocumentPurchaseRequests(query: DocumentPurchaseRequestQuery) {
+  return useQuery({
+    queryKey: queryKeys.documentPurchaseRequests(query),
+    queryFn: () =>
+      apiRequestPaginated<DocumentPurchaseRequest>("/document-purchases/workflow-requests", {
+        params: { ...query },
+      }),
+    placeholderData: (previous) => previous,
+  });
+}
+
 function useInvalidateDocumentPurchases() {
   const queryClient = useQueryClient();
   return () => {
     queryClient.invalidateQueries({ queryKey: ["document-purchases"] });
+    queryClient.invalidateQueries({ queryKey: ["document-purchase-requests"] });
   };
+}
+
+export function useApproveDocumentPurchaseRequest() {
+  const invalidate = useInvalidateDocumentPurchases();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: DocumentPurchaseRequestActionInput }) =>
+      apiRequest<DocumentPurchaseRequest>(`/document-purchases/workflow-requests/${id}/approve`, {
+        method: "POST",
+        body: payload,
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRejectDocumentPurchaseRequest() {
+  const invalidate = useInvalidateDocumentPurchases();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: RejectDocumentPurchaseRequestInput }) =>
+      apiRequest<DocumentPurchaseRequest>(`/document-purchases/workflow-requests/${id}/reject`, {
+        method: "POST",
+        body: payload,
+      }),
+    onSuccess: invalidate,
+  });
 }
 
 export function useCreateDocumentPurchase() {

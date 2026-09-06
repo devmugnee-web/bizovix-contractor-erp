@@ -6,6 +6,11 @@ import { ResponseMessage } from "../../common/decorators/response-message.decora
 import { CreateDocumentPurchaseDto } from "./dto/create-document-purchase.dto";
 import { UpdateDocumentPurchaseDto } from "./dto/update-document-purchase.dto";
 import { QueryDocumentPurchaseDto } from "./dto/query-document-purchase.dto";
+import {
+  DocumentPurchaseRequestActionDto,
+  QueryDocumentPurchaseRequestDto,
+  RejectDocumentPurchaseRequestDto,
+} from "./dto/document-purchase-request.dto";
 import { DocumentPurchasesService } from "./document-purchases.service";
 
 @Controller("document-purchases")
@@ -22,6 +27,34 @@ export class DocumentPurchasesController {
   @RequirePermissions("document_purchase.read")
   stats(@CurrentUser() user: AuthUser) {
     return this.documentPurchasesService.stats(user.organizationId);
+  }
+
+  @Get("workflow-requests")
+  @RequirePermissions("document_purchase.read")
+  findRequests(@Query() query: QueryDocumentPurchaseRequestDto, @CurrentUser() user: AuthUser) {
+    return this.documentPurchasesService.findRequests(user.organizationId, query);
+  }
+
+  @Post("workflow-requests/:id/approve")
+  @RequirePermissions("document_purchase.approve")
+  @ResponseMessage("Document purchase request approved successfully")
+  approveRequest(
+    @Param("id") id: string,
+    @Body() dto: DocumentPurchaseRequestActionDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.documentPurchasesService.approveRequest(user.organizationId, user.id, id, dto);
+  }
+
+  @Post("workflow-requests/:id/reject")
+  @RequirePermissions("document_purchase.approve")
+  @ResponseMessage("Document purchase request rejected")
+  rejectRequest(
+    @Param("id") id: string,
+    @Body() dto: RejectDocumentPurchaseRequestDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.documentPurchasesService.rejectRequest(user.organizationId, user.id, id, dto);
   }
 
   @Get(":id")

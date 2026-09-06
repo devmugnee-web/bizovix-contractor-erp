@@ -3,12 +3,16 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, Eye, FileText, Landmark, Layers, Plus, RotateCcw, Search } from "lucide-react";
+import { Check, Download, Eye, FileText, Landmark, Layers, Plus, RotateCcw, Search, ShoppingCart, X } from "lucide-react";
 import {
+  useApproveDocumentPurchaseRequest,
   useAllOrganizations,
   useBankAccounts,
   useDocumentPurchaseStats,
+  useDocumentPurchaseRequests,
   useDocumentPurchases,
+  useMe,
+  useRejectDocumentPurchaseRequest,
 } from "@bizovix/api-client";
 import {
   DataTable,
@@ -24,8 +28,15 @@ import {
   TextInput,
 } from "@bizovix/ui";
 import { formatBDT, formatDate } from "@bizovix/utils";
-import type { DocumentPurchase, DocumentPurchaseQuery, PurchaseType } from "@bizovix/types";
+import {
+  DocumentPurchaseRequestStatus,
+  type DocumentPurchase,
+  type DocumentPurchaseQuery,
+  type DocumentPurchaseRequest,
+  type PurchaseType,
+} from "@bizovix/types";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
+import { Modal } from "@/components/layout/Modal";
 
 interface FilterDraft {
   purchaseType: string;
@@ -48,51 +59,98 @@ const EMPTY_DRAFT: FilterDraft = {
 const DEFAULT_LIMIT = 10;
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 
+const REQUEST_STATUS_META = {
+  PENDING_APPROVAL: { label: "Pending Approval", tone: "warning" },
+  APPROVED: { label: "Approved to Purchase", tone: "info" },
+  REJECTED: { label: "Rejected", tone: "danger" },
+  PURCHASED: { label: "Purchased", tone: "success" },
+} as const;
+
 export default function DocumentPurchaseListPage() {
   useSetBreadcrumb([{ label: "Bank Instruments" }, { label: "Document Purchase" }]);
   const router = useRouter();
+  const me = useMe();
+  const canApprove = me.data?.permissions.includes("document_purchase.approve") ?? false;
+  const canCreate = me.data?.permissions.includes("document_purchase.create") ?? false;
 
   const [draft, setDraft] = React.useState<FilterDraft>(EMPTY_DRAFT);
-  const [query, setQuery] = React.useState<DocumentPurchaseQuery>({ page: 1, limit: DEFAULT_LIMIT });
-
-  const stats = useDocumentPurchaseStats();
-  const organizations = useAllOrganizations();
-  const bankAccounts = useBankAccounts();
-  const documentPurchases = useDocumentPurchases(query);
-
-  React.useEffect(() => {
-    setQuery((q) => ({
-      ...q,
-      page: 1,
+  const [page, setPage] = React.useState(1);
+  const [limit, setLimit] = React.useState(DEFAULT_LIMIT);
+  const deferredSearch = React.useDeferredValue(draft.search.trim());
+  const query = React.useMemo<DocumentPurchaseQuery>(
+    () => ({
+      page,
+      limit,
+      search: deferredSearch || undefined,
       purchaseType: (draft.purchaseType as PurchaseType) || undefined,
       organizationMasterId: draft.organizationMasterId || undefined,
       paymentFromAccountId: draft.paymentFromAccountId || undefined,
       fromDate: draft.fromDate || undefined,
       toDate: draft.toDate || undefined,
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.purchaseType, draft.organizationMasterId, draft.paymentFromAccountId, draft.fromDate, draft.toDate]);
+    }),
+    [deferredSearch, draft.fromDate, draft.organizationMasterId, draft.paymentFromAccountId, draft.purchaseType, draft.toDate, limit, page],
+  );
 
-  React.useEffect(() => {
-    const handle = setTimeout(() => {
-      setQuery((q) => ({ ...q, page: 1, search: draft.search || undefined }));
-    }, 400);
-    return () => clearTimeout(handle);
-  }, [draft.search]);
+  const stats = useDocumentPurchaseStats();
+  const organizations = useAllOrganizations();
+  const bankAccounts = useBankAccounts();
+  const documentPurchases = useDocumentPurchases(query);
+  const [requestStatus, setRequestStatus] = React.useState<DocumentPurchaseRequestStatus>(
+    DocumentPurchaseRequestStatus.PENDING_APPROVAL,
+  );
+  const [requestPage, setRequestPage] = React.useState(1);
+  const [requestLimit, setRequestLimit] = React.useState(5);
+  const requests = useDocumentPurchaseRequests({ page: requestPage, limit: requestLimit, status: requestStatus });
+  const approveRequest = useApproveDocumentPurchaseRequest();
+  const rejectRequest = useRejectDocumentPurchaseRequest();
+  const [rejecting, setRejecting] = React.useState<DocumentPurchaseRequest | null>(null);
+  const [rejectionReason, setRejectionReason] = React.useState("");
+  const [workflowError, setWorkflowError] = React.useState("");
 
-  function handleLimitChange(limit: number) {
-    setQuery((q) => ({ ...q, limit, page: 1 }));
+  async function approve(row: DocumentPurchaseRequest) {
+    setWorkflowError("");
+    try {
+      await approveRequest.mutateAsync({ id: row.id, payload: { version: row.version } });
+    } catch {
+      setWorkflowError("Could not approve the request. Reload the list and try again.");
+    }
+  }
+
+  async function reject() {
+    if (!rejecting || !rejectionReason.trim()) return;
+    setWorkflowError("");
+    try {
+      await rejectRequest.mutateAsync({
+        id: rejecting.id,
+        payload: { version: rejecting.version, reason: rejectionReason.trim() },
+      });
+      setRejecting(null);
+      setRejectionReason("");
+    } catch {
+      setWorkflowError("Could not reject the request. Reload the list and try again.");
+    }
+  }
+
+  function handleLimitChange(nextLimit: number) {
+    setLimit(nextLimit);
+    setPage(1);
   }
 
   function handleResetFilters() {
     setDraft(EMPTY_DRAFT);
+    setPage(1);
+  }
+
+  function updateDraft<Key extends keyof FilterDraft>(key: Key, value: FilterDraft[Key]) {
+    setDraft((current) => ({ ...current, [key]: value }));
+    setPage(1);
   }
 
   const items = documentPurchases.data?.items ?? [];
   const meta = documentPurchases.data?.meta ?? { page: 1, limit: DEFAULT_LIMIT, total: 0, totalPages: 1 };
 
   return (
-    <div className="flex flex-col gap-2 md:h-full md:min-h-0 md:overflow-hidden">
+    <div className="flex flex-col gap-3">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2.5">
         <div>
           <h1 className="text-page-title text-biz-text">Document Purchase</h1>
@@ -136,19 +194,134 @@ export default function DocumentPurchaseListPage() {
         />
       </div>
 
+      <section className="overflow-hidden rounded-lg border border-biz-border bg-biz-surface shadow-card">
+        <div className="flex flex-col gap-2 border-b border-biz-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-[15px] font-semibold text-biz-text">Costing to Document Purchase Workflow</h2>
+            <p className="mt-0.5 text-[12px] text-biz-muted">
+              Tenders approved for costing appear here automatically before any purchase is recorded.
+            </p>
+          </div>
+          <SelectInput
+            aria-label="Document purchase request status"
+            className="h-9 w-full sm:w-[190px]"
+            value={requestStatus}
+            onChange={(event) => {
+              setRequestStatus(event.target.value as DocumentPurchaseRequestStatus);
+              setRequestPage(1);
+            }}
+            options={Object.entries(REQUEST_STATUS_META).map(([value, meta]) => ({
+              value,
+              label: meta.label,
+            }))}
+          />
+        </div>
+
+        {workflowError && <p role="alert" className="border-b border-biz-border px-4 py-2 text-[12px] text-biz-danger">{workflowError}</p>}
+
+        <DataTable<DocumentPurchaseRequest>
+          isLoading={requests.isLoading}
+          data={requests.data?.items ?? []}
+          rowKey={(row) => row.id}
+          containerClassName="overflow-x-auto"
+          stickyHeader
+          columns={[
+            { key: "tender", header: "Tender ID", render: (row) => row.tender.egpTenderId ?? "N/A" },
+            { key: "organization", header: "Organization", render: (row) => row.tender.organizationMaster?.shortName ?? "Not assigned" },
+            { key: "work", header: "Tender / Work Name", render: (row) => row.tender.workName },
+            { key: "fee", header: "Document Fee", render: (row) => row.tender.documentFee ? formatBDT(row.tender.documentFee) : "Not set" },
+            { key: "deadline", header: "Purchase Deadline", render: (row) => row.tender.documentPurchaseDeadline ? formatDate(row.tender.documentPurchaseDeadline) : "Not set" },
+            {
+              key: "status",
+              header: "Status",
+              render: (row) => {
+                const meta = REQUEST_STATUS_META[row.status];
+                return <StatusBadge label={meta.label} tone={meta.tone} />;
+              },
+            },
+            {
+              key: "workflow-action",
+              header: "Action",
+              render: (row) => (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(row.status === DocumentPurchaseRequestStatus.PENDING_APPROVAL ||
+                    row.status === DocumentPurchaseRequestStatus.REJECTED) &&
+                    canApprove && (
+                      <button
+                        type="button"
+                        disabled={approveRequest.isPending}
+                        onClick={() => void approve(row)}
+                        className="inline-flex h-8 items-center gap-1 rounded-md bg-biz-blue px-2.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                      >
+                        <Check className="h-3.5 w-3.5" /> Approve
+                      </button>
+                    )}
+                  {row.status === DocumentPurchaseRequestStatus.PENDING_APPROVAL && canApprove && (
+                    <button
+                      type="button"
+                      disabled={rejectRequest.isPending}
+                      onClick={() => {
+                        setRejecting(row);
+                        setRejectionReason("");
+                      }}
+                      className="inline-flex h-8 items-center gap-1 rounded-md border border-biz-border px-2.5 text-[11px] font-semibold text-biz-danger disabled:opacity-50"
+                    >
+                      <X className="h-3.5 w-3.5" /> Reject
+                    </button>
+                  )}
+                  {row.status === DocumentPurchaseRequestStatus.APPROVED && canCreate && (
+                    <Link
+                      href={`/bank-instruments/document-purchase/create?tenderId=${row.tenderId}&requestId=${row.id}`}
+                      className="inline-flex h-8 items-center gap-1 rounded-md bg-biz-success px-2.5 text-[11px] font-semibold text-white"
+                    >
+                      <ShoppingCart className="h-3.5 w-3.5" /> Purchase Document
+                    </Link>
+                  )}
+                  {row.status === DocumentPurchaseRequestStatus.PURCHASED && row.documentPurchaseId && (
+                    <Link
+                      href={`/bank-instruments/document-purchase/${row.documentPurchaseId}`}
+                      className="inline-flex h-8 items-center gap-1 rounded-md border border-biz-border px-2.5 text-[11px] font-semibold text-biz-text"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> View Purchase
+                    </Link>
+                  )}
+                  {row.status === DocumentPurchaseRequestStatus.REJECTED && row.rejectionReason && (
+                    <span className="text-[11px] text-biz-muted" title={row.rejectionReason}>Reason: {row.rejectionReason}</span>
+                  )}
+                </div>
+              ),
+            },
+          ]}
+        />
+        <div className="border-t border-biz-border">
+          <Pagination
+            page={requests.data?.meta.page ?? requestPage}
+            limit={requests.data?.meta.limit ?? requestLimit}
+            total={requests.data?.meta.total ?? 0}
+            totalPages={requests.data?.meta.totalPages ?? 1}
+            onPageChange={setRequestPage}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onLimitChange={(nextLimit) => {
+              setRequestLimit(nextLimit);
+              setRequestPage(1);
+            }}
+          />
+        </div>
+      </section>
+
       <FilterBar className="shrink-0 p-2.5">
         <div className="flex w-full flex-col gap-1 sm:w-auto">
           <label className="text-[12px] font-medium text-biz-muted">Date Range</label>
           <div className="flex items-center gap-2">
             <DateInput
               value={draft.fromDate}
-              onChange={(e) => setDraft((d) => ({ ...d, fromDate: e.target.value }))}
+              onChange={(e) => updateDraft("fromDate", e.target.value)}
               className="h-10 w-full sm:w-[130px]"
             />
             <span className="shrink-0 text-biz-muted">–</span>
             <DateInput
               value={draft.toDate}
-              onChange={(e) => setDraft((d) => ({ ...d, toDate: e.target.value }))}
+              onChange={(e) => updateDraft("toDate", e.target.value)}
               className="h-10 w-full sm:w-[130px]"
             />
           </div>
@@ -160,7 +333,7 @@ export default function DocumentPurchaseListPage() {
             className="h-10 w-full"
             placeholder="All"
             value={draft.purchaseType}
-            onChange={(e) => setDraft((d) => ({ ...d, purchaseType: e.target.value }))}
+            onChange={(e) => updateDraft("purchaseType", e.target.value)}
             options={[
               { label: "e-GP", value: "EGP" },
               { label: "Manual", value: "MANUAL" },
@@ -174,7 +347,7 @@ export default function DocumentPurchaseListPage() {
             className="h-10 w-full"
             placeholder="All"
             value={draft.organizationMasterId}
-            onChange={(e) => setDraft((d) => ({ ...d, organizationMasterId: e.target.value }))}
+            onChange={(e) => updateDraft("organizationMasterId", e.target.value)}
             options={(organizations.data ?? []).map((org) => ({ label: org.shortName, value: org.id }))}
           />
         </div>
@@ -185,7 +358,7 @@ export default function DocumentPurchaseListPage() {
             className="h-10 w-full"
             placeholder="All"
             value={draft.paymentFromAccountId}
-            onChange={(e) => setDraft((d) => ({ ...d, paymentFromAccountId: e.target.value }))}
+            onChange={(e) => updateDraft("paymentFromAccountId", e.target.value)}
             options={(bankAccounts.data ?? []).map((acc) => ({ label: acc.accountName, value: acc.id }))}
           />
         </div>
@@ -196,7 +369,7 @@ export default function DocumentPurchaseListPage() {
             icon={Search}
             placeholder="Search..."
             value={draft.search}
-            onChange={(e) => setDraft((d) => ({ ...d, search: e.target.value }))}
+            onChange={(e) => updateDraft("search", e.target.value)}
             className="h-10"
           />
         </div>
@@ -212,7 +385,7 @@ export default function DocumentPurchaseListPage() {
         </IconButton>
       </FilterBar>
 
-      <div className="flex flex-col rounded-lg border border-biz-border bg-biz-surface shadow-card md:min-h-0 md:flex-1 md:overflow-hidden">
+      <div className="flex flex-col rounded-lg border border-biz-border bg-biz-surface shadow-card">
         <div className="flex shrink-0 items-center justify-between border-b border-biz-border px-4 py-2.5">
           <h3 className="text-[15px] font-semibold text-biz-text">Purchase List</h3>
           <SecondaryButton>
@@ -226,7 +399,7 @@ export default function DocumentPurchaseListPage() {
           data={items}
           rowKey={(row) => row.id}
           onRowClick={(row) => router.push(`/bank-instruments/document-purchase/${row.id}`)}
-          containerClassName="md:min-h-0 md:flex-1 md:overflow-y-auto"
+          containerClassName="overflow-x-auto"
           stickyHeader
           columns={[
             {
@@ -270,12 +443,49 @@ export default function DocumentPurchaseListPage() {
             limit={meta.limit}
             total={meta.total}
             totalPages={meta.totalPages}
-            onPageChange={(page) => setQuery((q) => ({ ...q, page }))}
+            onPageChange={setPage}
             pageSizeOptions={PAGE_SIZE_OPTIONS}
             onLimitChange={handleLimitChange}
           />
         </div>
       </div>
+
+      <Modal
+        open={!!rejecting}
+        onClose={() => {
+          if (rejectRequest.isPending) return;
+          setRejecting(null);
+          setRejectionReason("");
+        }}
+        title="Reject Document Purchase Request"
+      >
+        <p className="text-[13px] text-biz-muted">
+          Add a reason so the decision remains clear in the audit trail.
+        </p>
+        <textarea
+          autoFocus
+          value={rejectionReason}
+          onChange={(event) => setRejectionReason(event.target.value)}
+          placeholder="Enter rejection reason"
+          className="mt-3 min-h-24 w-full resize-y rounded-md border border-biz-border bg-white px-3 py-2 text-sm text-biz-text outline-none focus:border-biz-blue"
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <SecondaryButton
+            type="button"
+            disabled={rejectRequest.isPending}
+            onClick={() => setRejecting(null)}
+          >
+            Cancel
+          </SecondaryButton>
+          <PrimaryButton
+            type="button"
+            disabled={!rejectionReason.trim() || rejectRequest.isPending}
+            onClick={() => void reject()}
+          >
+            {rejectRequest.isPending ? "Rejecting..." : "Confirm Reject"}
+          </PrimaryButton>
+        </div>
+      </Modal>
     </div>
   );
 }

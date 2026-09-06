@@ -5,6 +5,7 @@ export const createDocumentPurchaseSchema = z
   .object({
     purchaseType: z.enum([PurchaseType.EGP, PurchaseType.MANUAL]),
     tenderId: z.string().optional().or(z.literal("")),
+    requestId: z.string().optional().or(z.literal("")),
     organizationMasterId: z.string().min(1, "Organization is required"),
     tenderWorkName: z.string().min(1, "Tender / work name is required"),
     purchaseDate: z.string().min(1, "Purchase date is required"),

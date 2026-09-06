@@ -55,6 +55,7 @@ function AddDocumentPurchaseForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tenderId = searchParams.get("tenderId") ?? undefined;
+  const requestId = searchParams.get("requestId") ?? undefined;
   const linkedTender = useTender(tenderId);
   const bankAccounts = useBankAccounts();
   const categories = useMasterCategories(MasterCategoryType.DOCUMENT_PURCHASE);
@@ -72,13 +73,16 @@ function AddDocumentPurchaseForm() {
     defaultValues: {
       purchaseType: PurchaseType.EGP,
       tenderId: "",
+      requestId: requestId ?? "",
       organizationMasterId: "",
       tenderWorkName: "",
       purchaseDate: new Date().toISOString().slice(0, 10),
       documentPrice: undefined,
       paymentFromAccountId: "",
       category: "",
+      estimatedTenderAmount: undefined,
       submissionDate: "",
+      openingDate: "",
       remarks: "",
     },
   });
@@ -106,7 +110,10 @@ function AddDocumentPurchaseForm() {
     }
     setValue("tenderWorkName", linkedTender.data.workName);
     if (linkedTender.data.documentFee != null) setValue("documentPrice", Number(linkedTender.data.documentFee), { shouldDirty: false });
+    setValue("estimatedTenderAmount", Number(linkedTender.data.contractValue), { shouldDirty: false });
+    if (linkedTender.data.category) setValue("category", linkedTender.data.category, { shouldDirty: false });
     if (linkedTender.data.submissionDeadline) setValue("submissionDate", linkedTender.data.submissionDeadline.slice(0, 10), { shouldDirty: false });
+    if (linkedTender.data.openingDate) setValue("openingDate", linkedTender.data.openingDate.slice(0, 10), { shouldDirty: false });
     if (linkedTender.data.egpTenderId) setValue("tenderId", linkedTender.data.egpTenderId);
   }, [linkedTender.data, setValue]);
 
@@ -116,13 +123,16 @@ function AddDocumentPurchaseForm() {
         purchaseType: values.purchaseType,
         tenderId: values.purchaseType === PurchaseType.EGP ? values.tenderId || undefined : undefined,
         linkedTenderId: tenderId,
+        requestId,
         organizationMasterId: values.organizationMasterId,
         tenderWorkName: values.tenderWorkName,
         purchaseDate: values.purchaseDate,
         documentPrice: Number(values.documentPrice),
         paymentFromAccountId: values.paymentFromAccountId,
         category: values.category || undefined,
+        estimatedTenderAmount: values.estimatedTenderAmount == null ? undefined : Number(values.estimatedTenderAmount),
         submissionDate: values.submissionDate || undefined,
+        openingDate: values.openingDate || undefined,
         remarks: values.remarks || undefined,
       },
       {

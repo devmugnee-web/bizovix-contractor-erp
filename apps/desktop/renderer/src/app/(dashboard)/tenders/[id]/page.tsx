@@ -314,10 +314,16 @@ export default function TenderDetailPage() {
             title="Document Purchase"
             count={t.linked.documentPurchases.length}
             emptyAction={
-              <Link href={`/bank-instruments/document-purchase/create?tenderId=${t.id}`}>
+              <Link
+                href={
+                  t.costingApprovalStatus === "APPROVED"
+                    ? "/bank-instruments/document-purchase"
+                    : `/bank-instruments/document-purchase/create?tenderId=${t.id}`
+                }
+              >
                 <SecondaryButton>
                   <Plus className="h-4 w-4" />
-                  Purchase Document
+                  {t.costingApprovalStatus === "APPROVED" ? "Review Purchase Request" : "Purchase Document"}
                 </SecondaryButton>
               </Link>
             }

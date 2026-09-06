@@ -9,7 +9,12 @@ import { apiRequest, apiRequestPaginated } from "../http-client";
 import { queryKeys } from "./query-keys";
 
 function params(query: WorkCompletionCertificateQuery) {
-  return { ...query };
+  const { completedOnly, ...rest } = query;
+
+  return {
+    ...rest,
+    completedOnly: completedOnly === undefined ? undefined : String(completedOnly),
+  };
 }
 
 export function useWorkCompletionCertificates(query: WorkCompletionCertificateQuery) {

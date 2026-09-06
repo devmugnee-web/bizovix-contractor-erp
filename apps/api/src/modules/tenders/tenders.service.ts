@@ -797,6 +797,18 @@ export class TendersService {
         },
       });
 
+      const documentPurchaseRequest = await tx.documentPurchaseRequest.upsert({
+        where: { organizationId_tenderId: { organizationId, tenderId: id } },
+        create: {
+          organizationId,
+          tenderId: id,
+          costingId: costing.id,
+          requestedById: existing.costingApprovedById ?? userId,
+          requestedAt: approvedAt,
+        },
+        update: { costingId: costing.id },
+      });
+
       if (!alreadyApproved) {
         await this.auditLogService.record(
           {
@@ -810,6 +822,7 @@ export class TendersService {
             newValue: {
               costingApprovalStatus: tender.costingApprovalStatus,
               costingId: costing.id,
+              documentPurchaseRequestId: documentPurchaseRequest.id,
             },
           },
           tx,

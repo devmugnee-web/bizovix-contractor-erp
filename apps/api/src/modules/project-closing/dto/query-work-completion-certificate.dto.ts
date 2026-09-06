@@ -3,7 +3,8 @@ import {
   CompletionCertificateSource,
   CompletionCertificateStatus,
 } from "@bizovix/database";
-import { IsEnum, IsIn, IsOptional, IsString } from "class-validator";
+import { Transform } from "class-transformer";
+import { IsBoolean, IsEnum, IsIn, IsOptional, IsString } from "class-validator";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 
 export const WORK_COMPLETION_DISPLAY_STATUSES = [
@@ -22,6 +23,11 @@ export class QueryWorkCompletionCertificateDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   cmsWorkId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (value === "true" ? true : value === "false" ? false : value))
+  @IsBoolean()
+  completedOnly?: boolean;
 
   @IsOptional()
   @IsEnum(CompletionCertificateSource)

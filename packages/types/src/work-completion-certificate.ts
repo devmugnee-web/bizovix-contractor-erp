@@ -64,13 +64,18 @@ export interface WorkCompletionCertificateRow {
   tenderId: string | null;
   tid: string | null;
   project: string;
+  procuringEntity: string;
   workDescription: string;
   workCategory: string;
+  contractNo: string | null;
   projectStatus: CmsWorkStatus;
+  workCompletionDate: string | null;
   displayStatus: WorkCompletionCertificateDisplayStatus;
   source: WorkCompletionCertificateSource | null;
   egpStatus: WorkCompletionCertificateEgpStatus | null;
   wccObtainedOn: string | null;
+  certificateNo: string | null;
+  certificateDate: string | null;
   egpAppliedOn: string | null;
   egpObtainedOn: string | null;
   lastUpdated: string;
@@ -80,6 +85,7 @@ export interface WorkCompletionCertificateRow {
 
 export interface WorkCompletionCertificateQuery extends PageQuery {
   cmsWorkId?: string;
+  completedOnly?: boolean;
   source?: WorkCompletionCertificateSource;
   egpStatus?: WorkCompletionCertificateEgpStatus;
   certificateStatus?: WorkCompletionCertificateCoreStatus;

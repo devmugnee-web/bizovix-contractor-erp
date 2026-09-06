@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@bizovix/database";
+import { DocumentPurchaseRequestStatus, Prisma } from "@bizovix/database";
 import { normalizeTenderBusinessId, type PaginationMeta } from "@bizovix/types";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { PrismaService } from "../prisma/prisma.service";
@@ -7,6 +7,11 @@ import { AuditLogService } from "../audit-logs/audit-log.service";
 import { CreateDocumentPurchaseDto } from "./dto/create-document-purchase.dto";
 import { UpdateDocumentPurchaseDto } from "./dto/update-document-purchase.dto";
 import { QueryDocumentPurchaseDto } from "./dto/query-document-purchase.dto";
+import {
+  DocumentPurchaseRequestActionDto,
+  QueryDocumentPurchaseRequestDto,
+  RejectDocumentPurchaseRequestDto,
+} from "./dto/document-purchase-request.dto";
 
 const includeRelations = {
   organizationMaster: { select: { id: true, shortName: true, fullName: true } },
@@ -22,6 +27,31 @@ type DocumentPurchaseStats = {
   totalAmount: string;
 };
 
+const requestInclude = {
+  tender: {
+    select: {
+      id: true,
+      egpTenderId: true,
+      workName: true,
+      category: true,
+      documentFee: true,
+      contractValue: true,
+      documentPurchaseDeadline: true,
+      submissionDeadline: true,
+      openingDate: true,
+      organizationMaster: { select: { id: true, shortName: true, fullName: true } },
+    },
+  },
+  costing: { select: { id: true, status: true } },
+  requestedBy: { select: { id: true, name: true } },
+  approvedBy: { select: { id: true, name: true } },
+  rejectedBy: { select: { id: true, name: true } },
+} satisfies Prisma.DocumentPurchaseRequestInclude;
+
+type DocumentPurchaseRequestWithRelations = Prisma.DocumentPurchaseRequestGetPayload<{
+  include: typeof requestInclude;
+}>;
+
 type ExistingTenderBusinessId = {
   id: string;
   egpTenderId: string | null;
@@ -35,12 +65,182 @@ function toDto(record: DocumentPurchaseWithRelations): DocumentPurchaseDto {
   return { ...rest, tenderId: egpTenderId };
 }
 
+function requestToDto(record: DocumentPurchaseRequestWithRelations) {
+  return {
+    ...record,
+    tender: {
+      ...record.tender,
+      documentFee: record.tender.documentFee?.toFixed(2) ?? null,
+      contractValue: record.tender.contractValue.toFixed(2),
+    },
+  };
+}
+
 @Injectable()
 export class DocumentPurchasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
   ) {}
+
+  async findRequests(
+    organizationId: string,
+    query: QueryDocumentPurchaseRequestDto,
+  ): Promise<{ items: ReturnType<typeof requestToDto>[]; meta: PaginationMeta }> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const search = query.search?.trim();
+    const where: Prisma.DocumentPurchaseRequestWhereInput = {
+      organizationId,
+      ...(query.status ? { status: query.status } : {}),
+      ...(search
+        ? {
+            tender: {
+              OR: [
+                { egpTenderId: { contains: search, mode: "insensitive" } },
+                { workName: { contains: search, mode: "insensitive" } },
+              ],
+            },
+          }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.documentPurchaseRequest.findMany({
+        where,
+        include: requestInclude,
+        orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.documentPurchaseRequest.count({ where }),
+    ]);
+
+    return { items: items.map(requestToDto), meta: buildPaginationMeta(total, page, limit) };
+  }
+
+  async approveRequest(
+    organizationId: string,
+    userId: string,
+    id: string,
+    dto: DocumentPurchaseRequestActionDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.documentPurchaseRequest.findFirst({
+        where: { id, organizationId },
+        include: requestInclude,
+      });
+      if (!existing) throw new NotFoundException("Document purchase request not found");
+      if (existing.status === DocumentPurchaseRequestStatus.APPROVED) return requestToDto(existing);
+      if (existing.status === DocumentPurchaseRequestStatus.PURCHASED) {
+        throw new ConflictException("This document purchase request has already been purchased");
+      }
+
+      const changed = await tx.documentPurchaseRequest.updateMany({
+        where: {
+          id,
+          organizationId,
+          version: dto.version,
+          status: { in: [DocumentPurchaseRequestStatus.PENDING_APPROVAL, DocumentPurchaseRequestStatus.REJECTED] },
+        },
+        data: {
+          status: DocumentPurchaseRequestStatus.APPROVED,
+          approvedById: userId,
+          approvedAt: new Date(),
+          rejectedById: null,
+          rejectedAt: null,
+          rejectionReason: null,
+          version: { increment: 1 },
+        },
+      });
+      if (changed.count !== 1) {
+        throw new ConflictException("Document purchase request changed; reload it before approving");
+      }
+
+      const record = await tx.documentPurchaseRequest.findFirst({
+        where: { id, organizationId },
+        include: requestInclude,
+      });
+      if (!record) throw new NotFoundException("Document purchase request not found");
+      await this.auditLogService.record(
+        {
+          organizationId,
+          userId,
+          action: "DOCUMENT_PURCHASE_REQUEST_APPROVED",
+          entityType: "DocumentPurchaseRequest",
+          entityId: id,
+          referenceNo: record.tender.egpTenderId,
+          oldValue: { status: existing.status, version: existing.version },
+          newValue: { status: record.status, version: record.version },
+        },
+        tx,
+      );
+      return requestToDto(record);
+    });
+  }
+
+  async rejectRequest(
+    organizationId: string,
+    userId: string,
+    id: string,
+    dto: RejectDocumentPurchaseRequestDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.documentPurchaseRequest.findFirst({
+        where: { id, organizationId },
+        include: requestInclude,
+      });
+      if (!existing) throw new NotFoundException("Document purchase request not found");
+      if (existing.status === DocumentPurchaseRequestStatus.REJECTED) return requestToDto(existing);
+      if (existing.status !== DocumentPurchaseRequestStatus.PENDING_APPROVAL) {
+        throw new BadRequestException("Only a pending document purchase request can be rejected");
+      }
+
+      const changed = await tx.documentPurchaseRequest.updateMany({
+        where: {
+          id,
+          organizationId,
+          version: dto.version,
+          status: DocumentPurchaseRequestStatus.PENDING_APPROVAL,
+        },
+        data: {
+          status: DocumentPurchaseRequestStatus.REJECTED,
+          rejectedById: userId,
+          rejectedAt: new Date(),
+          rejectionReason: dto.reason.trim(),
+          version: { increment: 1 },
+        },
+      });
+      if (changed.count !== 1) {
+        throw new ConflictException("Document purchase request changed; reload it before rejecting");
+      }
+
+      const record = await tx.documentPurchaseRequest.findFirst({
+        where: { id, organizationId },
+        include: requestInclude,
+      });
+      if (!record) throw new NotFoundException("Document purchase request not found");
+      await this.auditLogService.record(
+        {
+          organizationId,
+          userId,
+          action: "DOCUMENT_PURCHASE_REQUEST_REJECTED",
+          entityType: "DocumentPurchaseRequest",
+          entityId: id,
+          referenceNo: record.tender.egpTenderId,
+          status: "WARNING",
+          oldValue: { status: existing.status, version: existing.version },
+          newValue: {
+            status: record.status,
+            version: record.version,
+            reason: record.rejectionReason,
+          },
+        },
+        tx,
+      );
+      return requestToDto(record);
+    });
+  }
 
   async findAll(
     organizationId: string,
@@ -179,6 +379,9 @@ export class DocumentPurchasesService {
   ): Promise<DocumentPurchaseDto> {
     await this.assertBelongsToOrg(organizationId, dto.organizationMasterId, dto.paymentFromAccountId);
     await this.assertTenderBelongsToOrg(organizationId, dto.linkedTenderId);
+    if (dto.requestId && !dto.linkedTenderId) {
+      throw new BadRequestException("A document purchase request must reference its linked tender");
+    }
 
     const shouldCreateTender = !dto.linkedTenderId;
     const suppliedTenderId = dto.purchaseType === "EGP" ? dto.tenderId?.trim() ?? "" : "";
@@ -197,26 +400,65 @@ export class DocumentPurchasesService {
       record = await this.prisma.$transaction(async (tx) => {
         // Purchases started from an existing Tender retain that authoritative link.
         if (dto.linkedTenderId) {
-          return tx.documentPurchase.create({
+          const request = await tx.documentPurchaseRequest.findFirst({
+            where: {
+              organizationId,
+              tenderId: dto.linkedTenderId,
+              ...(dto.requestId ? { id: dto.requestId } : {}),
+            },
+            include: { tender: true },
+          });
+          if (dto.requestId && !request) {
+            throw new NotFoundException("Document purchase request not found for this tender");
+          }
+          if (request?.status === DocumentPurchaseRequestStatus.PURCHASED) {
+            throw new ConflictException("This approved request has already been purchased");
+          }
+          if (request && request.status !== DocumentPurchaseRequestStatus.APPROVED) {
+            throw new BadRequestException("Approve the document purchase request before purchasing");
+          }
+
+          const purchase = await tx.documentPurchase.create({
             data: {
               organizationId,
               purchaseType: dto.purchaseType,
-              egpTenderId: dto.purchaseType === "EGP" ? suppliedTenderId : null,
+              egpTenderId: dto.purchaseType === "EGP" ? request?.tender.egpTenderId ?? suppliedTenderId : null,
               linkedTenderId: dto.linkedTenderId,
-              organizationMasterId: dto.organizationMasterId,
-              tenderWorkName: dto.tenderWorkName,
+              organizationMasterId: request?.tender.organizationMasterId ?? dto.organizationMasterId,
+              tenderWorkName: request?.tender.workName ?? dto.tenderWorkName,
               purchaseDate: new Date(dto.purchaseDate),
               documentPrice: dto.documentPrice,
-              estimatedTenderAmount: dto.estimatedTenderAmount ?? 0,
-              category: dto.category,
-              submissionDate: dto.submissionDate ? new Date(dto.submissionDate) : null,
-              openingDate: dto.openingDate ? new Date(dto.openingDate) : null,
+              estimatedTenderAmount: request?.tender.contractValue ?? dto.estimatedTenderAmount ?? 0,
+              category: request?.tender.category ?? dto.category,
+              submissionDate: request?.tender.submissionDeadline ?? (dto.submissionDate ? new Date(dto.submissionDate) : null),
+              openingDate: request?.tender.openingDate ?? (dto.openingDate ? new Date(dto.openingDate) : null),
               remarks: dto.remarks,
               paymentFromAccountId: dto.paymentFromAccountId,
               createdById: userId,
             },
             include: includeRelations,
           });
+
+          if (request) {
+            const completed = await tx.documentPurchaseRequest.updateMany({
+              where: {
+                id: request.id,
+                organizationId,
+                version: request.version,
+                status: DocumentPurchaseRequestStatus.APPROVED,
+                documentPurchaseId: null,
+              },
+              data: {
+                status: DocumentPurchaseRequestStatus.PURCHASED,
+                documentPurchaseId: purchase.id,
+                version: { increment: 1 },
+              },
+            });
+            if (completed.count !== 1) {
+              throw new ConflictException("Document purchase request changed; reload before purchasing");
+            }
+          }
+          return purchase;
         }
 
         // A Manual purchase has no external Tender ID. Create the purchase first and use its

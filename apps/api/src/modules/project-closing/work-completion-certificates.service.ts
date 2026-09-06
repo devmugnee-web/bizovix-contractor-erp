@@ -15,6 +15,7 @@ import {
 
 const workInclude = {
   tender: { select: { id: true, egpTenderId: true } },
+  organizationMaster: { select: { shortName: true } },
   contracts: {
     where: { status: { not: "CANCELLED" as const } },
     orderBy: [{ updatedAt: "desc" as const }, { id: "asc" as const }],
@@ -61,14 +62,19 @@ function toRow(work: WorkWithCompletion) {
     tenderId: work.tenderId,
     tid: work.tender?.egpTenderId ?? null,
     project: work.workName,
+    procuringEntity: work.organizationMaster.shortName,
     workDescription: scopeOfWork || work.workCategory,
     workCategory: work.workCategory,
+    contractNo: contract?.contractNo ?? null,
     projectStatus: work.status,
+    workCompletionDate: work.completionDate,
     displayStatus: deriveWorkCompletionDisplayStatus(certificate),
     source: certificate?.source ?? null,
     egpStatus: certificate?.egpStatus ?? null,
     wccObtainedOn:
       certificate?.status === "APPROVED" ? certificate.certificateDate : null,
+    certificateNo: certificate?.certificateNo ?? null,
+    certificateDate: certificate?.certificateDate ?? null,
     egpAppliedOn: certificate?.egpAppliedOn ?? null,
     egpObtainedOn: certificate?.egpObtainedOn ?? null,
     lastUpdated: certificate?.updatedAt ?? work.updatedAt,
@@ -112,7 +118,9 @@ export class WorkCompletionCertificatesService {
     const records = await this.prisma.cmsWork.findMany({
       where: {
         organizationId,
-        status: { not: "CANCELLED" },
+        status: query.completedOnly
+          ? { in: ["COMPLETED", "ARCHIVED"] }
+          : { not: "CANCELLED" },
         ...(query.cmsWorkId ? { id: query.cmsWorkId } : {}),
         ...(search
           ? {

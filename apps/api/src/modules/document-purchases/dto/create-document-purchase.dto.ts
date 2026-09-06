@@ -18,6 +18,10 @@ export class CreateDocumentPurchaseDto {
   @IsString()
   linkedTenderId?: string;
 
+  @IsOptional()
+  @IsString()
+  requestId?: string;
+
   @IsString()
   @IsNotEmpty()
   organizationMasterId!: string;

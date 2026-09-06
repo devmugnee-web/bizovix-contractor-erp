@@ -64,6 +64,7 @@ function setup() {
       updateMany: jest.fn(),
     },
     tenderCosting: { upsert: jest.fn() },
+    documentPurchaseRequest: { upsert: jest.fn() },
   };
   const prisma = {
     organizationMaster: { findFirst: jest.fn().mockResolvedValue({ id: "master-1" }) },
@@ -512,6 +513,7 @@ describe("TendersService costing intake workflow", () => {
       );
     tx.tender.updateMany.mockResolvedValue({ count: 1 });
     tx.tenderCosting.upsert.mockResolvedValue(costingFixture());
+    tx.documentPurchaseRequest.upsert.mockResolvedValue({ id: "request-1" });
 
     await expect(
       service.approveForCosting("org-1", "approver-1", "tender-1", { version: 1 }),
@@ -527,6 +529,14 @@ describe("TendersService costing intake workflow", () => {
         where: {
           organizationId_tenderId: { organizationId: "org-1", tenderId: "tender-1" },
         },
+      }),
+    );
+    expect(tx.documentPurchaseRequest.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          organizationId_tenderId: { organizationId: "org-1", tenderId: "tender-1" },
+        },
+        create: expect.objectContaining({ costingId: "costing-1", requestedById: "approver-1" }),
       }),
     );
     expect(audit.record).toHaveBeenCalledWith(
@@ -546,9 +556,11 @@ describe("TendersService costing intake workflow", () => {
       }),
     );
     tx.tenderCosting.upsert.mockResolvedValue(costingFixture());
+    tx.documentPurchaseRequest.upsert.mockResolvedValue({ id: "request-1" });
     await service.approveForCosting("org-1", "approver-1", "tender-1", { version: 1 });
     expect(tx.tender.updateMany).not.toHaveBeenCalled();
     expect(audit.record).not.toHaveBeenCalled();
     expect(tx.tenderCosting.upsert).toHaveBeenCalledTimes(1);
+    expect(tx.documentPurchaseRequest.upsert).toHaveBeenCalledTimes(1);
   });
 });

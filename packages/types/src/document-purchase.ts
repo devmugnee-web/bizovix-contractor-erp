@@ -1,4 +1,4 @@
-import type { PurchaseType } from "./enums";
+import type { DocumentPurchaseRequestStatus, PurchaseType, TenderCostingStatus } from "./enums";
 
 export interface DocumentPurchase {
   id: string;
@@ -26,6 +26,7 @@ export interface CreateDocumentPurchaseInput {
   purchaseType: PurchaseType;
   tenderId?: string | null;
   linkedTenderId?: string | null;
+  requestId?: string | null;
   organizationMasterId: string;
   tenderWorkName: string;
   purchaseDate: string;
@@ -56,4 +57,49 @@ export interface DocumentPurchaseStats {
   egpPurchases: number;
   manualPurchases: number;
   totalAmount: string;
+}
+
+export interface DocumentPurchaseRequest {
+  id: string;
+  organizationId: string;
+  tenderId: string;
+  costingId: string;
+  status: DocumentPurchaseRequestStatus;
+  requestedAt: string;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+  documentPurchaseId: string | null;
+  version: number;
+  tender: {
+    id: string;
+    egpTenderId: string | null;
+    workName: string;
+    category: string | null;
+    documentFee: string | null;
+    contractValue: string;
+    documentPurchaseDeadline: string | null;
+    submissionDeadline: string | null;
+    openingDate: string | null;
+    organizationMaster: { id: string; shortName: string; fullName: string } | null;
+  };
+  costing: { id: string; status: TenderCostingStatus };
+  requestedBy: { id: string; name: string } | null;
+  approvedBy: { id: string; name: string } | null;
+  rejectedBy: { id: string; name: string } | null;
+}
+
+export interface DocumentPurchaseRequestQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: DocumentPurchaseRequestStatus;
+}
+
+export interface DocumentPurchaseRequestActionInput {
+  version: number;
+}
+
+export interface RejectDocumentPurchaseRequestInput extends DocumentPurchaseRequestActionInput {
+  reason: string;
 }
