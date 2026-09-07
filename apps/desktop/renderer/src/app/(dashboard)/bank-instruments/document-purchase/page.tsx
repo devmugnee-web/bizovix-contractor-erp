@@ -177,7 +177,7 @@ export default function DocumentPurchaseListPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2.5">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2.5 rounded-xl border border-biz-border bg-white px-4 py-3 shadow-card">
         <div>
           <h1 className="text-page-title text-biz-text">Document Purchase</h1>
         </div>
@@ -189,7 +189,7 @@ export default function DocumentPurchaseListPage() {
         </Link>
       </div>
 
-      <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <ModuleStatCard
           icon={Layers}
           iconClassName="bg-biz-blue-soft text-biz-blue"
@@ -220,15 +220,15 @@ export default function DocumentPurchaseListPage() {
         />
       </div>
 
-      <section className="overflow-hidden rounded-lg border border-biz-border bg-biz-surface shadow-card">
-        <div className="flex flex-col gap-3 border-b border-biz-border px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+      <section className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-card">
+        <div className="flex flex-col gap-3 border-b border-blue-100 bg-blue-50/30 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-[15px] font-semibold text-biz-text">Costing to Document Purchase Workflow</h2>
             <p className="mt-0.5 text-[12px] text-biz-muted">
               Tenders approved for costing appear here automatically before any purchase is recorded.
             </p>
           </div>
-          <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-biz-bg p-1" role="tablist" aria-label="Document purchase request status">
+          <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-biz-border bg-white p-1" role="tablist" aria-label="Document purchase request status">
             {REQUEST_STATUS_TABS.map((tab) => {
               const active = requestStatus === tab.status;
               return (
@@ -242,7 +242,7 @@ export default function DocumentPurchaseListPage() {
                     setRequestPage(1);
                   }}
                   className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[11px] font-semibold transition-colors ${
-                    active ? "bg-white text-biz-blue shadow-sm" : "text-biz-muted hover:text-biz-text"
+                    active ? "bg-biz-blue-soft text-biz-blue" : "text-biz-muted hover:bg-[#f8fafc] hover:text-biz-text"
                   }`}
                 >
                   {tab.label}
@@ -266,7 +266,7 @@ export default function DocumentPurchaseListPage() {
           columns={[
             { key: "tender", header: "Tender ID", render: (row) => row.tender.egpTenderId ?? "N/A" },
             { key: "organization", header: "Organization", render: (row) => row.tender.organizationMaster?.shortName ?? "Not assigned" },
-            { key: "work", header: "Tender / Work Name", render: (row) => row.tender.workName },
+            { key: "work", header: "Tender / Work Name", render: (row) => <p className="line-clamp-2 max-w-[460px] leading-4" title={row.tender.workName}>{row.tender.workName}</p> },
             { key: "fee", header: "Document Fee", render: (row) => row.tender.documentFee ? formatBDT(row.tender.documentFee) : "Not set" },
             { key: "deadline", header: "Purchase Deadline", render: (row) => row.tender.documentPurchaseDeadline ? formatDate(row.tender.documentPurchaseDeadline) : "Not set" },
             {
@@ -370,7 +370,7 @@ export default function DocumentPurchaseListPage() {
         )}
       </section>
 
-      <FilterBar className="shrink-0 p-2.5">
+      <FilterBar className="shrink-0 rounded-xl border border-biz-border bg-white p-3 shadow-card">
         <div className="flex w-full flex-col gap-1 sm:w-auto">
           <label className="text-[12px] font-medium text-biz-muted">Date Range</label>
           <div className="flex items-center gap-2">
@@ -446,8 +446,8 @@ export default function DocumentPurchaseListPage() {
         </IconButton>
       </FilterBar>
 
-      <div className="flex flex-col rounded-lg border border-biz-border bg-biz-surface shadow-card">
-        <div className="flex shrink-0 items-center justify-between border-b border-biz-border px-4 py-2.5">
+      <div className="flex flex-col overflow-hidden rounded-xl border border-biz-border bg-white shadow-card">
+        <div className="flex shrink-0 items-center justify-between border-b border-biz-border bg-[#f8fafc] px-4 py-2.5">
           <h3 className="text-[15px] font-semibold text-biz-text">Purchase List</h3>
           <SecondaryButton>
             <Download className="h-4 w-4" />
@@ -480,7 +480,7 @@ export default function DocumentPurchaseListPage() {
             },
             { key: "tenderId", header: "Tender ID", render: (row) => row.tenderId ?? "N/A" },
             { key: "org", header: "Organization", render: (row) => row.organizationMaster.shortName },
-            { key: "work", header: "Tender / Work Name", render: (row) => row.tenderWorkName },
+            { key: "work", header: "Tender / Work Name", render: (row) => <p className="line-clamp-2 max-w-[460px] leading-4" title={row.tenderWorkName}>{row.tenderWorkName}</p> },
             { key: "date", header: "Purchase Date", render: (row) => formatDate(row.purchaseDate) },
             { key: "price", header: "Document Price", render: (row) => formatBDT(row.documentPrice) },
             { key: "payment", header: "Payment From", render: (row) => row.paymentFromAccount.accountName },
