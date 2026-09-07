@@ -227,12 +227,18 @@ export default function NewWorkIouPage() {
   const hydratedIdRef = React.useRef<string | undefined>(undefined);
 
   React.useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("id");
-    setEditId(id || undefined);
+    const timer = window.setTimeout(() => {
+      const id = new URLSearchParams(window.location.search).get("id");
+      setEditId(id || undefined);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   React.useEffect(() => {
-    if (!paidById && me.data?.id) setPaidById(me.data.id);
+    if (paidById || !me.data?.id) return;
+    const userId = me.data.id;
+    const timer = window.setTimeout(() => setPaidById(userId), 0);
+    return () => window.clearTimeout(timer);
   }, [me.data?.id, paidById]);
 
   React.useEffect(() => {

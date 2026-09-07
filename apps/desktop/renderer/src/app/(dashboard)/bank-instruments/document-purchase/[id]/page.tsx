@@ -31,10 +31,13 @@ export default function DocumentPurchaseViewPage() {
   const [editingCategory, setEditingCategory] = React.useState(false);
 
   React.useEffect(() => {
-    if (documentPurchase.data) {
-      setCategory(documentPurchase.data.category ?? "");
-      setEditingCategory(!documentPurchase.data.category);
-    }
+    if (!documentPurchase.data) return;
+    const record = documentPurchase.data;
+    const timer = window.setTimeout(() => {
+      setCategory(record.category ?? "");
+      setEditingCategory(!record.category);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [documentPurchase.data]);
 
   useSetBreadcrumb([
