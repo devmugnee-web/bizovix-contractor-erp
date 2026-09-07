@@ -357,11 +357,27 @@ function TenderSecurityWorkspace() {
         secondaryLabel="Stay on This Page"
         onSecondary={() => setMessage(null)}
       />
-      <div>
-        <h1 className="text-[22px] font-bold leading-7 text-biz-navy">Tender Security</h1>
-        <p className="text-[13px] text-biz-muted">
-          Select a ready tender, then create its Pay Order or Bank Guarantee.
-        </p>
+      <div className="relative overflow-hidden rounded-xl border border-biz-border bg-white px-4 py-2.5 shadow-card">
+        <div className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-biz-blue">Bank Instrument Workflow</p>
+            <h1 className="text-[22px] font-bold leading-7 tracking-tight text-biz-navy">Tender Security</h1>
+            <p className="mt-1 text-[12px] text-biz-muted">
+              Create a Pay Order or Bank Guarantee for document-purchased tenders.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-[96px] rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-1.5">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-biz-muted">Ready now</p>
+              <p className="mt-0.5 text-[18px] font-bold text-biz-blue">{meta.total}</p>
+            </div>
+            <div className="min-w-[96px] rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-1.5">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-biz-muted">Completed</p>
+              <p className="mt-0.5 text-[18px] font-bold text-emerald-700">{completedSecurities.data?.meta.total ?? 0}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {message?.type === "error" && (
@@ -394,23 +410,17 @@ function TenderSecurityWorkspace() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-lg border border-biz-border bg-white shadow-card">
-        <div className="flex items-center justify-between px-4 py-3">
-          <h2 className="text-[15px] font-bold text-biz-navy">
-            1. Ready for Tender Security <span className="ml-2 rounded-md bg-biz-blue-soft px-2 py-1 text-[12px] text-biz-blue">{meta.total}</span>
-          </h2>
-          <div className="flex items-center gap-2">
-            <IconButton aria-label="Refresh" onClick={() => pendingQuery.refetch()}>
-              <RefreshCw className="h-4 w-4" />
-            </IconButton>
-            <Button variant="outline" size="sm" onClick={() => setFiltersOpen((open) => !open)}>
-              <Filter className="h-4 w-4" />
-              Filter
-            </Button>
+      <section className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-card">
+        <div className="border-b border-blue-100 bg-blue-50/35 px-4 py-2.5">
+          <div>
+            <h2 className="text-[15px] font-bold text-biz-navy">
+              Ready for Tender Security <span className="ml-2 rounded-full bg-biz-blue-soft px-2 py-1 text-[11px] text-biz-blue">{meta.total}</span>
+            </h2>
+            <p className="mt-0.5 text-[10px] text-biz-muted">Select a tender and create the required security instrument.</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2 border-t border-biz-border bg-[#FBFCFE] px-4 py-3">
+        <div className="flex flex-wrap items-end gap-2 bg-white px-4 py-2.5">
           <div className="min-w-[240px] flex-1">
             <label className="mb-1 block text-[11px] font-medium text-biz-muted">Search Tender ID / Work / Organization</label>
             <TextInput
@@ -435,6 +445,19 @@ function TenderSecurityWorkspace() {
             }}
           >
             Reset
+          </Button>
+          <IconButton aria-label="Refresh tender list" title="Refresh tender list" onClick={() => pendingQuery.refetch()}>
+            <RefreshCw className="h-4 w-4" />
+          </IconButton>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((open) => !open)}
+            className={cn(filtersOpen && "border-biz-blue bg-biz-blue-soft text-biz-blue")}
+          >
+            <Filter className="h-4 w-4" />
+            Filter
           </Button>
         </div>
 
@@ -461,7 +484,7 @@ function TenderSecurityWorkspace() {
           </div>
         )}
 
-        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-y border-biz-border bg-white/95 px-4 py-2.5 shadow-sm backdrop-blur">
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-y border-blue-100 bg-blue-50/30 px-4 py-2 backdrop-blur">
           <div>
             <p className="text-[12px] font-semibold text-biz-navy">
               {selectedRows.length > 0 ? `${selectedRows.length} tender selected` : "Select a tender to continue"}
@@ -484,8 +507,8 @@ function TenderSecurityWorkspace() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] border-t border-biz-border text-[12px]">
-            <thead className="bg-[#F7FAFF] text-[11px] font-semibold text-biz-navy">
+          <table className="w-full min-w-[1040px] text-[12px]">
+            <thead className="bg-[#f6f8fb] text-[10px] font-bold uppercase tracking-wide text-biz-muted">
               <tr className="border-b border-biz-border">
                 <th className="w-10 px-4 py-2 text-left">
                   <Checkbox
@@ -510,10 +533,10 @@ function TenderSecurityWorkspace() {
               {pendingQuery.isLoading ? (
                 <tr><td colSpan={10} className="px-4 py-8 text-center text-biz-muted">Loading active tenders...</td></tr>
               ) : pendingItems.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-biz-muted">No active tenders match the selected filters.</td></tr>
+                <tr><td colSpan={10} className="px-4 py-5 text-center text-biz-muted"><p className="font-semibold text-biz-navy">No tender is waiting for security</p><p className="mt-1 text-[11px]">New document-purchased tenders will appear here automatically.</p></td></tr>
               ) : (
                 pendingItems.map((row, index) => (
-                  <tr key={row.id} className={cn("border-b border-biz-border last:border-b-0", selectedIds.has(row.id) && "bg-biz-blue-soft/45")}>
+                  <tr key={row.id} className={cn("border-b border-biz-border transition-colors last:border-b-0 hover:bg-[#f8fafc]", selectedIds.has(row.id) && "bg-biz-blue-soft/45")}>
                     <td className="px-4 py-2">
                       <Checkbox
                         checked={selectedIds.has(row.id)}
@@ -527,7 +550,7 @@ function TenderSecurityWorkspace() {
                     <td className="px-3 py-2 font-semibold">
                       {row.organizationMaster?.shortName ?? "Not set"}
                     </td>
-                    <td className="px-3 py-2">{row.tenderWorkName}</td>
+                    <td className="max-w-[360px] px-3 py-2"><p className="line-clamp-2 leading-4" title={row.tenderWorkName}>{row.tenderWorkName}</p></td>
                     <td className="px-3 py-2"><span className="rounded-md bg-biz-blue-soft px-2 py-1 text-[11px] font-medium text-biz-blue">{TENDER_STATUS_LABELS[row.tenderStatus] ?? row.tenderStatus}</span></td>
                     <td className="px-3 py-2">{row.submissionDeadline ? displayDate(row.submissionDeadline) : "—"}</td>
                     <td className="px-3 py-2 text-right font-semibold">{money(row.securityAmount)}</td>
@@ -586,7 +609,7 @@ function TenderSecurityWorkspace() {
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-biz-border px-4 py-3 text-[12px]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-biz-border bg-[#fafbfd] px-4 py-2 text-[11px]">
           <span className="text-biz-muted">
             {meta.total === 0
               ? "No active tender records found."
@@ -614,21 +637,24 @@ function TenderSecurityWorkspace() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-lg border border-biz-border bg-white shadow-card">
-        <div className="flex items-center justify-between px-4 py-3">
-          <h2 className="text-[15px] font-bold text-biz-navy">
-            Completed Tender Securities
-            <span className="ml-2 rounded-md bg-biz-success-soft px-2 py-1 text-[12px] text-biz-success">
-              {completedSecurities.data?.meta.total ?? 0}
-            </span>
-          </h2>
+      <section className="overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card">
+        <div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50/30 px-4 py-2.5">
+          <div>
+            <h2 className="text-[15px] font-bold text-biz-navy">
+              Completed Tender Securities
+              <span className="ml-2 rounded-full bg-biz-success-soft px-2 py-1 text-[11px] text-biz-success">
+                {completedSecurities.data?.meta.total ?? 0}
+              </span>
+            </h2>
+            <p className="mt-0.5 text-[10px] text-biz-muted">Previously created securities are kept here for quick reference.</p>
+          </div>
           <IconButton aria-label="Refresh completed securities" onClick={() => completedSecurities.refetch()}>
             <RefreshCw className="h-4 w-4" />
           </IconButton>
         </div>
-        <div className="overflow-x-auto border-t border-biz-border">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-[11px]">
-            <thead className="bg-[#F7FAFF] text-biz-navy">
+            <thead className="bg-[#f6f8fb] text-[10px] font-bold uppercase tracking-wide text-biz-muted">
               <tr>
                 <th className="px-4 py-2 text-left">Tender ID</th>
                 <th className="px-3 py-2 text-left">Organization</th>
@@ -643,10 +669,10 @@ function TenderSecurityWorkspace() {
               ) : (completedSecurities.data?.items.length ?? 0) === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-7 text-center text-biz-muted">No completed tender securities yet.</td></tr>
               ) : completedSecurities.data?.items.map((row) => (
-                <tr key={row.id} className="border-t border-biz-border">
+                <tr key={row.id} className="border-t border-biz-border transition-colors hover:bg-emerald-50/30">
                   <td className="px-4 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td>
                   <td className="px-3 py-2">{row.organizationMaster?.shortName ?? "Not set"}</td>
-                  <td className="px-3 py-2">{row.tenderWorkName}</td>
+                  <td className="max-w-[520px] px-3 py-2"><p className="line-clamp-2 leading-4" title={row.tenderWorkName}>{row.tenderWorkName}</p></td>
                   <td className="px-3 py-2 text-right font-semibold">{money(row.securityAmount)}</td>
                   <td className="px-4 py-2 text-center"><span className="rounded bg-biz-success-soft px-2 py-1 font-semibold text-biz-success">Completed</span></td>
                 </tr>
@@ -656,7 +682,7 @@ function TenderSecurityWorkspace() {
         </div>
       </section>
 
-      {showDetails && <section ref={section2Ref} tabIndex={-1} className="rounded-lg border border-biz-border bg-white p-4 shadow-card outline-none">
+      {showDetails && <section ref={section2Ref} tabIndex={-1} className="rounded-xl border border-biz-blue/15 bg-white p-4 shadow-card outline-none">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-[15px] font-bold text-biz-navy">2. Configure Tender Security</h2>
