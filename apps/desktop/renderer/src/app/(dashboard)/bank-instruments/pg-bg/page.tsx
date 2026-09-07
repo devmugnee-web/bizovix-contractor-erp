@@ -476,13 +476,27 @@ export default function PgBgPage() {
         dismissOnEscape={false}
       />
 
-      <div>
-        <h1 className="text-[23px] font-bold leading-7 text-biz-navy">
-          Accept NOA &amp; Create PG/BG
-        </h1>
-        <p className="text-[12px] text-biz-muted">
-          Complete the guided steps to create PG/BG and move the awarded work to Ongoing Works.
-        </p>
+      <div className="relative overflow-hidden rounded-xl border border-biz-blue/15 bg-gradient-to-r from-[#edf5ff] via-white to-[#eefbf5] px-5 py-4 shadow-sm">
+        <div className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
+        <div className="absolute -right-12 -top-16 h-40 w-40 rounded-full bg-biz-blue/5" />
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-biz-blue">Bank Instrument Workflow</p>
+            <h1 className="text-[24px] font-bold leading-7 tracking-tight text-biz-navy">
+              Accept NOA &amp; Create PG/BG
+            </h1>
+            <p className="mt-1 max-w-2xl text-[12px] text-biz-muted">
+              Select the awarded tender, record the NOA decision, then complete the required guarantee.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 rounded-lg border border-emerald-200 bg-white/90 px-3 py-2 shadow-sm">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-[13px] font-bold text-emerald-700">{uiStep}</span>
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-wider text-biz-muted">Current stage</p>
+              <p className="text-[11px] font-semibold text-biz-navy">{uiStep === 1 ? "Select Tender" : uiStep === 2 ? "NOA & Decision" : "PG/BG & Finish"}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {message && (
@@ -499,14 +513,14 @@ export default function PgBgPage() {
         </div>
       )}
 
-      <div className="rounded-md border border-biz-border bg-white px-4 py-3 shadow-card">
+      <div className="rounded-xl border border-biz-border bg-white px-4 py-3 shadow-card">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-0">
           {STEPS.map(([title, subtitle], index) => {
             const step = (index + 1) as UiStep;
             const active = step === uiStep;
             const complete = step < uiStep;
             return (
-              <div key={title} className="relative flex items-center gap-2 sm:pr-4">
+              <div key={title} className={cn("relative flex items-center gap-2 rounded-lg px-2 py-1.5 sm:pr-4", active && "bg-biz-blue-soft/70")}>
                 <span
                   className={cn(
                     "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold",
@@ -537,10 +551,10 @@ export default function PgBgPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-3">
           {uiStep === 1 && (
-            <section className="overflow-hidden rounded-md border border-biz-border bg-white shadow-card">
+            <section className="overflow-hidden rounded-xl border border-biz-border bg-white shadow-card">
               <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h2 className="text-[14px] font-bold text-biz-navy">
@@ -1195,9 +1209,16 @@ export default function PgBgPage() {
           )}
         </div>
 
-        <aside className="space-y-3">
-          <section className="rounded-md border border-biz-border bg-white p-3 shadow-card">
-            <h2 className="mb-2 text-[12px] font-bold text-biz-navy">Work Summary</h2>
+        <aside className="space-y-3 xl:sticky xl:top-3">
+          <section className="overflow-hidden rounded-xl border border-biz-border bg-white shadow-card">
+            <div className="border-b border-biz-border bg-gradient-to-r from-biz-blue-soft to-white px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-[13px] font-bold text-biz-navy">Selected Work Summary</h2>
+                <span className={cn("rounded-full px-2 py-1 text-[9px] font-bold", selected ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-biz-muted")}>{selected ? "SELECTED" : "WAITING"}</span>
+              </div>
+              <p className="mt-0.5 text-[10px] text-biz-muted">Key information stays visible while you complete the workflow.</p>
+            </div>
+            <div className="p-4">
             <SummaryRow label="Organization" value={selected?.organizationMaster.shortName} />
             <SummaryRow label="Tender / Work" value={selected?.tenderWorkName} />
             <SummaryRow label="Tender ID" value={selected?.tenderId} />
@@ -1205,12 +1226,34 @@ export default function PgBgPage() {
             <SummaryRow label="NOA Amount" value={money(values.noaAmount)} />
             <SummaryRow label="Work Category" value={values.workCategory} />
             <SummaryRow label="PE Name" value={values.contact?.name} />
+            </div>
           </section>
 
+          <section className="rounded-xl border border-[#cfe0f7] bg-gradient-to-br from-[#f7fbff] to-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-biz-blue">What happens next</p>
+            <h3 className="mt-1 text-[13px] font-bold text-biz-navy">
+              {uiStep === 1 ? "Choose one ready tender" : uiStep === 2 ? "Review the NOA decision" : "Add guarantee details and finish"}
+            </h3>
+            <div className="mt-3 space-y-3">
+              {[
+                ["1", "Select Tender", "Choose the awarded work from the ready list."],
+                ["2", "NOA & Decision", "Confirm NOA amount, date and responsible contact."],
+                ["3", "PG/BG & Finish", "Save the guarantee and move the work forward."],
+              ].map(([number, title, description], index) => (
+                <div key={number} className="flex gap-3">
+                  <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold", index + 1 <= uiStep ? "bg-biz-blue text-white" : "border border-biz-border bg-white text-biz-muted")}>{number}</span>
+                  <div>
+                    <p className="text-[11px] font-semibold text-biz-navy">{title}</p>
+                    <p className="mt-0.5 text-[9px] leading-4 text-biz-muted">{description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         </aside>
       </div>
 
-      <div className="sticky bottom-0 z-20 flex flex-col gap-2 rounded-md border border-biz-border bg-white/95 px-4 py-3 shadow-card backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+      <div className="sticky bottom-3 z-20 flex flex-col gap-2 rounded-xl border border-biz-blue/15 bg-white/95 px-4 py-3 shadow-[0_12px_35px_rgba(15,48,92,0.14)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
         {(uiStep > 1 || selected) && (
           <button
             type="button"
