@@ -307,7 +307,9 @@ export function TenderForm({
         return;
       }
       setSaveError(
-        error instanceof ApiError ? error.message : "Failed to save tender. Please try again.",
+        error instanceof Error && error.message
+          ? error.message
+          : "Failed to save tender. Please try again.",
       );
     }
   }

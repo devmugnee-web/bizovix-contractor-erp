@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
@@ -76,6 +77,7 @@ function TableSkeleton({ columns }: { columns: number }) {
 }
 
 export default function CreditCommitmentPage() {
+  const router = useRouter();
   useSetBreadcrumb([
     { label: "Bank Instruments" },
     { label: "Credit Commitment", href: "/bank-instruments/credit-commitment" },
@@ -224,8 +226,16 @@ export default function CreditCommitmentPage() {
     <div className="flex w-full min-w-0 flex-col gap-3 overflow-x-hidden text-biz-text">
       <SuccessPopup
         open={message?.type === "success"}
+        title="Credit Commitment Charge Saved"
         message={message?.text ?? ""}
         onClose={() => setMessage(null)}
+        primaryLabel="Go to PG / BG"
+        onPrimary={() => {
+          setMessage(null);
+          router.push("/bank-instruments/pg-bg");
+        }}
+        secondaryLabel="Stay on This Page"
+        onSecondary={() => setMessage(null)}
       />
       <div>
         <h1 className="text-[23px] font-bold leading-7 text-biz-navy">Credit Commitment Charge</h1>

@@ -10,7 +10,7 @@ import { QueryCreditCommitmentDto } from "./dto/query-credit-commitment.dto";
 
 const pendingInclude = {
   organizationMaster: { select: { id: true, shortName: true, fullName: true } },
-  linkedTender: { select: { submissionDeadline: true } },
+  linkedTender: { select: { submissionDeadline: true, contractValue: true } },
 } satisfies Prisma.DocumentPurchaseInclude;
 
 const commitmentInclude = {
@@ -71,7 +71,11 @@ export class CreditCommitmentsService {
         submissionDeadline: item.linkedTender?.submissionDeadline ?? item.submissionDate,
         // Real value only — no fabricated multiplier. A zero here honestly reflects
         // that no Estimated Tender Amount was recorded on the document purchase.
-        estimatedTenderAmount: item.estimatedTenderAmount.toFixed(2),
+        estimatedTenderAmount: (
+          item.estimatedTenderAmount.gt(0)
+            ? item.estimatedTenderAmount
+            : (item.linkedTender?.contractValue ?? item.estimatedTenderAmount)
+        ).toFixed(2),
       })),
       meta: buildPaginationMeta(total, page, limit),
     };

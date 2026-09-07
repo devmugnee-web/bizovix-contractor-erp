@@ -108,12 +108,16 @@ function numbersFrom(value: string): number[] {
 function cleanDescription(value: string): string | undefined {
   const description = compactLine(value)
     .replace(new RegExp(`^${SERIAL_PREFIX}\\s+`, "i"), "")
+    .replace(
+      /^(?:(?:group\s+)?(?:n\/?a|not\s+applicable))(?:\s*[-:|]\s*|\s+)(?=\S)/i,
+      "",
+    )
     .replace(/^[-:;,.\s]+|[-:;,.\s]+$/g, "")
     .slice(0, 500)
     .trim();
   if (description.length < 2 || !/[\p{L}]/u.test(description)) return undefined;
   if (
-    /^(?:sl\.?\s*(?:no\.?)?|item\s*(?:no\.?)?|description(?:\s+of\s+(?:goods|works|item))?|product(?:\s*\/\s*work)?(?:\s+name)?|unit|uom|qty|quantity|unit\s+(?:price|rate)|rate|amount|total(?:\s+price)?|grand\s+total|subtotal|carried\s+forward|brought\s+forward)$/i.test(
+    /^(?:sl\.?\s*(?:no\.?)?|item\s*(?:no\.?)?|description(?:\s+of\s+(?:goods|works|item))?|product(?:\s*\/\s*work)?(?:\s+name)?|unit|uom|qty|quantity|unit\s+(?:price|rate)|rate|amount|total(?:\s+price)?|grand\s+total|subtotal|carried\s+forward|brought\s+forward|bill\s+of\s+quantities|price\s+schedule|schedule\s+of\s+requirements|technical\s+specifications?|terms\s+and\s+conditions?|general\s+requirements?|notes?|page\s+\d+(?:\s+of\s+\d+)?)$/i.test(
       description,
     )
   ) {
@@ -126,50 +130,89 @@ function makeRow(
   descriptionValue: string,
   unitValue: string | undefined,
   quantityValue: string | undefined,
-  trailingValue = "",
 ): TenderCostingPdfExtractedRow | undefined {
   const description = cleanDescription(descriptionValue);
   if (!description) return undefined;
   const unit = unitValue ? normalizeUnit(unitValue) : undefined;
   const parsedQuantity = parseNonNegativeNumber(quantityValue);
   const quantity = parsedQuantity && parsedQuantity > 0 ? parsedQuantity : undefined;
-  const prices = numbersFrom(trailingValue);
-  const unitPrice = prices[0] && prices[0] > 0 ? prices[0] : undefined;
-  const totalPrice = prices[1] && prices[1] > 0 ? prices[1] : undefined;
   return {
     description,
     ...(unit ? { unit } : {}),
     ...(quantity ? { quantity } : {}),
-    ...(unitPrice ? { unitPrice } : {}),
-    ...(totalPrice ? { totalPrice } : {}),
   };
 }
 
-function parseSeparatedRow(line: string): TenderCostingPdfExtractedRow | undefined {
-  const cells = line
+interface SeparatedColumnLayout {
+  columnCount: number;
+  descriptionIndex: number;
+  unitIndex: number;
+  quantityIndex: number;
+}
+
+function separatedCells(line: string): string[] {
+  return line
     .split(/\t+|\s*\|\s*|\s{2,}/)
     .map(compactLine)
     .filter(Boolean);
+}
+
+function detectSeparatedColumnLayout(line: string): SeparatedColumnLayout | undefined {
+  const cells = separatedCells(line);
+  const descriptionIndex = cells.findIndex((cell) =>
+    /^(?:description\s+of\s+(?:item|goods|works)|product(?:\s*\/\s*work)?\s+name)$/i.test(cell),
+  );
+  const unitIndex = cells.findIndex((cell) =>
+    /^(?:measurement(?:\s+unit)?|unit(?:\s+of\s+measurement)?|uom)$/i.test(cell),
+  );
+  const quantityIndex = cells.findIndex((cell) => /^(?:quantity|qty)$/i.test(cell));
+  if (descriptionIndex < 0 || unitIndex < 0 || quantityIndex < 0) return undefined;
+  return { columnCount: cells.length, descriptionIndex, unitIndex, quantityIndex };
+}
+
+function parseSeparatedRow(
+  line: string,
+  layout?: SeparatedColumnLayout,
+): TenderCostingPdfExtractedRow | undefined {
+  const cells = separatedCells(line);
   if (cells.length < 3) return undefined;
+  const first = cells[0] ?? "";
+  const hasSerial = new RegExp(`^${SERIAL_PREFIX}$`, "i").test(first);
+  if (!hasSerial) return undefined;
+
+  if (
+    layout &&
+    cells.length >= layout.columnCount &&
+    Math.max(layout.descriptionIndex, layout.unitIndex, layout.quantityIndex) < cells.length
+  ) {
+    const mappedRow = makeRow(
+      cells[layout.descriptionIndex] ?? "",
+      cells[layout.unitIndex],
+      cells[layout.quantityIndex],
+    );
+    if (mappedRow?.unit && mappedRow.quantity) return mappedRow;
+  }
+
   const unitIndex = cells.findIndex((cell) => Boolean(normalizeUnit(cell)));
   if (unitIndex < 1) return undefined;
 
   const beforeUnit = cells.slice(0, unitIndex);
-  const first = beforeUnit[0] ?? "";
-  const hasSerial = new RegExp(`^${SERIAL_PREFIX}(?:\\s+|$)`, "i").test(first);
   const descriptionCells = [...beforeUnit];
-  if (hasSerial) {
-    const withoutSerial = first.replace(new RegExp(`^${SERIAL_PREFIX}\\s*`, "i"), "");
-    descriptionCells.splice(0, 1, withoutSerial);
-  }
+  descriptionCells.splice(0, 1);
+  const firstDescriptionCell = descriptionCells[0] ?? "";
+  const descriptionValue = /^(?:n\/?a|not\s+applicable)$/i.test(firstDescriptionCell)
+    ? (descriptionCells[1] ?? "")
+    : firstDescriptionCell.replace(
+        /^(?:(?:group\s+)?(?:n\/?a|not\s+applicable))\s*[-:|]?\s+(?=\S)/i,
+        "",
+      );
   const afterUnit = cells.slice(unitIndex + 1);
   const numericValues = afterUnit.flatMap(numbersFrom);
   if (numericValues.length === 0) return undefined;
   return makeRow(
-    descriptionCells.join(" "),
+    descriptionValue,
     cells[unitIndex],
     String(numericValues[0]),
-    numericValues.slice(1).join(" "),
   );
 }
 
@@ -186,7 +229,6 @@ function parseInlineRow(
       serialQuantityUnit[1] ?? "",
       serialQuantityUnit[3],
       serialQuantityUnit[2],
-      serialQuantityUnit[4],
     );
   }
   const serialUnitQuantity = new RegExp(
@@ -198,7 +240,6 @@ function parseInlineRow(
       serialUnitQuantity[1] ?? "",
       serialUnitQuantity[2],
       serialUnitQuantity[3],
-      serialUnitQuantity[4],
     );
   }
   if (!allowWithoutSerial) return undefined;
@@ -212,7 +253,6 @@ function parseInlineRow(
       quantityUnit[1] ?? "",
       quantityUnit[3],
       quantityUnit[2],
-      quantityUnit[4],
     );
   }
   const unitQuantity = new RegExp(
@@ -220,12 +260,11 @@ function parseInlineRow(
     "iu",
   ).exec(line);
   return unitQuantity
-    ? makeRow(
-        unitQuantity[1] ?? "",
-        unitQuantity[2],
-        unitQuantity[3],
-        unitQuantity[4],
-      )
+      ? makeRow(
+          unitQuantity[1] ?? "",
+          unitQuantity[2],
+          unitQuantity[3],
+        )
     : undefined;
 }
 
@@ -252,7 +291,6 @@ function parseStackedRow(
         descriptionParts.join(" "),
         unitAndQuantity[1],
         unitAndQuantity[2],
-        unitAndQuantity[3],
       );
       return row ? { row, endIndex: index } : undefined;
     }
@@ -270,7 +308,6 @@ function parseStackedRow(
         descriptionParts.join(" "),
         unit,
         followingNumbers[0] === undefined ? undefined : String(followingNumbers[0]),
-        followingNumbers.slice(1).join(" "),
       );
       return row ? { row, endIndex } : undefined;
     }
@@ -324,17 +361,19 @@ export function parseTenderCostingPdfText(rawText: string): TenderCostingPdfExtr
     .split(/\n+/)
     .map(compactLine)
     .filter(Boolean);
-  const tableLikely =
-    /bill\s+of\s+quantit|price\s+schedule|schedule\s+of\s+requirements|item\s+description|description\s+of\s+(?:goods|works|item)|product\s*(?:\/\s*work)?\s+name|\bqty\b|\bquantity\b/i.test(
-      rawText,
-    );
   const rows: TenderCostingPdfExtractedRow[] = [];
+  let separatedLayout: SeparatedColumnLayout | undefined;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
+    const detectedLayout = detectSeparatedColumnLayout(line);
+    if (detectedLayout) {
+      separatedLayout = detectedLayout;
+      continue;
+    }
     if (/^(?:sub\s*total|grand\s+total|total|carried\s+forward|brought\s+forward)\b/i.test(line)) {
       continue;
     }
-    const direct = parseSeparatedRow(line) ?? parseInlineRow(line, tableLikely);
+    const direct = parseSeparatedRow(line, separatedLayout) ?? parseInlineRow(line, false);
     if (direct) {
       rows.push(direct);
       continue;

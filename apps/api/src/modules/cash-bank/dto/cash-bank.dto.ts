@@ -1,5 +1,6 @@
 import { Type } from "class-transformer";
 import { IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, MaxLength } from "class-validator";
+import { PartialType } from "@nestjs/mapped-types";
 
 export class QueryLedgerDto {
   @IsOptional() @Type(() => Number) page?: number;
@@ -24,6 +25,10 @@ export class CreateBankAccountDto {
   @IsOptional() @IsString() currency?: string;
   @IsOptional() @IsString() remarks?: string;
   @IsOptional() @IsIn(["Active", "Inactive"]) status?: string;
+}
+
+export class UpdateBankAccountDto extends PartialType(CreateBankAccountDto) {
+  @IsOptional() @Type(() => Number) @IsNumber() currentBalance?: number;
 }
 
 export class CreateCashTransactionDto {

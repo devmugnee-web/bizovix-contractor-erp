@@ -122,7 +122,7 @@ export default function TenderCostingPage() {
   ]);
   const router = useRouter();
   const [filters, setFilters] = React.useState<FilterDraft>(EMPTY_FILTERS);
-  const [query, setQuery] = React.useState<TenderCostingQuery>({ page: 1, limit: 10 });
+  const [query, setQuery] = React.useState<TenderCostingQuery>({ page: 1, limit: 5 });
   const [highlightedId, setHighlightedId] = React.useState("");
 
   const costings = useTenderCostings(query);
@@ -139,7 +139,7 @@ export default function TenderCostingPage() {
   function applyFilters() {
     setQuery({
       page: 1,
-      limit: 10,
+      limit: query.limit ?? 5,
       search: filters.search || undefined,
       organizationMasterId: filters.organizationMasterId || undefined,
       status: (filters.status as TenderCostingStatus) || undefined,
@@ -151,7 +151,7 @@ export default function TenderCostingPage() {
 
   function resetFilters() {
     setFilters(EMPTY_FILTERS);
-    setQuery({ page: 1, limit: 10 });
+    setQuery({ page: 1, limit: 5 });
   }
 
   const records = React.useMemo(() => {
@@ -162,7 +162,7 @@ export default function TenderCostingPage() {
     );
   }, [costings.data?.items, highlightedId]);
 
-  const meta = costings.data?.meta ?? { page: 1, limit: 10, total: 0, totalPages: 1 };
+  const meta = costings.data?.meta ?? { page: 1, limit: 5, total: 0, totalPages: 1 };
   const snapshot = stats.data;
 
   return (
@@ -514,14 +514,18 @@ export default function TenderCostingPage() {
             },
           ]}
         />
-        <Pagination
-          page={meta.page}
-          limit={meta.limit}
-          total={meta.total}
-          totalPages={meta.totalPages}
-          onPageChange={(page) => setQuery((current) => ({ ...current, page }))}
-          showJumpButtons
-        />
+        {meta.total > 5 && (
+          <Pagination
+            page={meta.page}
+            limit={meta.limit}
+            total={meta.total}
+            totalPages={meta.totalPages}
+            pageSizeOptions={[5, 10, 20, 50]}
+            onLimitChange={(limit) => setQuery((current) => ({ ...current, page: 1, limit }))}
+            onPageChange={(page) => setQuery((current) => ({ ...current, page }))}
+            showJumpButtons
+          />
+        )}
       </div>
     </div>
   );

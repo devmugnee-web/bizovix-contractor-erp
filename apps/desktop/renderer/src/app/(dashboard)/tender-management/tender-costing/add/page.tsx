@@ -379,10 +379,10 @@ function blankItem(
     selectedSource:
       sourcingType === "FOREIGN" ? "FOREIGN" : sourcingType === "LOCAL" ? "LOCAL" : "",
     localSupplierName: "",
-    localUnitPrice: "",
+    localUnitPrice: "0",
     localDiscountPercent: "",
-    localVatPercent: "",
-    localTaxPercent: "",
+    localVatPercent: "10",
+    localTaxPercent: "5",
     localTransportCost: "",
     localOtherCost: "",
     foreignSupplierName: "",
@@ -409,8 +409,8 @@ function blankItem(
     customsDutyPercent: "",
     regulatoryDutyPercent: "",
     supplementaryDutyPercent: "",
-    foreignVatPercent: "",
-    foreignTaxPercent: "",
+    foreignVatPercent: "10",
+    foreignTaxPercent: "5",
     cnfCharge: "",
     portHandlingCharge: "",
     bankLcCharge: "",
@@ -829,7 +829,7 @@ export default function TenderCostingEditorPage() {
             costingStatus: item.costingStatus,
             selectedSource: normalizedSourcingType(item.sourcingType, item.selectedSource),
             localSupplierName: item.localSupplierName ?? "",
-            localUnitPrice: compactInputNumber(item.localUnitPrice, true),
+            localUnitPrice: compactInputNumber(item.localUnitPrice),
             localDiscountPercent: compactInputNumber(item.localDiscountPercent, true),
             localVatPercent: compactInputNumber(item.localVatPercent, true),
             localTaxPercent: compactInputNumber(item.localTaxPercent, true),
@@ -1226,7 +1226,16 @@ export default function TenderCostingEditorPage() {
     setIsReadingCostingPdfs(true);
     try {
       const result = await extractTenderCostingPdfs(selectedFiles);
-      const replacePlaceholder = items.length === 1 && isBlankCostingPlaceholder(items[0]!);
+      const onlyItem = items[0];
+      const generatedTenderPlaceholder =
+        items.length === 1 &&
+        (costing.data?.items.length ?? 0) === 0 &&
+        onlyItem?.description.trim().toLocaleLowerCase() ===
+          costing.data?.tender.workName.trim().toLocaleLowerCase();
+      const replacePlaceholder =
+        items.length === 1 &&
+        !!onlyItem &&
+        (isBlankCostingPlaceholder(onlyItem) || generatedTenderPlaceholder);
       const existingItems = replacePlaceholder ? [] : items;
       const templateItem = items.at(-1) ?? blankItem();
       const existingKeys = new Set(existingItems.map(costingImportKey));
@@ -1795,7 +1804,7 @@ export default function TenderCostingEditorPage() {
 
   async function removeCostingItem(itemId: string) {
     const record = costing.data;
-    if (!record || items.length <= 1 || saveCosting.isPending) return;
+    if (!record || saveCosting.isPending) return;
 
     const remainingItems = allocateLcContainerFee(
       items.filter((item) => item.id !== itemId),
@@ -1808,14 +1817,17 @@ export default function TenderCostingEditorPage() {
       return;
     }
 
-    const allRemainingItemsCosted = remainingItems.every(
-      (item) => item.costingStatus === "COSTED",
-    );
-    const nextStatus: TenderCostingStatus = allRemainingItemsCosted
-      ? "COMPLETED"
-      : record.status === "READY"
+    const allRemainingItemsCosted =
+      remainingItems.length > 0 &&
+      remainingItems.every((item) => item.costingStatus === "COSTED");
+    const nextStatus: TenderCostingStatus =
+      remainingItems.length === 0
         ? "READY"
-        : "IN_PROGRESS";
+        : allRemainingItemsCosted
+          ? "COMPLETED"
+          : record.status === "READY"
+            ? "READY"
+            : "IN_PROGRESS";
     const saved = await save(nextStatus, remainingItems, { showSuccess: false });
     if (!saved) return;
 
@@ -2492,11 +2504,27 @@ export default function TenderCostingEditorPage() {
                               <TextInput
                                 data-costing-field
                                 data-costing-column="unit-price"
-                                className={`h-8 min-w-0 px-1 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                                aria-invalid={Number(item.localUnitPrice) <= 0}
+                                className={`h-8 min-w-0 px-1 text-right text-[9px] ${NUMBER_INPUT_CLASS} ${
+                                  Number(item.localUnitPrice) <= 0
+                                    ? "border-biz-danger focus:border-biz-danger focus:ring-biz-danger/20"
+                                    : ""
+                                }`}
                                 type="number"
-                                min="0"
+                                min="0.000001"
                                 step="any"
+                                required
                                 value={item.localUnitPrice}
+                                onFocus={(event) => {
+                                  if (Number(item.localUnitPrice) === 0) {
+                                    updateItem(item.id, {
+                                      localUnitPrice: "",
+                                      costingStatus: "NOT_COSTED",
+                                    });
+                                    return;
+                                  }
+                                  event.currentTarget.select();
+                                }}
                                 onChange={(event) =>
                                   updateItem(item.id, {
                                     localUnitPrice: event.target.value,
@@ -2626,15 +2654,13 @@ export default function TenderCostingEditorPage() {
                                       ? "Edit Cost"
                                       : "Cost"}
                             </button>
-                            {items.length > 1 ? (
-                              <IconButton
-                                aria-label="Remove item"
-                                disabled={saveCosting.isPending}
-                                onClick={() => void removeCostingItem(item.id)}
-                              >
-                                <Trash2 className="h-4 w-4 text-biz-danger" />
-                              </IconButton>
-                            ) : null}
+                            <IconButton
+                              aria-label="Remove item"
+                              disabled={saveCosting.isPending}
+                              onClick={() => void removeCostingItem(item.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-biz-danger" />
+                            </IconButton>
                           </div>
                         </td>
                       </tr>
@@ -3276,11 +3302,14 @@ function CostedItemsList({
             return (
               <tr key={item.id} className="border-t border-biz-border">
                 <td className="px-1 py-2.5">{index + 1}</td>
-                <td
-                  className="truncate px-1 py-2.5 font-medium text-biz-text"
-                  title={item.description}
-                >
-                  {item.description}
+                <td className="px-1 py-2.5 font-medium text-biz-text">
+                  <span
+                    className="block cursor-help truncate"
+                    title={item.description}
+                    aria-label={item.description}
+                  >
+                    {item.description}
+                  </span>
                 </td>
                 <td className="px-1 py-2.5">
                   <span
@@ -3986,6 +4015,7 @@ function CostingWorkspaceCard({
               </MiniField>
               <NumberCostField
                 required
+                clearZeroOnFocus
                 label="Unit Price (BDT)"
                 value={item.localUnitPrice}
                 onChange={(value) => onChange({ localUnitPrice: value })}
@@ -4201,12 +4231,14 @@ function MiniField({
 function NumberCostField({
   label,
   required = false,
+  clearZeroOnFocus = false,
   value,
   step = "any",
   onChange,
 }: {
   label: string;
   required?: boolean;
+  clearZeroOnFocus?: boolean;
   value: string;
   step?: string;
   onChange: (value: string) => void;
@@ -4215,11 +4247,23 @@ function NumberCostField({
     <MiniField label={label} required={required}>
       <TextInput
         type="number"
-        min="0"
+        min={required ? "0.000001" : "0"}
         step={step}
-        className={`h-9 min-w-0 px-2 text-[10.5px] ${NUMBER_INPUT_CLASS}`}
+        required={required}
+        aria-invalid={required && Number(value) <= 0}
+        className={`h-9 min-w-0 px-2 text-[10.5px] ${NUMBER_INPUT_CLASS} ${
+          required && Number(value) <= 0
+            ? "border-biz-danger focus:border-biz-danger focus:ring-biz-danger/20"
+            : ""
+        }`}
         value={value}
-        onFocus={(event) => event.currentTarget.select()}
+        onFocus={(event) => {
+          if (clearZeroOnFocus && Number(value) === 0) {
+            onChange("");
+            return;
+          }
+          event.currentTarget.select();
+        }}
         onChange={(event) => onChange(event.target.value)}
       />
     </MiniField>

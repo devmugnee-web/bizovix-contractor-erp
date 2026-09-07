@@ -352,20 +352,22 @@ export default function DocumentPurchaseListPage() {
             },
           ]}
         />
-        <div className="border-t border-biz-border">
-          <Pagination
-            page={requests.data?.meta.page ?? requestPage}
-            limit={requests.data?.meta.limit ?? requestLimit}
-            total={requests.data?.meta.total ?? 0}
-            totalPages={requests.data?.meta.totalPages ?? 1}
-            onPageChange={setRequestPage}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
-            onLimitChange={(nextLimit) => {
-              setRequestLimit(nextLimit);
-              setRequestPage(1);
-            }}
-          />
-        </div>
+        {(requests.data?.meta.total ?? 0) > 5 && (
+          <div className="border-t border-biz-border">
+            <Pagination
+              page={requests.data?.meta.page ?? requestPage}
+              limit={requests.data?.meta.limit ?? requestLimit}
+              total={requests.data?.meta.total ?? 0}
+              totalPages={requests.data?.meta.totalPages ?? 1}
+              onPageChange={setRequestPage}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              onLimitChange={(nextLimit) => {
+                setRequestLimit(nextLimit);
+                setRequestPage(1);
+              }}
+            />
+          </div>
+        )}
       </section>
 
       <FilterBar className="shrink-0 p-2.5">

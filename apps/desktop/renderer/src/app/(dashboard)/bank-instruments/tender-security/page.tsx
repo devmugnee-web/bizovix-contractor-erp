@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Building2,
@@ -156,6 +156,7 @@ export default function TenderSecurityPage() {
 function TenderSecurityWorkspace() {
   useSetBreadcrumb([{ label: "Bank Instruments" }, { label: "Tender Security" }]);
 
+  const router = useRouter();
   const searchParams = useSearchParams();
   const incomingTenderId = searchParams.get("tenderId")?.trim() ?? "";
   const [query, setQuery] = React.useState<TenderSecurityPendingQuery>(() => ({
@@ -338,8 +339,16 @@ function TenderSecurityWorkspace() {
     <div className="flex flex-col gap-3 text-biz-text">
       <SuccessPopup
         open={message?.type === "success"}
+        title="Tender Security Saved"
         message={message?.text ?? ""}
         onClose={() => setMessage(null)}
+        primaryLabel="Go to Credit Commitment"
+        onPrimary={() => {
+          setMessage(null);
+          router.push("/bank-instruments/credit-commitment");
+        }}
+        secondaryLabel="Stay on This Page"
+        onSecondary={() => setMessage(null)}
       />
       <div>
         <h1 className="text-[22px] font-bold leading-7 text-biz-navy">Tender Security</h1>
@@ -487,7 +496,7 @@ function TenderSecurityWorkspace() {
                 <th className="px-3 py-2 text-left">Submission Deadline</th>
                 <th className="px-3 py-2 text-right">Security Amount (৳)</th>
                 <th className="px-3 py-2 text-left">Status</th>
-                <th className="px-4 py-2 text-center">Action</th>
+                <th className="px-4 py-2 text-center">Next Step</th>
               </tr>
             </thead>
             <tbody>
@@ -522,9 +531,46 @@ function TenderSecurityWorkspace() {
                       {!row.eligible && row.ineligibleReason && <p className="mt-1 text-[10px] text-biz-muted">{row.ineligibleReason}</p>}
                     </td>
                     <td className="px-4 py-2 text-center">
-                      <Link href={`/tenders/${row.tenderRecordId}`}>
-                        <IconButton aria-label={`View ${row.tenderId ?? row.tenderWorkName}`}><Eye className="h-4 w-4 text-biz-navy" /></IconButton>
-                      </Link>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Button
+                          size="sm"
+                          disabled={!row.eligible || !row.documentPurchaseId}
+                          title={
+                            row.eligible && row.documentPurchaseId
+                              ? "Create tender security"
+                              : row.ineligibleReason
+                          }
+                          className="whitespace-nowrap"
+                          onClick={() => {
+                            if (!row.eligible || !row.documentPurchaseId) return;
+                            setSelectedRowsOverride([
+                              toSelectedTender(row, securityType, defaultMarginPct),
+                            ]);
+                            setShowDetails(true);
+                            window.setTimeout(
+                              () => section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                              0,
+                            );
+                          }}
+                        >
+                          <FileText className="h-4 w-4" />
+                          Create Security
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                        <Link
+                          href={`/tenders/${row.tenderRecordId}`}
+                          title="View Tender Details"
+                          aria-label={`View Tender Details: ${row.tenderId ?? row.tenderWorkName}`}
+                        >
+                          <IconButton
+                            type="button"
+                            aria-label={`View Tender Details: ${row.tenderId ?? row.tenderWorkName}`}
+                            title="View Tender Details"
+                          >
+                            <Eye className="h-4 w-4 text-biz-navy" />
+                          </IconButton>
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -660,7 +706,15 @@ function TenderSecurityWorkspace() {
                       <td className="px-3 py-1.5 font-semibold">
                         {row.organizationMaster?.shortName ?? "Not set"}
                       </td>
-                      <td className="px-3 py-1.5">{row.tenderWorkName}</td>
+                      <td className="w-64 max-w-64 px-3 py-1.5">
+                        <span
+                          className="line-clamp-2 cursor-help leading-4"
+                          title={row.tenderWorkName}
+                          aria-label={row.tenderWorkName}
+                        >
+                          {row.tenderWorkName}
+                        </span>
+                      </td>
                       <td className="px-3 py-1.5"><input type="number" min={0.01} value={row.securityAmount} onFocus={() => { if (Number(row.securityAmount) === 0) setSelectedValue(row.id, "securityAmount", ""); }} onChange={(e) => setSelectedValue(row.id, "securityAmount", e.target.value)} className="h-8 w-32 rounded border border-biz-border px-2 text-right" /></td>
                       <td className="px-3 py-1.5"><div className="flex"><input type="number" min={0} max={100} value={row.marginPercentage} onChange={(e) => setSelectedValue(row.id, "marginPercentage", e.target.value)} className="h-8 w-20 rounded-l border border-biz-border px-2 text-right" /><span className="flex h-8 w-8 items-center justify-center rounded-r border border-l-0 border-biz-border bg-biz-bg">%</span></div></td>
                       <td className="px-3 py-1.5"><input readOnly value={money(marginAmount)} className="h-8 w-32 rounded border border-biz-border bg-slate-50 px-2 text-right" /></td>

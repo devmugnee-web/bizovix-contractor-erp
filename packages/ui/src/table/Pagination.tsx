@@ -47,11 +47,11 @@ export function Pagination({
   const showSizeSelector = pageSizeOptions && onLimitChange;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-      <span className="text-[12px] text-biz-muted">
+    <div className="flex flex-col items-stretch gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-2.5">
+      <span className="text-center text-[12px] text-biz-muted sm:text-left">
         Showing {from.toLocaleString()} to {to.toLocaleString()} of {total.toLocaleString()} entries
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
         {showSizeSelector && (
           <>
             <label className="flex items-center gap-1.5 text-[12px] text-biz-muted">
@@ -74,7 +74,7 @@ export function Pagination({
             <span className="h-5 w-px bg-biz-border" />
           </>
         )}
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
           {showJumpButtons && (
             <button
               type="button"

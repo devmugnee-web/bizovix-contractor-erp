@@ -6,9 +6,11 @@ import {
   Banknote,
   CheckCircle2,
   Landmark,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   Wallet,
   X,
 } from "lucide-react";
@@ -22,10 +24,12 @@ import {
   useCreateMainCash,
   useCreatePettyExpense,
   useCreateReconciliation,
+  useDeleteBankAccount,
   useFinancialAccounts,
   useFundTransfers,
   useReconciliations,
   useReplenishPettyCash,
+  useUpdateBankAccount,
   useUpdateChequeStatus,
 } from "@bizovix/api-client";
 import type { CashBankQuery, ChequeRecord, FinancialTransactionRecord } from "@bizovix/types";
@@ -226,6 +230,8 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
   const recons = useReconciliations();
   const cheques = useCheques();
   const createAccount = useCreateBankAccount(),
+    updateAccount = useUpdateBankAccount(),
+    deleteAccount = useDeleteBankAccount(),
     createCash = useCreateMainCash(),
     createPetty = useCreatePettyExpense(),
     replenish = useReplenishPettyCash(),
@@ -235,29 +241,44 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
   const [modal, setModal] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState("");
   const [form, setForm] = React.useState<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, boolean>>({});
+  const setValue = (name: string, value: string) => {
+    setForm((current) => ({ ...current, [name]: value }));
+    setFieldErrors((current) => {
+      if (!current[name]) return current;
+      const next = { ...current };
+      delete next[name];
+      return next;
+    });
+  };
   const open = (kind: string, defaults: Record<string, string> = {}) => {
     setForm({ date: today(), amount: "", ...defaults });
+    setFieldErrors({});
+    setNotice("");
     setModal(kind);
   };
   const val = (name: string, label: string, type = "text", required = true) => (
-    <label className="text-[11px] font-semibold">
+    <label className={cn("text-[11px] font-semibold", fieldErrors[name] && "text-red-600")}>
       {label}
       {required && <b className="text-red-500"> *</b>}
       <input
-        className={cn(field, "mt-2 w-full")}
+        className={cn(field, "mt-2 w-full", fieldErrors[name] && "!border-red-500 !bg-red-50 ring-1 ring-red-500 focus:!border-red-500")}
         type={type}
         value={form[name] ?? ""}
-        onChange={(e) => setForm((v) => ({ ...v, [name]: e.target.value }))}
+        aria-invalid={fieldErrors[name] || undefined}
+        onChange={(e) => setValue(name, e.target.value)}
       />
     </label>
   );
-  const sel = (name: string, label: string, opts: Array<[string, string]>) => (
-    <label className="text-[11px] font-semibold">
+  const sel = (name: string, label: string, opts: Array<[string, string]>, required = true) => (
+    <label className={cn("text-[11px] font-semibold", fieldErrors[name] && "text-red-600")}>
       {label}
+      {required && <b className="text-red-500"> *</b>}
       <select
-        className={cn(field, "mt-2 w-full")}
+        className={cn(field, "mt-2 w-full", fieldErrors[name] && "!border-red-500 !bg-red-50 ring-1 ring-red-500 focus:!border-red-500")}
         value={form[name] ?? ""}
-        onChange={(e) => setForm((v) => ({ ...v, [name]: e.target.value }))}
+        aria-invalid={fieldErrors[name] || undefined}
+        onChange={(e) => setValue(name, e.target.value)}
       >
         <option value="">Select...</option>
         {opts.map(([v, l]) => (
@@ -270,9 +291,35 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
   );
   async function save() {
     try {
-      if (!form.amount && modal !== "recon") throw new Error();
+      const requiredFields: Record<string, string[]> = {
+        account: ["bankName", "accountName", "accountNumber", "branch", "bankAccountType", "amount", "date"],
+        "account-edit": ["bankName", "accountName", "accountNumber", "branch", "bankAccountType", "currentBalance", "status"],
+        cash: ["direction", "date", "amount", "category", "party"],
+        petty: ["date", "amount", "category", "party", "description"],
+        replenish: ["date", "amount", "fromAccountId"],
+        transfer: ["date", "fromAccountId", "toAccountId", "amount"],
+        recon: ["accountId", "from", "to", "statementBalance"],
+        cheque: ["type", "chequeNo", "date", "bankName", "party", "amount"],
+      };
+      const nextErrors: Record<string, boolean> = {};
+      for (const name of requiredFields[modal ?? ""] ?? []) {
+        if (!form[name]?.trim()) nextErrors[name] = true;
+      }
       const amount = Number(form.amount);
-      if (modal !== "recon" && amount <= 0) throw new Error();
+      if (modal === "account" && form.amount?.trim() && (!Number.isFinite(amount) || amount < 0)) nextErrors.amount = true;
+      if (modal === "account-edit" && form.currentBalance?.trim() && !Number.isFinite(Number(form.currentBalance))) nextErrors.currentBalance = true;
+      if (modal === "recon" && form.statementBalance?.trim() && !Number.isFinite(Number(form.statementBalance))) nextErrors.statementBalance = true;
+      if (!["account", "account-edit", "recon"].includes(modal ?? "") && form.amount?.trim() && (!Number.isFinite(amount) || amount <= 0)) nextErrors.amount = true;
+      if (modal === "transfer" && form.fromAccountId && form.fromAccountId === form.toAccountId) {
+        nextErrors.fromAccountId = true;
+        nextErrors.toAccountId = true;
+      }
+      if (Object.keys(nextErrors).length > 0) {
+        setFieldErrors(nextErrors);
+        setNotice("");
+        return;
+      }
+      setFieldErrors({});
       if (modal === "account")
         await createAccount.mutateAsync({
           bankName: form.bankName,
@@ -286,6 +333,22 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
           currency: "BDT",
           remarks: form.remarks,
           status: "Active",
+        });
+      if (modal === "account-edit")
+        await updateAccount.mutateAsync({
+          id: form.accountId,
+          body: {
+            bankName: form.bankName,
+            accountName: form.accountName,
+            accountNumber: form.accountNumber,
+            branch: form.branch,
+            routingNumber: form.routingNumber,
+            bankAccountType: form.bankAccountType,
+            currency: "BDT",
+            remarks: form.remarks,
+            status: form.status,
+            currentBalance: Number(form.currentBalance),
+          },
         });
       if (modal === "cash")
         await createCash.mutateAsync({
@@ -347,10 +410,22 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
           remarks: form.remarks,
         });
       setModal(null);
+      setFieldErrors({});
       setNotice("Saved successfully.");
       setTimeout(() => setNotice(""), 2500);
-    } catch {
-      setNotice("Complete all required fields with a valid amount.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setNotice(message === "Validation failed" ? "" : message || "Unable to save. Please try again.");
+    }
+  }
+  async function removeBankAccount(id: string, accountName: string) {
+    if (!window.confirm(`Delete bank account "${accountName}"?`)) return;
+    try {
+      await deleteAccount.mutateAsync(id);
+      setNotice("Bank account deleted successfully.");
+      setTimeout(() => setNotice(""), 2500);
+    } catch (error) {
+      setNotice(error instanceof Error && error.message ? error.message : "Unable to delete this bank account.");
     }
   }
   const bankAccounts = (accounts.data ?? []).filter((a) => a.accountType === "BANK");
@@ -492,9 +567,38 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
                           </span>
                         </td>
                         <td>
-                          <button title="View details" className="rounded border p-1.5">
-                            <Search className="h-3.5 w-3.5" />
+                          <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            title="Edit bank account"
+                            className="rounded border border-blue-100 bg-blue-50 p-1.5 text-blue-600"
+                            onClick={() => open("account-edit", {
+                              accountId: a.id,
+                              bankName: a.bankName ?? "",
+                              accountName: a.accountName,
+                              accountNumber: a.accountNumber ?? "",
+                              branch: a.branch ?? "",
+                              routingNumber: a.routingNumber ?? "",
+                              bankAccountType: a.bankAccountType ?? "",
+                              amount: String(a.openingBalance ?? 0),
+                              currentBalance: String(a.currentBalance ?? 0),
+                              date: a.openingBalanceDate?.slice(0, 10) ?? today(),
+                              remarks: a.remarks ?? "",
+                              status: a.isActive ? "Active" : "Inactive",
+                            })}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
                           </button>
+                          <button
+                            type="button"
+                            title="Delete bank account"
+                            className="rounded border border-red-100 bg-red-50 p-1.5 text-red-600"
+                            disabled={deleteAccount.isPending}
+                            onClick={() => void removeBankAccount(a.id, a.accountName)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -678,8 +782,8 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
       {modal && (
         <Modal
           title={
-            modal === "account"
-              ? "Add Bank Account"
+            modal === "account" || modal === "account-edit"
+              ? modal === "account-edit" ? "Edit Bank Account" : "Add Bank Account"
               : modal === "cash"
                 ? "Add Main Cash Transaction"
                 : modal === "petty"
@@ -696,6 +800,8 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
           onSave={save}
           busy={[
             createAccount,
+            updateAccount,
+            deleteAccount,
             createCash,
             createPetty,
             replenish,
@@ -704,7 +810,7 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
             createCheque,
           ].some((m) => m.isPending)}
         >
-          {modal === "account" && (
+          {(modal === "account" || modal === "account-edit") && (
             <>
               {val("bankName", "Bank Name")}
               {val("accountName", "Account Name")}
@@ -716,8 +822,10 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
                 "Account Type",
                 ["Current", "Savings", "SND", "OD", "Loan", "Other"].map((v) => [v, v]),
               )}
-              {val("amount", "Opening Balance", "number")}
-              {val("date", "Opening Balance Date", "date")}
+              {modal === "account" && val("amount", "Opening Balance", "number")}
+              {modal === "account" && val("date", "Opening Balance Date", "date")}
+              {modal === "account-edit" && val("currentBalance", "Current Balance", "number")}
+              {modal === "account-edit" && sel("status", "Status", [["Active", "Active"], ["Inactive", "Inactive"]])}
               {val("remarks", "Remarks", "text", false)}
             </>
           )}
@@ -789,6 +897,7 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
                 "accountId",
                 "Bank Account",
                 bankAccounts.map((a) => [a.id, a.accountName]),
+                false,
               )}
               {val("from", "Statement From", "date")}
               {val("to", "Statement To", "date")}

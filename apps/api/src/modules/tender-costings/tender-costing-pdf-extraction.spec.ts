@@ -26,15 +26,11 @@ describe("Tender costing PDF extraction", () => {
         description: "Desktop Computer with accessories",
         unit: "Nos",
         quantity: 10,
-        unitPrice: 50000,
-        totalPrice: 500000,
       },
       {
         description: "Network Switch 24 Port",
         unit: "Pcs",
         quantity: 5,
-        unitPrice: 12500,
-        totalPrice: 62500,
       },
     ]);
   });
@@ -51,15 +47,11 @@ describe("Tender costing PDF extraction", () => {
         description: "Supply and installation of CCTV Camera",
         unit: "Nos",
         quantity: 12,
-        unitPrice: 7500,
-        totalPrice: 90000,
       },
       {
         description: "Online UPS with batteries",
         unit: "Set",
         quantity: 4,
-        unitPrice: 85000,
-        totalPrice: 340000,
       },
     ]);
   });
@@ -80,8 +72,6 @@ describe("Tender costing PDF extraction", () => {
         description: "Repair and maintenance of conference sound system",
         unit: "Service",
         quantity: 2,
-        unitPrice: 150000,
-        totalPrice: 300000,
       },
     ]);
   });
@@ -97,9 +87,26 @@ describe("Tender costing PDF extraction", () => {
         description: "LED Display Panel",
         unit: "Nos",
         quantity: 2,
-        unitPrice: 25000,
-        totalPrice: 50000,
       },
+    ]);
+  });
+
+  it("maps only Description of Item, Measurement Unit and Quantity using the PDF headers", () => {
+    const rows = parseTenderCostingPdfText(`
+      Bill of Quantities
+      SL | Group | Description of Item | Measurement Unit | Quantity | Unit Price | Total Price
+      1 | N/A | Interactive Flat Panel Display | Nos | 4 | 250,000 | 1,000,000
+      2 | IT Equipment | Desktop Computer with Monitor | Set | 8 | 75,000 | 600,000
+      3 | N/A | Online UPS with Battery Backup | Pcs | 2 | 95,000 | 190,000
+      4 | Electrical | Network Rack with Accessories | Nos | 1 | 45,000 | 45,000
+      Grand Total | 1,835,000
+    `);
+
+    expect(rows).toEqual([
+      { description: "Interactive Flat Panel Display", unit: "Nos", quantity: 4 },
+      { description: "Desktop Computer with Monitor", unit: "Set", quantity: 8 },
+      { description: "Online UPS with Battery Backup", unit: "Pcs", quantity: 2 },
+      { description: "Network Rack with Accessories", unit: "Nos", quantity: 1 },
     ]);
   });
 

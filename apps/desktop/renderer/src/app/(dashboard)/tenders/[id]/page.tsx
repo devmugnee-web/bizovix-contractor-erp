@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
+  ArrowLeft,
   Award,
   Banknote,
   Building2,
@@ -60,6 +61,7 @@ const TIMELINE_STEPS = [
 
 export default function TenderDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const tender = useTender(params.id);
   useSetBreadcrumb([{ label: "Tenders", href: "/tenders" }]);
 
@@ -105,8 +107,12 @@ export default function TenderDetailPage() {
   return (
     <div className="flex flex-col gap-5">
       <section className="overflow-hidden rounded-lg border border-biz-border bg-biz-surface shadow-card">
-        <div className="flex flex-col gap-4 p-4 sm:p-5 xl:block">
-          <div className="order-2 flex w-full flex-wrap gap-2 xl:float-right xl:mb-2 xl:ml-5 xl:w-auto xl:justify-end">
+        <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+          <div className="relative z-20 order-2 flex w-full flex-wrap gap-2 xl:col-start-2 xl:row-start-1 xl:w-auto xl:justify-end">
+            <SecondaryButton type="button" onClick={() => router.push("/tenders")}>
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </SecondaryButton>
             <Link href={`/tenders/${t.id}/edit`}>
               <SecondaryButton>
                 <FileEdit className="h-4 w-4" />
@@ -127,7 +133,7 @@ export default function TenderDetailPage() {
             )}
           </div>
 
-          <div className="order-1 min-w-0">
+          <div className="order-1 min-w-0 xl:col-start-1 xl:row-start-1">
             <div className="relative sm:pl-[52px]">
               <span className="absolute left-0 top-0 hidden h-10 w-10 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue sm:flex">
                 <ClipboardList className="h-5 w-5" />
@@ -147,7 +153,6 @@ export default function TenderDetailPage() {
               </p>
             </div>
           </div>
-          <div className="hidden clear-both xl:block" />
         </div>
 
         <div className="grid grid-cols-2 border-t border-biz-border bg-biz-bg/60 sm:grid-cols-3 xl:grid-cols-6">

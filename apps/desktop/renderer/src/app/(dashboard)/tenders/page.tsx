@@ -11,7 +11,6 @@ import {
   Download,
   Eye,
   FileEdit,
-  Info,
   MoreVertical,
   Search,
   ShieldCheck,
@@ -105,7 +104,7 @@ export default function TendersListPage() {
   const searchParams = useSearchParams();
 
   const [draft, setDraft] = React.useState<FilterDraft>(EMPTY_DRAFT);
-  const [query, setQuery] = React.useState<TenderQuery>({ page: 1, limit: 10 });
+  const [query, setQuery] = React.useState<TenderQuery>({ page: 1, limit: 5 });
   const [dateRangeOpen, setDateRangeOpen] = React.useState(false);
   const [menuAnchor, setMenuAnchor] = React.useState<{
     tender: TenderRecord;
@@ -197,7 +196,7 @@ export default function TendersListPage() {
   function applyFilters(next: FilterDraft = draft) {
     setQuery({
       page: 1,
-      limit: 10,
+      limit: query.limit ?? 5,
       search: next.search || undefined,
       tenderType: next.tenderType || undefined,
       procurementMethod: (next.procurementMethod as TenderProcurementMethod) || undefined,
@@ -210,7 +209,7 @@ export default function TendersListPage() {
 
   function clearFilters() {
     setDraft(EMPTY_DRAFT);
-    setQuery({ page: 1, limit: 10 });
+    setQuery({ page: 1, limit: 5 });
   }
 
   function toggleMenu(tender: TenderRecord, e: React.MouseEvent<HTMLButtonElement>) {
@@ -222,7 +221,7 @@ export default function TendersListPage() {
     setMenuAnchor({ tender, top: rect.bottom + 4, right: window.innerWidth - rect.right });
   }
 
-  const meta = tenders.data?.meta ?? { page: 1, limit: 10, total: 0, totalPages: 1 };
+  const meta = tenders.data?.meta ?? { page: 1, limit: 5, total: 0, totalPages: 1 };
 
   const visibleItems = tenders.data?.items ?? [];
 
@@ -572,24 +571,18 @@ export default function TendersListPage() {
           ]}
         />
 
-        <Pagination
-          page={meta.page}
-          limit={meta.limit}
-          total={meta.total}
-          totalPages={meta.totalPages}
-          onPageChange={(page) => setQuery((q) => ({ ...q, page }))}
-          showJumpButtons
-        />
-      </div>
-
-      {/* Bottom info bar */}
-      <div className="flex items-center gap-2 rounded-lg border border-biz-blue/20 bg-biz-blue-soft px-4 py-2.5 text-[12.5px] text-biz-text">
-        <Info className="h-4 w-4 shrink-0 text-biz-blue" />
-        <span>
-          Click the <span className="font-semibold">tender name</span> or{" "}
-          <span className="font-semibold">View</span> to open full tender details and continue the
-          workflow.
-        </span>
+        {meta.total > 5 && (
+          <Pagination
+            page={meta.page}
+            limit={meta.limit}
+            total={meta.total}
+            totalPages={meta.totalPages}
+            pageSizeOptions={[5, 10, 20, 50]}
+            onLimitChange={(limit) => setQuery((current) => ({ ...current, page: 1, limit }))}
+            onPageChange={(page) => setQuery((current) => ({ ...current, page }))}
+            showJumpButtons
+          />
+        )}
       </div>
 
       {menuAnchor && (

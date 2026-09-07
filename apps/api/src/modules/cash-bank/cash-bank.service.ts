@@ -3,7 +3,7 @@ import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException 
 import { Prisma } from "@bizovix/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
-import type { CreateBankAccountDto, CreateCashTransactionDto, CreateChequeDto, CreatePettyExpenseDto, CreateReconciliationDto, CreateTransferDto, QueryLedgerDto, UpdateChequeStatusDto } from "./dto/cash-bank.dto";
+import type { CreateBankAccountDto, CreateCashTransactionDto, CreateChequeDto, CreatePettyExpenseDto, CreateReconciliationDto, CreateTransferDto, QueryLedgerDto, UpdateBankAccountDto, UpdateChequeStatusDto } from "./dto/cash-bank.dto";
 import { AccountingService } from "../accounting/accounting.service";
 
 type Tx = Prisma.TransactionClient;
@@ -95,11 +95,78 @@ export class CashBankService {
     return row;
   }
 
-  async updateBankAccount(organizationId: string, userId: string, id: string, dto: Partial<CreateBankAccountDto>) {
-    await this.account(this.prisma, organizationId, id);
-    const row = await this.prisma.bankAccount.update({ where: { id, organizationId }, data: { bankName: dto.bankName, accountName: dto.accountName, accountNumber: dto.accountNumber, branch: dto.branch, routingNumber: dto.routingNumber, bankAccountType: dto.bankAccountType, currency: dto.currency, remarks: dto.remarks, isActive: dto.status ? dto.status === "Active" : undefined } });
+  async updateBankAccount(organizationId: string, userId: string, id: string, dto: UpdateBankAccountDto) {
+    const account = await this.account(this.prisma, organizationId, id);
+    if (account.accountType !== "BANK") throw new BadRequestException("Only bank accounts can be edited here");
+    const row = await this.prisma.$transaction(async (tx) => {
+      await tx.bankAccount.update({ where: { id, organizationId }, data: { bankName: dto.bankName, accountName: dto.accountName, accountNumber: dto.accountNumber, branch: dto.branch, routingNumber: dto.routingNumber, bankAccountType: dto.bankAccountType, currency: dto.currency, remarks: dto.remarks, isActive: dto.status ? dto.status === "Active" : undefined } });
+      if (dto.currentBalance !== undefined) {
+        const target = new Prisma.Decimal(dto.currentBalance);
+        const difference = target.minus(account.currentBalance);
+        if (!difference.isZero()) {
+          const adjustmentId = randomUUID();
+          const increase = difference.gt(0);
+          const amount = difference.abs();
+          await this.post(tx, { organizationId, accountId: id, direction: increase ? "IN" : "OUT", amount, sourceModule: "BANK_ACCOUNT", sourceType: "BALANCE_ADJUSTMENT", sourceId: adjustmentId, description: "Manual bank balance adjustment", transactionDate: new Date(), createdById: userId });
+          await this.accounting.post(tx, {
+            organizationId,
+            userId,
+            journalDate: new Date(),
+            referenceNo: account.accountName,
+            description: `Bank balance adjustment - ${account.accountName}`,
+            sourceModule: "BANK_ACCOUNT",
+            sourceType: "BALANCE_ADJUSTMENT",
+            sourceId: adjustmentId,
+            lines: increase
+              ? [{ bankAccountId: id, debit: amount, credit: 0 }, { systemKey: "OPENING_BALANCE_EQUITY", debit: 0, credit: amount }]
+              : [{ systemKey: "OPENING_BALANCE_EQUITY", debit: amount, credit: 0 }, { bankAccountId: id, debit: 0, credit: amount }],
+          });
+        }
+      }
+      return tx.bankAccount.findUniqueOrThrow({ where: { id, organizationId } });
+    });
     await this.log(organizationId, userId, "BANK_ACCOUNT_UPDATED", "BankAccount", id, row.accountName);
     return row;
+  }
+
+  async deleteBankAccount(organizationId: string, userId: string, id: string) {
+    const account = await this.account(this.prisma, organizationId, id);
+    if (account.accountType !== "BANK") throw new BadRequestException("Cash accounts cannot be deleted");
+    const operationalTransactions = await this.prisma.financialTransaction.count({
+      where: {
+        organizationId,
+        accountId: id,
+        NOT: { sourceModule: "BANK_ACCOUNT" },
+      },
+    });
+    if (operationalTransactions > 0) {
+      throw new BadRequestException("This bank account has transactions and cannot be deleted. Mark it inactive instead.");
+    }
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const accountTransactions = await tx.financialTransaction.findMany({
+          where: { organizationId, accountId: id, sourceModule: "BANK_ACCOUNT" },
+          select: { sourceId: true },
+        });
+        const accountJournals = await tx.journalEntry.findMany({
+          where: { organizationId, sourceModule: "BANK_ACCOUNT", sourceId: { in: accountTransactions.map((row) => row.sourceId) } },
+          select: { id: true },
+        });
+        await tx.financialTransaction.deleteMany({
+          where: { organizationId, accountId: id, sourceModule: "BANK_ACCOUNT" },
+        });
+        await tx.journalEntry.deleteMany({ where: { id: { in: accountJournals.map((row) => row.id) }, organizationId } });
+        await tx.ledgerAccount.updateMany({ where: { organizationId, linkedBankAccountId: id }, data: { linkedBankAccountId: null } });
+        await tx.bankAccount.delete({ where: { id, organizationId } });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+        throw new BadRequestException("This bank account is in use and cannot be deleted. Mark it inactive instead.");
+      }
+      throw error;
+    }
+    await this.log(organizationId, userId, "BANK_ACCOUNT_DELETED", "BankAccount", id, account.accountName);
+    return { success: true };
   }
 
   async cashTransactions(organizationId: string, kind: "Main Cash" | "Petty Cash", query: QueryLedgerDto) { const a = await this.namedCash(this.prisma, organizationId, kind); return this.ledger(organizationId, { ...query, accountId: a.id }); }
