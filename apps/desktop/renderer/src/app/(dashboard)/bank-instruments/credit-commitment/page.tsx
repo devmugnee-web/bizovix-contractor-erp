@@ -240,17 +240,17 @@ export default function CreditCommitmentPage() {
         secondaryLabel="Stay on This Page"
         onSecondary={() => setMessage(null)}
       />
-      <div>
-        <h1 className="text-[23px] font-bold leading-7 text-biz-navy">Credit Commitment Charge</h1>
+      <div className="rounded-xl border border-biz-border bg-white px-4 py-3 shadow-card">
+        <h1 className="text-[22px] font-bold leading-7 text-biz-navy">Credit Commitment Charge</h1>
         <p className="mt-0.5 whitespace-normal break-words text-[12px] text-biz-muted">Select tenders, then review the charge and payment details before saving.</p>
       </div>
 
-      <div className="grid overflow-hidden rounded-md border border-biz-border bg-white shadow-card sm:grid-cols-2">
+      <div className="grid overflow-hidden rounded-xl border border-blue-100 bg-white shadow-card sm:grid-cols-2">
         {[
           { number: 1, title: "Select Tenders", description: "Choose only the tenders you want to charge", active: true },
           { number: 2, title: "Charge & Payment", description: chargeRows.length > 0 ? `Review ${chargeRows.length} tender${chargeRows.length === 1 ? "" : "s"}, account and final total` : "Add selected tenders to continue", active: chargeRows.length > 0 },
         ].map((step, index) => (
-          <div key={step.number} className={cn("flex items-center gap-3 px-4 py-3", index === 0 && "border-b border-biz-border sm:border-b-0 sm:border-r", step.active ? "bg-white" : "bg-[#F8FAFD]")}>
+          <div key={step.number} className={cn("flex items-center gap-3 px-4 py-2.5", index === 0 && "border-b border-biz-border sm:border-b-0 sm:border-r", step.active ? "bg-blue-50/35" : "bg-[#F8FAFD]")}>
             <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold", step.active ? "bg-biz-blue text-white" : "bg-biz-bg text-biz-muted")}>{step.number}</span>
             <div className="min-w-0"><p className={cn("text-[12px] font-bold", step.active ? "text-biz-navy" : "text-biz-muted")}>{step.title}</p><p className="mt-0.5 whitespace-normal break-words text-[10px] text-biz-muted">{step.description}</p></div>
           </div>
@@ -263,8 +263,8 @@ export default function CreditCommitmentPage() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-md border border-biz-border bg-white shadow-card">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+      <section className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-blue-50/30 px-4 py-2.5">
           <h2 className="text-[14px] font-bold text-biz-navy">1. Pending Tenders (Not Charged Yet) <span className="ml-2 rounded bg-biz-blue-soft px-2 py-1 text-[11px] text-biz-blue">{meta.total}</span></h2>
           <div className="flex w-full items-center gap-2 sm:w-auto">
             <button type="button" onClick={() => pendingQuery.refetch()} className="flex h-8 w-8 items-center justify-center rounded border border-biz-border bg-white text-biz-navy hover:bg-biz-bg" aria-label="Refresh" title="Refresh"><RefreshCw className="h-3.5 w-3.5" /></button>
@@ -278,7 +278,7 @@ export default function CreditCommitmentPage() {
         {pendingQuery.isError && <div className="border-t border-biz-danger/15 bg-biz-danger-soft px-4 py-2 text-[11px] text-biz-danger">Failed to load pending tenders. Check the API connection and refresh.</div>}
         <div className="overflow-x-auto border-t border-biz-border">
           <table className="w-full min-w-[960px] text-[11px]">
-            <thead className="bg-[#F7FAFF] font-semibold text-biz-navy">
+            <thead className="bg-[#f6f8fb] text-[10px] font-bold uppercase tracking-wide text-biz-muted">
               <tr className="border-b border-biz-border">
                 <th className="w-10 px-4 py-2 text-left"><Checkbox checked={selectablePendingItems.length > 0 && selectablePendingItems.every((row) => selectedIds.has(row.id))} onChange={toggleAll} label="Select all available tenders on this page" disabled={selectablePendingItems.length === 0} /></th>
                 <th className="w-12 px-3 py-2 text-left">SL</th><th className="px-3 py-2 text-left">Tender ID</th><th className="px-3 py-2 text-left">Organization</th><th className="px-3 py-2 text-left">Work / Tender Name</th><th className="px-3 py-2 text-left">Submission Deadline</th><th className="px-4 py-2 text-right">Estimated Tender Amount (৳)</th>
@@ -286,17 +286,17 @@ export default function CreditCommitmentPage() {
             </thead>
             <tbody>
               {pendingQuery.isLoading ? <TableSkeleton columns={7} /> : pendingItems.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-[12px] text-biz-muted">No pending tenders found.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-6 text-center text-[12px] font-medium text-biz-muted">No pending tenders found.</td></tr>
               ) : pendingItems.map((row, index) => (
-                <tr key={row.id} onClick={() => toggleRow(row)} className={cn("border-b border-biz-border last:border-0", chargeRowIds.has(row.id) ? "bg-[#F8FAFD]" : "cursor-pointer hover:bg-biz-blue-soft/30")}>
+                <tr key={row.id} onClick={() => toggleRow(row)} className={cn("border-b border-biz-border transition-colors last:border-0", chargeRowIds.has(row.id) ? "bg-[#F8FAFD]" : "cursor-pointer hover:bg-biz-blue-soft/30")}>
                   <td className="px-4 py-2" onClick={(event) => event.stopPropagation()}><Checkbox checked={selectedIds.has(row.id)} onChange={() => toggleRow(row)} label={chargeRowIds.has(row.id) ? `${row.tenderId ?? row.tenderWorkName} is already in the charge list` : `Select ${row.tenderId ?? row.tenderWorkName}`} disabled={chargeRowIds.has(row.id)} /></td>
-                  <td className="px-3 py-2">{(meta.page - 1) * meta.limit + index + 1}</td><td className="px-3 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td><td className="px-3 py-2 font-semibold">{row.organizationMaster.shortName}</td><td className="px-3 py-2"><span>{row.tenderWorkName}</span>{chargeRowIds.has(row.id) && <span className="ml-2 rounded bg-biz-success-soft px-2 py-0.5 text-[10px] font-semibold text-biz-success">Added</span>}</td><td className="px-3 py-2">{row.submissionDeadline ? displayDate(row.submissionDeadline) : "—"}</td><td className="px-4 py-2 text-right font-semibold">{money(row.estimatedTenderAmount)}</td>
+                  <td className="px-3 py-2">{(meta.page - 1) * meta.limit + index + 1}</td><td className="px-3 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td><td className="px-3 py-2 font-semibold">{row.organizationMaster.shortName}</td><td className="max-w-[420px] px-3 py-2"><span className="line-clamp-2 leading-4" title={row.tenderWorkName}>{row.tenderWorkName}</span>{chargeRowIds.has(row.id) && <span className="ml-2 rounded bg-biz-success-soft px-2 py-0.5 text-[10px] font-semibold text-biz-success">Added</span>}</td><td className="px-3 py-2">{row.submissionDeadline ? displayDate(row.submissionDeadline) : "—"}</td><td className="px-4 py-2 text-right font-semibold">{money(row.estimatedTenderAmount)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="flex flex-col items-stretch gap-3 border-t border-biz-border px-4 py-3 text-[11px] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-col items-stretch gap-3 border-t border-blue-100 bg-blue-50/25 px-4 py-2.5 text-[11px] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <span className="text-biz-muted">Showing {firstEntry} to {lastEntry} of {meta.total} entries</span>
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
             <span className="flex h-8 items-center justify-center rounded bg-biz-blue-soft px-3 font-semibold text-biz-blue">{selectedIds.size} Selected</span>
@@ -311,11 +311,11 @@ export default function CreditCommitmentPage() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-md border border-biz-border bg-white shadow-card">
+      <section className="overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card">
         <button
           type="button"
           onClick={() => setHistoryOpen((open) => !open)}
-          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+          className="flex w-full items-center justify-between gap-3 bg-emerald-50/30 px-4 py-2.5 text-left transition-colors hover:bg-emerald-50/50"
         >
           <span className="text-[14px] font-bold text-biz-navy">
             Completed Credit Commitment Charges
@@ -330,7 +330,7 @@ export default function CreditCommitmentPage() {
         {historyOpen && (
           <div className="overflow-x-auto border-t border-biz-border">
             <table className="w-full min-w-[620px] text-[11px]">
-              <thead className="bg-[#F7FAFF] text-biz-navy">
+              <thead className="bg-[#f6f8fb] text-[10px] font-bold uppercase tracking-wide text-biz-muted">
                 <tr>
                   <th className="px-4 py-2 text-left">Reference</th>
                   <th className="px-3 py-2 text-left">Payment Date</th>
@@ -345,7 +345,7 @@ export default function CreditCommitmentPage() {
                 ) : (completedQuery.data?.items.length ?? 0) === 0 ? (
                   <tr><td colSpan={5} className="px-4 py-7 text-center text-biz-muted">No completed charges yet.</td></tr>
                 ) : completedQuery.data?.items.map((charge) => (
-                  <tr key={charge.id} className="border-t border-biz-border">
+                  <tr key={charge.id} className="border-t border-biz-border transition-colors hover:bg-emerald-50/30">
                     <td className="px-4 py-2 font-semibold text-biz-navy">{charge.id.slice(-8).toUpperCase()}</td>
                     <td className="px-3 py-2">{charge.paymentDate ? displayDate(charge.paymentDate) : "Not set"}</td>
                     <td className="px-3 py-2 text-center">{charge.items.length}</td>
@@ -359,21 +359,21 @@ export default function CreditCommitmentPage() {
         )}
       </section>
 
-      <section ref={chargeSectionRef} className="overflow-hidden rounded-md border border-biz-border bg-white shadow-card">
-        <div className="px-4 py-3">
+      <section ref={chargeSectionRef} className="overflow-hidden rounded-xl border border-biz-border bg-white shadow-card">
+        <div className="bg-[#f8fafc] px-4 py-2.5">
           <h2 className="text-[14px] font-bold text-biz-navy">2. Charge &amp; Payment Details</h2>
           <p className="mt-0.5 text-[10px] text-biz-muted">Choose one bank account, review each tender charge and confirm the payment details.</p>
         </div>
 
         {chargeRows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center border-t border-biz-border bg-[#FBFCFE] px-4 py-9 text-center">
+          <div className="flex flex-col items-center justify-center border-t border-biz-border bg-white px-4 py-7 text-center">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-biz-blue-soft text-biz-blue"><Plus className="h-4 w-4" /></span>
             <p className="mt-2 text-[12px] font-semibold text-biz-navy">No tender added yet</p>
             <p className="mt-1 max-w-[430px] text-[11px] text-biz-muted">Select one or more pending tenders above, then click “Add Selected to Charge List”.</p>
           </div>
         ) : (
           <>
-            <div className="border-t border-biz-border bg-[#F7FAFF] px-4 py-3">
+            <div className="border-t border-biz-border bg-blue-50/25 px-4 py-3">
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.15fr_0.65fr_1fr]">
                 <label className="block"><span className="mb-1 block text-[11px] font-semibold text-biz-navy">Bank Account <span className="text-biz-danger">*</span></span><span className="relative block"><Landmark className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-biz-muted" /><select value={selectedBankAccountId} onChange={(event) => changeChargeBank(event.target.value)} className="h-10 w-full rounded-md border border-biz-border bg-white pl-9 pr-3 text-[12px] outline-none focus:border-biz-blue"><option value="">Select bank account</option>{availableBankAccounts.map((account) => <option key={account.id} value={account.id}>{account.bankName ?? account.accountName}{account.accountNumber ? ` — ${account.accountNumber}` : ""}</option>)}</select></span>{errors.paymentFromAccountId && <span className="mt-1 block text-[10px] text-biz-danger">{errors.paymentFromAccountId.message}</span>}</label>
                 <label className="block"><span className="mb-1 block text-[11px] font-semibold text-biz-navy">Payment Date <span className="text-biz-danger">*</span></span><span className="relative block"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-biz-muted" /><input type="date" {...register("paymentDate")} className="h-10 w-full rounded-md border border-biz-border bg-white pl-9 pr-3 text-[12px] outline-none focus:border-biz-blue" /></span>{errors.paymentDate && <span className="mt-1 block text-[10px] text-biz-danger">{errors.paymentDate.message}</span>}</label>
@@ -387,11 +387,11 @@ export default function CreditCommitmentPage() {
 
             <div className="overflow-x-auto border-t border-biz-border">
               <table className="w-full min-w-[900px] text-[11px]">
-                <thead className="bg-[#F7FAFF] font-semibold text-biz-navy"><tr className="border-b border-biz-border">{["SL", "Tender ID", "Organization", "Work / Tender Name", "Charge Amount (৳)", "Remarks (optional)", "Action"].map((header) => <th key={header} className={cn("px-3 py-2 text-left", header === "Action" && "text-center")}>{header}</th>)}</tr></thead>
+                <thead className="bg-[#f6f8fb] text-[10px] font-bold uppercase tracking-wide text-biz-muted"><tr className="border-b border-biz-border">{["SL", "Tender ID", "Organization", "Work / Tender Name", "Charge Amount (৳)", "Remarks (optional)", "Action"].map((header) => <th key={header} className={cn("px-3 py-2 text-left", header === "Action" && "text-center")}>{header}</th>)}</tr></thead>
                 <tbody>
                   {chargeRows.map((row, index) => (
-                    <tr key={row.id} className="border-b border-biz-border last:border-0">
-                      <td className="px-3 py-2">{index + 1}</td><td className="px-3 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td><td className="px-3 py-2 font-semibold">{row.organizationMaster.shortName}</td><td className="px-3 py-2">{row.tenderWorkName}</td>
+                    <tr key={row.id} className="border-b border-biz-border transition-colors last:border-0 hover:bg-[#f8fafc]">
+                      <td className="px-3 py-2">{index + 1}</td><td className="px-3 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td><td className="px-3 py-2 font-semibold">{row.organizationMaster.shortName}</td><td className="max-w-[360px] px-3 py-2"><p className="line-clamp-2 leading-4" title={row.tenderWorkName}>{row.tenderWorkName}</p></td>
                       <td className="px-3 py-1.5"><input type="number" min="0.01" step="0.01" value={row.chargeAmount} onChange={(event) => updateChargeRow(row.id, "chargeAmount", event.target.value)} className="h-8 w-28 rounded border border-biz-border px-2 text-right text-[11px] outline-none focus:border-biz-blue" /></td>
                       <td className="px-3 py-1.5"><input value={row.remarks} onChange={(event) => updateChargeRow(row.id, "remarks", event.target.value)} placeholder="Enter remarks" className="h-8 w-full min-w-[150px] rounded border border-biz-border px-2 text-[11px] outline-none focus:border-biz-blue" /></td>
                       <td className="px-3 py-1.5 text-center"><button type="button" onClick={() => removeChargeRow(row.id)} className="inline-flex h-8 w-8 items-center justify-center rounded border border-biz-border bg-white text-biz-danger hover:bg-biz-danger-soft" aria-label={`Remove ${row.tenderId ?? row.tenderWorkName}`} title="Remove"><Trash2 className="h-3.5 w-3.5" /></button></td>
@@ -407,7 +407,7 @@ export default function CreditCommitmentPage() {
                 <div className="px-4 py-2.5"><p className="text-[10px] font-semibold text-biz-muted">Total Credit Commitment Charge (৳)</p><p className="mt-0.5 text-[16px] font-bold text-biz-success">{money(totalCharge)}</p></div>
               </div>
             </div>
-            <div className="flex flex-col-reverse gap-2 border-t border-biz-border bg-[#FBFCFE] px-4 py-3 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-2 border-t border-biz-border bg-[#fafbfd] px-4 py-2.5 sm:flex-row sm:justify-end">
               <button type="button" onClick={resetWorkspace} className="h-9 w-full rounded-md border border-biz-border bg-white px-5 text-[12px] font-semibold text-biz-navy hover:bg-biz-bg sm:w-auto">Reset</button>
               <button type="button" disabled={createCharge.isPending || !canSave} onClick={prepareSave} className="flex h-9 w-full items-center justify-center gap-2 rounded-md bg-biz-blue px-5 text-[12px] font-semibold text-white hover:bg-biz-blue-hover disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"><Save className="h-4 w-4" />{createCharge.isPending ? "Saving..." : !selectedBankAccountId ? "Select a Bank Account to Continue" : hasInvalidChargeAmount ? "Enter Valid Charge Amounts" : `Save Charge for ${chargeRows.length} Tender${chargeRows.length === 1 ? "" : "s"} — ৳${money(totalCharge)}`}</button>
             </div>
