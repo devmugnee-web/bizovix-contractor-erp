@@ -9,7 +9,6 @@ import {
   Eye,
   Filter,
   Hourglass,
-  Play,
   Search,
   Send,
   SquareStack,
@@ -285,7 +284,7 @@ export default function TenderManagementPage() {
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid grid-cols-6 gap-2 [&>*]:min-w-0">
         <ModuleStatCard
           icon={SquareStack}
           iconClassName="bg-biz-blue-soft text-biz-blue"
@@ -476,8 +475,8 @@ export default function TenderManagementPage() {
         <SearchActivityShareCard items={SEARCH_ACTIVITY_SHARE} />
       </div>
 
-      {/* Bottom Row: Tender Costing, SLT Calculation, Item Price History, Help + Quick Tip */}
-      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-[27fr_27fr_27fr_19fr]">
+      {/* Bottom Row: Tender Costing, SLT Calculation, Item Price History */}
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <MiniDataCard
           badgeNumber={1}
           badgeClassName="bg-biz-orange-soft text-biz-orange"
@@ -606,28 +605,6 @@ export default function TenderManagementPage() {
           ]}
         />
 
-        <div className="flex flex-col gap-3">
-          <div className="rounded-xl border border-biz-blue/20 bg-biz-blue-soft p-3">
-            <h3 className="text-[13px] font-semibold text-biz-text">Need Help?</h3>
-            <p className="mt-1 text-[11.5px] leading-snug text-biz-muted">Learn how Tender Management works</p>
-            <button
-              type="button"
-              onClick={() =>
-                document.getElementById("slt-calculation-card")?.scrollIntoView({ behavior: "smooth", block: "start" })
-              }
-              className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-biz-blue/30 bg-biz-surface px-3 py-1.5 text-[12px] font-semibold text-biz-blue transition-colors hover:bg-biz-blue-soft"
-            >
-              <Play className="h-3 w-3 fill-current" />
-              How SLT Works?
-            </button>
-          </div>
-          <div className="rounded-xl border border-biz-success/20 bg-biz-success-soft p-3">
-            <h3 className="text-[13px] font-semibold text-biz-text">Quick Tip</h3>
-            <p className="mt-1 text-[11.5px] leading-snug text-biz-muted">
-              Keep your item prices updated for more accurate costing.
-            </p>
-          </div>
-        </div>
       </div>
 
       {viewing && (
