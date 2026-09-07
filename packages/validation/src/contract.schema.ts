@@ -46,6 +46,63 @@ export const createContractSchema = z
   .refine((data) => new Date(data.originalCompletionDate) >= new Date(data.commencementDate), {
     message: "Original Completion Date must be on or after the Commencement Date",
     path: ["originalCompletionDate"],
+  })
+  .superRefine((data, context) => {
+    const sdRate = Number(data.securityDepositPct ?? 0);
+    const releasedAmount = Number(data.securityDepositReleasedAmount ?? 0);
+    const hasReleasedDate = Boolean(data.securityDepositReleasedDate);
+
+    if (sdRate > 0 && !data.securityDepositMethod) {
+      context.addIssue({
+        code: "custom",
+        path: ["securityDepositMethod"],
+        message: "Select how the security deposit is held",
+      });
+    }
+
+    if (sdRate > 0 && !data.securityDepositStatus) {
+      context.addIssue({
+        code: "custom",
+        path: ["securityDepositStatus"],
+        message: "Select the current security deposit status",
+      });
+    }
+
+    if (sdRate <= 0 && (data.securityDepositMethod || data.securityDepositStatus)) {
+      context.addIssue({
+        code: "custom",
+        path: ["securityDepositPct"],
+        message: "Enter an SD rate when an SD method or status is selected",
+      });
+    }
+
+    if (data.securityDepositStatus === "HELD" && (releasedAmount > 0 || hasReleasedDate)) {
+      context.addIssue({
+        code: "custom",
+        path: [releasedAmount > 0 ? "securityDepositReleasedAmount" : "securityDepositReleasedDate"],
+        message: "A held security deposit cannot have released amount or date",
+      });
+    }
+
+    if (
+      data.securityDepositStatus === "PARTIALLY_RELEASED" ||
+      data.securityDepositStatus === "RELEASED"
+    ) {
+      if (releasedAmount <= 0) {
+        context.addIssue({
+          code: "custom",
+          path: ["securityDepositReleasedAmount"],
+          message: "Enter the released SD amount",
+        });
+      }
+      if (!hasReleasedDate) {
+        context.addIssue({
+          code: "custom",
+          path: ["securityDepositReleasedDate"],
+          message: "Enter the SD released date",
+        });
+      }
+    }
   });
 
 export type CreateContractFormValues = z.infer<typeof createContractSchema>;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { CheckCircle2, FileEdit, FileText, FolderKanban } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileEdit, FileText, FolderKanban } from "lucide-react";
 import { useActivateContract, useContract } from "@bizovix/api-client";
 import { PrimaryButton, SecondaryButton, StatusBadge } from "@bizovix/ui";
 import { formatBDT, formatDate } from "@bizovix/utils";
@@ -11,9 +11,10 @@ import { CONTRACT_STATUS_META, CONTRACT_TYPE_META } from "@/lib/contracts";
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-[160px] flex-1 rounded-lg border border-biz-border bg-biz-surface p-3 shadow-card">
-      <p className="text-[11px] font-medium text-biz-muted">{label}</p>
-      <p className="mt-1 text-[15px] font-semibold text-biz-text">{value}</p>
+    <div className="relative min-w-0 overflow-hidden rounded-lg border border-biz-border bg-white p-3 shadow-card">
+      <span className="absolute inset-x-0 top-0 h-0.5 bg-biz-blue" />
+      <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-biz-muted">{label}</p>
+      <p className="mt-1 truncate text-[15px] font-bold text-biz-navy" title={value}>{value}</p>
     </div>
   );
 }
@@ -46,8 +47,17 @@ export default function ContractDetailPage() {
   const statusMeta = CONTRACT_STATUS_META[c.status];
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="flex flex-col gap-4">
+      <Link
+        href={`/cms/ongoing-works/${c.cmsWorkId}`}
+        className="flex h-9 w-fit items-center gap-2 rounded-md border border-biz-border bg-white px-4 text-[11px] font-semibold text-biz-navy shadow-sm transition-colors hover:border-biz-blue hover:bg-biz-blue-soft hover:text-biz-blue"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Ongoing Work
+      </Link>
+
+      <div className="relative flex flex-col gap-4 overflow-hidden rounded-xl border border-biz-border bg-gradient-to-br from-white via-white to-biz-blue-soft/60 p-4 shadow-card sm:p-5 lg:flex-row lg:items-start lg:justify-between">
+        <span className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-page-title text-biz-text">{c.contractNo}</h1>
@@ -58,15 +68,15 @@ export default function ContractDetailPage() {
             {CONTRACT_TYPE_META[c.contractType]}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Link href={`/cms/ongoing-works/${c.cmsWorkId}`}>
-            <SecondaryButton>
+            <SecondaryButton className="w-full justify-center sm:w-auto">
               <FolderKanban className="h-4 w-4" />
               Open Project
             </SecondaryButton>
           </Link>
           <Link href={`/cms/contracts/${c.id}/edit`}>
-            <SecondaryButton>
+            <SecondaryButton className="w-full justify-center sm:w-auto">
               <FileEdit className="h-4 w-4" />
               Edit
             </SecondaryButton>
@@ -83,7 +93,7 @@ export default function ContractDetailPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <InfoCard label="Original Contract Value" value={formatBDT(c.originalContractValue)} />
         <InfoCard label="Current Contract Value" value={formatBDT(c.currentContractValue)} />
         <InfoCard label="Commencement Date" value={formatDate(c.commencementDate)} />
@@ -91,9 +101,9 @@ export default function ContractDetailPage() {
         <InfoCard label="Duration" value={c.durationDays ? `${c.durationDays} days` : "—"} />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-biz-border bg-biz-surface px-6 py-2 shadow-card">
-          <h2 className="mb-1 mt-3 text-[14px] font-semibold text-biz-text">Contract Details</h2>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <section className="rounded-lg border border-biz-border bg-white px-4 py-2 shadow-card sm:px-5">
+          <h2 className="mb-1 mt-3 text-[14px] font-bold text-biz-navy">Contract Details</h2>
           <DetailRow label="Contract Type" value={CONTRACT_TYPE_META[c.contractType]} />
           <DetailRow label="Issue Date" value={formatDate(c.issueDate)} />
           <DetailRow
@@ -129,7 +139,7 @@ export default function ContractDetailPage() {
           <DetailRow label="Responsible Person" value={c.responsiblePerson ?? "Not set"} />
         </section>
 
-        <div className="rounded-lg border border-biz-border bg-biz-surface p-4 shadow-card">
+        <div className="self-start rounded-lg border border-biz-border bg-white p-4 shadow-card">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-biz-blue" />
@@ -163,7 +173,7 @@ export default function ContractDetailPage() {
       </div>
 
       {(c.scopeOfWork || c.remarks) && (
-        <section className="rounded-lg border border-biz-border bg-biz-surface p-4 shadow-card">
+        <section className="rounded-lg border border-biz-border bg-white p-4 shadow-card">
           {c.scopeOfWork && (
             <>
               <h2 className="mb-2 text-[14px] font-semibold text-biz-text">Scope of Work</h2>

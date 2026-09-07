@@ -206,33 +206,6 @@ export function ApprovedWorkDetails({
               Back to List
             </Link>
           )}
-          <Link
-            href={
-              project.contractId
-                ? `/cms/contracts/${project.contractId}/edit`
-                : archived
-                  ? "#"
-                  : `/cms/contracts/create?cmsWorkId=${id}`
-            }
-            aria-disabled={archived && !project.contractId}
-            className={cn(
-              "flex h-9 items-center gap-2 rounded-md border border-biz-border bg-white px-4 text-[11px] font-semibold",
-              archived && !project.contractId && "pointer-events-none opacity-50",
-            )}
-          >
-            {project.contractId ? (
-              <FilePenLine className="h-4 w-4" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
-            {project.contractId
-              ? archived
-                ? "Archive Info"
-                : "Edit"
-              : archived
-                ? "Contract Unavailable"
-                : "Add Contract"}
-          </Link>
           {!archived && (
             <button
               onClick={archive}
@@ -336,10 +309,41 @@ export function ApprovedWorkDetails({
           </div>
         </section>
         <section className="rounded-lg border border-biz-border bg-white p-4 shadow-card">
-          <h2 className="mb-3 flex items-center gap-2 text-[13px] font-bold text-biz-navy">
-            <WalletCards className="h-5 w-5 text-green-700" />
-            Project Financial Information
-          </h2>
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="flex items-center gap-2 text-[13px] font-bold text-biz-navy">
+              <WalletCards className="h-5 w-5 text-green-700" />
+              Project Financial Information
+            </h2>
+            <div className="w-full sm:w-auto">
+              <Link
+                href={
+                  project.contractId
+                    ? `/cms/contracts/${project.contractId}/edit`
+                    : archived
+                      ? "#"
+                      : `/cms/contracts/create?cmsWorkId=${id}`
+                }
+                aria-disabled={archived && !project.contractId}
+                className={cn(
+                  "flex h-9 w-full items-center justify-center gap-2 rounded-md border border-biz-blue bg-biz-blue px-4 text-[11px] font-semibold text-white shadow-[0_6px_16px_rgba(18,98,255,0.22)] transition-colors hover:border-[#0B55D8] hover:bg-[#0B55D8] sm:w-auto",
+                  archived && !project.contractId && "pointer-events-none opacity-50",
+                )}
+              >
+                {project.contractId ? (
+                  <FilePenLine className="h-4 w-4" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                {project.contractId
+                  ? archived
+                    ? "View Contract & Financials"
+                    : "Edit Contract & Financials"
+                  : archived
+                    ? "Contract Unavailable"
+                    : "Set Up Contract & Financials"}
+              </Link>
+            </div>
+          </div>
           <InfoRow
             label="Contract Value (Including VAT & Tax)"
             value={money(financial.contractValue)}
@@ -367,13 +371,20 @@ export function ApprovedWorkDetails({
               label="Security Method"
               value={financial.securityDeposit.method?.replaceAll("_", " ") ?? sdLabel}
             />
-            <InfoRow label="SD Rate (%)" value={financial.securityDeposit.rate ?? sdLabel} />
-            <InfoRow label="SD Amount" value={money(financial.securityDeposit.amount)} />
+            <InfoRow
+              label={`SD Rate${
+                financial.securityDeposit.rate
+                  ? ` (${Number(financial.securityDeposit.rate)}%)`
+                  : ""
+              }`}
+              value={money(financial.securityDeposit.amount)}
+            />
             <InfoRow
               label="SD Status"
               value={financial.securityDeposit.status?.replaceAll("_", " ") ?? sdLabel}
             />
-            {financial.securityDeposit.releasedDate && (
+            {financial.securityDeposit.releasedDate &&
+              financial.securityDeposit.status !== "HELD" && (
               <InfoRow
                 label="SD Released Date"
                 value={dateText(financial.securityDeposit.releasedDate)}

@@ -116,11 +116,20 @@ export class CmsWorksService {
     const vatAmount = valueExcludingVat ? contractValue.minus(valueExcludingVat) : null;
     const taxAmount = valueExcludingVat && taxRate ? valueExcludingVat.mul(taxRate).div(100) : null;
     const valueAfterVatTax = valueExcludingVat && taxAmount ? valueExcludingVat.minus(taxAmount) : null;
-    const sdConfigured = Boolean(securityRate?.gt(0) && contract?.securityDepositMethod && valueAfterVatTax);
+    const hasSecurityDeposit = Boolean(securityRate?.gt(0) && valueAfterVatTax);
+    const sdConfigured = Boolean(hasSecurityDeposit && contract?.securityDepositMethod);
     const securityState = securityRate?.gt(0) ? (sdConfigured ? "CONFIGURED" : "NOT_CONFIGURED") : "NOT_APPLICABLE";
-    const securityAmount = sdConfigured ? valueAfterVatTax!.mul(securityRate!).div(100) : null;
+    const securityAmount = hasSecurityDeposit
+      ? valueAfterVatTax!.mul(securityRate!).div(100)
+      : null;
     const releasedAmount = contract?.securityDepositReleasedAmount ?? new Prisma.Decimal(0);
-    const heldAmount = securityAmount ? (contract?.securityDepositStatus === "RELEASED" ? new Prisma.Decimal(0) : Prisma.Decimal.max(0, securityAmount.minus(releasedAmount))) : null;
+    const heldAmount = securityAmount
+      ? contract?.securityDepositStatus === "RELEASED"
+        ? new Prisma.Decimal(0)
+        : contract?.securityDepositStatus === "PARTIALLY_RELEASED"
+          ? Prisma.Decimal.max(0, securityAmount.minus(releasedAmount))
+          : securityAmount
+      : null;
     const netReceivableAfterSd = valueAfterVatTax && heldAmount ? valueAfterVatTax.minus(heldAmount) : valueAfterVatTax;
     const totalExpense = expenses.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
     const receivedRows = receipts.filter((row) => row.status === "RECEIVED");

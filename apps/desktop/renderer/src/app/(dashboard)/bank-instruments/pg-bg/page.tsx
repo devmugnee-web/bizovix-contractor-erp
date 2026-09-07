@@ -13,7 +13,6 @@ import {
   ChevronRight,
   FileText,
   Info,
-  Lightbulb,
   Search,
 } from "lucide-react";
 import {
@@ -664,11 +663,32 @@ export default function PgBgPage() {
               </div>
 
               <div className="flex flex-col gap-2 px-3 py-2 text-[10px] sm:flex-row sm:items-center sm:justify-between">
-                <span className="text-biz-muted">
-                  Showing {meta.total ? (meta.page - 1) * meta.limit + 1 : 0} to{" "}
-                  {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} entries
-                </span>
-                <div className="flex gap-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-biz-muted">
+                    Showing {meta.total ? (meta.page - 1) * meta.limit + 1 : 0} to{" "}
+                    {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} entries
+                  </span>
+                  <label className="flex items-center gap-1.5 font-medium text-biz-muted">
+                    Show
+                    <select
+                      aria-label="Tenders per page"
+                      value={meta.limit}
+                      onChange={(event) =>
+                        setQuery({ ...query, page: 1, limit: Number(event.target.value) })
+                      }
+                      className="h-7 rounded border border-biz-border bg-white px-2 text-[10px] font-semibold text-biz-navy outline-none focus:border-biz-blue"
+                    >
+                      {[5, 10, 20, 50].map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                    entries
+                  </label>
+                </div>
+                {meta.totalPages > 1 && (
+                  <div className="flex gap-1 self-end sm:self-auto">
                   <button
                     type="button"
                     aria-label="Previous page"
@@ -704,7 +724,8 @@ export default function PgBgPage() {
                   >
                     <ChevronRight className="h-3.5 w-3.5" />
                   </button>
-                </div>
+                  </div>
+                )}
               </div>
 
               {selected && (isDraftLookupPending || workflowQuery.isError) && (
@@ -734,13 +755,6 @@ export default function PgBgPage() {
                 </div>
               )}
 
-              <div className="mx-3 mb-3 flex items-start gap-2 rounded-md border border-biz-blue/20 bg-biz-blue-soft px-3 py-2 text-[10px] text-biz-blue">
-                <Info className="h-3.5 w-3.5 shrink-0" />
-                <span>
-                  If a tender is missing, purchase its document first from Document Purchase.
-                  Completed PG/BG workflows are not shown here.
-                </span>
-              </div>
             </section>
           )}
 
@@ -1073,11 +1087,6 @@ export default function PgBgPage() {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-start gap-2 rounded-md border border-biz-warning/30 bg-biz-warning-soft px-3 py-2 text-[10px] text-biz-navy">
-                <Info className="h-3.5 w-3.5 shrink-0 text-biz-warning" />
-                Finalizing will save the PG/BG and move this tender to Ongoing Works. If the final
-                request is interrupted, you can select the tender again and retry safely.
-              </div>
             </section>
           )}
         </div>
@@ -1094,67 +1103,6 @@ export default function PgBgPage() {
             <SummaryRow label="PE Name" value={values.contact?.name} />
           </section>
 
-          <section className="rounded-md border border-biz-border bg-white p-3 shadow-card">
-            <h2 className="mb-3 text-[12px] font-bold text-biz-navy">Process Timeline</h2>
-            <div>
-              {STEPS.map(([title], index) => {
-                const step = (index + 1) as UiStep;
-                const active = step === uiStep;
-                const complete = step < uiStep;
-                return (
-                  <div key={title} className="relative flex gap-2 pb-3 last:pb-0">
-                    <span
-                      className={cn(
-                        "relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold",
-                        active || complete
-                          ? "border-biz-blue bg-biz-blue text-white"
-                          : "border-[#B8C3D6] bg-white text-biz-muted",
-                      )}
-                    >
-                      {complete ? <Check className="h-3 w-3" /> : step}
-                    </span>
-                    {step < 3 && (
-                      <span className="absolute left-[11px] top-6 h-[calc(100%-18px)] w-px bg-biz-border" />
-                    )}
-                    <div className={cn("flex-1 rounded px-2 py-1", active && "bg-biz-blue-soft")}>
-                      <p
-                        className={cn(
-                          "text-[10px] font-semibold",
-                          active ? "text-biz-blue" : "text-biz-navy",
-                        )}
-                      >
-                        {title}
-                      </p>
-                      <p
-                        className={cn(
-                          "text-[9px]",
-                          active
-                            ? "text-biz-blue"
-                            : complete
-                              ? "text-biz-success"
-                              : "text-biz-muted",
-                        )}
-                      >
-                        {active ? "In Progress" : complete ? "Completed" : "Pending"}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="rounded-md border border-biz-warning/30 bg-biz-warning-soft p-3">
-            <h2 className="mb-2 flex items-center gap-2 text-[11px] font-bold text-biz-navy">
-              <Lightbulb className="h-4 w-4 text-biz-warning" />
-              Important Notes
-            </h2>
-            <ul className="space-y-2 text-[9px] leading-4 text-biz-navy">
-              <li>• Select the intended tender yourself; no tender is preselected.</li>
-              <li>• Work Category always comes from Document Purchase.</li>
-              <li>• Final submission creates the Ongoing Work only after successful completion.</li>
-            </ul>
-          </section>
         </aside>
       </div>
 

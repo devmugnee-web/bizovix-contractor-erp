@@ -20,11 +20,20 @@ import {
 } from "@bizovix/ui";
 import type { ContractDetail } from "@bizovix/types";
 import { CONTRACT_TYPE_OPTIONS } from "@/lib/contracts";
+import { SuccessPopup } from "@/components/layout/SuccessPopup";
 
 interface ContractFormProps {
   mode: "create" | "edit";
   contract?: ContractDetail;
-  initialWork?: { id: string; workName: string };
+  initialWork?: {
+    id: string;
+    workName: string;
+    tender?: { id: string; workName: string };
+    contractValue?: string;
+    startDate?: string | null;
+    expectedCompletionDate?: string | null;
+    clientContactName?: string;
+  };
 }
 
 export function ContractForm({ mode, contract, initialWork }: ContractFormProps) {
@@ -32,6 +41,10 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
   const createMutation = useCreateContract();
   const updateMutation = useUpdateContract();
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const [createdContract, setCreatedContract] = React.useState<{
+    id: string;
+    cmsWorkId: string;
+  } | null>(null);
 
   const {
     control,
@@ -43,16 +56,24 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
     resolver: zodResolver(createContractSchema),
     defaultValues: {
       cmsWorkId: contract?.cmsWorkId ?? initialWork?.id ?? "",
-      tenderId: contract?.tenderId ?? "",
+      tenderId: contract?.tenderId ?? initialWork?.tender?.id ?? "",
       contractType: contract?.contractType ?? "WORK_ORDER",
       contractNo: contract?.contractNo ?? "",
       issueDate: contract?.issueDate.slice(0, 10) ?? "",
       contractDate: contract?.contractDate?.slice(0, 10) ?? "",
-      originalContractValue: contract ? Number(contract.originalContractValue) : undefined,
+      originalContractValue: contract
+        ? Number(contract.originalContractValue)
+        : initialWork?.contractValue
+          ? Number(initialWork.contractValue)
+          : undefined,
       currentContractValue: contract ? Number(contract.currentContractValue) : undefined,
       currency: contract?.currency ?? "BDT",
-      commencementDate: contract?.commencementDate.slice(0, 10) ?? "",
-      originalCompletionDate: contract?.originalCompletionDate.slice(0, 10) ?? "",
+      commencementDate:
+        contract?.commencementDate.slice(0, 10) ?? initialWork?.startDate?.slice(0, 10) ?? "",
+      originalCompletionDate:
+        contract?.originalCompletionDate.slice(0, 10) ??
+        initialWork?.expectedCompletionDate?.slice(0, 10) ??
+        "",
       currentCompletionDate: contract?.currentCompletionDate?.slice(0, 10) ?? "",
       durationDays: contract?.durationDays ?? undefined,
       dlpDays: contract?.dlpDays ?? undefined,
@@ -60,8 +81,16 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
       securityDepositPct: contract?.securityDepositPct
         ? Number(contract.securityDepositPct)
         : undefined,
-      vatPct: contract?.vatPct ? Number(contract.vatPct) : undefined,
-      taxPct: contract?.taxPct ? Number(contract.taxPct) : undefined,
+      vatPct: contract
+        ? contract.vatPct == null
+          ? undefined
+          : Number(contract.vatPct)
+        : 10,
+      taxPct: contract
+        ? contract.taxPct == null
+          ? undefined
+          : Number(contract.taxPct)
+        : 5,
       securityDepositMethod: (contract?.securityDepositMethod ??
         "") as CreateContractFormValues["securityDepositMethod"],
       securityDepositStatus: (contract?.securityDepositStatus ??
@@ -71,7 +100,7 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
         : undefined,
       securityDepositReleaseDueDate: contract?.securityDepositReleaseDueDate?.slice(0, 10) ?? "",
       securityDepositReleasedDate: contract?.securityDepositReleasedDate?.slice(0, 10) ?? "",
-      clientContactName: contract?.clientContactName ?? "",
+      clientContactName: contract?.clientContactName ?? initialWork?.clientContactName ?? "",
       responsiblePerson: contract?.responsiblePerson ?? "",
       scopeOfWork: contract?.scopeOfWork ?? "",
       remarks: contract?.remarks ?? "",
@@ -93,7 +122,11 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
     value: string;
     label: string;
   } | null>(
-    contract?.tender ? { value: contract.tender.id, label: contract.tender.workName } : null,
+    contract?.tender
+      ? { value: contract.tender.id, label: contract.tender.workName }
+      : initialWork?.tender
+        ? { value: initialWork.tender.id, label: initialWork.tender.workName }
+        : null,
   );
   const tenders = useTenders({ search: tenderQuery, limit: 20 });
 
@@ -130,28 +163,67 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
 
     if (mode === "create") {
       createMutation.mutate(payload, {
-        onSuccess: (record) => router.push(`/cms/contracts/${record.id}`),
+        onSuccess: (record) =>
+          setCreatedContract({ id: record.id, cmsWorkId: record.cmsWorkId }),
       });
     } else if (contract) {
       updateMutation.mutate(
         { id: contract.id, payload },
-        { onSuccess: () => router.push(`/cms/contracts/${contract.id}`) },
+        {
+          onSuccess: (record) =>
+            setCreatedContract({ id: record.id, cmsWorkId: record.cmsWorkId }),
+        },
       );
     }
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-3">
+      <SuccessPopup
+        open={createdContract !== null}
+        title={
+          mode === "create"
+            ? "Contract & Financials Saved Successfully"
+            : "Contract & Financials Updated Successfully"
+        }
+        message={
+          mode === "create"
+            ? "The contract and project financial information have been saved."
+            : "The updated contract and project financial information have been saved."
+        }
+        onClose={() => {
+          if (createdContract) router.push(`/cms/contracts/${createdContract.id}`);
+        }}
+        primaryLabel="Back to Ongoing Work"
+        onPrimary={() => {
+          if (createdContract) router.push(`/cms/ongoing-works/${createdContract.cmsWorkId}`);
+        }}
+        secondaryLabel="View Contract Details"
+        onSecondary={() => {
+          if (createdContract) router.push(`/cms/contracts/${createdContract.id}`);
+        }}
+        dismissOnBackdrop={false}
+        dismissOnEscape={false}
+      />
+      <button
+        type="button"
+        onClick={() => router.back()}
+        className="flex h-9 w-fit items-center gap-2 rounded-md border border-biz-border bg-white px-4 text-[12px] font-semibold text-biz-navy shadow-sm transition-colors hover:border-biz-blue hover:bg-biz-blue-soft hover:text-biz-blue"
+      >
+        <span aria-hidden="true">&larr;</span>
+        Back
+      </button>
       <PageHeader
-        title={mode === "create" ? "Add Contract / Work Order" : "Edit Contract / Work Order"}
-        subtitle="Manage awarded contracts, work orders and project execution details."
+        title={mode === "create" ? "Set Up Contract & Financials" : "Edit Contract & Financials"}
+        subtitle={mode === "create" ? "Enter the official contract details and financial deductions. You can update progress and release information later." : "Update contract, financial and lifecycle information."}
       />
 
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="rounded-lg border border-biz-border bg-biz-surface p-6"
+        className="rounded-lg border border-biz-border bg-biz-surface p-4"
       >
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-4 gap-y-3 lg:grid-cols-2">
+          <div className="border-b border-biz-border pb-1 text-[11px] font-bold uppercase tracking-wide text-biz-blue lg:col-span-2">Contract Basics</div>
           <FormField
             label="Linked Project / Work"
             required
@@ -254,13 +326,25 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
             />
           </FormField>
 
-          <FormField
-            label="Current Contract Value"
-            helper="Defaults to original value if left blank"
-            error={errors.currentContractValue?.message}
-          >
-            <CurrencyInput placeholder="Same as original" {...register("currentContractValue")} />
-          </FormField>
+          {mode === "edit" && (
+
+            <FormField
+
+                        label="Current Contract Value"
+
+                        helper="Defaults to original value if left blank"
+
+                        error={errors.currentContractValue?.message}
+
+                      >
+
+                        <CurrencyInput placeholder="Same as original" {...register("currentContractValue")} />
+
+                      </FormField>
+
+          )}
+
+          <div className="border-b border-biz-border pb-1 text-[11px] font-bold uppercase tracking-wide text-biz-blue lg:col-span-2">Schedule</div>
 
           <FormField label="Commencement Date" required error={errors.commencementDate?.message}>
             <Controller
@@ -282,25 +366,51 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
             />
           </FormField>
 
-          <FormField
-            label="Current Completion Date"
-            helper="Defaults to original completion date"
-            error={errors.currentCompletionDate?.message}
-          >
-            <Controller
-              control={control}
-              name="currentCompletionDate"
-              render={({ field }) => <DateInput {...field} />}
-            />
-          </FormField>
+          {mode === "edit" && (
 
-          <FormField
-            label="Duration (Days)"
-            helper="Auto-calculated if left blank"
-            error={errors.durationDays?.message}
-          >
-            <TextInput type="number" placeholder="Auto-calculated" {...register("durationDays")} />
-          </FormField>
+            <FormField
+
+                        label="Current Completion Date"
+
+                        helper="Defaults to original completion date"
+
+                        error={errors.currentCompletionDate?.message}
+
+                      >
+
+                        <Controller
+
+                          control={control}
+
+                          name="currentCompletionDate"
+
+                          render={({ field }) => <DateInput {...field} />}
+
+                        />
+
+                      </FormField>
+
+          )}
+
+          {mode === "edit" && (
+
+            <FormField
+
+                        label="Duration (Days)"
+
+                        helper="Auto-calculated if left blank"
+
+                        error={errors.durationDays?.message}
+
+                      >
+
+                        <TextInput type="number" placeholder="Auto-calculated" {...register("durationDays")} />
+
+                      </FormField>
+
+          )}
+
+          <div className="border-b border-biz-border pb-1 text-[11px] font-bold uppercase tracking-wide text-biz-blue lg:col-span-2">Financial Terms</div>
 
           <FormField label="Defect Liability Period (Days)" error={errors.dlpDays?.message}>
             <TextInput type="number" placeholder="Optional" {...register("dlpDays")} />
@@ -315,7 +425,7 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
             />
           </FormField>
 
-          <FormField label="Security Deposit %" error={errors.securityDepositPct?.message}>
+          <FormField label="Security Deposit (SD) %" error={errors.securityDepositPct?.message}>
             <TextInput
               type="number"
               step="0.01"
@@ -332,7 +442,7 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
             <TextInput type="number" step="0.01" placeholder="Optional" {...register("taxPct")} />
           </FormField>
 
-          <FormField label="Security Deposit Method" error={errors.securityDepositMethod?.message}>
+          <FormField label="How SD Is Held" error={errors.securityDepositMethod?.message}>
             <Controller
               control={control}
               name="securityDepositMethod"
@@ -349,7 +459,7 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
             />
           </FormField>
 
-          <FormField label="Security Deposit Status" error={errors.securityDepositStatus?.message}>
+          <FormField label="Current SD Status" error={errors.securityDepositStatus?.message}>
             <Controller
               control={control}
               name="securityDepositStatus"
@@ -367,31 +477,65 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
             />
           </FormField>
 
-          <FormField
-            label="SD Released Amount"
-            error={errors.securityDepositReleasedAmount?.message}
-          >
-            <CurrencyInput placeholder="Optional" {...register("securityDepositReleasedAmount")} />
-          </FormField>
+          {mode === "edit" && (
 
-          <FormField
-            label="SD Release Due Date"
-            error={errors.securityDepositReleaseDueDate?.message}
-          >
-            <Controller
-              control={control}
-              name="securityDepositReleaseDueDate"
-              render={({ field }) => <DateInput {...field} />}
-            />
-          </FormField>
+            <FormField
 
-          <FormField label="SD Released Date" error={errors.securityDepositReleasedDate?.message}>
-            <Controller
-              control={control}
-              name="securityDepositReleasedDate"
-              render={({ field }) => <DateInput {...field} />}
-            />
-          </FormField>
+                        label="SD Released Amount"
+
+                        error={errors.securityDepositReleasedAmount?.message}
+
+                      >
+
+                        <CurrencyInput placeholder="Optional" {...register("securityDepositReleasedAmount")} />
+
+                      </FormField>
+
+          )}
+
+          {mode === "edit" && (
+
+            <FormField
+
+                        label="SD Release Due Date"
+
+                        error={errors.securityDepositReleaseDueDate?.message}
+
+                      >
+
+                        <Controller
+
+                          control={control}
+
+                          name="securityDepositReleaseDueDate"
+
+                          render={({ field }) => <DateInput {...field} />}
+
+                        />
+
+                      </FormField>
+
+          )}
+
+          {mode === "edit" && (
+
+            <FormField label="SD Released Date" error={errors.securityDepositReleasedDate?.message}>
+
+                        <Controller
+
+                          control={control}
+
+                          name="securityDepositReleasedDate"
+
+                          render={({ field }) => <DateInput {...field} />}
+
+                        />
+
+                      </FormField>
+
+          )}
+
+          <div className="border-b border-biz-border pb-1 text-[11px] font-bold uppercase tracking-wide text-biz-blue lg:col-span-2">Contacts & Scope</div>
 
           <FormField label="Client Contact / PE" error={errors.clientContactName?.message}>
             <TextInput icon={User} placeholder="Optional" {...register("clientContactName")} />
@@ -437,7 +581,7 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
           </SecondaryButton>
           <PrimaryButton type="submit" disabled={isPending}>
             <Save className="h-4 w-4" />
-            {isPending ? "Saving..." : "Save Draft"}
+            {isPending ? "Saving..." : "Save Contract"}
           </PrimaryButton>
         </div>
       </form>
