@@ -131,7 +131,7 @@ function AddDocumentPurchaseForm() {
         purchaseDate: values.purchaseDate,
         documentPrice: Number(values.documentPrice),
         paymentFromAccountId: values.paymentFromAccountId,
-        category: values.category || undefined,
+        category: values.category,
         estimatedTenderAmount: values.estimatedTenderAmount == null ? undefined : Number(values.estimatedTenderAmount),
         submissionDate: values.submissionDate || undefined,
         openingDate: values.openingDate || undefined,
@@ -286,7 +286,7 @@ function AddDocumentPurchaseForm() {
             />
           </FormField>
 
-          <FormField label="8. Category" error={errors.category?.message}>
+          <FormField label="8. Work Category" required error={errors.category?.message}>
             <div className="flex items-start gap-3">
               <Controller
                 control={control}
@@ -294,7 +294,7 @@ function AddDocumentPurchaseForm() {
                 render={({ field }) => (
                   <SelectInput
                     className="flex-1"
-                    placeholder={categories.isLoading ? "Loading categories..." : "Select category"}
+                    placeholder={categories.isLoading ? "Loading categories..." : "Select work category"}
                     options={(categories.data ?? [])
                       .filter((category) => category.isActive)
                       .map((category) => ({ label: category.name, value: category.name }))}

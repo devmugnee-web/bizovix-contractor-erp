@@ -165,7 +165,14 @@ function TenderSecurityWorkspace() {
   }));
   const [search, setSearch] = React.useState(incomingTenderId);
   const [filtersOpen, setFiltersOpen] = React.useState(false);
-  const pendingQuery = usePendingTenderSecurities(query);
+  const pendingQuery = usePendingTenderSecurities({ ...query, securityStatus: "PENDING" });
+  const completedSecurities = usePendingTenderSecurities({
+    ...query,
+    page: 1,
+    limit: 5,
+    tenderStatus: undefined,
+    securityStatus: "CREATED",
+  });
   const organizations = useAllOrganizations();
   const bankAccounts = useBankAccounts();
   const tenderBankSettings = useTenderBankSettings();
@@ -526,7 +533,7 @@ function TenderSecurityWorkspace() {
                     <td className="px-3 py-2 text-right font-semibold">{money(row.securityAmount)}</td>
                     <td className="px-3 py-2">
                       <span className={cn("rounded-md px-2 py-1 text-[11px] font-medium", SECURITY_STATUS_META[row.securityStatus].className)}>
-                        Ready
+                        {SECURITY_STATUS_META[row.securityStatus].label}
                       </span>
                       {!row.eligible && row.ineligibleReason && <p className="mt-1 text-[10px] text-biz-muted">{row.ineligibleReason}</p>}
                     </td>
@@ -538,7 +545,7 @@ function TenderSecurityWorkspace() {
                           title={
                             row.eligible && row.documentPurchaseId
                               ? "Create tender security"
-                              : row.ineligibleReason
+                              : row.ineligibleReason ?? undefined
                           }
                           className="whitespace-nowrap"
                           onClick={() => {
@@ -604,6 +611,48 @@ function TenderSecurityWorkspace() {
               ›
             </button>
           </div>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-lg border border-biz-border bg-white shadow-card">
+        <div className="flex items-center justify-between px-4 py-3">
+          <h2 className="text-[15px] font-bold text-biz-navy">
+            Completed Tender Securities
+            <span className="ml-2 rounded-md bg-biz-success-soft px-2 py-1 text-[12px] text-biz-success">
+              {completedSecurities.data?.meta.total ?? 0}
+            </span>
+          </h2>
+          <IconButton aria-label="Refresh completed securities" onClick={() => completedSecurities.refetch()}>
+            <RefreshCw className="h-4 w-4" />
+          </IconButton>
+        </div>
+        <div className="overflow-x-auto border-t border-biz-border">
+          <table className="w-full min-w-[720px] text-[11px]">
+            <thead className="bg-[#F7FAFF] text-biz-navy">
+              <tr>
+                <th className="px-4 py-2 text-left">Tender ID</th>
+                <th className="px-3 py-2 text-left">Organization</th>
+                <th className="px-3 py-2 text-left">Work / Tender Name</th>
+                <th className="px-3 py-2 text-right">Security Amount</th>
+                <th className="px-4 py-2 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {completedSecurities.isLoading ? (
+                <tr><td colSpan={5} className="px-4 py-7 text-center text-biz-muted">Loading completed securities...</td></tr>
+              ) : (completedSecurities.data?.items.length ?? 0) === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-7 text-center text-biz-muted">No completed tender securities yet.</td></tr>
+              ) : completedSecurities.data?.items.map((row) => (
+                <tr key={row.id} className="border-t border-biz-border">
+                  <td className="px-4 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td>
+                  <td className="px-3 py-2">{row.organizationMaster?.shortName ?? "Not set"}</td>
+                  <td className="px-3 py-2">{row.tenderWorkName}</td>
+                  <td className="px-3 py-2 text-right font-semibold">{money(row.securityAmount)}</td>
+                  <td className="px-4 py-2 text-center"><span className="rounded bg-biz-success-soft px-2 py-1 font-semibold text-biz-success">Completed</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 

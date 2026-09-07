@@ -51,7 +51,7 @@ type GuaranteeDraft = {
   expiryDate: string;
 };
 
-const DEFAULT_QUERY: PgBgEligibleQuery = { page: 1, limit: 5 };
+const DEFAULT_QUERY: PgBgEligibleQuery = { page: 1, limit: 5, workflowStatus: "READY" };
 const STEPS = [
   ["Select Tender", "Choose one tender"],
   ["NOA & Decision", "Enter NOA and contact details"],
@@ -204,6 +204,7 @@ export default function PgBgPage() {
 
   const [query, setQuery] = React.useState<PgBgEligibleQuery>(DEFAULT_QUERY);
   const eligible = useEligiblePgBgTenders(query);
+  const completedPgBg = useEligiblePgBgTenders({ page: 1, limit: 5, workflowStatus: "FINALIZED" });
   const [selected, setSelected] = React.useState<EligiblePgBgTender | null>(null);
   const [uiStep, setUiStep] = React.useState<UiStep>(1);
   const [message, setMessage] = React.useState<{
@@ -213,7 +214,9 @@ export default function PgBgPage() {
   const [completion, setCompletion] = React.useState<CompletionState | null>(null);
   const [guarantee, setGuarantee] = React.useState<GuaranteeDraft>(initialGuarantee);
 
-  const workflowQuery = usePgBgWorkflowByDocument(selected?.id ?? "");
+  const workflowQuery = usePgBgWorkflowByDocument(
+    selected && selected.workflowStatus !== "READY" ? selected.id : "",
+  );
   const contacts = useOrganizationContacts(selected?.organizationMaster.id);
   const bankAccounts = useBankAccounts();
   const saveDraftMutation = useSavePgBgDraft();
@@ -541,12 +544,31 @@ export default function PgBgPage() {
               <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h2 className="text-[14px] font-bold text-biz-navy">
-                    1. Select Tender <span className="ml-1 text-[10px] text-biz-blue">Required</span>
+                    1. PG/BG Workflow <span className="ml-1 text-[10px] text-biz-blue">Status &amp; History</span>
                   </h2>
                   <p className="mt-0.5 text-[10px] text-biz-muted">
                     Choose the awarded tender you want to process. Nothing is selected automatically.
                   </p>
                 </div>
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <select
+                  aria-label="PG/BG workflow status"
+                  value={query.workflowStatus ?? "READY"}
+                  onChange={(event) => {
+                    setSelected(null);
+                    setQuery({
+                      ...query,
+                      page: 1,
+                      workflowStatus: event.target.value as PgBgEligibleQuery["workflowStatus"],
+                    });
+                  }}
+                  className={`${inputClass} sm:w-[160px]`}
+                >
+                  <option value="READY">Ready</option>
+                  <option value="DRAFT">Draft</option>
+                  <option value="NOA_ACCEPTED">NOA Accepted</option>
+                  <option value="NOA_REJECTED">Rejected</option>
+                </select>
                 <label className="relative block w-full sm:w-[330px]">
                   <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" />
                   <input
@@ -559,6 +581,7 @@ export default function PgBgPage() {
                     className={`${inputClass} pl-9`}
                   />
                 </label>
+                </div>
               </div>
 
               <div className="overflow-x-auto border-y border-biz-border">
@@ -570,19 +593,20 @@ export default function PgBgPage() {
                       <th className="px-3 py-2 text-left">Work / Project Name</th>
                       <th className="px-3 py-2 text-left">Organization</th>
                       <th className="px-3 py-2 text-left">Category</th>
+                      <th className="px-3 py-2 text-left">Status</th>
                       <th className="px-3 py-2 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {eligible.isLoading ? (
                       <tr>
-                        <td colSpan={6} className="px-3 py-10 text-center text-biz-muted">
+                        <td colSpan={7} className="px-3 py-10 text-center text-biz-muted">
                           Loading eligible tenders...
                         </td>
                       </tr>
                     ) : eligible.isError ? (
                       <tr>
-                        <td colSpan={6} className="px-3 py-10 text-center text-biz-danger">
+                        <td colSpan={7} className="px-3 py-10 text-center text-biz-danger">
                           <p className="font-semibold">Could not load eligible tenders.</p>
                           <button
                             type="button"
@@ -595,7 +619,7 @@ export default function PgBgPage() {
                       </tr>
                     ) : pageItems.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-3 py-10 text-center text-biz-muted">
+                        <td colSpan={7} className="px-3 py-10 text-center text-biz-muted">
                           No eligible tenders found.
                         </td>
                       </tr>
@@ -603,15 +627,17 @@ export default function PgBgPage() {
                       pageItems.map((row) => {
                         const active = selected?.id === row.id;
                         const hasCategory = Boolean(row.category?.trim());
+                        const completed = row.workflowStatus === "FINALIZED" || Boolean(row.cmsWorkId);
+                        const rejected = row.workflowStatus === "NOA_REJECTED";
                         return (
                           <tr
                             key={row.id}
                             onClick={() => {
-                              if (hasCategory) selectTender(row);
+                              if (hasCategory && !completed && !rejected) selectTender(row);
                             }}
                             className={cn(
                               "border-t border-biz-border transition-colors",
-                              hasCategory
+                              hasCategory && !completed && !rejected
                                 ? "cursor-pointer hover:bg-biz-blue-soft/30"
                                 : "cursor-not-allowed bg-biz-bg/60 text-biz-muted",
                               active && "bg-biz-blue-soft/40",
@@ -635,14 +661,34 @@ export default function PgBgPage() {
                               {row.organizationMaster.shortName}
                             </td>
                             <td className="px-3 py-2.5">{row.category ?? "Not set"}</td>
+                            <td className="px-3 py-2.5">
+                              <span className={cn(
+                                "rounded px-2 py-1 font-semibold",
+                                completed
+                                  ? "bg-biz-success-soft text-biz-success"
+                                  : rejected
+                                    ? "bg-biz-danger-soft text-biz-danger"
+                                    : row.workflowStatus === "READY"
+                                      ? "bg-biz-blue-soft text-biz-blue"
+                                      : "bg-biz-warning-soft text-biz-navy",
+                              )}>
+                                {row.workflowStatus.replaceAll("_", " ")}
+                              </span>
+                            </td>
                             <td className="px-3 py-2.5 text-center">
                               <button
                                 type="button"
                                 aria-pressed={active}
-                                disabled={active || !hasCategory}
+                                disabled={active || rejected}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  selectTender(row);
+                                  if (!hasCategory) {
+                                    router.push(`/bank-instruments/document-purchase/${row.id}?returnTo=${encodeURIComponent("/bank-instruments/pg-bg")}`);
+                                  } else if (row.cmsWorkId) {
+                                    router.push(`/cms/ongoing-works/${row.cmsWorkId}`);
+                                  } else {
+                                    selectTender(row);
+                                  }
                                 }}
                                 className={cn(
                                   "rounded border px-3 py-1 font-semibold",
@@ -651,7 +697,17 @@ export default function PgBgPage() {
                                     : "border-biz-blue text-biz-blue",
                                 )}
                               >
-                                {active ? "Selected" : hasCategory ? "Select" : "Add Category First"}
+                                {active
+                                  ? "Selected"
+                                  : !hasCategory
+                                    ? "Complete Purchase Info"
+                                    : row.cmsWorkId
+                                      ? "View Work"
+                                      : rejected
+                                        ? "Rejected"
+                                        : row.workflowStatus === "READY"
+                                          ? "Start"
+                                          : "Resume"}
                               </button>
                             </td>
                           </tr>
@@ -755,6 +811,54 @@ export default function PgBgPage() {
                 </div>
               )}
 
+            </section>
+          )}
+
+          {uiStep === 1 && (
+            <section className="overflow-hidden rounded-md border border-biz-border bg-white shadow-card">
+              <div className="flex items-center justify-between px-4 py-3">
+                <h2 className="text-[14px] font-bold text-biz-navy">
+                  Completed PG/BG Workflows
+                  <span className="ml-2 rounded bg-biz-success-soft px-2 py-1 text-[11px] text-biz-success">
+                    {completedPgBg.data?.meta.total ?? 0}
+                  </span>
+                </h2>
+                <button type="button" onClick={() => completedPgBg.refetch()} className="flex h-8 w-8 items-center justify-center rounded border border-biz-border" aria-label="Refresh completed PG/BG">
+                  <Search className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="overflow-x-auto border-t border-biz-border">
+                <table className="w-full min-w-[680px] text-[10px]">
+                  <thead className="bg-[#F7FAFF] text-biz-navy">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Tender ID</th>
+                      <th className="px-3 py-2 text-left">Work / Project Name</th>
+                      <th className="px-3 py-2 text-left">Organization</th>
+                      <th className="px-3 py-2 text-center">Status</th>
+                      <th className="px-3 py-2 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {completedPgBg.isLoading ? (
+                      <tr><td colSpan={5} className="px-3 py-8 text-center text-biz-muted">Loading completed workflows...</td></tr>
+                    ) : (completedPgBg.data?.items.length ?? 0) === 0 ? (
+                      <tr><td colSpan={5} className="px-3 py-8 text-center text-biz-muted">No completed PG/BG workflows yet.</td></tr>
+                    ) : completedPgBg.data?.items.map((row) => (
+                      <tr key={row.id} className="border-t border-biz-border">
+                        <td className="px-3 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td>
+                        <td className="px-3 py-2">{row.tenderWorkName}</td>
+                        <td className="px-3 py-2">{row.organizationMaster.shortName}</td>
+                        <td className="px-3 py-2 text-center"><span className="rounded bg-biz-success-soft px-2 py-1 font-semibold text-biz-success">Completed</span></td>
+                        <td className="px-3 py-2 text-center">
+                          {row.cmsWorkId ? (
+                            <button type="button" onClick={() => router.push(`/cms/ongoing-works/${row.cmsWorkId}`)} className="rounded border border-biz-blue px-3 py-1 font-semibold text-biz-blue">View Work</button>
+                          ) : <span className="text-biz-muted">View only</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </section>
           )}
 

@@ -32,7 +32,7 @@ export interface CreateDocumentPurchaseInput {
   purchaseDate: string;
   documentPrice: number;
   paymentFromAccountId: string;
-  category?: string;
+  category: string;
   estimatedTenderAmount?: number;
   submissionDate?: string;
   openingDate?: string;

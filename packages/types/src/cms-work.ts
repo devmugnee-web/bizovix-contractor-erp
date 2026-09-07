@@ -9,6 +9,7 @@ export type CmsWorkStatus =
 
 export interface CmsWork {
   id: string;
+  tenderId: string | null;
   workName: string;
   workCategory: string;
   contractValue: string;

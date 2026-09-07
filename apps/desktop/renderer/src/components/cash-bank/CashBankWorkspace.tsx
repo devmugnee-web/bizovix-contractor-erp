@@ -336,7 +336,7 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
         });
       if (modal === "account-edit")
         await updateAccount.mutateAsync({
-          id: form.accountId,
+          id: form.accountId!,
           body: {
             bankName: form.bankName,
             accountName: form.accountName,

@@ -132,7 +132,11 @@ export class TenderSecuritiesService {
             : {};
     const where: Prisma.TenderWhereInput = {
       organizationId,
-      status: query.tenderStatus ?? { in: [...ACTIVE_TENDER_STATUSES] },
+      ...(query.tenderStatus
+        ? { status: query.tenderStatus }
+        : securityStatus === "PENDING"
+          ? { status: { in: [...ACTIVE_TENDER_STATUSES] } }
+          : {}),
       ...securityWhere,
       ...(query.organizationId ? { organizationMasterId: query.organizationId } : {}),
       ...(query.search

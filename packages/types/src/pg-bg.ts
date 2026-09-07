@@ -1,11 +1,15 @@
 export type PgBgWorkflowStatus = "DRAFT" | "NOA_ACCEPTED" | "NOA_REJECTED" | "FINALIZED";
+export type PgBgListStatus = "READY" | PgBgWorkflowStatus;
 
 export interface EligiblePgBgTender {
   paContact?: OrganizationContactInput | null;
   id: string;
+  tenderRecordId: string | null;
   tenderId: string | null;
   tenderWorkName: string;
   category: string | null;
+  workflowStatus: PgBgListStatus;
+  cmsWorkId: string | null;
   organizationMaster: { id: string; shortName: string; fullName: string };
 }
 
@@ -13,6 +17,7 @@ export interface PgBgEligibleQuery {
   page?: number;
   limit?: number;
   search?: string;
+  workflowStatus?: PgBgListStatus;
 }
 
 export interface OrganizationContactInput {

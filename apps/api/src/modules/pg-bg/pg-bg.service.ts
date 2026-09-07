@@ -31,17 +31,16 @@ export class PgBgService {
   async eligibleTenders(organizationId: string, query: QueryPgBgDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 5;
+    const workflowStatus = query.workflowStatus ?? "READY";
+    const statusWhere: Prisma.DocumentPurchaseWhereInput =
+      workflowStatus === "READY"
+        ? { cmsWork: { is: null }, pgBgWorkflow: { is: null } }
+        : { pgBgWorkflow: { is: { status: workflowStatus } } };
     const where: Prisma.DocumentPurchaseWhereInput = {
       organizationId,
       purchaseType: "EGP",
       AND: [
-        { cmsWork: { is: null } },
-        {
-          OR: [
-            { pgBgWorkflow: { is: null } },
-            { pgBgWorkflow: { is: { status: { in: ["DRAFT", "NOA_ACCEPTED"] } } } },
-          ],
-        },
+        statusWhere,
         ...(query.search
           ? [
               {
@@ -57,6 +56,8 @@ export class PgBgService {
     const relation = {
       linkedTender: { select: tenderPaSelect },
       organizationMaster: { select: { id: true, shortName: true, fullName: true } },
+      pgBgWorkflow: { select: { status: true } },
+      cmsWork: { select: { id: true } },
     } as const;
     const [items, total] = await Promise.all([
       this.prisma.documentPurchase.findMany({
@@ -70,9 +71,12 @@ export class PgBgService {
     ]);
     const eligibleItems = items.map((item) => ({
       id: item.id,
+      tenderRecordId: item.linkedTenderId,
       tenderId: item.egpTenderId,
       tenderWorkName: item.tenderWorkName,
       category: item.category,
+      workflowStatus: item.pgBgWorkflow?.status ?? "READY",
+      cmsWorkId: item.cmsWork?.id ?? null,
       paContact: tenderPaContact(item.linkedTender),
       organizationMaster: item.organizationMaster,
     }));

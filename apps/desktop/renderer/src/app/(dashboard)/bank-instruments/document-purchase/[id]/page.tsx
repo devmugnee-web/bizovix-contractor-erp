@@ -1,9 +1,11 @@
 "use client";
 
+import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
-import { useDeleteDocumentPurchase, useDocumentPurchase } from "@bizovix/api-client";
-import { PageHeader, PrimaryButton, SecondaryButton, StatusBadge } from "@bizovix/ui";
+import { Save, Trash2 } from "lucide-react";
+import { useDeleteDocumentPurchase, useDocumentPurchase, useMasterCategories, useUpdateDocumentPurchase } from "@bizovix/api-client";
+import { MasterCategoryType } from "@bizovix/types";
+import { FormField, PageHeader, PrimaryButton, SecondaryButton, SelectInput, StatusBadge } from "@bizovix/ui";
 import { formatBDT, formatDate } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
@@ -21,6 +23,15 @@ export default function DocumentPurchaseViewPage() {
   const router = useRouter();
   const documentPurchase = useDocumentPurchase(params.id);
   const deleteMutation = useDeleteDocumentPurchase();
+  const updateMutation = useUpdateDocumentPurchase();
+  const categories = useMasterCategories(MasterCategoryType.DOCUMENT_PURCHASE);
+  const [category, setCategory] = React.useState("");
+  const [categoryError, setCategoryError] = React.useState("");
+  const [saved, setSaved] = React.useState(false);
+
+  React.useEffect(() => {
+    if (documentPurchase.data) setCategory(documentPurchase.data.category ?? "");
+  }, [documentPurchase.data]);
 
   useSetBreadcrumb([
     { label: "Bank Instruments" },
@@ -34,6 +45,24 @@ export default function DocumentPurchaseViewPage() {
     deleteMutation.mutate(documentPurchase.data.id, {
       onSuccess: () => router.push("/bank-instruments/document-purchase"),
     });
+  }
+
+  function saveCategory() {
+    const value = category.trim();
+    if (!value) {
+      setCategoryError("Work category is required before continuing to PG/BG.");
+      return;
+    }
+    setCategoryError("");
+    setSaved(false);
+    updateMutation.mutate(
+      { id: params.id, payload: { category: value } },
+      {
+        onSuccess: () => {
+          router.push("/bank-instruments/pg-bg");
+        },
+      },
+    );
   }
 
   if (documentPurchase.isLoading) {
@@ -80,6 +109,29 @@ export default function DocumentPurchaseViewPage() {
         <DetailRow label="Purchase Date" value={formatDate(record.purchaseDate)} />
         <DetailRow label="Document Price" value={formatBDT(record.documentPrice)} />
         <DetailRow label="Payment From" value={record.paymentFromAccount.accountName} />
+        <div className="border-b border-biz-border py-4">
+          <FormField label="Work Category" required error={categoryError || undefined} helper="Required for the PG/BG and Ongoing Work workflow.">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <SelectInput
+                className="flex-1"
+                value={category}
+                onChange={(event) => {
+                  setCategory(event.target.value);
+                  setCategoryError("");
+                  setSaved(false);
+                }}
+                placeholder="Select work category"
+                options={(categories.data ?? []).filter((item) => item.isActive).map((item) => ({ label: item.name, value: item.name }))}
+              />
+              <PrimaryButton type="button" onClick={saveCategory} disabled={updateMutation.isPending}>
+                <Save className="h-4 w-4" />
+                {updateMutation.isPending ? "Saving..." : "Save Category"}
+              </PrimaryButton>
+            </div>
+          </FormField>
+          {saved && <p className="mt-2 text-[12px] font-medium text-emerald-700">Work category saved. This purchase can now continue to PG/BG.</p>}
+          {updateMutation.isError && <p className="mt-2 text-[12px] font-medium text-biz-danger">Could not save work category. Please try again.</p>}
+        </div>
         <DetailRow label="Created At" value={formatDate(record.createdAt)} />
       </div>
 

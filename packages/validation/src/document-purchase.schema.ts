@@ -13,7 +13,7 @@ export const createDocumentPurchaseSchema = z
       .number({ invalid_type_error: "Enter a valid amount" })
       .positive("Document price must be greater than 0"),
     paymentFromAccountId: z.string().min(1, "Payment account is required"),
-    category: z.string().optional().or(z.literal("")),
+    category: z.string().trim().min(1, "Work category is required"),
     estimatedTenderAmount: z.coerce.number().optional(),
     submissionDate: z.string().optional().or(z.literal("")),
     openingDate: z.string().optional().or(z.literal("")),

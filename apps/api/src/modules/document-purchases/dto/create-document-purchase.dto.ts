@@ -42,9 +42,9 @@ export class CreateDocumentPurchaseDto {
   @IsNotEmpty()
   paymentFromAccountId!: string;
 
-  @IsOptional()
   @IsString()
-  category?: string;
+  @IsNotEmpty({ message: "Work category is required" })
+  category!: string;
 
   @IsOptional()
   @Type(() => Number)
