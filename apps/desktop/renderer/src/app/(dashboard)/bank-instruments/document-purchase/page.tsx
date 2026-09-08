@@ -176,20 +176,20 @@ export default function DocumentPurchaseListPage() {
   const meta = documentPurchases.data?.meta ?? { page: 1, limit: DEFAULT_LIMIT, total: 0, totalPages: 1 };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2.5 rounded-xl border border-biz-border bg-white px-4 py-3 shadow-card">
-        <div>
-          <h1 className="text-page-title text-biz-text">Document Purchase</h1>
+    <div className="flex flex-col gap-4 pb-4">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50/60 to-emerald-50/40 px-5 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-bold tracking-[-0.02em] text-biz-text">Document Purchase</h1>
         </div>
         <Link href="/bank-instruments/document-purchase/create" className="w-full sm:w-auto">
-          <PrimaryButton className="w-full sm:w-auto">
+          <PrimaryButton className="w-full shadow-[0_7px_16px_rgba(37,99,235,0.22)] transition-transform hover:-translate-y-0.5 sm:w-auto">
             <Plus className="h-4 w-4" />
             Add Document Purchase
           </PrimaryButton>
         </Link>
       </div>
 
-      <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <ModuleStatCard
           icon={Layers}
           iconClassName="bg-biz-blue-soft text-biz-blue"
@@ -220,15 +220,15 @@ export default function DocumentPurchaseListPage() {
         />
       </div>
 
-      <section className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-card">
-        <div className="flex flex-col gap-3 border-b border-blue-100 bg-blue-50/30 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-[15px] font-semibold text-biz-text">Costing to Document Purchase Workflow</h2>
-            <p className="mt-0.5 text-[12px] text-biz-muted">
+      <section className="overflow-hidden rounded-2xl border border-blue-200/80 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-col gap-3 border-b border-blue-100 bg-gradient-to-r from-blue-50/80 via-white to-white px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-[16px] font-bold tracking-[-0.01em] text-biz-text">Costing to Document Purchase Workflow</h2>
+            <p className="mt-1 text-[12px] leading-5 text-biz-muted">
               Tenders approved for costing appear here automatically before any purchase is recorded.
             </p>
           </div>
-          <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-biz-border bg-white p-1" role="tablist" aria-label="Document purchase request status">
+          <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-blue-100 bg-slate-100/70 p-1.5" role="tablist" aria-label="Document purchase request status">
             {REQUEST_STATUS_TABS.map((tab) => {
               const active = requestStatus === tab.status;
               return (
@@ -241,12 +241,12 @@ export default function DocumentPurchaseListPage() {
                     setRequestStatus(tab.status);
                     setRequestPage(1);
                   }}
-                  className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[11px] font-semibold transition-colors ${
-                    active ? "bg-biz-blue-soft text-biz-blue" : "text-biz-muted hover:bg-[#f8fafc] hover:text-biz-text"
+                  className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[11px] font-semibold transition-all ${
+                    active ? "bg-white text-biz-blue shadow-sm ring-1 ring-blue-100" : "text-biz-muted hover:bg-white/80 hover:text-biz-text"
                   }`}
                 >
                   {tab.label}
-                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? "bg-biz-blue-soft text-biz-blue" : "bg-white text-biz-muted"}`}>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? "bg-blue-100 text-biz-blue" : "bg-white text-biz-muted"}`}>
                     {requestStats.isLoading ? "–" : (requestStats.data?.[tab.countKey] ?? 0)}
                   </span>
                 </button>
@@ -255,18 +255,18 @@ export default function DocumentPurchaseListPage() {
           </div>
         </div>
 
-        {workflowError && <p role="alert" className="border-b border-biz-border px-4 py-2 text-[12px] text-biz-danger">{workflowError}</p>}
+        {workflowError && <p role="alert" className="border-b border-red-100 bg-red-50 px-5 py-2.5 text-[12px] font-medium text-biz-danger">{workflowError}</p>}
 
         <DataTable<DocumentPurchaseRequest>
           isLoading={requests.isLoading}
           data={requests.data?.items ?? []}
           rowKey={(row) => row.id}
-          containerClassName="overflow-x-auto"
+          containerClassName="overflow-x-auto bg-white [&_table]:min-w-[1050px]"
           stickyHeader
           columns={[
             { key: "tender", header: "Tender ID", render: (row) => row.tender.egpTenderId ?? "N/A" },
             { key: "organization", header: "Organization", render: (row) => row.tender.organizationMaster?.shortName ?? "Not assigned" },
-            { key: "work", header: "Tender / Work Name", render: (row) => <p className="line-clamp-2 max-w-[460px] leading-4" title={row.tender.workName}>{row.tender.workName}</p> },
+            { key: "work", header: "Tender / Work Name", render: (row) => <p className="line-clamp-2 max-w-[420px] font-medium leading-4 text-biz-text" title={row.tender.workName}>{row.tender.workName}</p> },
             { key: "fee", header: "Document Fee", render: (row) => row.tender.documentFee ? formatBDT(row.tender.documentFee) : "Not set" },
             { key: "deadline", header: "Purchase Deadline", render: (row) => row.tender.documentPurchaseDeadline ? formatDate(row.tender.documentPurchaseDeadline) : "Not set" },
             {
@@ -305,7 +305,7 @@ export default function DocumentPurchaseListPage() {
               key: "workflow-action",
               header: "Action",
               render: (row) => (
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex min-w-[132px] flex-col items-stretch gap-1.5">
                   {(row.status === DocumentPurchaseRequestStatus.PENDING_APPROVAL ||
                     row.status === DocumentPurchaseRequestStatus.REJECTED) &&
                     canApprove && (
@@ -313,7 +313,7 @@ export default function DocumentPurchaseListPage() {
                         type="button"
                         disabled={approveRequest.isPending}
                         onClick={() => void approve(row)}
-                        className="inline-flex h-8 items-center gap-1 rounded-md bg-biz-blue px-2.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                        className="inline-flex h-8 items-center justify-center gap-1 rounded-lg bg-biz-blue px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50"
                       >
                         <Check className="h-3.5 w-3.5" /> Approve for Purchase
                       </button>
@@ -326,7 +326,7 @@ export default function DocumentPurchaseListPage() {
                         setRejecting(row);
                         setRejectionReason("");
                       }}
-                      className="inline-flex h-8 items-center gap-1 rounded-md border border-biz-border px-2.5 text-[11px] font-semibold text-biz-danger disabled:opacity-50"
+                      className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50/70 px-2.5 text-[11px] font-semibold text-biz-danger transition-colors hover:bg-red-50 disabled:opacity-50"
                     >
                       <X className="h-3.5 w-3.5" /> Reject
                     </button>
@@ -334,7 +334,7 @@ export default function DocumentPurchaseListPage() {
                   {row.status === DocumentPurchaseRequestStatus.APPROVED && canCreate && (
                     <Link
                       href={`/bank-instruments/document-purchase/create?tenderId=${row.tenderId}&requestId=${row.id}`}
-                      className="inline-flex h-8 items-center gap-1 rounded-md bg-biz-success px-2.5 text-[11px] font-semibold text-white"
+                      className="inline-flex h-8 items-center justify-center gap-1 rounded-lg bg-biz-success px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:brightness-95"
                     >
                       <ShoppingCart className="h-3.5 w-3.5" /> Purchase Document
                     </Link>
@@ -342,7 +342,7 @@ export default function DocumentPurchaseListPage() {
                   {row.status === DocumentPurchaseRequestStatus.PURCHASED && row.documentPurchaseId && (
                     <Link
                       href={`/bank-instruments/document-purchase/${row.documentPurchaseId}`}
-                      className="inline-flex h-8 items-center gap-1 rounded-md border border-biz-border px-2.5 text-[11px] font-semibold text-biz-text"
+                      className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50/60 px-2.5 text-[11px] font-semibold text-biz-blue transition-colors hover:bg-blue-50"
                     >
                       <Eye className="h-3.5 w-3.5" /> View Purchase
                     </Link>
@@ -353,7 +353,7 @@ export default function DocumentPurchaseListPage() {
           ]}
         />
         {(requests.data?.meta.total ?? 0) > 5 && (
-          <div className="border-t border-biz-border">
+          <div className="border-t border-blue-100 bg-slate-50/60">
             <Pagination
               page={requests.data?.meta.page ?? requestPage}
               limit={requests.data?.meta.limit ?? requestLimit}
@@ -370,9 +370,9 @@ export default function DocumentPurchaseListPage() {
         )}
       </section>
 
-      <FilterBar className="shrink-0 rounded-xl border border-biz-border bg-white p-3 shadow-card">
+      <FilterBar className="shrink-0 rounded-2xl border border-blue-100 bg-gradient-to-r from-slate-50 via-white to-blue-50/40 p-4 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
         <div className="flex w-full flex-col gap-1 sm:w-auto">
-          <label className="text-[12px] font-medium text-biz-muted">Date Range</label>
+          <label className="text-[12px] font-semibold text-slate-600">Date Range</label>
           <div className="flex items-center gap-2">
             <DateInput
               value={draft.fromDate}
@@ -389,7 +389,7 @@ export default function DocumentPurchaseListPage() {
         </div>
 
         <div className="flex w-full flex-col gap-1 sm:w-[135px]">
-          <label className="text-[12px] font-medium text-biz-muted">Purchase Type</label>
+          <label className="text-[12px] font-semibold text-slate-600">Purchase Type</label>
           <SelectInput
             className="h-10 w-full"
             placeholder="All"
@@ -403,7 +403,7 @@ export default function DocumentPurchaseListPage() {
         </div>
 
         <div className="flex w-full flex-col gap-1 sm:w-[150px]">
-          <label className="text-[12px] font-medium text-biz-muted">Organization</label>
+          <label className="text-[12px] font-semibold text-slate-600">Organization</label>
           <SelectInput
             className="h-10 w-full"
             placeholder="All"
@@ -414,7 +414,7 @@ export default function DocumentPurchaseListPage() {
         </div>
 
         <div className="flex w-full flex-col gap-1 sm:w-[145px]">
-          <label className="text-[12px] font-medium text-biz-muted">Payment From</label>
+          <label className="text-[12px] font-semibold text-slate-600">Payment From</label>
           <SelectInput
             className="h-10 w-full"
             placeholder="All"
@@ -425,7 +425,7 @@ export default function DocumentPurchaseListPage() {
         </div>
 
         <div className="flex w-full min-w-0 flex-1 flex-col gap-1 sm:min-w-[180px]">
-          <label className="text-[12px] font-medium text-biz-muted">Search Tender ID / Work Name</label>
+          <label className="text-[12px] font-semibold text-slate-600">Search Tender ID / Work Name</label>
           <TextInput
             icon={Search}
             placeholder="Search..."
@@ -440,16 +440,16 @@ export default function DocumentPurchaseListPage() {
           onClick={handleResetFilters}
           aria-label="Reset filters"
           title="Reset filters"
-          className="h-10 w-10 shrink-0"
+          className="h-10 w-10 shrink-0 self-end border-blue-100 bg-white text-biz-blue shadow-sm hover:bg-blue-50"
         >
           <RotateCcw className="h-4 w-4" />
         </IconButton>
       </FilterBar>
 
-      <div className="flex flex-col overflow-hidden rounded-xl border border-biz-border bg-white shadow-card">
-        <div className="flex shrink-0 items-center justify-between border-b border-biz-border bg-[#f8fafc] px-4 py-2.5">
-          <h3 className="text-[15px] font-semibold text-biz-text">Purchase List</h3>
-          <SecondaryButton>
+      <div className="flex flex-col overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+        <div className="flex shrink-0 items-center justify-between border-b border-blue-100 bg-gradient-to-r from-slate-50 to-blue-50/50 px-5 py-3.5">
+          <h3 className="text-[16px] font-bold tracking-[-0.01em] text-biz-text">Purchase List</h3>
+          <SecondaryButton className="border-blue-200 bg-white text-biz-blue shadow-sm hover:bg-blue-50">
             <Download className="h-4 w-4" />
             Export
           </SecondaryButton>
@@ -460,7 +460,7 @@ export default function DocumentPurchaseListPage() {
           data={items}
           rowKey={(row) => row.id}
           onRowClick={(row) => router.push(`/bank-instruments/document-purchase/${row.id}`)}
-          containerClassName="overflow-x-auto"
+          containerClassName="overflow-x-auto bg-white [&_table]:min-w-[1000px]"
           stickyHeader
           columns={[
             {
@@ -480,7 +480,7 @@ export default function DocumentPurchaseListPage() {
             },
             { key: "tenderId", header: "Tender ID", render: (row) => row.tenderId ?? "N/A" },
             { key: "org", header: "Organization", render: (row) => row.organizationMaster.shortName },
-            { key: "work", header: "Tender / Work Name", render: (row) => <p className="line-clamp-2 max-w-[460px] leading-4" title={row.tenderWorkName}>{row.tenderWorkName}</p> },
+            { key: "work", header: "Tender / Work Name", render: (row) => <p className="line-clamp-2 max-w-[460px] font-medium leading-4 text-biz-text" title={row.tenderWorkName}>{row.tenderWorkName}</p> },
             { key: "date", header: "Purchase Date", render: (row) => formatDate(row.purchaseDate) },
             { key: "price", header: "Document Price", render: (row) => formatBDT(row.documentPrice) },
             { key: "payment", header: "Payment From", render: (row) => row.paymentFromAccount.accountName },
@@ -489,7 +489,7 @@ export default function DocumentPurchaseListPage() {
               header: "Action",
               render: (row) => (
                 <Link href={`/bank-instruments/document-purchase/${row.id}`}>
-                  <IconButton aria-label="View">
+                  <IconButton aria-label="View" className="border-blue-100 bg-blue-50/60 text-biz-blue hover:bg-blue-100">
                     <Eye className="h-4 w-4" />
                   </IconButton>
                 </Link>
@@ -498,7 +498,7 @@ export default function DocumentPurchaseListPage() {
           ]}
         />
 
-        <div className="shrink-0 border-t border-biz-border">
+        <div className="shrink-0 border-t border-blue-100 bg-slate-50/60">
           <Pagination
             page={meta.page}
             limit={meta.limit}

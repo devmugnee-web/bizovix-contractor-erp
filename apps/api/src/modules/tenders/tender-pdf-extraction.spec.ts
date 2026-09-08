@@ -41,6 +41,26 @@ describe("Tender PDF extraction", () => {
     ], "Invitation for : Tender - Single Lot")).toBe(100000);
   });
 
+  it("reads the security amount when Lot and No. are split across header lines", () => {
+    const splitLotHeader = [
+      ...securityTableHeader.slice(1),
+      tableItem("Lot", 40, 69, 15),
+      tableItem("No.", 40, 53, 16),
+    ];
+    expect(extractTenderSecurityFromTable([
+      [...splitLotHeader, ...singleLotRow],
+      [],
+    ], "Invitation for : Tender - Single Lot")).toBe(100000);
+  });
+
+  it("reads a security table header split across consecutive PDF pages", () => {
+    const continuedHeader = securityTableHeader.filter((item) => item.str !== "Tender/Proposal");
+    expect(extractTenderSecurityFromTable([
+      [tableItem("Tender/Proposal", 413, 12, 53)],
+      [...continuedHeader, ...singleLotRow],
+    ], "Invitation for : Tender - Single Lot")).toBe(100000);
+  });
+
   it("does not substitute the lot number, location number or adjacent date for a missing amount", () => {
     expect(extractTenderSecurityFromTable([[...securityTableHeader, ...singleLotRow.filter((item) => item.str !== "100000")]], "")).toBeUndefined();
   });

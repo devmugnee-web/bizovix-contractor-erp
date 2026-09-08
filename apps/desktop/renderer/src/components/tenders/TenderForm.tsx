@@ -29,6 +29,7 @@ import {
   TENDER_PROCUREMENT_METHODS,
   type TenderDetail,
   type TenderDuplicateConflict,
+  type TenderPdfExtractionResult,
 } from "@bizovix/types";
 import { Modal } from "@/components/layout/Modal";
 
@@ -65,6 +66,17 @@ function localDate(): string {
 
 function firstError(errors: Record<string, string[]> | undefined, key: string): string | undefined {
   return errors?.[key]?.[0];
+}
+
+function unwrapPdfExtractionResult(
+  response: TenderPdfExtractionResult,
+): TenderPdfExtractionResult {
+  if (typeof response.extractedFieldCount === "number") return response;
+
+  const nested = (response as unknown as { data?: TenderPdfExtractionResult }).data;
+  if (nested && typeof nested.extractedFieldCount === "number") return nested;
+
+  throw new Error("The tender PDF response did not contain readable form data.");
 }
 
 function duplicateFromError(error: unknown, fallbackTenderId: string): DuplicateTenderState | null {
@@ -129,7 +141,8 @@ export function TenderForm({
     register,
     handleSubmit,
     clearErrors,
-    setValue,
+    getValues,
+    reset,
     formState: { errors },
   } = useForm<TenderFormInput, unknown, CreateTenderFormValues>({
     resolver: zodResolver(createTenderSchema),
@@ -176,44 +189,37 @@ export function TenderForm({
 
     setIsReadingPdf(true);
     try {
-      const result = await extractTenderPdf(file);
+      const result = unwrapPdfExtractionResult(await extractTenderPdf(file));
       const { data } = result;
-      for (const key of ["paName", "paDesignation", "paPhone", "paAddress", "noticeOrganization", "documentFee", "estimatedTenderSecurityAmount"] as const) {
-        if (data[key] !== undefined) setValue(key, data[key], { shouldDirty: true, shouldValidate: true });
-      }
-      if (data.preBidEndDate) {
-        setValue("preBidEndDate", new Date(new Date(data.preBidEndDate).getTime() + 6 * 60 * 60 * 1000).toISOString().slice(0, 16), { shouldDirty: true });
-      }
-      if (data.egpTenderId) {
-        setValue("egpTenderId", data.egpTenderId, { shouldDirty: true, shouldValidate: true });
-        clearErrors("egpTenderId");
-      }
-      if (data.workName) {
-        setValue("workName", data.workName, { shouldDirty: true, shouldValidate: true });
-        clearErrors("workName");
-      }
-      if (data.tenderType) {
-        setValue("tenderType", data.tenderType, { shouldDirty: true, shouldValidate: true });
-        clearErrors("tenderType");
-      }
-      if (data.procurementMethod) {
-        setValue("procurementMethod", data.procurementMethod, {
-          shouldDirty: true,
-          shouldValidate: true,
-        });
-        clearErrors("procurementMethod");
-      }
-      if (data.submissionDeadline) {
-        setValue("submissionDeadline", data.submissionDeadline, {
-          shouldDirty: true,
-          shouldValidate: true,
-        });
-        clearErrors("submissionDeadline");
-      }
-      if (data.remarks) {
-        setValue("remarks", data.remarks, { shouldDirty: true, shouldValidate: true });
-        clearErrors("remarks");
-      }
+      const current = getValues();
+      const preBidEndDate = data.preBidEndDate
+        ? new Date(new Date(data.preBidEndDate).getTime() + 6 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 16)
+        : current.preBidEndDate;
+
+      reset(
+        {
+          ...current,
+          egpTenderId: data.egpTenderId ?? current.egpTenderId,
+          documentFee: data.documentFee ?? current.documentFee,
+          estimatedTenderSecurityAmount:
+            data.estimatedTenderSecurityAmount ?? current.estimatedTenderSecurityAmount,
+          preBidEndDate,
+          paName: data.paName ?? current.paName,
+          paDesignation: data.paDesignation ?? current.paDesignation,
+          paPhone: data.paPhone ?? current.paPhone,
+          paAddress: data.paAddress ?? current.paAddress,
+          noticeOrganization: data.noticeOrganization ?? current.noticeOrganization,
+          workName: data.workName ?? current.workName,
+          tenderType: data.tenderType ?? current.tenderType,
+          procurementMethod: data.procurementMethod ?? current.procurementMethod,
+          submissionDeadline: data.submissionDeadline ?? current.submissionDeadline,
+          remarks: data.remarks ?? current.remarks,
+        },
+        { keepDefaultValues: true },
+      );
+      clearErrors();
 
       const warningText = result.warnings.length > 0 ? ` ${result.warnings.join(". ")}.` : "";
       setPdfImportNotice(
@@ -221,7 +227,7 @@ export function TenderForm({
       );
     } catch (error) {
       setPdfImportError(
-        error instanceof ApiError ? error.message : "Could not read this tender PDF.",
+        error instanceof Error ? error.message : "Could not read this tender PDF.",
       );
     } finally {
       setIsReadingPdf(false);

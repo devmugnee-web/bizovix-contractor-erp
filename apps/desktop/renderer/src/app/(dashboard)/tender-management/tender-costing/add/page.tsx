@@ -352,6 +352,9 @@ function defaultShippingRate(method: TenderCostingShippingMethod): string {
   return method.endsWith("AIR") ? "800" : "400";
 }
 
+const DEFAULT_VAT_PERCENT = "10";
+const DEFAULT_TAX_PERCENT = "5";
+
 function countryOptionsWithCurrent(country: string) {
   return country && !COUNTRY_OPTIONS.some((option) => option.value === country)
     ? [{ value: country, label: country }, ...COUNTRY_OPTIONS]
@@ -381,8 +384,8 @@ function blankItem(
     localSupplierName: "",
     localUnitPrice: "0",
     localDiscountPercent: "",
-    localVatPercent: "10",
-    localTaxPercent: "5",
+    localVatPercent: DEFAULT_VAT_PERCENT,
+    localTaxPercent: DEFAULT_TAX_PERCENT,
     localTransportCost: "",
     localOtherCost: "",
     foreignSupplierName: "",
@@ -409,8 +412,8 @@ function blankItem(
     customsDutyPercent: "",
     regulatoryDutyPercent: "",
     supplementaryDutyPercent: "",
-    foreignVatPercent: "10",
-    foreignTaxPercent: "5",
+    foreignVatPercent: DEFAULT_VAT_PERCENT,
+    foreignTaxPercent: DEFAULT_TAX_PERCENT,
     cnfCharge: "",
     portHandlingCharge: "",
     bankLcCharge: "",
@@ -741,8 +744,8 @@ export default function TenderCostingEditorPage() {
   const [profitSettingsOpen, setProfitSettingsOpen] = React.useState(false);
   const [localTargetMargin, setLocalTargetMargin] = React.useState("10");
   const [foreignTargetMargin, setForeignTargetMargin] = React.useState("10");
-  const [commonVatPercent, setCommonVatPercent] = React.useState("");
-  const [commonTaxPercent, setCommonTaxPercent] = React.useState("");
+  const [commonVatPercent, setCommonVatPercent] = React.useState(DEFAULT_VAT_PERCENT);
+  const [commonTaxPercent, setCommonTaxPercent] = React.useState(DEFAULT_TAX_PERCENT);
   const [bulkForeign, setBulkForeign] = React.useState<BulkForeignForm>({
     country: "China",
     currency: DEFAULT_CHINA_CURRENCY,
@@ -831,8 +834,10 @@ export default function TenderCostingEditorPage() {
             localSupplierName: item.localSupplierName ?? "",
             localUnitPrice: compactInputNumber(item.localUnitPrice),
             localDiscountPercent: compactInputNumber(item.localDiscountPercent, true),
-            localVatPercent: compactInputNumber(item.localVatPercent, true),
-            localTaxPercent: compactInputNumber(item.localTaxPercent, true),
+            localVatPercent:
+              compactInputNumber(item.localVatPercent, true) || DEFAULT_VAT_PERCENT,
+            localTaxPercent:
+              compactInputNumber(item.localTaxPercent, true) || DEFAULT_TAX_PERCENT,
             localTransportCost: compactInputNumber(item.localTransportCost, true),
             localOtherCost: compactInputNumber(item.localOtherCost, true),
             foreignSupplierName: item.foreignSupplierName ?? "",
@@ -859,8 +864,10 @@ export default function TenderCostingEditorPage() {
             customsDutyPercent: compactInputNumber(item.customsDutyPercent, true),
             regulatoryDutyPercent: compactInputNumber(item.regulatoryDutyPercent, true),
             supplementaryDutyPercent: compactInputNumber(item.supplementaryDutyPercent, true),
-            foreignVatPercent: compactInputNumber(item.foreignVatPercent, true),
-            foreignTaxPercent: compactInputNumber(item.foreignTaxPercent, true),
+            foreignVatPercent:
+              compactInputNumber(item.foreignVatPercent, true) || DEFAULT_VAT_PERCENT,
+            foreignTaxPercent:
+              compactInputNumber(item.foreignTaxPercent, true) || DEFAULT_TAX_PERCENT,
             cnfCharge: compactInputNumber(item.cnfCharge, true),
             portHandlingCharge: compactInputNumber(item.portHandlingCharge, true),
             bankLcCharge: compactInputNumber(item.bankLcCharge, true),
@@ -896,16 +903,16 @@ export default function TenderCostingEditorPage() {
     setCommonVatPercent(
       firstPricedItem
         ? useForeignRates
-          ? compactInputNumber(firstPricedItem.foreignVatPercent, true)
-          : compactInputNumber(firstPricedItem.localVatPercent, true)
-        : "",
+          ? compactInputNumber(firstPricedItem.foreignVatPercent, true) || DEFAULT_VAT_PERCENT
+          : compactInputNumber(firstPricedItem.localVatPercent, true) || DEFAULT_VAT_PERCENT
+        : DEFAULT_VAT_PERCENT,
     );
     setCommonTaxPercent(
       firstPricedItem
         ? useForeignRates
-          ? compactInputNumber(firstPricedItem.foreignTaxPercent, true)
-          : compactInputNumber(firstPricedItem.localTaxPercent, true)
-        : "",
+          ? compactInputNumber(firstPricedItem.foreignTaxPercent, true) || DEFAULT_TAX_PERCENT
+          : compactInputNumber(firstPricedItem.localTaxPercent, true) || DEFAULT_TAX_PERCENT
+        : DEFAULT_TAX_PERCENT,
     );
     const firstForeignItem = record.items.find(
       (item) => item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN",
@@ -1179,10 +1186,10 @@ export default function TenderCostingEditorPage() {
           {
             ...newItem,
             marginPercent: sourcingType === "FOREIGN" ? foreignTargetMargin : localTargetMargin,
-            localVatPercent: commonVatPercent,
-            localTaxPercent: commonTaxPercent,
-            foreignVatPercent: commonVatPercent,
-            foreignTaxPercent: commonTaxPercent,
+            localVatPercent: commonVatPercent || DEFAULT_VAT_PERCENT,
+            localTaxPercent: commonTaxPercent || DEFAULT_TAX_PERCENT,
+            foreignVatPercent: commonVatPercent || DEFAULT_VAT_PERCENT,
+            foreignTaxPercent: commonTaxPercent || DEFAULT_TAX_PERCENT,
             ...(sourcingType === "FOREIGN" ? currentForeignDefaults() : {}),
           },
         ],
@@ -1271,10 +1278,10 @@ export default function TenderCostingEditorPage() {
               templateItem.sourcingType === "FOREIGN"
                 ? foreignTargetMargin
                 : localTargetMargin,
-            localVatPercent: commonVatPercent,
-            localTaxPercent: commonTaxPercent,
-            foreignVatPercent: commonVatPercent,
-            foreignTaxPercent: commonTaxPercent,
+            localVatPercent: commonVatPercent || DEFAULT_VAT_PERCENT,
+            localTaxPercent: commonTaxPercent || DEFAULT_TAX_PERCENT,
+            foreignVatPercent: commonVatPercent || DEFAULT_VAT_PERCENT,
+            foreignTaxPercent: commonTaxPercent || DEFAULT_TAX_PERCENT,
             ...(templateItem.sourcingType === "FOREIGN" ? currentForeignDefaults() : {}),
             ...(extractedUnitPrice
               ? templateItem.sourcingType === "FOREIGN"
@@ -3265,6 +3272,16 @@ function CostedItemsList({
   items: CostingItemForm[];
   onEdit: (item: CostingItemForm) => void;
 }) {
+  const totals = items.reduce(
+    (summary, item) => {
+      const preview = calculateItemPreview(item);
+      summary.grandTotal += preview.selectedGrandTotal;
+      summary.profit += preview.totalProfit;
+      return summary;
+    },
+    { grandTotal: 0, profit: 0 },
+  );
+
   return (
     <div className="overflow-hidden rounded-lg border border-biz-border bg-biz-surface shadow-card">
       <div className="flex items-center justify-between gap-3 border-b border-biz-border px-4 py-3">
@@ -3353,6 +3370,24 @@ function CostedItemsList({
           })}
         </tbody>
       </table>
+      <div className="flex flex-col items-stretch justify-end gap-2 border-t border-biz-border bg-biz-bg/70 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex min-w-[190px] items-center justify-between gap-5 rounded-md border border-biz-blue/20 bg-biz-surface px-3 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-biz-muted">
+            Total Grand Total
+          </span>
+          <span className="text-[13px] font-bold text-biz-blue">
+            BDT {formatCompactMoney(roundMoney(totals.grandTotal))}
+          </span>
+        </div>
+        <div className="flex min-w-[175px] items-center justify-between gap-5 rounded-md border border-biz-success/25 bg-biz-success/5 px-3 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-biz-muted">
+            Total Profit
+          </span>
+          <span className="text-[13px] font-bold text-biz-success">
+            BDT {formatCompactMoney(roundMoney(totals.profit))}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

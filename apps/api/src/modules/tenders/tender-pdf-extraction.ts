@@ -306,7 +306,8 @@ export function extractTenderSecurityFromTable(pages: NoticeTextItem[][], text: 
   // Multi-page tables without an explicit single-lot notice may contain unseen continuation rows.
   if (pages.length > 1 && !/Invitation\s+for\s*:\s*Tender\s*[-–—]\s*Single\s+Lot\b/i.test(singleLineText(text))) return undefined;
   const rows: Array<number | undefined> = [];
-  for (const page of pages) {
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+    const page = pages[pageIndex];
     const items = page.filter((item) => item.str.trim());
     for (const security of items.filter((item) => /\bsecurity\b/i.test(item.str))) {
       const center = security.x + security.width / 2;
@@ -316,13 +317,36 @@ export function extractTenderSecurityFromTable(pages: NoticeTextItem[][], text: 
         && Math.abs(item.y - security.y) <= security.fontSize * 5
         && /[A-Za-z]/.test(item.str),
       ).sort((a, b) => b.y - a.y);
-      const label = header.map((item) => item.str).join(" ");
+      let label = header.map((item) => item.str).join(" ");
+      if (!/Tender\s*\/\s*Proposal\s+security/i.test(label) && pageIndex > 0) {
+        const previousTenderLabel = pages[pageIndex - 1].find((item) =>
+          /^Tender\s*\/\s*Proposal$/i.test(item.str.trim())
+          && item.y <= item.fontSize * 5
+          && Math.abs(item.x + item.width / 2 - center) <= Math.max(10, security.fontSize * 1.5),
+        );
+        if (previousTenderLabel) label = `${previousTenderLabel.str} ${label}`;
+      }
       if (!/Tender\s*\/\s*Proposal\s+security\s*\(\s*Amount\s+in\s+BDT\s*\)/i.test(label)) continue;
       const top = Math.max(...header.map((item) => item.y));
       const bottom = Math.min(...header.map((item) => item.y));
       const left = Math.min(...header.map((item) => item.x));
       const right = Math.max(...header.map((item) => item.x + item.width));
-      const lotHeader = items.find((item) => /^Lot\s+No\.?$/i.test(item.str.trim()) && item.y >= bottom - tolerance && item.y <= top + tolerance);
+      const lotHeader = items.find((item) =>
+        /^Lot\s+No\.?$/i.test(item.str.trim())
+        && item.y >= bottom - tolerance
+        && item.y <= top + tolerance,
+      ) ?? items.find((item) => {
+        if (!/^Lot$/i.test(item.str.trim()) || item.y < bottom - tolerance || item.y > top + tolerance) {
+          return false;
+        }
+        const center = item.x + item.width / 2;
+        return items.some((part) =>
+          /^No\.?$/i.test(part.str.trim())
+          && part.y >= bottom - tolerance
+          && part.y <= top + tolerance
+          && Math.abs(part.x + part.width / 2 - center) <= Math.max(tolerance, item.fontSize),
+        );
+      });
       if (!lotHeader) continue;
       const sectionEnd = items.filter((item) => item.y < bottom && /Procuring\s+Entity\s+Details|Official\s+Inviting/i.test(item.str));
       const endY = sectionEnd.length ? Math.max(...sectionEnd.map((item) => item.y)) : 0;
@@ -485,11 +509,11 @@ export async function extractTenderPdf(
     }
 
     const data = parseTenderPdfText(text);
-    if (data.estimatedTenderSecurityAmount === undefined) {
-      const positioned = await withTimeout(extractTextItems(pdf), "Tender PDF took too long to read");
-      const securityAmount = extractTenderSecurityFromTable(positioned.items, text);
-      if (securityAmount !== undefined) data.estimatedTenderSecurityAmount = securityAmount;
-    }
+    const positioned = await withTimeout(extractTextItems(pdf), "Tender PDF took too long to read");
+    const securityAmount = extractTenderSecurityFromTable(positioned.items, text);
+    // The notice table is authoritative: this is the value shown under
+    // "Tender/Proposal Security (Amount in BDT)", not another security figure.
+    if (securityAmount !== undefined) data.estimatedTenderSecurityAmount = securityAmount;
     const extractedFieldCount = Object.values(data).filter((value) => value !== undefined && value !== "").length;
     if (extractedFieldCount === 0) {
       throw new BadRequestException("No supported tender information was found in this PDF");
