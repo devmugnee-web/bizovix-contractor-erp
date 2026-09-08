@@ -9,11 +9,19 @@ import { CreateCmsWorkDto } from "./dto/create-cms-work.dto";
 import { QueryCmsWorkDto } from "./dto/query-cms-work.dto";
 import { CreateWorkContactDto } from "./dto/create-work-contact.dto";
 
-const includeRelations = { organizationMaster: { select: { id: true, shortName: true, fullName: true } } } satisfies Prisma.CmsWorkInclude;
+const includeRelations = {
+  organizationMaster: { select: { id: true, shortName: true, fullName: true } },
+  tender: { select: { egpTenderId: true } },
+} satisfies Prisma.CmsWorkInclude;
 type WorkRecord = Prisma.CmsWorkGetPayload<{ include: typeof includeRelations }>;
 
 function toDto(record: WorkRecord) {
-  return { ...record, contractValue: record.contractValue.toFixed(2) };
+  const { tender, ...work } = record;
+  return {
+    ...work,
+    tenderNumber: tender?.egpTenderId ?? null,
+    contractValue: record.contractValue.toFixed(2),
+  };
 }
 
 @Injectable()
@@ -32,6 +40,7 @@ export class CmsWorksService {
       } } : {}),
       ...(query.search ? { OR: [
         { workName: { contains: query.search, mode: "insensitive" } },
+        { tender: { is: { egpTenderId: { contains: query.search, mode: "insensitive" } } } },
         { organizationMaster: { shortName: { contains: query.search, mode: "insensitive" } } },
         { organizationMaster: { fullName: { contains: query.search, mode: "insensitive" } } },
       ] } : {}),
@@ -82,7 +91,7 @@ export class CmsWorksService {
       include: {
         organizationMaster: { select: { id: true, shortName: true, fullName: true } },
         pgBgWorkflow: { include: { contact: true } },
-        tender: { select: tenderPaSelect },
+        tender: { select: { ...tenderPaSelect, egpTenderId: true } },
         contracts: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     });
@@ -144,6 +153,8 @@ export class CmsWorksService {
     return {
       project: {
         id: work.id,
+        tenderId: work.tenderId,
+        tenderNumber: work.tender?.egpTenderId ?? null,
         workName: work.workName,
         workCategory: work.workCategory,
         contractValue: work.contractValue.toFixed(2),

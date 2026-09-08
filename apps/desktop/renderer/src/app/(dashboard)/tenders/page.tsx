@@ -126,13 +126,10 @@ export default function TendersListPage() {
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const notice = params.get("notice");
-    if (!notice) return;
-    const timer = window.setTimeout(() => {
-      setSuccessTitle("Tender Saved");
-      setSuccessMessage(notice);
-    }, 0);
-    return () => window.clearTimeout(timer);
+    if (!params.has("notice")) return;
+    params.delete("notice");
+    const queryString = params.toString();
+    window.history.replaceState(null, "", `/tenders${queryString ? `?${queryString}` : ""}`);
   }, []);
 
   React.useEffect(() => {
@@ -154,13 +151,13 @@ export default function TendersListPage() {
     window.history.replaceState(null, "", `${url.pathname}${url.search}`);
   }
 
-  async function approveSelectedTender() {
-    if (!approvalTender) return;
+  async function approveSelectedTender(tender: TenderRecord) {
+    setApprovalTender(tender);
     setApprovalError("");
     try {
       const result = await approveForCosting.mutateAsync({
-        id: approvalTender.id,
-        payload: { version: approvalTender.version },
+        id: tender.id,
+        payload: { version: tender.version },
       });
       setApprovalTender(null);
       router.push(`/tender-management/tender-costing?costingId=${result.costing.id}`);
@@ -536,16 +533,19 @@ export default function TendersListPage() {
               render: (row) => {
                 if (row.costingApprovalStatus === "PENDING_APPROVAL") {
                   return (
-                    <PrimaryButton
-                      className="h-7 max-w-full gap-1 px-1.5 text-[10px] xl:px-2"
-                      onClick={() => {
-                        setApprovalError("");
-                        setApprovalTender(row);
-                      }}
-                    >
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                      Approve
-                    </PrimaryButton>
+                    <div>
+                      <PrimaryButton
+                        className="h-7 max-w-full gap-1 px-1.5 text-[10px] xl:px-2"
+                        disabled={approveForCosting.isPending}
+                        onClick={() => void approveSelectedTender(row)}
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        {approveForCosting.isPending && approvalTender?.id === row.id ? "Approving..." : "Approve"}
+                      </PrimaryButton>
+                      {approvalTender?.id === row.id && approvalError && (
+                        <p className="mt-1 max-w-40 text-[10px] leading-4 text-biz-danger">{approvalError}</p>
+                      )}
+                    </div>
                   );
                 }
                 const meta = COSTING_APPROVAL_META[row.costingApprovalStatus];
@@ -687,45 +687,10 @@ export default function TendersListPage() {
           mode="create"
           embedded
           onCancel={() => setCreateTenderOpen(false)}
-          onCompleted={(message) => {
+          onCompleted={() => {
             setCreateTenderOpen(false);
-            setSuccessTitle("Tender Saved");
-            setSuccessMessage(message);
           }}
         />
-      </Modal>
-
-      <Modal
-        open={!!approvalTender}
-        onClose={() => !approveForCosting.isPending && setApprovalTender(null)}
-        title="Approve for Tender Costing?"
-      >
-        {approvalTender && (
-          <div className="flex flex-col gap-4">
-            <div className="rounded-md border border-biz-border bg-biz-bg p-3 text-[13px] text-biz-text">
-              <p className="font-semibold">
-                {approvalTender.egpTenderId} · {approvalTender.workName}
-              </p>
-              <p className="mt-1 text-biz-muted">
-                A ready costing record will be created and placed at the top of the Tender Costing
-                list.
-              </p>
-            </div>
-            {approvalError && <p className="text-[12px] text-biz-danger">{approvalError}</p>}
-            <div className="flex justify-end gap-2">
-              <SecondaryButton
-                disabled={approveForCosting.isPending}
-                onClick={() => setApprovalTender(null)}
-              >
-                Cancel
-              </SecondaryButton>
-              <PrimaryButton disabled={approveForCosting.isPending} onClick={approveSelectedTender}>
-                <ShieldCheck className="h-4 w-4" />
-                {approveForCosting.isPending ? "Approving..." : "Approve for Costing"}
-              </PrimaryButton>
-            </div>
-          </div>
-        )}
       </Modal>
 
       <SuccessPopup

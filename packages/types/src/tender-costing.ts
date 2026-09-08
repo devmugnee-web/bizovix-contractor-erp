@@ -12,6 +12,7 @@ export type TenderCostingShippingRateBasis = "PER_CBM" | "PER_KG" | "FLAT";
 export type TenderCostingLcAllocationMethod = "EQUAL" | "WEIGHT" | "VALUE";
 
 export interface TenderCostingPdfExtractedRow {
+  itemNo?: string;
   description: string;
   unit?: string;
   quantity?: number;

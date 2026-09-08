@@ -14,7 +14,7 @@ export const createTenderSchema = z.object({
   paAddress: optionalTrimmedText(1000),
   noticeOrganization: optionalTrimmedText(300),
   egpTenderId: z.string().trim().min(1, "Tender ID is required").max(100, "Tender ID is too long"),
-  workName: z.string().trim().min(1, "Product / work name is required").max(300),
+  workName: z.string().trim().min(1, "Product / work name is required").max(1000),
   tenderType: optionalTrimmedText(100),
   procurementMethod: z.enum(TENDER_PROCUREMENT_METHODS).default("OTM"),
   submissionDeadline: z.string().min(1, "Closing / submission date is required"),

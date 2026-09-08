@@ -521,7 +521,7 @@ export function TenderForm({
               <FormField label="PA Designation" htmlFor="paDesignation" error={errors.paDesignation?.message}><TextInput id="paDesignation" {...register("paDesignation")} /></FormField>
               <FormField label="PA Phone Number" htmlFor="paPhone" error={errors.paPhone?.message}><TextInput id="paPhone" type="tel" {...register("paPhone")} /></FormField>
               <div className="sm:col-span-2">
-                <FormField label="PA Address" htmlFor="paAddress" error={errors.paAddress?.message}><TextInput id="paAddress" {...register("paAddress")} /></FormField>
+                <FormField label="PE Address" htmlFor="paAddress" error={errors.paAddress?.message}><TextInput id="paAddress" {...register("paAddress")} /></FormField>
               </div>
             </div>
             <FormField label="Remarks" error={errors.remarks?.message}>

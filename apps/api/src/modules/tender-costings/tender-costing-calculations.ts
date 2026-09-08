@@ -229,11 +229,13 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
     .plus(foreignOtherCost)
     .toDecimalPlaces(2);
   const simplifiedLcCostBeforeProfit = foreignProductValueBdt
+    .plus(foreignOriginTransportBdt)
     .plus(bankLcCharge)
     .plus(portHandlingCharge)
     .plus(foreignFreightCost)
     .plus(cnfCharge)
     .plus(foreignLocalTransportCost)
+    .plus(domesticTransportCost)
     .plus(foreignOtherCost)
     .toDecimalPlaces(2);
 

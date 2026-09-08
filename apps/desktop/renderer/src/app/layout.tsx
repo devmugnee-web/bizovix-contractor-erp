@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { NumericInputBehavior } from "@/components/providers/NumericInputBehavior";
 import { AppProviders } from "@/components/providers/AppProviders";
 import "./globals.css";
 
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
+        <NumericInputBehavior />
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

@@ -191,7 +191,7 @@ export default function TenderDetailPage() {
             ["PA Name", t.paName || "Not set"],
             ["PA Designation", t.paDesignation || "Not set"],
             ["PA Phone", t.paPhone || "Not set"],
-            ["PA Address", t.paAddress || "Not set"],
+            ["PE Address", t.paAddress || "Not set"],
           ].map(([label, value]) => (
             <div key={label} className="min-w-0">
               <dt className="text-xs text-biz-muted">{label}</dt>

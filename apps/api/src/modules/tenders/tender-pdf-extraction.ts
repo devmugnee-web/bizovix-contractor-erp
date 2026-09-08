@@ -187,11 +187,6 @@ function extractSubmissionDeadline(text: string): string | undefined {
   return parseDate(patterns.map((pattern) => pattern.exec(compact)?.[1]).find(Boolean));
 }
 
-function looksLikePackageCode(value: string): boolean {
-  const words = value.split(/\s+/);
-  return value.length <= 100 && words.length <= 6 && /\d/.test(value) && /[-/]/.test(value);
-}
-
 function cleanWorkName(value: string | undefined): string | undefined {
   if (!value) return undefined;
   let cleaned = value
@@ -201,20 +196,27 @@ function cleanWorkName(value: string | undefined): string | undefined {
   if (!cleaned) return undefined;
 
   const workStart =
-    /\b(?:Construction|Supply|Procurement|Purchase|Repair|Renovation|Installation|Operation|Maintenance|Development|Improvement|Rehabilitation|Consultancy|Consulting|Printing|Hiring|Providing|Establishment|Upgradation)\b/i.exec(
+    /\b(?:Construction|Reconstruction|Supply|Delivery|Procurement|Purchase|Repair|Renovation|Installation|Operation|Maintenance|Development|Improvement|Rehabilitation|Consultancy|Consulting|Printing|Hiring|Providing|Establishment|Upgradation|Expansion|Extension|Replacement|Retrofitting|Design|Manufacturing)\b/i.exec(
       cleaned,
     );
   if (workStart && workStart.index > 0) {
     cleaned = cleaned.slice(workStart.index);
   } else {
-    const parts = cleaned.split(/\s{2,}|\s(?=[A-Z][a-z]+\s)/, 2);
-    if (parts.length === 2 && looksLikePackageCode(parts[0])) cleaned = parts[1];
+    cleaned = cleaned.replace(
+      /^(?=[A-Z0-9./_-]*\d)(?=[A-Z0-9./_-]*[./_-])[A-Z0-9./_-]+(?:\s+(?=[0-9./_-]*\d)[0-9./_-]+)?\s+(?=\p{L})/iu,
+      "",
+    );
   }
-  return truncate(cleaned, 300) || undefined;
+  return truncate(cleaned, 1_000) || undefined;
 }
 
 function extractWorkName(text: string): string | undefined {
   const candidates = [
+    captureBetween(
+      text,
+      /(?:Product\s*\/\s*Work\s+Name|Name\s+of\s+Work|Tender\/Proposal\s+Title)/i,
+      /Tender\s+Type|Procurement\s+Method|Closing\s+Date|Category/i,
+    ),
     captureBetween(
       text,
       /Tender\/Proposal\s+Package\s+No\.?\s+and\s+Description/i,
@@ -227,16 +229,18 @@ function extractWorkName(text: string): string | undefined {
     ),
     captureBetween(
       text,
-      /(?:Product\s*\/\s*Work\s+Name|Name\s+of\s+Work|Tender\/Proposal\s+Title)/i,
-      /Tender\s+Type|Procurement\s+Method|Closing\s+Date|Category/i,
-    ),
-    captureBetween(
-      text,
       /Brief\s+Description\s+of\s+(?:Goods(?:\s+and\s+Related\s+Service)?|Works?|Services?)/i,
       /Evaluation\s+Type|Document\s+Available|Tender\/Proposal\s+Document\s+Price/i,
     ),
   ];
-  return candidates.map(cleanWorkName).find((value) => !!value);
+  const primaryCandidates = candidates
+    .slice(0, 3)
+    .map(cleanWorkName)
+    .filter((value): value is string => !!value);
+  return primaryCandidates.reduce<string | undefined>(
+    (longest, value) => !longest || value.length > longest.length ? value : longest,
+    undefined,
+  ) ?? cleanWorkName(candidates[3]);
 }
 
 function extractRemarks(text: string): string | undefined {

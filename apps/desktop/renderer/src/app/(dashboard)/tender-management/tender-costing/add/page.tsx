@@ -48,6 +48,7 @@ import { SuccessPopup } from "@/components/layout/SuccessPopup";
 
 interface CostingItemForm {
   id: string;
+  sourceItemNo?: string;
   costingDate: string;
   preparedByUserId: string;
   description: string;
@@ -126,6 +127,14 @@ interface BulkForeignForm {
   exchangeRate: string;
   exchangeRateDate: string;
   shippingMethod: TenderCostingShippingMethod;
+}
+
+interface ForeignBatchCostForm {
+  originTransport: string;
+  localTransport: string;
+  projectTransport: string;
+  otherCost: string;
+  allocationMethod: TenderCostingLcAllocationMethod;
 }
 
 type PendingLcAction =
@@ -280,13 +289,10 @@ function withShippingMethod(
     shippingRate: defaultShippingRate(shippingMethod),
     ...(switchingFamily
       ? {
-          foreignTransportCharge: "",
           foreignFreightCost: "",
           cnfCharge: "",
           portHandlingCharge: "",
           bankLcCharge: "",
-          foreignLocalTransportCost: "",
-          domesticTransportCost: "",
         }
       : {}),
   };
@@ -340,6 +346,144 @@ function allocateLcContainerFee(
           foreignFreightCost: compactInputNumber((shareCents / 100).toFixed(2), true),
         };
   });
+}
+
+function emptyForeignBatchCosts(): ForeignBatchCostForm {
+  return {
+    originTransport: "",
+    localTransport: "",
+    projectTransport: "",
+    otherCost: "",
+    allocationMethod: "WEIGHT",
+  };
+}
+
+function foreignBatchCostsFromItems(
+  items: CostingItemForm[],
+  allocationMethod: TenderCostingLcAllocationMethod = "WEIGHT",
+): ForeignBatchCostForm {
+  const total = (field: keyof Pick<
+    CostingItemForm,
+    | "foreignTransportCharge"
+    | "foreignLocalTransportCost"
+    | "domesticTransportCost"
+    | "foreignOtherCost"
+  >) =>
+    compactInputNumber(
+      roundMoney(items.reduce((sum, item) => sum + (Number(item[field]) || 0), 0)).toFixed(2),
+      true,
+    );
+
+  return {
+    originTransport: total("foreignTransportCharge"),
+    localTransport: total("foreignLocalTransportCost"),
+    projectTransport: total("domesticTransportCost"),
+    otherCost: total("foreignOtherCost"),
+    allocationMethod,
+  };
+}
+
+function hasInvalidForeignBatchCost(costs: ForeignBatchCostForm): boolean {
+  return [costs.originTransport, costs.localTransport, costs.projectTransport, costs.otherCost]
+    .filter((value) => value.trim())
+    .some((value) => !Number.isFinite(Number(value)) || Number(value) < 0);
+}
+
+function foreignBatchAllocationBases(
+  items: CostingItemForm[],
+  allocationMethod: TenderCostingLcAllocationMethod,
+): number[] {
+  const productValues = items.map((item) =>
+    Math.max(
+      0,
+      (Number(item.quantity) || 0) *
+        (Number(item.foreignUnitPrice) || 0) *
+        (Number(item.foreignExchangeRate) || 0),
+    ),
+  );
+
+  if (allocationMethod === "WEIGHT") {
+    const weights = items.map((item) => Math.max(0, Number(item.shippingWeightKg) || 0));
+    if (weights.every((weight) => weight > 0)) return weights;
+    if (productValues.every((value) => value > 0)) return productValues;
+  }
+
+  if (allocationMethod === "VALUE" && productValues.every((value) => value > 0)) {
+    return productValues;
+  }
+
+  return items.map(() => 1);
+}
+
+function allocateForeignBatchAmount(
+  items: CostingItemForm[],
+  totalInput: string,
+  allocationMethod: TenderCostingLcAllocationMethod,
+): Map<string, string> {
+  const totalMinorUnits = Math.round(Math.max(0, Number(totalInput) || 0) * 100);
+  const bases = foreignBatchAllocationBases(items, allocationMethod);
+  const basisTotal = bases.reduce((sum, basis) => sum + basis, 0);
+  const allocations = new Map<string, string>();
+  let allocatedMinorUnits = 0;
+
+  items.forEach((item, index) => {
+    const shareMinorUnits =
+      index === items.length - 1
+        ? totalMinorUnits - allocatedMinorUnits
+        : Math.round((totalMinorUnits * (bases[index] ?? 0)) / basisTotal);
+    allocatedMinorUnits += shareMinorUnits;
+    allocations.set(
+      item.id,
+      compactInputNumber((shareMinorUnits / 100).toFixed(2), true),
+    );
+  });
+
+  return allocations;
+}
+
+function allocateForeignBatchCosts(
+  items: CostingItemForm[],
+  targetIds: ReadonlySet<string>,
+  costs: ForeignBatchCostForm,
+): CostingItemForm[] {
+  const targetItems = items.filter(
+    (item) => targetIds.has(item.id) && item.sourcingType === "FOREIGN",
+  );
+  if (targetItems.length === 0) return items;
+
+  const originTransport = allocateForeignBatchAmount(
+    targetItems,
+    costs.originTransport,
+    costs.allocationMethod,
+  );
+  const localTransport = allocateForeignBatchAmount(
+    targetItems,
+    costs.localTransport,
+    costs.allocationMethod,
+  );
+  const projectTransport = allocateForeignBatchAmount(
+    targetItems,
+    costs.projectTransport,
+    costs.allocationMethod,
+  );
+  const otherCost = allocateForeignBatchAmount(
+    targetItems,
+    costs.otherCost,
+    costs.allocationMethod,
+  );
+
+  return items.map((item) =>
+    targetIds.has(item.id) && item.sourcingType === "FOREIGN"
+      ? {
+          ...item,
+          foreignTransportCharge: originTransport.get(item.id) ?? "",
+          foreignLocalTransportCost: localTransport.get(item.id) ?? "",
+          domesticTransportCost: projectTransport.get(item.id) ?? "",
+          foreignOtherCost: otherCost.get(item.id) ?? "",
+          costingStatus: "DRAFT",
+        }
+      : item,
+  );
 }
 function defaultShippingRateBasis(
   method: TenderCostingShippingMethod,
@@ -458,9 +602,13 @@ function compactInputNumber(value: string | number | null | undefined, blankZero
   return text.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
 }
 
-function costingImportKey(item: Pick<CostingItemForm, "description" | "unit" | "quantity">) {
+function costingImportKey(
+  item: Pick<CostingItemForm, "description" | "unit" | "quantity" | "sourceItemNo">,
+) {
+  const description = item.description.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
   return [
-    item.description.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""),
+    item.sourceItemNo?.trim().toLocaleLowerCase().replace(/[^\p{L}\p{N}.]+/gu, "") ?? "",
+    description,
     item.unit.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""),
     compactInputNumber(item.quantity, true),
   ].join("|");
@@ -558,11 +706,13 @@ function calculateItemPreview(item: CostingItemForm) {
       (Number(item.foreignOtherCost) || 0);
   const simplifiedLcCostBeforeProfit =
     foreignProductValue +
+    foreignTransportBdt +
     (Number(item.bankLcCharge) || 0) +
     (Number(item.portHandlingCharge) || 0) +
     (Number(item.foreignFreightCost) || 0) +
     (Number(item.cnfCharge) || 0) +
     (Number(item.foreignLocalTransportCost) || 0) +
+    (Number(item.domesticTransportCost) || 0) +
     (Number(item.foreignOtherCost) || 0);
   const simplifiedDoorCostBeforeProfit =
     foreignProductValue +
@@ -753,6 +903,9 @@ export default function TenderCostingEditorPage() {
     exchangeRateDate: localDate(),
     shippingMethod: "DOOR_TO_DOOR_SEA",
   });
+  const [foreignBatchCosts, setForeignBatchCosts] = React.useState<ForeignBatchCostForm>(
+    emptyForeignBatchCosts,
+  );
   const [lcContainerFee, setLcContainerFee] = React.useState("");
   const [lcContainerAllocationMethod, setLcContainerAllocationMethod] =
     React.useState<TenderCostingLcAllocationMethod>("EQUAL");
@@ -1029,10 +1182,10 @@ export default function TenderCostingEditorPage() {
 
   function closeLcContainerEditor() {
     if (pendingLcAction?.kind === "BULK_SELECTION") {
-      setBulkForeign((current) => ({
-        ...current,
+      updateBulkForeignSettings({
+        ...bulkForeign,
         shippingMethod: pendingLcAction.previousShippingMethod,
-      }));
+      });
     }
     setLcContainerEditorOpen(false);
     setPendingLcAction(null);
@@ -1127,27 +1280,30 @@ export default function TenderCostingEditorPage() {
     };
   }
 
-  function applyCommonForeignValues(item: CostingItemForm): CostingItemForm {
-    const isLc = bulkForeign.shippingMethod.startsWith("LC_");
+  function applyCommonForeignValues(
+    item: CostingItemForm,
+    settings: BulkForeignForm = bulkForeign,
+  ): CostingItemForm {
+    const isLc = settings.shippingMethod.startsWith("LC_");
     const preserveLcCharges = isLc && item.foreignShippingMethod.startsWith("LC_");
     const keepEditedRate =
       !isLc &&
       item.shippingRateBasis === "PER_KG" &&
-      item.foreignShippingMethod === bulkForeign.shippingMethod &&
+      item.foreignShippingMethod === settings.shippingMethod &&
       Number(item.shippingRate) > 0;
     return {
       ...item,
-      foreignCountry: bulkForeign.country,
-      foreignCurrency: bulkForeign.currency,
-      foreignExchangeRate: bulkForeign.exchangeRate,
-      exchangeRateDate: bulkForeign.exchangeRateDate,
-      foreignShippingMethod: bulkForeign.shippingMethod,
-      shippingRateBasis: defaultShippingRateBasis(bulkForeign.shippingMethod),
+      foreignCountry: settings.country,
+      foreignCurrency: settings.currency,
+      foreignExchangeRate: settings.exchangeRate,
+      exchangeRateDate: settings.exchangeRateDate,
+      foreignShippingMethod: settings.shippingMethod,
+      shippingRateBasis: defaultShippingRateBasis(settings.shippingMethod),
       shippingRate: keepEditedRate
         ? item.shippingRate
-        : defaultShippingRate(bulkForeign.shippingMethod),
-      shippingWeightKg: isLc ? "" : item.shippingWeightKg,
-      foreignTransportCharge: isLc ? "" : item.foreignTransportCharge,
+        : defaultShippingRate(settings.shippingMethod),
+      shippingWeightKg: item.shippingWeightKg,
+      foreignTransportCharge: item.foreignTransportCharge,
       foreignDoorToDoorCharge: "",
       foreignImportDutyIncluded: false,
       customsDeclarationCharge: "",
@@ -1165,7 +1321,7 @@ export default function TenderCostingEditorPage() {
           ? item.foreignLocalTransportCost
           : ""
         : item.foreignLocalTransportCost,
-      domesticTransportCost: isLc ? "" : item.domesticTransportCost,
+      domesticTransportCost: item.domesticTransportCost,
     };
   }
 
@@ -1205,8 +1361,8 @@ export default function TenderCostingEditorPage() {
     setCostingPdfNotice("");
     setCostingPdfError("");
 
-    if (selectedFiles.length > 10) {
-      setCostingPdfError("Select up to 10 BOQ PDF files at a time.");
+    if (selectedFiles.length > 20) {
+      setCostingPdfError("Select up to 20 BOQ PDF files at a time.");
       if (costingPdfInputRef.current) costingPdfInputRef.current.value = "";
       return;
     }
@@ -1249,6 +1405,7 @@ export default function TenderCostingEditorPage() {
       let existingDuplicatesSkipped = 0;
       const importedItems = result.rows.flatMap((row) => {
         const key = costingImportKey({
+          sourceItemNo: row.itemNo,
           description: row.description,
           unit: row.unit ?? "Nos",
           quantity: row.quantity === undefined ? "" : String(row.quantity),
@@ -1257,8 +1414,6 @@ export default function TenderCostingEditorPage() {
           existingDuplicatesSkipped += 1;
           return [];
         }
-        existingKeys.add(key);
-
         const imported = blankItem(
           row.description,
           lastPreparedByUserId || effectivePreparedByUserId,
@@ -1271,7 +1426,8 @@ export default function TenderCostingEditorPage() {
         return [
           {
             ...imported,
-            unit: row.unit ?? templateItem.unit ?? "Nos",
+            sourceItemNo: row.itemNo ?? "",
+            unit: row.unit ?? "Nos",
             quantity:
               row.quantity === undefined ? "" : compactInputNumber(String(row.quantity), true),
             marginPercent:
@@ -1429,6 +1585,15 @@ export default function TenderCostingEditorPage() {
     }
     setSaveError("");
     setForeignCostingNotice("");
+    const nextActiveIds = new Set([...activeCostingIds, ...candidateIds]);
+    const nextForeignBatch = items.filter(
+      (item) => nextActiveIds.has(item.id) && item.sourcingType === "FOREIGN",
+    );
+    if (nextForeignBatch.length > 0) {
+      setForeignBatchCosts((current) =>
+        foreignBatchCostsFromItems(nextForeignBatch, current.allocationMethod),
+      );
+    }
     setActiveCostingIds((current) => new Set([...current, ...candidateIds]));
     window.setTimeout(
       () => costingWorkspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
@@ -1478,6 +1643,18 @@ export default function TenderCostingEditorPage() {
     });
     setSaveError("");
     setForeignCostingNotice("");
+    if (item.sourcingType === "FOREIGN") {
+      const nextActiveIds = new Set([...activeCostingIds, item.id]);
+      setForeignBatchCosts((current) =>
+        foreignBatchCostsFromItems(
+          items.filter(
+            (candidate) =>
+              nextActiveIds.has(candidate.id) && candidate.sourcingType === "FOREIGN",
+          ),
+          current.allocationMethod,
+        ),
+      );
+    }
     setActiveCostingIds((current) => new Set([...current, item.id]));
     window.setTimeout(
       () => costingWorkspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
@@ -1485,31 +1662,57 @@ export default function TenderCostingEditorPage() {
     );
   }
 
-  function applyBulkForeignSettings() {
+  function updateBulkForeignSettings(nextSettings: BulkForeignForm) {
     const targetIds = activeCostingIds;
-    if (!bulkForeign.country || targetIds.size === 0 || Number(bulkForeign.exchangeRate) <= 0) {
-      setSaveError("Select Country and enter a valid Foreign exchange rate first.");
+    setBulkForeign(nextSettings);
+    if (targetIds.size === 0) {
       return;
     }
     const candidateItems = items.map((item) =>
       targetIds.has(item.id) && item.sourcingType === "FOREIGN"
-        ? { ...applyCommonForeignValues(item), costingStatus: "DRAFT" as const }
+        ? {
+            ...applyCommonForeignValues(item, nextSettings),
+            costingStatus: "DRAFT" as const,
+          }
         : item,
     );
-    const lcCandidates = candidateItems.filter(isLcForeignCostingItem);
-    if (
-      lcCandidates.length > 0 &&
-      (Number(lcContainerFee) <= 0 ||
-        (lcContainerAllocationMethod === "WEIGHT" &&
-          lcCandidates.some((item) => Number(item.shippingWeightKg) <= 0)))
-    ) {
-      openLcContainerEditor({ kind: "BULK_APPLY" });
-      return;
-    }
     setItems(
-      allocateLcContainerFee(candidateItems, lcContainerFee, lcContainerAllocationMethod),
+      allocateForeignBatchCosts(
+        allocateLcContainerFee(candidateItems, lcContainerFee, lcContainerAllocationMethod),
+        targetIds,
+        foreignBatchCosts,
+      ),
     );
     setSaveError("");
+    setForeignCostingNotice("");
+    setIsDirty(true);
+  }
+
+  function updateForeignBatchCosts(patch: Partial<ForeignBatchCostForm>) {
+    const nextCosts = { ...foreignBatchCosts, ...patch };
+    setForeignBatchCosts(nextCosts);
+    setItems((current) => allocateForeignBatchCosts(current, activeCostingIds, nextCosts));
+    setSaveError("");
+    setForeignCostingNotice("");
+    setIsDirty(true);
+  }
+
+  function updateForeignBatchItem(id: string, patch: Partial<CostingItemForm>) {
+    setItems((current) =>
+      allocateForeignBatchCosts(
+        allocateLcContainerFee(
+          current.map((item) =>
+            item.id === id ? { ...item, ...patch, costingStatus: "DRAFT" } : item,
+          ),
+          lcContainerFee,
+          lcContainerAllocationMethod,
+        ),
+        activeCostingIds,
+        foreignBatchCosts,
+      ),
+    );
+    setSaveError("");
+    setForeignCostingNotice("");
     setIsDirty(true);
   }
 
@@ -1518,14 +1721,22 @@ export default function TenderCostingEditorPage() {
       setSaveError("Select Country and enter a valid Foreign exchange rate first.");
       return;
     }
-    const updatedItems: CostingItemForm[] = items.map((item) =>
-      activeCostingIds.has(item.id) && item.sourcingType === "FOREIGN"
-        ? {
-            ...item,
-            selectedSource: "FOREIGN",
-            costingStatus: "DRAFT",
-          }
-        : item,
+    if (hasInvalidForeignBatchCost(foreignBatchCosts)) {
+      setSaveError("Shipment common costs cannot contain a negative or invalid amount.");
+      return;
+    }
+    const updatedItems: CostingItemForm[] = allocateForeignBatchCosts(
+      items.map((item) =>
+        activeCostingIds.has(item.id) && item.sourcingType === "FOREIGN"
+          ? {
+              ...item,
+              selectedSource: "FOREIGN" as const,
+              costingStatus: "DRAFT" as const,
+            }
+          : item,
+      ),
+      activeCostingIds,
+      foreignBatchCosts,
     );
     const targetItems = updatedItems.filter(
       (item) => activeCostingIds.has(item.id) && item.sourcingType === "FOREIGN",
@@ -2385,7 +2596,7 @@ export default function TenderCostingEditorPage() {
                             />
                           )}
                         </td>
-                        <td className="px-1 py-2">{visibleIndex + 1}</td>
+                        <td className="px-1 py-2">{item.sourceItemNo || visibleIndex + 1}</td>
                         <td className="px-1 py-2">
                           <RequiredRowField>
                             <TextInput
@@ -2768,69 +2979,68 @@ export default function TenderCostingEditorPage() {
                   items={activeForeignItems}
                   saving={saveCosting.isPending}
                   settings={
-                    <div className="grid grid-cols-1 gap-2 border-b border-biz-border bg-biz-bg/60 px-3 py-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(120px,1fr)_minmax(100px,0.8fr)_minmax(180px,1.35fr)_minmax(110px,0.8fr)_minmax(145px,1fr)_auto] lg:items-end">
+                    <div className="grid min-w-0 grid-cols-2 gap-2 overflow-hidden border-b border-biz-border bg-biz-bg/60 px-3 py-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10 xl:items-end">
+                    <div className="contents">
                       <MiniField label="Country" required>
                         <SelectInput
-                          className="h-9 text-[10px]"
+                          className="h-9 min-w-0 text-[10px]"
                           value={bulkForeign.country}
                           options={countryOptionsWithCurrent(bulkForeign.country)}
                           onChange={(event) => {
                             const country = event.target.value;
-                            setBulkForeign((current) => {
-                              const currency = COUNTRY_CURRENCY[country] ?? current.currency;
-                              const currencyChanged = currency !== current.currency;
-                              return {
-                                ...current,
-                                country,
-                                currency,
-                                exchangeRate: currencyChanged
-                                  ? currency === DEFAULT_CHINA_CURRENCY
-                                    ? DEFAULT_CNY_TO_BDT_RATE
-                                    : ""
-                                  : current.exchangeRate,
-                                exchangeRateDate: currencyChanged
-                                  ? localDate()
-                                  : current.exchangeRateDate,
-                              };
+                            const currency = COUNTRY_CURRENCY[country] ?? bulkForeign.currency;
+                            const currencyChanged = currency !== bulkForeign.currency;
+                            updateBulkForeignSettings({
+                              ...bulkForeign,
+                              country,
+                              currency,
+                              exchangeRate: currencyChanged
+                                ? currency === DEFAULT_CHINA_CURRENCY
+                                  ? DEFAULT_CNY_TO_BDT_RATE
+                                  : ""
+                                : bulkForeign.exchangeRate,
+                              exchangeRateDate: currencyChanged
+                                ? localDate()
+                                : bulkForeign.exchangeRateDate,
                             });
                           }}
                         />
                       </MiniField>
                       <MiniField label="Currency">
                         <SelectInput
-                          className="h-9 text-[10px]"
+                          className="h-9 min-w-0 text-[10px]"
                           value={bulkForeign.currency}
                           options={CURRENCY_OPTIONS}
                           onChange={(event) => {
                             const currency = event.target.value;
-                            setBulkForeign((current) => ({
-                              ...current,
+                            updateBulkForeignSettings({
+                              ...bulkForeign,
                               currency,
-                              country: CURRENCY_COUNTRY[currency] ?? current.country,
+                              country: CURRENCY_COUNTRY[currency] ?? bulkForeign.country,
                               exchangeRate:
-                                currency === current.currency
-                                  ? current.exchangeRate
+                                currency === bulkForeign.currency
+                                  ? bulkForeign.exchangeRate
                                   : currency === DEFAULT_CHINA_CURRENCY
                                     ? DEFAULT_CNY_TO_BDT_RATE
                                     : "",
                               exchangeRateDate:
-                                currency === current.currency
-                                  ? current.exchangeRateDate
+                                currency === bulkForeign.currency
+                                  ? bulkForeign.exchangeRateDate
                                   : localDate(),
-                            }));
+                            });
                           }}
                         />
                       </MiniField>
                       <MiniField label="Shipping Method" required>
                         <SelectInput
-                          className="h-9 text-[9px]"
+                          className="h-9 min-w-0 text-[9px]"
                           value={bulkForeign.shippingMethod}
                           options={SHIPPING_METHOD_OPTIONS}
                           onChange={(event) => {
                             const shippingMethod = event.target
                               .value as TenderCostingShippingMethod;
                             const previousShippingMethod = bulkForeign.shippingMethod;
-                            setBulkForeign((current) => ({ ...current, shippingMethod }));
+                            updateBulkForeignSettings({ ...bulkForeign, shippingMethod });
                             if (shippingMethod.startsWith("LC_") && Number(lcContainerFee) <= 0) {
                               openLcContainerEditor({
                                 kind: "BULK_SELECTION",
@@ -2844,39 +3054,89 @@ export default function TenderCostingEditorPage() {
                       <BulkForeignNumber
                         required
                         label="Exchange Rate"
-                        field="exchangeRate"
                         value={bulkForeign.exchangeRate}
-                        onChange={setBulkForeign}
+                        onChange={(exchangeRate) =>
+                          updateBulkForeignSettings({ ...bulkForeign, exchangeRate })
+                        }
                       />
                       <MiniField label="Rate Date">
                         <TextInput
                           type="date"
-                          className="h-9 px-1 text-[9px]"
+                          className="h-9 min-w-0 px-1 text-[9px]"
                           value={bulkForeign.exchangeRateDate}
                           onChange={(event) =>
-                            setBulkForeign((current) => ({
-                              ...current,
+                            updateBulkForeignSettings({
+                              ...bulkForeign,
                               exchangeRateDate: event.target.value,
-                            }))
+                            })
                           }
                         />
                       </MiniField>
-                      <div className="flex min-w-0 flex-col">
-                        <span className="mb-1.5 flex min-h-[28px] items-end text-[11px] font-bold text-biz-text">
-                          Common Settings
+                    </div>
+                    <div className="contents">
+                      <div className="hidden">
+                        <div>
+                          <p className="text-[12px] font-bold text-biz-text">
+                            Shipment Common Cost
+                          </p>
+                          <p className="text-[10px] text-biz-muted">
+                            Enter each shared charge once. Product rows show only their allocated share.
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-biz-blue/10 px-2.5 py-1 text-[10px] font-semibold text-biz-blue">
+                          Current batch: {activeForeignItems.length} {activeForeignItems.length === 1 ? "item" : "items"}
                         </span>
-                        <PrimaryButton
-                          className="h-9 whitespace-nowrap bg-biz-warning px-4 text-white hover:bg-biz-warning/90"
-                          onClick={applyBulkForeignSettings}
-                        >
-                          <CheckCircle2 className="h-4 w-4" />
-                          Apply to {activeForeignItems.length}{" "}
-                          {activeForeignItems.length === 1 ? "Item" : "Items"}
-                        </PrimaryButton>
                       </div>
+                      <div className="contents">
+                        <ForeignBatchCostInput
+                          label={`Transport (${bulkForeign.currency})`}
+                          value={foreignBatchCosts.originTransport}
+                          onChange={(originTransport) =>
+                            updateForeignBatchCosts({ originTransport })
+                          }
+                        />
+                        <ForeignBatchCostInput
+                          label="Local Transport"
+                          value={foreignBatchCosts.localTransport}
+                          onChange={(localTransport) =>
+                            updateForeignBatchCosts({ localTransport })
+                          }
+                        />
+                        <ForeignBatchCostInput
+                          label="Project Transport"
+                          value={foreignBatchCosts.projectTransport}
+                          onChange={(projectTransport) =>
+                            updateForeignBatchCosts({ projectTransport })
+                          }
+                        />
+                        <ForeignBatchCostInput
+                          label="Other Cost"
+                          value={foreignBatchCosts.otherCost}
+                          onChange={(otherCost) =>
+                            updateForeignBatchCosts({ otherCost })
+                          }
+                        />
+                        <MiniField label="Allocation Basis">
+                          <SelectInput
+                            className="h-9 min-w-0 text-[10px]"
+                            value={foreignBatchCosts.allocationMethod}
+                            options={LC_ALLOCATION_OPTIONS}
+                            onChange={(event) =>
+                              updateForeignBatchCosts({
+                                allocationMethod: event.target
+                                  .value as TenderCostingLcAllocationMethod,
+                              })
+                            }
+                          />
+                        </MiniField>
+                      </div>
+                      <p className="hidden">
+                        Values are allocated automatically. Missing weight falls back to product value, then equal split.
+                      </p>
+                    </div>
                     </div>
                   }
-                  onChange={(id, patch) => updateItem(id, { ...patch, costingStatus: "DRAFT" })}
+                  onChange={updateForeignBatchItem}
                   onShippingMethodChange={handleForeignShippingMethodChange}
                   lcContainerFee={lcContainerFee}
                   lcContainerAllocationMethod={lcContainerAllocationMethod}
@@ -3318,7 +3578,7 @@ function CostedItemsList({
             const isForeign = item.selectedSource === "FOREIGN" || item.sourcingType === "FOREIGN";
             return (
               <tr key={item.id} className="border-t border-biz-border">
-                <td className="px-1 py-2.5">{index + 1}</td>
+                <td className="px-1 py-2.5">{item.sourceItemNo || index + 1}</td>
                 <td className="px-1 py-2.5 font-medium text-biz-text">
                   <span
                     className="block cursor-help truncate"
@@ -3686,7 +3946,7 @@ function ForeignBatchTable({
                 <div>
                   <span className="sr-only">SL</span>
                   <strong className="flex h-7 items-center text-[9px] text-biz-text">
-                    {index + 1}
+                    {item.sourceItemNo || index + 1}
                   </strong>
                 </div>
                 <div>
@@ -3815,23 +4075,19 @@ function ForeignBatchTable({
                           onChange={(value) => onChange(item.id, { cnfCharge: value })}
                         />
                       </MiniField>
-                      <MiniField label="Transport">
-                        <BatchNumberInput
-                          column="cost-5"
-                          value={item.foreignLocalTransportCost}
-                          onChange={(value) =>
-                            onChange(item.id, { foreignLocalTransportCost: value })
-                          }
+                      <MiniField label="Local Transport">
+                        <ReadOnlyCostValue
+                          value={formatCompactMoney(Number(item.foreignLocalTransportCost) || 0)}
                         />
                       </MiniField>
-                      <MiniField label="To Project">
-                        <ReadOnlyCostValue value="—" />
+                      <MiniField label="Project Transport">
+                        <ReadOnlyCostValue
+                          value={formatCompactMoney(Number(item.domesticTransportCost) || 0)}
+                        />
                       </MiniField>
-                      <MiniField label="Other">
-                        <BatchNumberInput
-                          column="cost-7"
-                          value={item.foreignOtherCost}
-                          onChange={(value) => onChange(item.id, { foreignOtherCost: value })}
+                      <MiniField label="Other Cost">
+                        <ReadOnlyCostValue
+                          value={formatCompactMoney(Number(item.foreignOtherCost) || 0)}
                         />
                       </MiniField>
                       <MiniField label="Landed Total">
@@ -3846,12 +4102,8 @@ function ForeignBatchTable({
                 <div className="min-w-0 flex-1">
                   <div className="grid grid-cols-[1fr_0.8fr_0.85fr_0.85fr_0.95fr_1.1fr_0.8fr_0.9fr] gap-1">
                       <MiniField label={`Transport/${currency}`}>
-                        <BatchNumberInput
-                          column="cost-1"
-                          value={item.foreignTransportCharge}
-                          onChange={(value) =>
-                            onChange(item.id, { foreignTransportCharge: value })
-                          }
+                        <ReadOnlyCostValue
+                          value={formatCompactMoney(Number(item.foreignTransportCharge) || 0)}
                         />
                       </MiniField>
                       <MiniField label="Weight KG" required>
@@ -3884,26 +4136,18 @@ function ForeignBatchTable({
                         <ReadOnlyCostValue value={formatCompactMoney(preview.shippingCostBdt)} />
                       </MiniField>
                       <MiniField label="Local Transport">
-                        <BatchNumberInput
-                          column="cost-5"
-                          value={item.foreignLocalTransportCost}
-                          onChange={(value) =>
-                            onChange(item.id, { foreignLocalTransportCost: value })
-                          }
+                        <ReadOnlyCostValue
+                          value={formatCompactMoney(Number(item.foreignLocalTransportCost) || 0)}
                         />
                       </MiniField>
-                      <MiniField label="To Project">
-                        <BatchNumberInput
-                          column="cost-6"
-                          value={item.domesticTransportCost}
-                          onChange={(value) => onChange(item.id, { domesticTransportCost: value })}
+                      <MiniField label="Project Transport">
+                        <ReadOnlyCostValue
+                          value={formatCompactMoney(Number(item.domesticTransportCost) || 0)}
                         />
                       </MiniField>
-                      <MiniField label="Other">
-                        <BatchNumberInput
-                          column="cost-7"
-                          value={item.foreignOtherCost}
-                          onChange={(value) => onChange(item.id, { foreignOtherCost: value })}
+                      <MiniField label="Other Cost">
+                        <ReadOnlyCostValue
+                          value={formatCompactMoney(Number(item.foreignOtherCost) || 0)}
                         />
                       </MiniField>
                       <MiniField label="Landed Total">
@@ -4321,15 +4565,13 @@ function ReadOnlyCostValue({ value, emphasized = false }: { value: string; empha
 function BulkForeignNumber({
   label,
   required = false,
-  field,
   value,
   onChange,
 }: {
   label: string;
   required?: boolean;
-  field: keyof BulkForeignForm;
   value: string;
-  onChange: React.Dispatch<React.SetStateAction<BulkForeignForm>>;
+  onChange: (value: string) => void;
 }) {
   return (
     <MiniField label={label} required={required}>
@@ -4339,7 +4581,31 @@ function BulkForeignNumber({
         step="any"
         className={`h-9 min-w-0 px-1.5 text-[10px] ${NUMBER_INPUT_CLASS}`}
         value={value}
-        onChange={(event) => onChange((current) => ({ ...current, [field]: event.target.value }))}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </MiniField>
+  );
+}
+
+function ForeignBatchCostInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <MiniField label={label}>
+      <TextInput
+        type="number"
+        min="0"
+        step="any"
+        className={`h-9 min-w-0 px-2 text-[10px] ${NUMBER_INPUT_CLASS}`}
+        placeholder="0.00"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
       />
     </MiniField>
   );

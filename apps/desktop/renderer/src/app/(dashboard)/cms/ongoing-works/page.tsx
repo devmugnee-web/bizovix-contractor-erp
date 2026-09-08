@@ -42,7 +42,7 @@ function TableSkeleton() {
     <>
       {Array.from({ length: 6 }).map((_, index) => (
         <tr key={index} className="border-b border-biz-border last:border-0">
-          <td colSpan={6} className="px-4 py-2.5">
+          <td colSpan={7} className="px-4 py-2.5">
             <div className="h-5 animate-pulse rounded-sm bg-slate-100" />
           </td>
         </tr>
@@ -136,7 +136,7 @@ export default function OngoingWorksPage() {
             <TextInput
               icon={Search}
               value={search}
-              placeholder="Search by Work Name or Organization..."
+              placeholder="Search by Tender ID, Work Name or Organization..."
               onChange={(event) => { setSearch(event.target.value); setPage(1); }}
             />
           </div>
@@ -172,10 +172,11 @@ export default function OngoingWorksPage() {
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-left">
+          <table className="w-full min-w-[1000px] border-collapse text-left">
             <thead className="bg-[#f4f7fb] text-[11px] font-semibold text-biz-text">
               <tr className="border-b border-biz-border">
                 <th className="w-14 px-4 py-2.5">SL</th>
+                <th className="w-32 px-4 py-2.5">Tender ID</th>
                 <th className="px-4 py-2.5">Work / Project Name</th>
                 <th className="w-40 px-4 py-2.5">Organization</th>
                 <th className="w-40 px-4 py-2.5">Work Category</th>
@@ -185,10 +186,11 @@ export default function OngoingWorksPage() {
             </thead>
             <tbody className="text-[12px] text-biz-text">
               {works.isLoading ? <TableSkeleton /> : items.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-[13px] text-biz-muted">No ongoing works found.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-[13px] text-biz-muted">No ongoing works found.</td></tr>
               ) : items.map((work, index) => (
                 <tr key={work.id} className="border-b border-biz-border last:border-0 hover:bg-biz-bg/60">
                   <td className="px-4 py-2.5 text-biz-muted">{(meta.page - 1) * meta.limit + index + 1}</td>
+                  <td className="px-4 py-2.5 font-semibold text-biz-blue">{work.tenderNumber ?? "Manual Work"}</td>
                   <td className="px-4 py-2.5 font-medium">{work.workName}</td>
                   <td className="px-4 py-2.5">{work.organizationMaster.shortName}</td>
                   <td className="px-4 py-2.5">{work.workCategory}</td>

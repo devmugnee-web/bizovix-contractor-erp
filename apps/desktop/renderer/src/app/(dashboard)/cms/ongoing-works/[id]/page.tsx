@@ -173,6 +173,9 @@ export function ApprovedWorkDetails({
           </div>
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-biz-muted">
             <span>
+              Tender ID: <b className="text-biz-navy">{project.tenderNumber ?? "Manual Work"}</b>
+            </span>
+            <span>
               Work Category: <b className="text-biz-navy">{project.workCategory}</b>
             </span>
             <span>

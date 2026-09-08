@@ -49,13 +49,24 @@ export function useTenderOptions() {
   });
 }
 
-export function extractTenderPdf(file: File) {
-  const body = new FormData();
-  body.append("file", file);
-  return apiRequest<TenderPdfExtractionResult>("/tenders/extract-pdf", {
-    method: "POST",
-    body,
-  });
+export async function extractTenderPdf(file: File) {
+  const upload = () => {
+    const body = new FormData();
+    body.append("file", file);
+    return apiRequest<TenderPdfExtractionResult>("/tenders/extract-pdf", {
+      method: "POST",
+      body,
+    });
+  };
+
+  try {
+    return await upload();
+  } catch (error) {
+    // PDF extraction is read-only, so one retry safely covers brief API restarts.
+    if (!(error instanceof TypeError)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    return upload();
+  }
 }
 
 function useInvalidateTenders() {

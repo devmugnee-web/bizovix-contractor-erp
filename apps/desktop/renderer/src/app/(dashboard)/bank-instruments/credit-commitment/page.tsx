@@ -226,7 +226,7 @@ export default function CreditCommitmentPage() {
   const lastEntry = Math.min(meta.page * meta.limit, meta.total);
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-3 overflow-x-hidden text-biz-text">
+    <div className="flex w-full min-w-0 flex-col gap-4 overflow-x-hidden pb-4 text-biz-text">
       <SuccessPopup
         open={message?.type === "success"}
         title="Credit Commitment Charge Saved"
@@ -240,45 +240,46 @@ export default function CreditCommitmentPage() {
         secondaryLabel="Stay on This Page"
         onSecondary={() => setMessage(null)}
       />
-      <div className="rounded-xl border border-biz-border bg-white px-4 py-3 shadow-card">
-        <h1 className="text-[22px] font-bold leading-7 text-biz-navy">Credit Commitment Charge</h1>
-        <p className="mt-0.5 whitespace-normal break-words text-[12px] text-biz-muted">Select tenders, then review the charge and payment details before saving.</p>
+      <div className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50/60 to-emerald-50/40 px-5 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+        <div className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
+        <h1 className="text-[22px] font-bold leading-7 tracking-[-0.02em] text-biz-navy">Credit Commitment Charge</h1>
+        <p className="mt-1 whitespace-normal break-words text-[12px] leading-5 text-biz-muted">Select tenders, then review the charge and payment details before saving.</p>
       </div>
 
-      <div className="grid overflow-hidden rounded-xl border border-blue-100 bg-white shadow-card sm:grid-cols-2">
+      <div className="grid overflow-hidden rounded-2xl border border-blue-200/80 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.05)] sm:grid-cols-2">
         {[
           { number: 1, title: "Select Tenders", description: "Choose only the tenders you want to charge", active: true },
           { number: 2, title: "Charge & Payment", description: chargeRows.length > 0 ? `Review ${chargeRows.length} tender${chargeRows.length === 1 ? "" : "s"}, account and final total` : "Add selected tenders to continue", active: chargeRows.length > 0 },
         ].map((step, index) => (
-          <div key={step.number} className={cn("flex items-center gap-3 px-4 py-2.5", index === 0 && "border-b border-biz-border sm:border-b-0 sm:border-r", step.active ? "bg-blue-50/35" : "bg-[#F8FAFD]")}>
-            <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold", step.active ? "bg-biz-blue text-white" : "bg-biz-bg text-biz-muted")}>{step.number}</span>
-            <div className="min-w-0"><p className={cn("text-[12px] font-bold", step.active ? "text-biz-navy" : "text-biz-muted")}>{step.title}</p><p className="mt-0.5 whitespace-normal break-words text-[10px] text-biz-muted">{step.description}</p></div>
+          <div key={step.number} className={cn("flex items-center gap-3 px-5 py-3.5 transition-colors", index === 0 && "border-b border-blue-100 sm:border-b-0 sm:border-r", step.active ? "bg-gradient-to-r from-blue-50/80 to-white" : "bg-slate-50/70")}>
+            <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-bold", step.active ? "bg-biz-blue text-white shadow-[0_4px_10px_rgba(37,99,235,0.2)]" : "border border-biz-border bg-white text-biz-muted")}>{step.number}</span>
+            <div className="min-w-0"><p className={cn("text-[12px] font-bold", step.active ? "text-biz-navy" : "text-biz-muted")}>{step.title}</p><p className="mt-1 whitespace-normal break-words text-[10px] leading-4 text-biz-muted">{step.description}</p></div>
           </div>
         ))}
       </div>
 
       {message?.type === "error" && (
-        <div className="rounded-md border border-biz-danger/20 bg-biz-danger-soft px-3 py-2 text-[12px] font-medium text-biz-danger">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[12px] font-medium text-biz-danger shadow-sm">
           {message.text}
         </div>
       )}
 
-      <section className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-card">
-        <div className="flex flex-wrap items-center justify-between gap-2 bg-blue-50/30 px-4 py-2.5">
-          <h2 className="text-[14px] font-bold text-biz-navy">1. Pending Tenders (Not Charged Yet) <span className="ml-2 rounded bg-biz-blue-soft px-2 py-1 text-[11px] text-biz-blue">{meta.total}</span></h2>
+      <section className="overflow-hidden rounded-2xl border border-blue-200/80 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-blue-50/90 via-white to-white px-5 py-3.5">
+          <h2 className="text-[15px] font-bold tracking-[-0.01em] text-biz-navy">1. Pending Tenders (Not Charged Yet) <span className="ml-2 rounded-full bg-blue-100 px-2.5 py-1 text-[11px] text-biz-blue">{meta.total}</span></h2>
           <div className="flex w-full items-center gap-2 sm:w-auto">
-            <button type="button" onClick={() => pendingQuery.refetch()} className="flex h-8 w-8 items-center justify-center rounded border border-biz-border bg-white text-biz-navy hover:bg-biz-bg" aria-label="Refresh" title="Refresh"><RefreshCw className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => pendingQuery.refetch()} className="flex h-9 w-9 items-center justify-center rounded-lg border border-blue-100 bg-white text-biz-blue shadow-sm transition-colors hover:bg-blue-50" aria-label="Refresh" title="Refresh"><RefreshCw className="h-3.5 w-3.5" /></button>
             <label className="relative block flex-1 sm:w-[220px] sm:flex-none">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" />
-              <input value={query.search ?? ""} onChange={(event) => setQuery({ ...query, page: 1, search: event.target.value })} placeholder="Search Tender ID, work or organization..." className="h-8 w-full rounded border border-biz-border bg-white pl-8 pr-3 text-[11px] outline-none focus:border-biz-blue" />
+              <input value={query.search ?? ""} onChange={(event) => setQuery({ ...query, page: 1, search: event.target.value })} placeholder="Search Tender ID, work or organization..." className="h-9 w-full rounded-lg border border-biz-border bg-white pl-8 pr-3 text-[11px] outline-none transition-shadow focus:border-biz-blue focus:ring-2 focus:ring-blue-100" />
             </label>
           </div>
         </div>
 
-        {pendingQuery.isError && <div className="border-t border-biz-danger/15 bg-biz-danger-soft px-4 py-2 text-[11px] text-biz-danger">Failed to load pending tenders. Check the API connection and refresh.</div>}
-        <div className="overflow-x-auto border-t border-biz-border">
+        {pendingQuery.isError && <div className="border-t border-red-100 bg-red-50 px-5 py-2.5 text-[11px] font-medium text-biz-danger">Failed to load pending tenders. Check the API connection and refresh.</div>}
+        <div className="overflow-x-auto border-t border-blue-100">
           <table className="w-full min-w-[960px] text-[11px]">
-            <thead className="bg-[#f6f8fb] text-[10px] font-bold uppercase tracking-wide text-biz-muted">
+            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-biz-muted">
               <tr className="border-b border-biz-border">
                 <th className="w-10 px-4 py-2 text-left"><Checkbox checked={selectablePendingItems.length > 0 && selectablePendingItems.every((row) => selectedIds.has(row.id))} onChange={toggleAll} label="Select all available tenders on this page" disabled={selectablePendingItems.length === 0} /></th>
                 <th className="w-12 px-3 py-2 text-left">SL</th><th className="px-3 py-2 text-left">Tender ID</th><th className="px-3 py-2 text-left">Organization</th><th className="px-3 py-2 text-left">Work / Tender Name</th><th className="px-3 py-2 text-left">Submission Deadline</th><th className="px-4 py-2 text-right">Estimated Tender Amount (৳)</th>
@@ -288,7 +289,7 @@ export default function CreditCommitmentPage() {
               {pendingQuery.isLoading ? <TableSkeleton columns={7} /> : pendingItems.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-6 text-center text-[12px] font-medium text-biz-muted">No pending tenders found.</td></tr>
               ) : pendingItems.map((row, index) => (
-                <tr key={row.id} onClick={() => toggleRow(row)} className={cn("border-b border-biz-border transition-colors last:border-0", chargeRowIds.has(row.id) ? "bg-[#F8FAFD]" : "cursor-pointer hover:bg-biz-blue-soft/30")}>
+                <tr key={row.id} onClick={() => toggleRow(row)} className={cn("border-b border-biz-border transition-colors last:border-0", chargeRowIds.has(row.id) ? "bg-slate-50" : "cursor-pointer hover:bg-blue-50/50")}>
                   <td className="px-4 py-2" onClick={(event) => event.stopPropagation()}><Checkbox checked={selectedIds.has(row.id)} onChange={() => toggleRow(row)} label={chargeRowIds.has(row.id) ? `${row.tenderId ?? row.tenderWorkName} is already in the charge list` : `Select ${row.tenderId ?? row.tenderWorkName}`} disabled={chargeRowIds.has(row.id)} /></td>
                   <td className="px-3 py-2">{(meta.page - 1) * meta.limit + index + 1}</td><td className="px-3 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td><td className="px-3 py-2 font-semibold">{row.organizationMaster.shortName}</td><td className="max-w-[420px] px-3 py-2"><span className="line-clamp-2 leading-4" title={row.tenderWorkName}>{row.tenderWorkName}</span>{chargeRowIds.has(row.id) && <span className="ml-2 rounded bg-biz-success-soft px-2 py-0.5 text-[10px] font-semibold text-biz-success">Added</span>}</td><td className="px-3 py-2">{row.submissionDeadline ? displayDate(row.submissionDeadline) : "—"}</td><td className="px-4 py-2 text-right font-semibold">{money(row.estimatedTenderAmount)}</td>
                 </tr>
@@ -296,30 +297,30 @@ export default function CreditCommitmentPage() {
             </tbody>
           </table>
         </div>
-        <div className="flex flex-col items-stretch gap-3 border-t border-blue-100 bg-blue-50/25 px-4 py-2.5 text-[11px] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-col items-stretch gap-3 border-t border-blue-100 bg-gradient-to-r from-blue-50/60 to-slate-50/60 px-5 py-3 text-[11px] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <span className="text-biz-muted">Showing {firstEntry} to {lastEntry} of {meta.total} entries</span>
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
-            <span className="flex h-8 items-center justify-center rounded bg-biz-blue-soft px-3 font-semibold text-biz-blue">{selectedIds.size} Selected</span>
-            <button type="button" disabled={selectedIds.size === 0} onClick={() => setSelectedTenders([])} className="flex h-8 items-center justify-center gap-1.5 rounded border border-biz-border bg-white px-3 font-semibold text-biz-navy hover:bg-biz-bg disabled:cursor-not-allowed disabled:opacity-40"><CircleX className="h-3.5 w-3.5" />Clear Selection</button>
-            <button type="button" disabled={selectedIds.size === 0} onClick={addSelected} className="col-span-2 flex h-8 items-center justify-center gap-1.5 rounded bg-biz-blue px-3 font-semibold text-white hover:bg-biz-blue-hover disabled:cursor-not-allowed disabled:opacity-50 sm:col-auto"><Plus className="h-3.5 w-3.5" />Add Selected to Charge List</button>
+            <span className="flex h-8 items-center justify-center rounded-lg border border-blue-100 bg-white px-3 font-semibold text-biz-blue shadow-sm">{selectedIds.size} Selected</span>
+            <button type="button" disabled={selectedIds.size === 0} onClick={() => setSelectedTenders([])} className="flex h-8 items-center justify-center gap-1.5 rounded-lg border border-biz-border bg-white px-3 font-semibold text-biz-navy transition-colors hover:bg-biz-bg disabled:cursor-not-allowed disabled:opacity-40"><CircleX className="h-3.5 w-3.5" />Clear Selection</button>
+            <button type="button" disabled={selectedIds.size === 0} onClick={addSelected} className="col-span-2 flex h-8 items-center justify-center gap-1.5 rounded-lg bg-biz-blue px-3 font-semibold text-white shadow-[0_5px_12px_rgba(37,99,235,0.18)] transition-colors hover:bg-biz-blue-hover disabled:cursor-not-allowed disabled:opacity-50 sm:col-auto"><Plus className="h-3.5 w-3.5" />Charge Selected</button>
           </div>
           <div className="flex items-center justify-end gap-1">
-            <button type="button" disabled={meta.page <= 1} onClick={() => setQuery({ ...query, page: meta.page - 1 })} className="flex h-8 w-8 items-center justify-center rounded border border-biz-border disabled:opacity-40"><ChevronLeft className="h-3.5 w-3.5" /></button>
-            {Array.from({ length: Math.min(meta.totalPages, 4) }, (_, index) => index + 1).map((page) => <button type="button" key={page} onClick={() => setQuery({ ...query, page })} className={cn("h-8 min-w-8 rounded border px-2 font-semibold", page === meta.page ? "border-biz-blue bg-biz-blue text-white" : "border-biz-border bg-white text-biz-navy")}>{page}</button>)}
-            <button type="button" disabled={meta.page >= meta.totalPages} onClick={() => setQuery({ ...query, page: meta.page + 1 })} className="flex h-8 w-8 items-center justify-center rounded border border-biz-border disabled:opacity-40"><ChevronRight className="h-3.5 w-3.5" /></button>
+            <button type="button" disabled={meta.page <= 1} onClick={() => setQuery({ ...query, page: meta.page - 1 })} className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-100 bg-white transition-colors hover:bg-blue-50 disabled:opacity-40"><ChevronLeft className="h-3.5 w-3.5" /></button>
+            {Array.from({ length: Math.min(meta.totalPages, 4) }, (_, index) => index + 1).map((page) => <button type="button" key={page} onClick={() => setQuery({ ...query, page })} className={cn("h-8 min-w-8 rounded-lg border px-2 font-semibold", page === meta.page ? "border-biz-blue bg-biz-blue text-white shadow-sm" : "border-blue-100 bg-white text-biz-navy hover:bg-blue-50")}>{page}</button>)}
+            <button type="button" disabled={meta.page >= meta.totalPages} onClick={() => setQuery({ ...query, page: meta.page + 1 })} className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-100 bg-white transition-colors hover:bg-blue-50 disabled:opacity-40"><ChevronRight className="h-3.5 w-3.5" /></button>
           </div>
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card">
+      <section className="overflow-hidden rounded-2xl border border-emerald-200/80 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
         <button
           type="button"
           onClick={() => setHistoryOpen((open) => !open)}
-          className="flex w-full items-center justify-between gap-3 bg-emerald-50/30 px-4 py-2.5 text-left transition-colors hover:bg-emerald-50/50"
+          className="flex w-full items-center justify-between gap-3 bg-gradient-to-r from-emerald-50/80 via-white to-white px-5 py-3.5 text-left transition-colors hover:from-emerald-50"
         >
-          <span className="text-[14px] font-bold text-biz-navy">
+          <span className="text-[15px] font-bold tracking-[-0.01em] text-biz-navy">
             Completed Credit Commitment Charges
-            <span className="ml-2 rounded bg-biz-success-soft px-2 py-1 text-[11px] text-biz-success">
+            <span className="ml-2 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] text-biz-success">
               {completedQuery.data?.meta.total ?? 0}
             </span>
           </span>
@@ -328,9 +329,9 @@ export default function CreditCommitmentPage() {
           </span>
         </button>
         {historyOpen && (
-          <div className="overflow-x-auto border-t border-biz-border">
+          <div className="overflow-x-auto border-t border-emerald-100">
             <table className="w-full min-w-[620px] text-[11px]">
-              <thead className="bg-[#f6f8fb] text-[10px] font-bold uppercase tracking-wide text-biz-muted">
+              <thead className="bg-emerald-50/40 text-[10px] font-bold uppercase tracking-wide text-biz-muted">
                 <tr>
                   <th className="px-4 py-2 text-left">Reference</th>
                   <th className="px-3 py-2 text-left">Payment Date</th>
@@ -349,8 +350,8 @@ export default function CreditCommitmentPage() {
                     <td className="px-4 py-2 font-semibold text-biz-navy">{charge.id.slice(-8).toUpperCase()}</td>
                     <td className="px-3 py-2">{charge.paymentDate ? displayDate(charge.paymentDate) : "Not set"}</td>
                     <td className="px-3 py-2 text-center">{charge.items.length}</td>
-                    <td className="px-3 py-2 text-right font-semibold">{money(charge.totalAmount)}</td>
-                    <td className="px-4 py-2 text-center"><span className="rounded bg-biz-success-soft px-2 py-1 font-semibold text-biz-success">Completed</span></td>
+                    <td className="px-3 py-2 text-right font-bold text-biz-navy">{money(charge.totalAmount)}</td>
+                    <td className="px-4 py-2 text-center"><span className="rounded-full bg-biz-success-soft px-2.5 py-1 font-semibold text-biz-success">Completed</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -359,21 +360,21 @@ export default function CreditCommitmentPage() {
         )}
       </section>
 
-      <section ref={chargeSectionRef} className="overflow-hidden rounded-xl border border-biz-border bg-white shadow-card">
-        <div className="bg-[#f8fafc] px-4 py-2.5">
-          <h2 className="text-[14px] font-bold text-biz-navy">2. Charge &amp; Payment Details</h2>
-          <p className="mt-0.5 text-[10px] text-biz-muted">Choose one bank account, review each tender charge and confirm the payment details.</p>
+      <section ref={chargeSectionRef} className="overflow-hidden rounded-2xl border border-blue-200/80 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+        <div className="bg-gradient-to-r from-slate-50 via-white to-blue-50/50 px-5 py-3.5">
+          <h2 className="text-[15px] font-bold tracking-[-0.01em] text-biz-navy">2. Charge &amp; Payment Details</h2>
+          <p className="mt-1 text-[11px] leading-4 text-biz-muted">Choose one bank account, review each tender charge and confirm the payment details.</p>
         </div>
 
         {chargeRows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center border-t border-biz-border bg-white px-4 py-7 text-center">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-biz-blue-soft text-biz-blue"><Plus className="h-4 w-4" /></span>
+          <div className="flex flex-col items-center justify-center border-t border-blue-100 bg-gradient-to-b from-white to-slate-50/60 px-4 py-10 text-center">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full border border-blue-100 bg-biz-blue-soft text-biz-blue shadow-sm"><Plus className="h-4 w-4" /></span>
             <p className="mt-2 text-[12px] font-semibold text-biz-navy">No tender added yet</p>
             <p className="mt-1 max-w-[430px] text-[11px] text-biz-muted">Select one or more pending tenders above, then click “Add Selected to Charge List”.</p>
           </div>
         ) : (
           <>
-            <div className="border-t border-biz-border bg-blue-50/25 px-4 py-3">
+            <div className="border-t border-blue-100 bg-gradient-to-r from-blue-50/60 to-white px-5 py-4">
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.15fr_0.65fr_1fr]">
                 <label className="block"><span className="mb-1 block text-[11px] font-semibold text-biz-navy">Bank Account <span className="text-biz-danger">*</span></span><span className="relative block"><Landmark className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-biz-muted" /><select value={selectedBankAccountId} onChange={(event) => changeChargeBank(event.target.value)} className="h-10 w-full rounded-md border border-biz-border bg-white pl-9 pr-3 text-[12px] outline-none focus:border-biz-blue"><option value="">Select bank account</option>{availableBankAccounts.map((account) => <option key={account.id} value={account.id}>{account.bankName ?? account.accountName}{account.accountNumber ? ` — ${account.accountNumber}` : ""}</option>)}</select></span>{errors.paymentFromAccountId && <span className="mt-1 block text-[10px] text-biz-danger">{errors.paymentFromAccountId.message}</span>}</label>
                 <label className="block"><span className="mb-1 block text-[11px] font-semibold text-biz-navy">Payment Date <span className="text-biz-danger">*</span></span><span className="relative block"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-biz-muted" /><input type="date" {...register("paymentDate")} className="h-10 w-full rounded-md border border-biz-border bg-white pl-9 pr-3 text-[12px] outline-none focus:border-biz-blue" /></span>{errors.paymentDate && <span className="mt-1 block text-[10px] text-biz-danger">{errors.paymentDate.message}</span>}</label>
@@ -385,12 +386,12 @@ export default function CreditCommitmentPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto border-t border-biz-border">
+            <div className="overflow-x-auto border-t border-blue-100">
               <table className="w-full min-w-[900px] text-[11px]">
                 <thead className="bg-[#f6f8fb] text-[10px] font-bold uppercase tracking-wide text-biz-muted"><tr className="border-b border-biz-border">{["SL", "Tender ID", "Organization", "Work / Tender Name", "Charge Amount (৳)", "Remarks (optional)", "Action"].map((header) => <th key={header} className={cn("px-3 py-2 text-left", header === "Action" && "text-center")}>{header}</th>)}</tr></thead>
                 <tbody>
                   {chargeRows.map((row, index) => (
-                    <tr key={row.id} className="border-b border-biz-border transition-colors last:border-0 hover:bg-[#f8fafc]">
+                    <tr key={row.id} className="border-b border-biz-border transition-colors last:border-0 hover:bg-blue-50/30">
                       <td className="px-3 py-2">{index + 1}</td><td className="px-3 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td><td className="px-3 py-2 font-semibold">{row.organizationMaster.shortName}</td><td className="max-w-[360px] px-3 py-2"><p className="line-clamp-2 leading-4" title={row.tenderWorkName}>{row.tenderWorkName}</p></td>
                       <td className="px-3 py-1.5"><input type="number" min="0.01" step="0.01" value={row.chargeAmount} onChange={(event) => updateChargeRow(row.id, "chargeAmount", event.target.value)} className="h-8 w-28 rounded border border-biz-border px-2 text-right text-[11px] outline-none focus:border-biz-blue" /></td>
                       <td className="px-3 py-1.5"><input value={row.remarks} onChange={(event) => updateChargeRow(row.id, "remarks", event.target.value)} placeholder="Enter remarks" className="h-8 w-full min-w-[150px] rounded border border-biz-border px-2 text-[11px] outline-none focus:border-biz-blue" /></td>

@@ -49,7 +49,7 @@ export class CreateTenderDto {
   @IsString()
   @IsNotEmpty()
   @Matches(/\S/, { message: "Product / Work Name must contain text" })
-  @MaxLength(300)
+  @MaxLength(1000)
   workName!: string;
 
   @IsOptional()
