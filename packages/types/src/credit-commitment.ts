@@ -30,6 +30,7 @@ export interface CreateCreditCommitmentInput {
 export interface CreditCommitmentItem {
   id: string;
   documentPurchaseId: string;
+  tenderId: string;
   bankAccountId: string;
   chargeAmount: string;
   remarks: string | null;

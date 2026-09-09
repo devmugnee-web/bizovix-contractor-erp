@@ -63,6 +63,7 @@ function useInvalidateDocumentPurchases() {
   return () => {
     queryClient.invalidateQueries({ queryKey: ["document-purchases"] });
     queryClient.invalidateQueries({ queryKey: ["document-purchase-requests"] });
+    queryClient.invalidateQueries({ queryKey: ["tender-securities"] });
   };
 }
 

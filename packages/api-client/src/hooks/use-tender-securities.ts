@@ -24,6 +24,8 @@ function useInvalidateTenderSecurities() {
   const queryClient = useQueryClient();
   return () => {
     queryClient.invalidateQueries({ queryKey: ["tender-securities"] });
+    queryClient.invalidateQueries({ queryKey: ["document-purchases"] });
+    queryClient.invalidateQueries({ queryKey: ["credit-commitments"] });
   };
 }
 

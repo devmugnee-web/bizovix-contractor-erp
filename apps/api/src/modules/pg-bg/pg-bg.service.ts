@@ -39,6 +39,8 @@ export class PgBgService {
     const where: Prisma.DocumentPurchaseWhereInput = {
       organizationId,
       purchaseType: "EGP",
+      tenderSecurityStatus: { in: ["CREATED", "NOT_REQUIRED"] },
+      creditCommitmentItems: { some: {} },
       AND: [
         statusWhere,
         ...(query.search
@@ -106,11 +108,24 @@ export class PgBgService {
   async saveDraft(organizationId: string, userId: string, dto: SavePgBgWorkflowDto) {
     const purchase = await this.prisma.documentPurchase.findFirst({
       where: { id: dto.documentPurchaseId, organizationId },
-      include: { cmsWork: { select: { id: true } }, linkedTender: { select: tenderPaSelect } },
+      include: {
+        cmsWork: { select: { id: true } },
+        linkedTender: { select: tenderPaSelect },
+        creditCommitmentItems: { select: { id: true }, take: 1 },
+      },
     });
     if (!purchase) throw new NotFoundException("Eligible tender not found");
     if (purchase.purchaseType !== "EGP") {
       throw new BadRequestException("Only e-GP document purchases can use the PG/BG workflow");
+    }
+    if (
+      purchase.tenderSecurityStatus !== "CREATED" &&
+      purchase.tenderSecurityStatus !== "NOT_REQUIRED"
+    ) {
+      throw new BadRequestException("Complete the Tender Security decision before continuing PG/BG");
+    }
+    if (purchase.creditCommitmentItems.length === 0) {
+      throw new BadRequestException("Complete the Credit Commitment charge before continuing PG/BG");
     }
     if (purchase.cmsWork) {
       throw new BadRequestException("This tender has already been moved to Ongoing Works");

@@ -47,11 +47,14 @@ const UNIT_ALIASES: Array<[RegExp, string]> = [
   [/^lots?$/i, "Lot"],
   [/^(?:ls|lumpsum|lumpsums)$/i, "LS"],
   [/^(?:kg|kgs|kilogram|kilograms)$/i, "Kg"],
+  [/^(?:lb|lbs|pound|pounds)$/i, "Lbs"],
   [/^(?:mt|ton|tons|tonne|tonnes)$/i, "MT"],
   [/^(?:m|mtr|mtrs|meter|meters|metre|metres|rm)$/i, "Meter"],
+  [/^(?:ft|foot|feet)$/i, "Ft"],
   [/^(?:sqm|sqmeter|sqmeters|squaremeter|squaremeters)$/i, "Sqm"],
   [/^(?:sqft|sft|squarefeet|squarefoot)$/i, "Sqft"],
   [/^(?:cft|cubicfeet|cubicfoot)$/i, "Cft"],
+  [/^(?:doz|dozen|dozens)$/i, "Dozen"],
   [/^bags?$/i, "Bag"],
   [/^boxes?$/i, "Box"],
   [/^pairs?$/i, "Pair"],
@@ -86,9 +89,14 @@ function extractItemNo(value: string): string | undefined {
 }
 
 function normalizeUnit(value: string): string | undefined {
-  const normalized = compactLine(value)
+  const compact = compactLine(value);
+  const normalized = compact
     .replace(/[().,:;/\\-]/g, "")
     .replace(/\s+/g, "");
+
+  // Preserve package size details instead of reducing "Box (50Pcs)" to "Box".
+  if (/^boxes?\d+pcs?$/i.test(normalized)) return compact;
+
   return UNIT_ALIASES.find(([pattern]) => pattern.test(normalized))?.[1];
 }
 
@@ -121,7 +129,7 @@ function cleanDescription(value: string): string | undefined {
       /^(?:(?:group\s+)?(?:n\/?a|not\s+applicable))(?:\s*[-:|]\s*|\s+)(?=\S)/i,
       "",
     )
-    .replace(/^[-:;,.\s]+|[-:;,.\s]+$/g, "")
+    .replace(/^[-:;,.\s]+/, "")
     .trim();
   if (description.length < 2 || !/[\p{L}]/u.test(description)) return undefined;
   if (
@@ -152,6 +160,23 @@ function makeRow(
     ...(unit ? { unit } : {}),
     ...(quantity ? { quantity } : {}),
   };
+}
+
+function uniqueTenderCostingRows(
+  rows: TenderCostingPdfExtractedRow[],
+): TenderCostingPdfExtractedRow[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = [
+      row.itemNo ?? "",
+      compactLine(row.description).toLowerCase(),
+      (row.unit ?? "").toLowerCase(),
+      row.quantity ?? "",
+    ].join("\u0000");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 interface SeparatedColumnLayout {
@@ -498,6 +523,7 @@ function parsePositionedTechnicalSpecificationPage(
 
 interface PriceScheduleLayout {
   itemX: number;
+  itemAnchorEndBoundary: number;
   itemDescriptionBoundary: number;
   descriptionUnitBoundary: number;
   unitQuantityBoundary: number;
@@ -514,10 +540,6 @@ function detectPriceScheduleLayout(
   items: PositionedText[],
 ): DetectedPriceScheduleLayout | undefined {
   const visibleItems = items.filter((item) => item.str.trim());
-  const hasGroupedBoqColumns =
-    visibleItems.some((item) => /^group$/i.test(compactLine(item.str))) &&
-    visibleItems.some((item) => /^code$/i.test(compactLine(item.str)));
-  if (hasGroupedBoqColumns) return undefined;
   const descriptionHeader = visibleItems.find((item) =>
     /^description\s+of\s+(?:item|goods|works)$/i.test(compactLine(item.str)),
   );
@@ -527,21 +549,47 @@ function detectPriceScheduleLayout(
   if (!descriptionHeader || !quantityHeader || descriptionHeader.x >= quantityHeader.x) {
     return undefined;
   }
-  const itemHeader = visibleItems
+  const groupHeader = visibleItems
     .filter(
       (item) =>
         item.x < descriptionHeader.x &&
+        Math.abs(item.y - descriptionHeader.y) <= 28 &&
+        /^group$/i.test(compactLine(item.str)),
+    )
+    .sort((left, right) => right.y - left.y || left.x - right.x)[0];
+  const itemCodeHeader = groupHeader
+    ? visibleItems
+        .filter(
+          (item) =>
+            item.x > groupHeader.x &&
+            item.x < descriptionHeader.x &&
+            Math.abs(item.y - descriptionHeader.y) <= 28 &&
+            /^(?:item\s+)?code(?:\s+\(if\s+any\))?$/i.test(compactLine(item.str)),
+        )
+        .sort((left, right) => right.y - left.y || left.x - right.x)[0]
+    : undefined;
+  const hasGroupedBoqColumns = Boolean(groupHeader && itemCodeHeader);
+  const itemHeaderEndX = groupHeader?.x ?? descriptionHeader.x;
+  const itemHeader = visibleItems
+    .filter(
+      (item) =>
+        item.x < itemHeaderEndX &&
         /^(?:item|item\s+no\.?|sl\.?|serial)$/i.test(compactLine(item.str)),
     )
-    .sort((left, right) => right.y - left.y)[0];
+    .sort((left, right) => right.y - left.y || left.x - right.x)[0];
   const unitHeader = visibleItems
     .filter(
       (item) =>
         item.x > descriptionHeader.x &&
         item.x < quantityHeader.x &&
+        Math.abs(item.y - descriptionHeader.y) <= 28 &&
         /^(?:measurement|unit|uom)$/i.test(compactLine(item.str)),
     )
-    .sort((left, right) => left.x - right.x)[0];
+    .sort(
+      (left, right) =>
+        Math.abs(left.y - descriptionHeader.y) -
+          Math.abs(right.y - descriptionHeader.y) || left.x - right.x,
+    )[0];
   if (!itemHeader || !unitHeader) return undefined;
 
   const nextHeader = visibleItems
@@ -551,9 +599,6 @@ function detectPriceScheduleLayout(
         Math.abs(item.y - quantityHeader.y) <= 24,
     )
     .sort((left, right) => left.x - right.x)[0];
-  const itemDescriptionBoundary = (itemHeader.x + descriptionHeader.x) / 2;
-  const descriptionUnitBoundary = (descriptionHeader.x + unitHeader.x) / 2;
-  const unitQuantityBoundary = (unitHeader.x + quantityHeader.x) / 2;
   const headerBottom =
     Math.min(itemHeader.y, descriptionHeader.y, unitHeader.y, quantityHeader.y) - 2;
   const firstAnchor = visibleItems
@@ -561,33 +606,112 @@ function detectPriceScheduleLayout(
       (item) =>
         item.y < headerBottom &&
         item.x >= itemHeader.x - 10 &&
-        item.x < itemDescriptionBoundary &&
+        item.x < itemHeaderEndX &&
         new RegExp(`^(?:Item\\s+)?${ITEM_NO_CAPTURE}\\s*[).:-]?$`, "iu").test(
           item.str.trim(),
         ),
     )
     .sort((left, right) => right.y - left.y)[0];
-  const descriptionContentX = firstAnchor
+
+  // e-GP headings can be centered while the actual cell content starts much
+  // farther left. Detect boundaries from the first data row so descriptions
+  // are not cut out by header-only midpoint calculations.
+  const firstRowItems = firstAnchor
     ? visibleItems
         .filter(
           (item) =>
-            item.y <= firstAnchor.y + 2 &&
-            item.x >= itemDescriptionBoundary &&
-            item.x < descriptionUnitBoundary,
+            Math.abs(item.y - firstAnchor.y) <= 3 && item.x > firstAnchor.x + 2,
         )
-        .sort((left, right) => left.x - right.x)[0]?.x
+        .sort((left, right) => left.x - right.x)
+    : [];
+  const quantityEndBoundary = nextHeader
+    ? (quantityHeader.x + nextHeader.x) / 2
+    : Number.POSITIVE_INFINITY;
+  const unitContent =
+    firstRowItems.find(
+      (item) =>
+        item.x > descriptionHeader.x &&
+        item.x < quantityHeader.x &&
+        Boolean(normalizeUnit(item.str)),
+    ) ??
+    firstRowItems
+      .filter(
+        (item) => item.x > descriptionHeader.x && item.x < quantityHeader.x,
+      )
+      .sort(
+        (left, right) =>
+          Math.abs(left.x - unitHeader.x) - Math.abs(right.x - unitHeader.x),
+      )[0];
+  const quantityContent = unitContent
+    ? firstRowItems.find(
+        (item) =>
+          item.x > unitContent.x + 2 &&
+          item.x < quantityEndBoundary &&
+          /^[\d\u09e6-\u09ef][\d\u09e6-\u09ef,.\s]*$/u.test(item.str.trim()),
+      )
     : undefined;
+  const groupedFirstRowColumns =
+    hasGroupedBoqColumns && unitContent
+      ? firstRowItems
+          .filter((item) => item.x < unitContent.x)
+          .reduce<PositionedText[]>((columns, item) => {
+            if (!columns.some((column) => Math.abs(column.x - item.x) <= 3)) {
+              columns.push(item);
+            }
+            return columns;
+          }, [])
+      : [];
+  const itemCodeHeaderRight = itemCodeHeader
+    ? itemCodeHeader.x + Math.max(itemCodeHeader.width, 0) + 2
+    : undefined;
+  const groupedDescriptionFallbackIndex =
+    groupedFirstRowColumns.length >= 3 ? 2 : groupedFirstRowColumns.length - 1;
+  const groupedDescriptionContent = hasGroupedBoqColumns
+    ? (itemCodeHeaderRight
+        ? groupedFirstRowColumns.find((item) => item.x >= itemCodeHeaderRight)
+        : undefined) ?? groupedFirstRowColumns[groupedDescriptionFallbackIndex]
+    : undefined;
+  const descriptionContent = hasGroupedBoqColumns
+    ? groupedDescriptionContent
+    : unitContent
+      ? firstRowItems.find(
+          (item) =>
+            item.x < unitContent.x &&
+            /[A-Za-z\u0980-\u09ff]/u.test(item.str) &&
+            !/^N\/?A$/i.test(item.str.trim()),
+        )
+      : undefined;
+
+  const itemContentX = firstAnchor?.x ?? itemHeader.x;
+  const descriptionContentX = descriptionContent?.x ?? descriptionHeader.x;
+  const unitContentX = unitContent?.x ?? unitHeader.x;
+  const quantityContentX = quantityContent?.x ?? quantityHeader.x;
+  const groupedPreviousContent = groupedFirstRowColumns
+    .filter((item) => item.x < descriptionContentX - 2)
+    .slice(-1)[0];
+  const defaultItemDescriptionBoundary = (itemContentX + descriptionContentX) / 2;
+  const groupedItemDescriptionBoundary = groupedPreviousContent
+    ? (groupedPreviousContent.x + descriptionContentX) / 2
+    : (itemCodeHeaderRight ?? defaultItemDescriptionBoundary);
+  const itemDescriptionBoundary = hasGroupedBoqColumns
+    ? Math.min(descriptionContentX - 1, groupedItemDescriptionBoundary)
+    : defaultItemDescriptionBoundary;
+  const itemAnchorEndBoundary =
+    hasGroupedBoqColumns && groupHeader
+      ? (itemContentX + groupHeader.x) / 2
+      : itemDescriptionBoundary;
+  const descriptionUnitBoundary = (descriptionContentX + unitContentX) / 2;
+  const unitQuantityBoundary = (unitContentX + quantityContentX) / 2;
 
   return {
     layout: {
-      itemX: itemHeader.x,
+      itemX: itemContentX,
+      itemAnchorEndBoundary,
       itemDescriptionBoundary,
       descriptionUnitBoundary,
       unitQuantityBoundary,
-      quantityEndBoundary: nextHeader
-        ? (quantityHeader.x + nextHeader.x) / 2
-        : Number.POSITIVE_INFINITY,
-      descriptionContentX: descriptionContentX ?? itemDescriptionBoundary + 2,
+      quantityEndBoundary,
+      descriptionContentX,
     },
     headerBottom,
   };
@@ -602,7 +726,9 @@ function positionedColumnText(
     .filter((item) => Math.abs(item.x - contentX) <= tolerance)
     .sort((left, right) => right.y - left.y || left.x - right.x);
   const stopIndex = ordered.findIndex((item) =>
-    /^(?:note\s+\d+\s*:|about\s+e-gp|copyright\b)/i.test(compactLine(item.str)),
+    /^(?:note\s+\d+\s*:|about\s+e-gp|copyright\b|contact\s+us\b|rss\s+feed\b|terms\s+and\s+conditions\b|google\s+chrome\b)/i.test(
+      compactLine(item.str),
+    ),
   );
   return orderedPositionedText(stopIndex >= 0 ? ordered.slice(0, stopIndex) : ordered);
 }
@@ -616,7 +742,9 @@ function positionedColumnRangeText(
     .filter((item) => item.x >= startX && item.x < endX)
     .sort((left, right) => right.y - left.y || left.x - right.x);
   const stopIndex = ordered.findIndex((item) =>
-    /^(?:note\s+\d+\s*:|about\s+e-gp|copyright\b)/i.test(compactLine(item.str)),
+    /^(?:note\s+\d+\s*:|about\s+e-gp|copyright\b|contact\s+us\b|rss\s+feed\b|terms\s+and\s+conditions\b|google\s+chrome\b)/i.test(
+      compactLine(item.str),
+    ),
   );
   return orderedPositionedText(stopIndex >= 0 ? ordered.slice(0, stopIndex) : ordered);
 }
@@ -625,6 +753,7 @@ function parsePositionedPriceSchedulePage(
   items: PositionedText[],
   layout: PriceScheduleLayout,
   headerBottom = Number.POSITIVE_INFINITY,
+  includeLeadingContentInFirstRow = false,
 ): PositionedPageParseResult {
   const serialPattern = new RegExp(
     `^(?:Item\\s+)?${ITEM_NO_CAPTURE}\\s*[).:-]?$`,
@@ -635,7 +764,7 @@ function parsePositionedPriceSchedulePage(
     .filter(
       (item) =>
         item.x >= layout.itemX - 10 &&
-        item.x < layout.itemDescriptionBoundary &&
+        item.x < layout.itemAnchorEndBoundary &&
         serialPattern.test(item.str.trim()),
     )
     .sort((left, right) => right.y - left.y || left.x - right.x);
@@ -649,8 +778,12 @@ function parsePositionedPriceSchedulePage(
   );
   const rows = anchors.flatMap((anchor, index) => {
     const nextAnchor = anchors[index + 1];
+    // A row starts on its own item-number baseline and continues down to the
+    // next item. Starting the first row at the detected header boundary can
+    // shift its description into item 2 when the PDF has a tall first row.
+    const rowTopBoundary = anchor.y + 2;
     const rowItems = bodyItems.filter(
-      (item) => item.y <= anchor.y + 2 && (!nextAnchor || item.y > nextAnchor.y + 2),
+      (item) => item.y < rowTopBoundary && (!nextAnchor || item.y > nextAnchor.y + 2),
     );
     const description = positionedColumnRangeText(
       rowItems,
@@ -678,7 +811,12 @@ function parsePositionedPriceSchedulePage(
     );
     return row ? [row] : [];
   });
-  return { rows, ...(leadingDescription ? { leadingDescription } : {}) };
+  return {
+    rows,
+    ...(leadingDescription && !includeLeadingContentInFirstRow
+      ? { leadingDescription }
+      : {}),
+  };
 }
 
 interface BillOfQuantitiesLayout {
@@ -973,7 +1111,7 @@ export function parseTenderCostingPdfText(rawText: string): TenderCostingPdfExtr
       index = stacked.endIndex;
     }
   }
-  return rows;
+  return uniqueTenderCostingRows(rows);
 }
 
 export function hasValidTenderCostingPdfSignature(file: UploadedTenderCostingPdf): boolean {
@@ -1081,6 +1219,7 @@ export async function extractTenderCostingPdfs(
             pageItems as PositionedText[],
             priceScheduleLayout,
             detectedPriceScheduleLayout?.headerBottom,
+            rows.length === 0,
           );
           if (positioned.leadingDescription && rows.length > 0) {
             const previous = rows[rows.length - 1];
@@ -1154,7 +1293,7 @@ export async function extractTenderCostingPdfs(
     }
   }
 
-  const rows = extractedRows;
+  const rows = uniqueTenderCostingRows(extractedRows);
   if (rows.length === 0) {
     const firstError = fileResults.find((file) => file.error)?.error;
     throw new BadRequestException(firstError ?? "No product rows were found in the selected PDFs");
@@ -1163,6 +1302,6 @@ export async function extractTenderCostingPdfs(
     rows,
     files: fileResults,
     totalPages: fileResults.reduce((total, file) => total + file.totalPages, 0),
-    duplicateRowsSkipped: 0,
+    duplicateRowsSkipped: extractedRows.length - rows.length,
   };
 }

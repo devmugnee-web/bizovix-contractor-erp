@@ -920,6 +920,10 @@ export default function TenderCostingEditorPage() {
   const [isReadingCostingPdfs, setIsReadingCostingPdfs] = React.useState(false);
   const [costingPdfNotice, setCostingPdfNotice] = React.useState("");
   const [costingPdfError, setCostingPdfError] = React.useState("");
+  const [productEditor, setProductEditor] = React.useState<{
+    itemId: string;
+    value: string;
+  } | null>(null);
   const [success, setSuccess] = React.useState<{ title: string; message: string } | null>(null);
   const hydratedId = React.useRef<string | undefined>(undefined);
   const costingPdfInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -2227,7 +2231,16 @@ export default function TenderCostingEditorPage() {
       }
       return true;
     } catch (error) {
-      setSaveError(error instanceof ApiError ? error.message : "Could not save tender costing.");
+      if (error instanceof ApiError) {
+        const validationDetails = Object.entries(error.errors ?? {})
+          .flatMap(([field, messages]) =>
+            messages.map((message) => `${field}: ${message}`),
+          )
+          .join(" ");
+        setSaveError(validationDetails || error.message);
+      } else {
+        setSaveError("Could not save tender costing.");
+      }
       return false;
     }
   }
@@ -2613,14 +2626,14 @@ export default function TenderCostingEditorPage() {
                       />
                     </th>
                     <th className="w-[2%] px-0.5 py-2">SL</th>
-                    <th className="w-[20%] px-2 py-2">
+                    <th className="w-[18%] px-2 py-2">
                       Product Name <RequiredMark />
                     </th>
                     <th className="w-[7%] px-0.5 py-2">Source of Product</th>
-                    <th className="w-[5%] px-0.5 py-2">
+                    <th className="w-[6%] px-0.5 py-2">
                       Unit <RequiredMark />
                     </th>
-                    <th className="w-[4%] px-0.5 py-2">
+                    <th className="w-[5%] px-0.5 py-2">
                       Qty <RequiredMark />
                     </th>
                     <th className="w-[7%] px-0.5 py-2 text-right">
@@ -2668,29 +2681,33 @@ export default function TenderCostingEditorPage() {
                         <td className="px-1 py-2">{item.sourceItemNo || visibleIndex + 1}</td>
                         <td className="px-2 py-2">
                           <RequiredRowField>
-                            <textarea
+                            <input
+                              type="text"
                               data-costing-field
                               data-costing-column="product"
                               aria-invalid={productRequiredError}
-                              rows={Math.max(1, Math.ceil(Math.max(item.description.length, 1) / 28))}
-                              className={`min-h-9 w-full resize-none overflow-hidden rounded-md border bg-white px-2 py-2 text-[10px] font-medium leading-4 text-biz-text outline-none transition-colors [field-sizing:content] focus:border-biz-blue focus:ring-2 focus:ring-biz-blue/15 ${
+                              aria-label={`View and edit product name: ${item.description || "empty"}`}
+                              aria-haspopup="dialog"
+                              title={item.description}
+                              readOnly
+                              className={`h-9 w-full cursor-pointer truncate rounded-md border bg-white px-2 text-[10px] font-medium text-biz-text outline-none transition-colors hover:border-biz-blue/50 focus:border-biz-blue focus:ring-2 focus:ring-biz-blue/15 ${
                                 productRequiredError
                                   ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
                                   : "border-biz-border"
                               }`}
                               value={item.description}
                               placeholder="Enter product"
-                              onChange={(event) =>
-                                updateItem(item.id, {
-                                  description: event.target.value,
-                                  costingStatus: "NOT_COSTED",
-                                })
+                              onClick={() =>
+                                setProductEditor({ itemId: item.id, value: item.description })
                               }
-                              onKeyDown={(event) =>
-                                moveAcrossCostingRow(
-                                  event as unknown as React.KeyboardEvent<HTMLInputElement>,
-                                )
-                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setProductEditor({ itemId: item.id, value: item.description });
+                                  return;
+                                }
+                                moveAcrossCostingRow(event);
+                              }}
                             />
                           </RequiredRowField>
                         </td>
@@ -2739,13 +2756,14 @@ export default function TenderCostingEditorPage() {
                             onKeyDown={moveAcrossCostingRow}
                           />
                         </td>
-                        <td className="px-0.5 py-2">
+                        <td className="min-w-0 px-0.5 py-2">
                           <RequiredRowField>
                             <SelectInput
                               data-costing-field
                               data-costing-column="unit"
                               aria-invalid={unitRequiredError}
-                              className={`h-9 min-w-0 px-1 pr-4 text-[9px] xl:text-[10px] ${
+                              title={item.unit}
+                              className={`h-9 w-full min-w-0 px-1 pr-4 text-[8.5px] xl:text-[9px] ${
                                 unitRequiredError
                                   ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
                                   : ""
@@ -2940,7 +2958,7 @@ export default function TenderCostingEditorPage() {
                                     ? "Edit Compare"
                                     : "Compare"
                                   : item.costingStatus === "DRAFT"
-                                    ? "Edit Foreign Cost"
+                                    ? "Edit"
                                     : item.costingStatus === "COSTED"
                                       ? "Edit Cost"
                                       : "Cost"}
@@ -3255,6 +3273,55 @@ export default function TenderCostingEditorPage() {
       )}
 
       <Modal
+        open={Boolean(productEditor)}
+        onClose={() => setProductEditor(null)}
+        title="View & Edit Full Product Name"
+        contentClassName="max-w-[760px]"
+      >
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!productEditor?.value.trim()) return;
+            updateItem(productEditor.itemId, {
+              description: productEditor.value.trim(),
+              costingStatus: "NOT_COSTED",
+            });
+            setProductEditor(null);
+          }}
+        >
+          <label className="text-[11px] font-semibold text-biz-text" htmlFor="full-product-name">
+            Full Product Name
+          </label>
+          <textarea
+            id="full-product-name"
+            autoFocus
+            rows={12}
+            value={productEditor?.value ?? ""}
+            onChange={(event) =>
+              setProductEditor((current) =>
+                current ? { ...current, value: event.target.value } : current,
+              )
+            }
+            className="min-h-[240px] w-full resize-y rounded-lg border border-biz-border bg-white px-3 py-2.5 text-[12px] leading-5 text-biz-text outline-none focus:border-biz-blue focus:ring-2 focus:ring-biz-blue/15"
+          />
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[10px] text-biz-muted">
+              {productEditor?.value.length ?? 0} characters
+            </span>
+            <div className="flex items-center gap-2">
+              <SecondaryButton type="button" onClick={() => setProductEditor(null)}>
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton type="submit" disabled={!productEditor?.value.trim()}>
+                Save Product Name
+              </PrimaryButton>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
         open={lcContainerEditorOpen}
         onClose={closeLcContainerEditor}
         title={Number(lcContainerFee) > 0 ? "Edit Container Fee" : "Set Container Fee"}
@@ -3564,7 +3631,7 @@ export default function TenderCostingEditorPage() {
       </Modal>
 
       <SuccessPopup
-        open={!!success}
+        open={false}
         title={success?.title ?? "Success"}
         message={success?.message ?? ""}
         onClose={() => setSuccess(null)}
@@ -3584,7 +3651,7 @@ export default function TenderCostingEditorPage() {
           role="status"
           aria-live="polite"
           aria-label="Foreign costing saved successfully"
-          className="fixed left-1/2 top-1/2 z-[120] flex aspect-square w-[260px] max-w-[calc(100%-1.5rem)] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-xl border border-biz-success/30 bg-white p-6 text-center shadow-2xl"
+          className="hidden"
         >
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-biz-success-soft text-biz-success ring-4 ring-biz-success/5">
             <CheckCircle2 className="h-8 w-8" />
@@ -3614,11 +3681,12 @@ function CostedItemsList({
   const totals = items.reduce(
     (summary, item) => {
       const preview = calculateItemPreview(item);
+      summary.purchaseCost += preview.selectedUnitCost * (Number(item.quantity) || 0);
       summary.grandTotal += preview.selectedGrandTotal;
       summary.profit += preview.totalProfit;
       return summary;
     },
-    { grandTotal: 0, profit: 0 },
+    { purchaseCost: 0, grandTotal: 0, profit: 0 },
   );
 
   return (
@@ -3637,17 +3705,18 @@ function CostedItemsList({
         <thead className="bg-biz-bg text-biz-muted">
           <tr>
             <th className="w-[3%] px-1 py-2">SL</th>
-            <th className="w-[16%] px-1 py-2">Product</th>
-            <th className="w-[7%] px-1 py-2">Source</th>
-            <th className="w-[6%] px-1 py-2 text-right">Qty</th>
-            <th className="w-[6%] px-1 py-2">Unit</th>
-            <th className="w-[10%] px-1 py-2 text-right">Unit Cost</th>
+            <th className="w-[14%] px-1 py-2">Product</th>
+            <th className="w-[6%] px-1 py-2">Source</th>
+            <th className="w-[5%] px-1 py-2 text-right">Qty</th>
+            <th className="w-[5%] px-1 py-2">Unit</th>
+            <th className="w-[8%] px-1 py-2 text-right">Unit Cost</th>
+            <th className="w-[10%] px-1 py-2 text-right">Purchase Price</th>
             <th className="w-[6%] px-1 py-2 text-right">Profit %</th>
             <th className="w-[5%] px-1 py-2 text-right">VAT %</th>
             <th className="w-[5%] px-1 py-2 text-right">Tax %</th>
-            <th className="w-[11%] px-1 py-2 text-right">Grand Total</th>
-            <th className="w-[10%] px-1 py-2 text-right">Unit Sales</th>
-            <th className="w-[9%] px-1 py-2 text-right">Profit</th>
+            <th className="w-[10%] px-1 py-2 text-right">Grand Total</th>
+            <th className="w-[9%] px-1 py-2 text-right">Unit Sales</th>
+            <th className="w-[8%] px-1 py-2 text-right">Profit</th>
             <th className="w-[6%] px-1 py-2 text-center">Action</th>
           </tr>
         </thead>
@@ -3681,6 +3750,11 @@ function CostedItemsList({
                 <td className="px-1 py-2.5 text-right">
                   {formatCompactMoney(preview.selectedUnitCost)}
                 </td>
+                <td className="px-1 py-2.5 text-right font-semibold text-biz-navy">
+                  {formatCompactMoney(
+                    roundMoney(preview.selectedUnitCost * (Number(item.quantity) || 0)),
+                  )}
+                </td>
                 <td className="px-1 py-2.5 text-right">
                   {formatCompactMoney(Number(item.marginPercent) || 0)}%
                 </td>
@@ -3708,25 +3782,35 @@ function CostedItemsList({
             );
           })}
         </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-biz-border bg-biz-bg/70">
+            <td
+              colSpan={6}
+              className="px-2 py-2.5 text-right text-[9px] font-semibold uppercase tracking-wide text-biz-muted"
+            >
+              Totals
+            </td>
+            <td className="bg-biz-warning/10 px-1 py-2 text-right">
+              <span className="whitespace-nowrap text-[10px] font-bold text-biz-navy">
+                BDT {formatCompactMoney(roundMoney(totals.purchaseCost))}
+              </span>
+            </td>
+            <td colSpan={3} />
+            <td className="bg-biz-blue/5 px-1 py-2 text-right">
+              <span className="whitespace-nowrap text-[10px] font-bold text-biz-blue">
+                BDT {formatCompactMoney(roundMoney(totals.grandTotal))}
+              </span>
+            </td>
+            <td />
+            <td className="bg-biz-success/10 px-1 py-2 text-right">
+              <span className="whitespace-nowrap text-[10px] font-bold text-biz-success">
+                BDT {formatCompactMoney(roundMoney(totals.profit))}
+              </span>
+            </td>
+            <td />
+          </tr>
+        </tfoot>
       </table>
-      <div className="flex flex-col items-stretch justify-end gap-2 border-t border-biz-border bg-biz-bg/70 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
-        <div className="flex min-w-[190px] items-center justify-between gap-5 rounded-md border border-biz-blue/20 bg-biz-surface px-3 py-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-biz-muted">
-            Total Grand Total
-          </span>
-          <span className="text-[13px] font-bold text-biz-blue">
-            BDT {formatCompactMoney(roundMoney(totals.grandTotal))}
-          </span>
-        </div>
-        <div className="flex min-w-[175px] items-center justify-between gap-5 rounded-md border border-biz-success/25 bg-biz-success/5 px-3 py-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-biz-muted">
-            Total Profit
-          </span>
-          <span className="text-[13px] font-bold text-biz-success">
-            BDT {formatCompactMoney(roundMoney(totals.profit))}
-          </span>
-        </div>
-      </div>
     </div>
   );
 }

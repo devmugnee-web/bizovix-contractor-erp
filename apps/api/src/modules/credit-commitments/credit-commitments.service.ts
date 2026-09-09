@@ -13,8 +13,14 @@ const pendingInclude = {
   linkedTender: { select: { submissionDeadline: true, contractValue: true } },
 } satisfies Prisma.DocumentPurchaseInclude;
 
+const CREDIT_COMMITMENT_SECURITY_STATUSES = ["CREATED", "NOT_REQUIRED"] as const;
+
 const commitmentInclude = {
-  items: true,
+  items: {
+    include: {
+      documentPurchase: { select: { egpTenderId: true } },
+    },
+  },
 } satisfies Prisma.CreditCommitmentInclude;
 
 type CommitmentRecord = Prisma.CreditCommitmentGetPayload<{ include: typeof commitmentInclude }>;
@@ -24,7 +30,14 @@ function toDto(record: CommitmentRecord) {
     ...record,
     amount: record.amount.toFixed(2),
     totalAmount: record.totalAmount.toFixed(2),
-    items: record.items.map((item) => ({ ...item, chargeAmount: item.chargeAmount.toFixed(2) })),
+    items: record.items.map((item) => {
+      const { documentPurchase, ...creditItem } = item;
+      return {
+        ...creditItem,
+        tenderId: documentPurchase.egpTenderId,
+        chargeAmount: item.chargeAmount.toFixed(2),
+      };
+    }),
   };
 }
 
@@ -40,6 +53,7 @@ export class CreditCommitmentsService {
     const limit = query.limit ?? 5;
     const where: Prisma.DocumentPurchaseWhereInput = {
       organizationId,
+      tenderSecurityStatus: { in: [...CREDIT_COMMITMENT_SECURITY_STATUSES] },
       creditCommitmentItems: { none: {} },
       ...(query.search
         ? {
@@ -121,7 +135,12 @@ export class CreditCommitmentsService {
       this.prisma.bankAccount.findFirst({ where: { id: dto.paymentFromAccountId, organizationId } }),
       this.prisma.bankAccount.findMany({ where: { id: { in: bankIds }, organizationId } }),
       this.prisma.documentPurchase.findMany({
-        where: { id: { in: purchaseIds }, organizationId, creditCommitmentItems: { none: {} } },
+        where: {
+          id: { in: purchaseIds },
+          organizationId,
+          tenderSecurityStatus: { in: [...CREDIT_COMMITMENT_SECURITY_STATUSES] },
+          creditCommitmentItems: { none: {} },
+        },
       }),
     ]);
     if (!paymentAccount) throw new NotFoundException("Payment account not found");

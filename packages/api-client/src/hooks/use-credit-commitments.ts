@@ -36,6 +36,11 @@ export function useCreateCreditCommitmentCharge() {
   return useMutation({
     mutationFn: (payload: CreateCreditCommitmentInput) =>
       apiRequest<CreditCommitmentCharge>("/credit-commitments", { method: "POST", body: payload }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["credit-commitments"] }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["credit-commitments"] }),
+        queryClient.invalidateQueries({ queryKey: ["pg-bg"] }),
+      ]);
+    },
   });
 }

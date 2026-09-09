@@ -20,6 +20,8 @@ import {
 } from "class-validator";
 import { PaginationQueryDto } from "../../../common/dto/pagination-query.dto";
 
+const MAX_COSTING_ITEM_DESCRIPTION_LENGTH = 10_000;
+
 export class QueryTenderCostingDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(TenderCostingStatus)
@@ -46,12 +48,12 @@ export class TenderCostingItemInputDto {
   @IsString()
   @IsNotEmpty()
   @Matches(/\S/, { message: "Item description must contain text" })
-  @MaxLength(500)
+  @MaxLength(MAX_COSTING_ITEM_DESCRIPTION_LENGTH)
   description!: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(MAX_COSTING_ITEM_DESCRIPTION_LENGTH)
   secondaryDescription?: string | null;
 
   @IsString()

@@ -23,11 +23,13 @@ describe("Tender costing PDF extraction", () => {
 
     expect(rows).toEqual([
       {
+        itemNo: "1",
         description: "Desktop Computer with accessories",
         unit: "Nos",
         quantity: 10,
       },
       {
+        itemNo: "2",
         description: "Network Switch 24 Port",
         unit: "Pcs",
         quantity: 5,
@@ -44,11 +46,13 @@ describe("Tender costing PDF extraction", () => {
 
     expect(rows).toEqual([
       {
+        itemNo: "1",
         description: "Supply and installation of CCTV Camera",
         unit: "Nos",
         quantity: 12,
       },
       {
+        itemNo: "2",
         description: "Online UPS with batteries",
         unit: "Set",
         quantity: 4,
@@ -69,6 +73,7 @@ describe("Tender costing PDF extraction", () => {
 
     expect(rows).toEqual([
       {
+        itemNo: "1",
         description: "Repair and maintenance of conference sound system",
         unit: "Service",
         quantity: 2,
@@ -84,6 +89,7 @@ describe("Tender costing PDF extraction", () => {
     `);
     expect(rows).toEqual([
       {
+        itemNo: "1",
         description: "LED Display Panel",
         unit: "Nos",
         quantity: 2,
@@ -103,10 +109,10 @@ describe("Tender costing PDF extraction", () => {
     `);
 
     expect(rows).toEqual([
-      { description: "Interactive Flat Panel Display", unit: "Nos", quantity: 4 },
-      { description: "Desktop Computer with Monitor", unit: "Set", quantity: 8 },
-      { description: "Online UPS with Battery Backup", unit: "Pcs", quantity: 2 },
-      { description: "Network Rack with Accessories", unit: "Nos", quantity: 1 },
+      { itemNo: "1", description: "Interactive Flat Panel Display", unit: "Nos", quantity: 4 },
+      { itemNo: "2", description: "Desktop Computer with Monitor", unit: "Set", quantity: 8 },
+      { itemNo: "3", description: "Online UPS with Battery Backup", unit: "Pcs", quantity: 2 },
+      { itemNo: "4", description: "Network Rack with Accessories", unit: "Nos", quantity: 1 },
     ]);
   });
 

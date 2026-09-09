@@ -85,7 +85,7 @@ export default function CreditCommitmentPage() {
   const chargeSectionRef = React.useRef<HTMLElement>(null);
   const [query, setQuery] = React.useState<CreditCommitmentPendingQuery>(DEFAULT_QUERY);
   const pendingQuery = usePendingCreditCommitmentTenders(query);
-  const completedQuery = useCreditCommitments({ page: 1, limit: 5 });
+  const completedQuery = useCreditCommitments({ page: 1, limit: 100 });
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const bankAccounts = useBankAccounts();
   const tenderBankSettings = useTenderBankSettings();
@@ -313,11 +313,12 @@ export default function CreditCommitmentPage() {
         </button>
         {historyOpen && (
           <div className="overflow-x-auto border-t border-emerald-100">
-            <table className="w-full min-w-[620px] text-[11px]">
+            <table className="w-full min-w-[760px] text-[11px]">
               <thead className="bg-emerald-50/40 text-[10px] font-bold uppercase tracking-wide text-biz-muted">
                 <tr>
                   <th className="px-4 py-2 text-left">Reference</th>
                   <th className="px-3 py-2 text-left">Payment Date</th>
+                  <th className="px-3 py-2 text-left">Tender ID</th>
                   <th className="px-3 py-2 text-center">Tenders</th>
                   <th className="px-3 py-2 text-right">Total Charge</th>
                   <th className="px-4 py-2 text-center">Status</th>
@@ -325,13 +326,22 @@ export default function CreditCommitmentPage() {
               </thead>
               <tbody>
                 {completedQuery.isLoading ? (
-                  <tr><td colSpan={5} className="px-4 py-7 text-center text-biz-muted">Loading completed charges...</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-7 text-center text-biz-muted">Loading completed charges...</td></tr>
                 ) : (completedQuery.data?.items.length ?? 0) === 0 ? (
-                  <tr><td colSpan={5} className="px-4 py-7 text-center text-biz-muted">No completed charges yet.</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-7 text-center text-biz-muted">No completed charges yet.</td></tr>
                 ) : completedQuery.data?.items.map((charge) => (
                   <tr key={charge.id} className="border-t border-biz-border transition-colors hover:bg-emerald-50/30">
                     <td className="px-4 py-2 font-semibold text-biz-navy">{charge.id.slice(-8).toUpperCase()}</td>
                     <td className="px-3 py-2">{charge.paymentDate ? displayDate(charge.paymentDate) : "Not set"}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {charge.items.map((item) => (
+                          <span key={item.id} className="whitespace-nowrap rounded-md bg-blue-50 px-2 py-1 font-semibold text-biz-blue">
+                            {item.tenderId}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-center">{charge.items.length}</td>
                     <td className="px-3 py-2 text-right font-bold text-biz-navy">{money(charge.totalAmount)}</td>
                     <td className="px-4 py-2 text-center"><span className="rounded-full bg-biz-success-soft px-2.5 py-1 font-semibold text-biz-success">Completed</span></td>
