@@ -477,7 +477,7 @@ export default function PgBgPage() {
         dismissOnEscape={false}
       />
 
-      <div className="relative overflow-hidden rounded-xl border border-biz-blue/15 bg-gradient-to-r from-[#edf5ff] via-white to-[#eefbf5] px-5 py-4 shadow-sm">
+      <div className="relative overflow-hidden rounded-xl border border-blue-200/80 bg-gradient-to-r from-[#edf5ff] via-white to-[#eefbf5] px-5 py-3.5 shadow-[0_5px_18px_rgba(15,48,92,0.05)]">
         <div className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
         <div className="absolute -right-12 -top-16 h-40 w-40 rounded-full bg-biz-blue/5" />
         <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -514,14 +514,14 @@ export default function PgBgPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-biz-border bg-white px-4 py-3 shadow-card">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-0">
+      <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-1">
           {STEPS.map(([title, subtitle], index) => {
             const step = (index + 1) as UiStep;
             const active = step === uiStep;
             const complete = step < uiStep;
             return (
-              <div key={title} className={cn("relative flex items-center gap-2 rounded-lg px-2 py-1.5 sm:pr-4", active && "bg-biz-blue-soft/70")}>
+              <div key={title} className={cn("relative flex items-center gap-2 rounded-lg px-2.5 py-2 sm:pr-4", active && "bg-biz-blue-soft/80 shadow-[inset_0_0_0_1px_rgba(37,99,235,0.08)]")}>
                 <span
                   className={cn(
                     "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold",
@@ -552,17 +552,15 @@ export default function PgBgPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-3">
           {uiStep === 1 && (
-            <section className="overflow-hidden rounded-xl border border-biz-border bg-white shadow-card">
-              <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
+              <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/55 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h2 className="text-[14px] font-bold text-biz-navy">
-                    1. PG/BG Workflow <span className="ml-1 text-[10px] text-biz-blue">Status &amp; History</span>
-                  </h2>
+                  <h2 className="text-[14px] font-bold text-biz-navy">Ready Tenders</h2>
                   <p className="mt-0.5 text-[10px] text-biz-muted">
-                    Choose the awarded tender you want to process. Nothing is selected automatically.
+                    Select a tender for review, or use Continue to open its NOA information directly.
                   </p>
                 </div>
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -599,9 +597,18 @@ export default function PgBgPage() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto border-y border-biz-border">
-                <table className="w-full min-w-[720px] text-[10px]">
-                  <thead className="bg-[#F7FAFF] font-semibold text-biz-navy">
+              <div className="overflow-x-auto border-b border-slate-100">
+                <table className="w-full min-w-[680px] table-fixed text-[10px] xl:min-w-0">
+                  <colgroup>
+                    <col className="w-[5%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[30%]" />
+                    <col className="w-[21%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[13%]" />
+                  </colgroup>
+                  <thead className="bg-slate-50/90 font-bold uppercase tracking-[0.035em] text-biz-muted">
                     <tr>
                       <th className="w-9 px-3 py-2" />
                       <th className="px-3 py-2 text-left">Tender ID</th>
@@ -655,7 +662,7 @@ export default function PgBgPage() {
                               hasCategory && !completed && !rejected
                                 ? "cursor-pointer hover:bg-biz-blue-soft/30"
                                 : "cursor-not-allowed bg-biz-bg/60 text-biz-muted",
-                              active && "bg-biz-blue-soft/40",
+                              active && "bg-biz-blue-soft/60 shadow-[inset_3px_0_0_#2563eb]",
                             )}
                           >
                             <td className="px-3 py-2.5">
@@ -671,14 +678,14 @@ export default function PgBgPage() {
                             <td className="px-3 py-2.5 font-semibold text-biz-navy">
                               {row.tenderId ?? "Manual"}
                             </td>
-                            <td className="px-3 py-2.5">{row.tenderWorkName}</td>
+                            <td className="px-3 py-2.5"><span className="line-clamp-2 leading-4" title={row.tenderWorkName}>{row.tenderWorkName}</span></td>
                             <td className="px-3 py-2.5 font-semibold">
                               {row.organizationMaster.shortName}
                             </td>
                             <td className="px-3 py-2.5">{row.category ?? "Not set"}</td>
                             <td className="px-3 py-2.5">
                               <span className={cn(
-                                "rounded px-2 py-1 font-semibold",
+                                "inline-flex whitespace-nowrap rounded-full px-2 py-1 font-semibold",
                                 completed
                                   ? "bg-biz-success-soft text-biz-success"
                                   : rejected
@@ -703,13 +710,23 @@ export default function PgBgPage() {
                                     router.push(`/cms/ongoing-works/${row.cmsWorkId}`);
                                   } else {
                                     selectTender(row);
+                                    if (row.workflowStatus === "READY") {
+                                      setUiStep(2);
+                                      window.scrollTo({ top: 0, behavior: "smooth" });
+                                    }
                                   }
                                 }}
                                 className={cn(
-                                  "rounded border px-3 py-1 font-semibold",
+                                  "inline-flex min-w-[76px] items-center justify-center rounded-md border px-3 py-1.5 font-semibold transition-colors",
                                   active
                                     ? "border-biz-success/30 bg-biz-success-soft text-biz-success"
-                                    : "border-biz-blue text-biz-blue",
+                                    : !hasCategory
+                                      ? "border-amber-300 bg-amber-50 text-amber-700"
+                                      : row.cmsWorkId
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                        : rejected
+                                          ? "border-red-200 bg-red-50 text-biz-danger"
+                                          : "border-biz-blue bg-biz-blue text-white shadow-[0_4px_10px_rgba(37,99,235,0.16)] hover:bg-blue-700",
                                 )}
                               >
                                 {active
@@ -721,7 +738,7 @@ export default function PgBgPage() {
                                       : rejected
                                         ? "Rejected"
                                         : row.workflowStatus === "READY"
-                                          ? "Start"
+                                          ? "Continue"
                                           : "Resume"}
                               </button>
                             </td>
@@ -830,8 +847,8 @@ export default function PgBgPage() {
           )}
 
           {uiStep === 1 && (
-            <section className="overflow-hidden rounded-md border border-biz-border bg-white shadow-card">
-              <div className="flex items-center justify-between px-4 py-3">
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.03)]">
+              <div className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
                 <h2 className="text-[14px] font-bold text-biz-navy">
                   Completed PG/BG Workflows
                   <span className="ml-2 rounded bg-biz-success-soft px-2 py-1 text-[11px] text-biz-success">
@@ -842,7 +859,7 @@ export default function PgBgPage() {
                   <Search className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <div className="overflow-x-auto border-t border-biz-border">
+              <div className="overflow-x-auto">
                 <table className="w-full min-w-[680px] text-[10px]">
                   <thead className="bg-[#F7FAFF] text-biz-navy">
                     <tr>
@@ -1211,8 +1228,8 @@ export default function PgBgPage() {
         </div>
 
         <aside className="space-y-3 xl:sticky xl:top-3">
-          <section className="overflow-hidden rounded-xl border border-biz-border bg-white shadow-card">
-            <div className="border-b border-biz-border bg-gradient-to-r from-biz-blue-soft to-white px-4 py-3">
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
+            <div className="border-b border-slate-100 bg-gradient-to-r from-blue-50/80 to-white px-4 py-3">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-[13px] font-bold text-biz-navy">Selected Work Summary</h2>
                 <span className={cn("rounded-full px-2 py-1 text-[9px] font-bold", selected ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-biz-muted")}>{selected ? "SELECTED" : "WAITING"}</span>
@@ -1230,7 +1247,7 @@ export default function PgBgPage() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-[#cfe0f7] bg-gradient-to-br from-[#f7fbff] to-white p-4 shadow-sm">
+          <section className="rounded-xl border border-slate-200 bg-slate-50/55 p-4 shadow-[0_3px_12px_rgba(15,23,42,0.03)]">
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-biz-blue">What happens next</p>
             <h3 className="mt-1 text-[13px] font-bold text-biz-navy">
               {uiStep === 1 ? "Choose one ready tender" : uiStep === 2 ? "Review the NOA decision" : "Add guarantee details and finish"}
@@ -1254,7 +1271,8 @@ export default function PgBgPage() {
         </aside>
       </div>
 
-      <div className="sticky bottom-3 z-20 flex flex-col gap-2 rounded-xl border border-biz-blue/15 bg-white/95 px-4 py-3 shadow-[0_12px_35px_rgba(15,48,92,0.14)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+      {(uiStep > 1 || selected) && (
+      <div className="sticky bottom-2 z-20 flex flex-col gap-2 rounded-xl border border-blue-200 bg-white/95 px-4 py-2.5 shadow-[0_10px_28px_rgba(15,48,92,0.12)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
         {(uiStep > 1 || selected) && (
           <button
             type="button"
@@ -1327,6 +1345,7 @@ export default function PgBgPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
