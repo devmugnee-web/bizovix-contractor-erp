@@ -147,6 +147,10 @@ export class CmsWorksService {
     const totalExpense = expenses.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
     const receivedRows = receipts.filter((row) => row.status === "RECEIVED");
     const totalReceipt = receivedRows.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
+    const totalVatDeducted = receivedRows.reduce((sum, row) => sum.plus(row.vatDeductedAmount), new Prisma.Decimal(0));
+    const totalTaxDeducted = receivedRows.reduce((sum, row) => sum.plus(row.taxDeductedAmount), new Prisma.Decimal(0));
+    const totalSecurityDepositDeducted = receivedRows.reduce((sum, row) => sum.plus(row.securityDepositDeductedAmount), new Prisma.Decimal(0));
+    const totalOtherDeduction = receivedRows.reduce((sum, row) => sum.plus(row.otherDeductionAmount), new Prisma.Decimal(0));
     const balanceReceivable = netReceivableAfterSd ? netReceivableAfterSd.minus(totalReceipt) : null;
     const currentMarginPct = valueAfterVatTax?.gt(0) ? totalReceipt.minus(totalExpense).div(valueAfterVatTax).mul(100) : null;
     const transactions = [
@@ -172,6 +176,7 @@ export class CmsWorksService {
       primaryContact,
       otherContacts,
       financial: {
+        noaAmount: work.pgBgWorkflow?.noaAmount?.toFixed(2) ?? null,
         contractValue: contractValue.toFixed(2),
         vatRate: vatRate?.toFixed(2) ?? null,
         vatAmount: vatAmount?.toFixed(2) ?? null,
@@ -182,7 +187,7 @@ export class CmsWorksService {
         netReceivableAfterSd: netReceivableAfterSd?.toFixed(2) ?? null,
       },
       transactions,
-      summary: { totalExpense: totalExpense.toFixed(2), totalReceipt: totalReceipt.toFixed(2), securityDepositHeld: heldAmount?.toFixed(2) ?? null, balanceReceivable: balanceReceivable?.toFixed(2) ?? null, currentMarginPct: currentMarginPct?.toFixed(2) ?? null },
+      summary: { totalExpense: totalExpense.toFixed(2), totalReceipt: totalReceipt.toFixed(2), totalVatDeducted: totalVatDeducted.toFixed(2), totalTaxDeducted: totalTaxDeducted.toFixed(2), totalSecurityDepositDeducted: totalSecurityDepositDeducted.toFixed(2), totalOtherDeduction: totalOtherDeduction.toFixed(2), securityDepositHeld: heldAmount?.toFixed(2) ?? null, balanceReceivable: balanceReceivable?.toFixed(2) ?? null, currentMarginPct: currentMarginPct?.toFixed(2) ?? null },
     };
   }
 

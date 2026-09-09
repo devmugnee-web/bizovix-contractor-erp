@@ -72,6 +72,7 @@ export interface CmsWorkOverview {
   primaryContact: { id: string; name: string; designation: string; mobile: string; email: string | null; address: string } | null;
   otherContacts: Array<{ id: string; name: string; designation: string; mobile: string; email: string | null; address: string }>;
   financial: {
+    noaAmount: string | null;
     contractValue: string;
     vatRate: string | null;
     vatAmount: string | null;
@@ -82,5 +83,15 @@ export interface CmsWorkOverview {
     netReceivableAfterSd: string | null;
   };
   transactions: CmsWorkOverviewTransaction[];
-  summary: { totalExpense: string; totalReceipt: string; securityDepositHeld: string | null; balanceReceivable: string | null; currentMarginPct: string | null };
+  summary: {
+    totalExpense: string;
+    totalReceipt: string;
+    totalVatDeducted: string;
+    totalTaxDeducted: string;
+    totalSecurityDepositDeducted: string;
+    totalOtherDeduction: string;
+    securityDepositHeld: string | null;
+    balanceReceivable: string | null;
+    currentMarginPct: string | null;
+  };
 }
