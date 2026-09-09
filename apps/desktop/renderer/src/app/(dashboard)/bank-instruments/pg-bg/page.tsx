@@ -371,19 +371,20 @@ export default function PgBgPage() {
         pgBgRequired: form.pgBgRequired,
       });
 
-      setCompletion(
-        form.acceptNoa
-          ? {
-              title: "Work Created Successfully",
-              message: `NOA accepted successfully and “${selected.tenderWorkName}” has been moved to Ongoing Works.`,
-              cmsWorkId: decided.cmsWorkId,
-            }
-          : {
-              title: "NOA Decision Saved",
-              message: `The NOA rejection for “${selected.tenderWorkName}” has been saved successfully.`,
-              cmsWorkId: null,
-            },
-      );
+      if (form.acceptNoa) {
+        router.push(
+          decided.cmsWorkId
+            ? `/cms/ongoing-works/${decided.cmsWorkId}`
+            : "/cms/ongoing-works",
+        );
+        return;
+      }
+
+      setCompletion({
+        title: "NOA Decision Saved",
+        message: `The NOA rejection for "${selected.tenderWorkName}" has been saved successfully.`,
+        cmsWorkId: null,
+      });
     } catch (error) {
       setMessage({
         type: "error",
@@ -432,11 +433,11 @@ export default function PgBgPage() {
         payload: { ...guarantee, amount: guaranteeAmount },
       });
 
-      setCompletion({
-        title: "Work Created Successfully",
-        message: `PG/BG created successfully and “${selected.tenderWorkName}” has been moved to Ongoing Works.`,
-        cmsWorkId: finalized.cmsWorkId,
-      });
+      router.push(
+        finalized.cmsWorkId
+          ? `/cms/ongoing-works/${finalized.cmsWorkId}`
+          : "/cms/ongoing-works",
+      );
     } catch (error) {
       setMessage({
         type: "error",

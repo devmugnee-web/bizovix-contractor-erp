@@ -1177,7 +1177,30 @@ export default function TenderCostingEditorPage() {
     );
     setLcEditorAttempted(false);
     setPendingLcAction(action);
-    setLcContainerEditorOpen(true);
+    setLcContainerEditorOpen(false);
+    if (action?.kind === "ITEM") {
+      const targetIds = new Set([...activeCostingIds, action.itemId]);
+      setActiveCostingIds(targetIds);
+      setItems((current) =>
+        allocateForeignBatchCosts(
+          allocateLcContainerFee(
+            current.map((item) =>
+              item.id === action.itemId
+                ? {
+                    ...withShippingMethod(item, action.shippingMethod),
+                    costingStatus: "DRAFT" as const,
+                  }
+                : item,
+            ),
+            lcContainerFee,
+            lcContainerAllocationMethod,
+          ),
+          targetIds,
+          foreignBatchCosts,
+        ),
+      );
+    }
+    setSaveError("Enter the LC Container Fee in the common costing row.");
   }
 
   function closeLcContainerEditor() {
@@ -1691,7 +1714,28 @@ export default function TenderCostingEditorPage() {
   function updateForeignBatchCosts(patch: Partial<ForeignBatchCostForm>) {
     const nextCosts = { ...foreignBatchCosts, ...patch };
     setForeignBatchCosts(nextCosts);
-    setItems((current) => allocateForeignBatchCosts(current, activeCostingIds, nextCosts));
+    setLcContainerAllocationMethod(nextCosts.allocationMethod);
+    setItems((current) =>
+      allocateForeignBatchCosts(
+        allocateLcContainerFee(current, lcContainerFee, nextCosts.allocationMethod),
+        activeCostingIds,
+        nextCosts,
+      ),
+    );
+    setSaveError("");
+    setForeignCostingNotice("");
+    setIsDirty(true);
+  }
+
+  function updateInlineLcContainerFee(value: string) {
+    setLcContainerFee(value);
+    setItems((current) =>
+      allocateForeignBatchCosts(
+        allocateLcContainerFee(current, value, foreignBatchCosts.allocationMethod),
+        activeCostingIds,
+        foreignBatchCosts,
+      ),
+    );
     setSaveError("");
     setForeignCostingNotice("");
     setIsDirty(true);
@@ -1742,7 +1786,7 @@ export default function TenderCostingEditorPage() {
       (item) => activeCostingIds.has(item.id) && item.sourcingType === "FOREIGN",
     );
     if (targetItems.some(isLcForeignCostingItem) && Number(lcContainerFee) <= 0) {
-      openLcContainerEditor();
+      setSaveError("Enter the LC Container Fee in the common costing row.");
       return;
     }
     const validationError = targetItems
@@ -2979,7 +3023,13 @@ export default function TenderCostingEditorPage() {
                   items={activeForeignItems}
                   saving={saveCosting.isPending}
                   settings={
-                    <div className="grid min-w-0 grid-cols-2 gap-2 overflow-hidden border-b border-biz-border bg-biz-bg/60 px-3 py-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10 xl:items-end">
+                    <div
+                      className={`grid min-w-0 grid-cols-2 gap-2 overflow-hidden border-b border-biz-border bg-biz-bg/60 px-3 py-3 sm:grid-cols-3 lg:grid-cols-5 xl:items-end ${
+                        activeForeignItems.some(isLcForeignCostingItem)
+                          ? "xl:grid-cols-11"
+                          : "xl:grid-cols-10"
+                      }`}
+                    >
                     <div className="contents">
                       <MiniField label="Country" required>
                         <SelectInput
@@ -3039,15 +3089,7 @@ export default function TenderCostingEditorPage() {
                           onChange={(event) => {
                             const shippingMethod = event.target
                               .value as TenderCostingShippingMethod;
-                            const previousShippingMethod = bulkForeign.shippingMethod;
                             updateBulkForeignSettings({ ...bulkForeign, shippingMethod });
-                            if (shippingMethod.startsWith("LC_") && Number(lcContainerFee) <= 0) {
-                              openLcContainerEditor({
-                                kind: "BULK_SELECTION",
-                                previousShippingMethod,
-                                shippingMethod,
-                              });
-                            }
                           }}
                         />
                       </MiniField>
@@ -3116,6 +3158,13 @@ export default function TenderCostingEditorPage() {
                             updateForeignBatchCosts({ otherCost })
                           }
                         />
+                        {activeForeignItems.some(isLcForeignCostingItem) && (
+                          <ForeignBatchCostInput
+                            label="Container Fee (BDT)"
+                            value={lcContainerFee}
+                            onChange={updateInlineLcContainerFee}
+                          />
+                        )}
                         <MiniField label="Allocation Basis">
                           <SelectInput
                             className="h-9 min-w-0 text-[10px]"
@@ -3141,9 +3190,10 @@ export default function TenderCostingEditorPage() {
                   lcContainerFee={lcContainerFee}
                   lcContainerAllocationMethod={lcContainerAllocationMethod}
                   lcProductCount={lcProducts.length}
-                  onEditLcContainer={() => openLcContainerEditor()}
                   onValidationBlocked={() => setSaveError("")}
-                  onContainerFeeRequired={() => openLcContainerEditor()}
+                  onContainerFeeRequired={() =>
+                    setSaveError("Enter the LC Container Fee in the common costing row.")
+                  }
                   onSaveAll={saveAllActiveForeignCosting}
                 />
               )}
@@ -3749,7 +3799,6 @@ function ForeignBatchTable({
   lcContainerFee,
   lcContainerAllocationMethod,
   lcProductCount,
-  onEditLcContainer,
   onValidationBlocked,
   onContainerFeeRequired,
   onSaveAll,
@@ -3765,7 +3814,6 @@ function ForeignBatchTable({
   lcContainerFee: string;
   lcContainerAllocationMethod: TenderCostingLcAllocationMethod;
   lcProductCount: number;
-  onEditLcContainer: () => void;
   onValidationBlocked: () => void;
   onContainerFeeRequired: () => void;
   onSaveAll: () => void;
@@ -3878,13 +3926,6 @@ function ForeignBatchTable({
             <strong className="text-[12px] text-biz-text">
               BDT {formatCompactMoney(Number(lcContainerFee) || 0)}
             </strong>
-            <button
-              type="button"
-              className="h-7 rounded-md border border-biz-warning/40 bg-white px-3 text-[10px] font-semibold text-biz-warning hover:bg-biz-warning hover:text-white"
-              onClick={onEditLcContainer}
-            >
-              {Number(lcContainerFee) > 0 ? "Edit" : "Set Fee"}
-            </button>
           </div>
         </div>
       )}

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Building2,
@@ -29,7 +29,6 @@ import {
 import type { FundingType, PendingTenderSecurity, SecurityType, TenderSecurityPendingQuery, TenderStatus } from "@bizovix/types";
 import { Button, DateInput, IconButton, SelectInput, TextInput, cn } from "@bizovix/ui";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
-import { SuccessPopup } from "@/components/layout/SuccessPopup";
 
 type SelectedTender = PendingTenderSecurity & {
   securityAmount: string;
@@ -156,7 +155,6 @@ export default function TenderSecurityPage() {
 function TenderSecurityWorkspace() {
   useSetBreadcrumb([{ label: "Bank Instruments" }, { label: "Tender Security" }]);
 
-  const router = useRouter();
   const searchParams = useSearchParams();
   const incomingTenderId = searchParams.get("tenderId")?.trim() ?? "";
   const [query, setQuery] = React.useState<TenderSecurityPendingQuery>(() => ({
@@ -320,7 +318,6 @@ function TenderSecurityWorkspace() {
           referenceNo: row.referenceNo,
         })),
       });
-      setMessage({ type: "success", text: "Tender security saved successfully." });
       setSelectedRowsOverride([]);
       setShowDetails(false);
       await pendingQuery.refetch();
@@ -344,19 +341,6 @@ function TenderSecurityWorkspace() {
 
   return (
     <div className="flex flex-col gap-3 text-biz-text">
-      <SuccessPopup
-        open={message?.type === "success"}
-        title="Tender Security Saved"
-        message={message?.text ?? ""}
-        onClose={() => setMessage(null)}
-        primaryLabel="Go to Credit Commitment"
-        onPrimary={() => {
-          setMessage(null);
-          router.push("/bank-instruments/credit-commitment");
-        }}
-        secondaryLabel="Stay on This Page"
-        onSecondary={() => setMessage(null)}
-      />
       <div className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50/60 to-emerald-50/40 px-5 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
         <div className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

@@ -22,6 +22,10 @@ import type { ContractDetail } from "@bizovix/types";
 import { CONTRACT_TYPE_OPTIONS } from "@/lib/contracts";
 import { SuccessPopup } from "@/components/layout/SuccessPopup";
 
+const DEFAULT_VAT_RATE = 10;
+const DEFAULT_TAX_RATE = 5;
+const DEFAULT_SECURITY_DEPOSIT_RATE = 10;
+
 interface ContractFormProps {
   mode: "create" | "edit";
   contract?: ContractDetail;
@@ -78,19 +82,21 @@ export function ContractForm({ mode, contract, initialWork }: ContractFormProps)
       durationDays: contract?.durationDays ?? undefined,
       dlpDays: contract?.dlpDays ?? undefined,
       retentionPct: contract?.retentionPct ? Number(contract.retentionPct) : undefined,
-      securityDepositPct: contract?.securityDepositPct
-        ? Number(contract.securityDepositPct)
-        : undefined,
+      securityDepositPct: contract
+        ? contract.securityDepositPct == null
+          ? DEFAULT_SECURITY_DEPOSIT_RATE
+          : Number(contract.securityDepositPct)
+        : DEFAULT_SECURITY_DEPOSIT_RATE,
       vatPct: contract
         ? contract.vatPct == null
-          ? undefined
+          ? DEFAULT_VAT_RATE
           : Number(contract.vatPct)
-        : 10,
+        : DEFAULT_VAT_RATE,
       taxPct: contract
         ? contract.taxPct == null
-          ? undefined
+          ? DEFAULT_TAX_RATE
           : Number(contract.taxPct)
-        : 5,
+        : DEFAULT_TAX_RATE,
       securityDepositMethod: (contract?.securityDepositMethod ??
         "") as CreateContractFormValues["securityDepositMethod"],
       securityDepositStatus: (contract?.securityDepositStatus ??

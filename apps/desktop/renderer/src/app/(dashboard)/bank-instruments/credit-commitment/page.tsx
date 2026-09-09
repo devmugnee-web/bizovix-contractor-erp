@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
@@ -32,7 +31,6 @@ import {
 } from "@bizovix/validation";
 import { cn } from "@bizovix/ui";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
-import { SuccessPopup } from "@/components/layout/SuccessPopup";
 
 type ChargeRow = PendingCreditCommitmentTender & {
   bankAccountId: string;
@@ -78,7 +76,6 @@ function TableSkeleton({ columns }: { columns: number }) {
 }
 
 export default function CreditCommitmentPage() {
-  const router = useRouter();
   useSetBreadcrumb([
     { label: "Bank Instruments" },
     { label: "Credit Commitment", href: "/bank-instruments/credit-commitment" },
@@ -209,7 +206,6 @@ export default function CreditCommitmentPage() {
       async (values) => {
         try {
           await createCharge.mutateAsync(values);
-          setMessage({ type: "success", text: "Credit commitment charge saved successfully." });
           setSelectedTenders([]);
           setChargeRows([]);
           setChargeBankAccountId("");
@@ -227,19 +223,6 @@ export default function CreditCommitmentPage() {
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4 overflow-x-hidden pb-4 text-biz-text">
-      <SuccessPopup
-        open={message?.type === "success"}
-        title="Credit Commitment Charge Saved"
-        message={message?.text ?? ""}
-        onClose={() => setMessage(null)}
-        primaryLabel="Go to PG / BG"
-        onPrimary={() => {
-          setMessage(null);
-          router.push("/bank-instruments/pg-bg");
-        }}
-        secondaryLabel="Stay on This Page"
-        onSecondary={() => setMessage(null)}
-      />
       <div className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50/60 to-emerald-50/40 px-5 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
         <div className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
         <h1 className="text-[22px] font-bold leading-7 tracking-[-0.02em] text-biz-navy">Credit Commitment Charge</h1>

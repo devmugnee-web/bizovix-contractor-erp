@@ -33,10 +33,9 @@ import {
   SelectInput,
   TextInput,
 } from "@bizovix/ui";
-import { MasterCategoryType, PurchaseType, type DocumentPurchase } from "@bizovix/types";
+import { MasterCategoryType, PurchaseType } from "@bizovix/types";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { Modal } from "@/components/layout/Modal";
-import { SuccessPopup } from "@/components/layout/SuccessPopup";
 
 export default function AddDocumentPurchasePage() {
   return (
@@ -97,7 +96,6 @@ function AddDocumentPurchaseForm() {
 
   const [addOrgOpen, setAddOrgOpen] = React.useState(false);
   const [addCategoryOpen, setAddCategoryOpen] = React.useState(false);
-  const [savedPurchase, setSavedPurchase] = React.useState<DocumentPurchase | null>(null);
 
   const prefilledFromTender = React.useRef(false);
   React.useEffect(() => {
@@ -139,35 +137,15 @@ function AddDocumentPurchaseForm() {
       },
       {
         onSuccess: (record) => {
-          setSavedPurchase(record);
+          const tenderSearch = record.tenderId ?? record.tenderWorkName;
+          router.push(
+            record.linkedTenderId
+              ? `/bank-instruments/tender-security?tenderId=${encodeURIComponent(tenderSearch)}`
+              : `/bank-instruments/document-purchase/${record.id}`,
+          );
         },
       },
     );
-  }
-
-  function closeSuccess() {
-    setSavedPurchase(null);
-    router.push("/bank-instruments/document-purchase");
-  }
-
-  function continueAfterPurchase() {
-    if (!savedPurchase) return;
-    setSavedPurchase(null);
-    const tenderSearch = savedPurchase.tenderId ?? savedPurchase.tenderWorkName;
-    router.push(
-      savedPurchase.linkedTenderId
-        ? `/bank-instruments/tender-security?tenderId=${encodeURIComponent(tenderSearch)}`
-        : `/bank-instruments/document-purchase/${savedPurchase.id}`,
-    );
-  }
-
-  function viewPurchaseContext() {
-    if (!savedPurchase) return;
-    const destination = savedPurchase.linkedTenderId
-      ? `/tenders/${savedPurchase.linkedTenderId}`
-      : `/bank-instruments/document-purchase/${savedPurchase.id}`;
-    setSavedPurchase(null);
-    router.push(destination);
   }
 
   return (
@@ -351,21 +329,6 @@ function AddDocumentPurchaseForm() {
           setValue("category", category.name, { shouldDirty: true, shouldValidate: true });
           setAddCategoryOpen(false);
         }}
-      />
-      <SuccessPopup
-        open={savedPurchase !== null}
-        title="Document Purchased Successfully"
-        message={
-          savedPurchase
-            ? `Tender ${savedPurchase.tenderId ?? savedPurchase.tenderWorkName} document purchase has been completed.`
-            : "The document purchase has been completed."
-        }
-        primaryLabel={savedPurchase?.linkedTenderId ? "Continue to Tender Security" : "View Document Purchase"}
-        onPrimary={continueAfterPurchase}
-        secondaryLabel={savedPurchase?.linkedTenderId ? "View Tender Details" : "Back to Document Purchase List"}
-        onSecondary={savedPurchase?.linkedTenderId ? viewPurchaseContext : closeSuccess}
-        onClose={closeSuccess}
-        dismissOnBackdrop={false}
       />
     </div>
   );

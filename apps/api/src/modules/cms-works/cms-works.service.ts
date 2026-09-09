@@ -9,6 +9,10 @@ import { CreateCmsWorkDto } from "./dto/create-cms-work.dto";
 import { QueryCmsWorkDto } from "./dto/query-cms-work.dto";
 import { CreateWorkContactDto } from "./dto/create-work-contact.dto";
 
+const DEFAULT_VAT_RATE = new Prisma.Decimal(10);
+const DEFAULT_TAX_RATE = new Prisma.Decimal(5);
+const DEFAULT_SECURITY_DEPOSIT_RATE = new Prisma.Decimal(10);
+
 const includeRelations = {
   organizationMaster: { select: { id: true, shortName: true, fullName: true } },
   tender: { select: { egpTenderId: true } },
@@ -117,9 +121,9 @@ export class CmsWorksService {
       ?? work.pgBgWorkflow?.contact ?? tenderPaContact(work.tender) ?? contacts[0] ?? null;
     const otherContacts = contacts.filter((contact) => contact.id !== primaryContact?.id);
     const contract = work.contracts[0] ?? null;
-    const securityRate = contract?.securityDepositPct ?? null;
-    const vatRate = contract?.vatPct ?? null;
-    const taxRate = contract?.taxPct ?? null;
+    const securityRate = contract?.securityDepositPct ?? DEFAULT_SECURITY_DEPOSIT_RATE;
+    const vatRate = contract?.vatPct ?? DEFAULT_VAT_RATE;
+    const taxRate = contract?.taxPct ?? DEFAULT_TAX_RATE;
     const contractValue = contract?.currentContractValue ?? work.contractValue;
     const valueExcludingVat = vatRate ? contractValue.div(new Prisma.Decimal(1).plus(vatRate.div(100))) : null;
     const vatAmount = valueExcludingVat ? contractValue.minus(valueExcludingVat) : null;

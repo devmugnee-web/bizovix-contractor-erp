@@ -38,7 +38,6 @@ import {
 } from "@bizovix/types";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { Modal } from "@/components/layout/Modal";
-import { SuccessPopup } from "@/components/layout/SuccessPopup";
 
 interface FilterDraft {
   purchaseType: string;
@@ -116,30 +115,17 @@ export default function DocumentPurchaseListPage() {
   const [rejecting, setRejecting] = React.useState<DocumentPurchaseRequest | null>(null);
   const [rejectionReason, setRejectionReason] = React.useState("");
   const [workflowError, setWorkflowError] = React.useState("");
-  const [approvedRequest, setApprovedRequest] = React.useState<DocumentPurchaseRequest | null>(null);
 
   async function approve(row: DocumentPurchaseRequest) {
     setWorkflowError("");
     try {
       const approved = await approveRequest.mutateAsync({ id: row.id, payload: { version: row.version } });
-      setApprovedRequest(approved);
+      router.push(
+        `/bank-instruments/document-purchase/create?tenderId=${approved.tenderId}&requestId=${approved.id}`,
+      );
     } catch {
       setWorkflowError("Could not approve the request. Reload the list and try again.");
     }
-  }
-
-  function showApprovedRequests() {
-    setApprovedRequest(null);
-    setRequestStatus(DocumentPurchaseRequestStatus.APPROVED);
-    setRequestPage(1);
-  }
-
-  function purchaseApprovedDocument() {
-    if (!approvedRequest) return;
-    router.push(
-      `/bank-instruments/document-purchase/create?tenderId=${approvedRequest.tenderId}&requestId=${approvedRequest.id}`,
-    );
-    setApprovedRequest(null);
   }
 
   async function reject() {
@@ -510,22 +496,6 @@ export default function DocumentPurchaseListPage() {
           />
         </div>
       </div>
-
-      <SuccessPopup
-        open={approvedRequest !== null}
-        title="Document Purchase Approved"
-        message={
-          approvedRequest
-            ? `Tender ${approvedRequest.tender.egpTenderId ?? approvedRequest.tenderId} is approved and ready for document purchase.`
-            : "The request is approved and ready for document purchase."
-        }
-        primaryLabel={canCreate ? "Purchase Document Now" : "View Approved Requests"}
-        onPrimary={canCreate ? purchaseApprovedDocument : showApprovedRequests}
-        secondaryLabel={canCreate ? "Purchase Later" : undefined}
-        onSecondary={showApprovedRequests}
-        onClose={showApprovedRequests}
-        dismissOnBackdrop={false}
-      />
 
       <Modal
         open={!!rejecting}
