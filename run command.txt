@@ -1,2 +1,3 @@
 cd "D:\bizovix-contractor-erp"
 pnpm dev
+pnpm --filter @bizovix/api dev

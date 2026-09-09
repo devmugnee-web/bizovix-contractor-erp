@@ -117,13 +117,11 @@ function numbersFrom(value: string): number[] {
 
 function cleanDescription(value: string): string | undefined {
   const description = compactLine(value)
-    .replace(new RegExp(`^${SERIAL_PREFIX}\\s+`, "i"), "")
     .replace(
       /^(?:(?:group\s+)?(?:n\/?a|not\s+applicable))(?:\s*[-:|]\s*|\s+)(?=\S)/i,
       "",
     )
     .replace(/^[-:;,.\s]+|[-:;,.\s]+$/g, "")
-    .slice(0, 500)
     .trim();
   if (description.length < 2 || !/[\p{L}]/u.test(description)) return undefined;
   if (
@@ -303,7 +301,7 @@ function extendDescription(
 ): { row: TenderCostingPdfExtractedRow; endIndex: number } {
   const descriptionParts = [row.description];
   let endIndex = startIndex;
-  const limit = Math.min(lines.length, startIndex + 30);
+  const limit = lines.length;
 
   for (let index = startIndex + 1; index < limit; index += 1) {
     const line = lines[index] ?? "";
@@ -330,7 +328,7 @@ function extendDescription(
   return {
     row: {
       ...row,
-      description: descriptionParts.join(" ").replace(/\s+/g, " ").slice(0, 500).trim(),
+      description: descriptionParts.join(" ").replace(/\s+/g, " ").trim(),
     },
     endIndex,
   };
@@ -346,7 +344,7 @@ function parseStackedRow(
   if (!start) return undefined;
   const itemNo = extractItemNo(lines[startIndex] ?? "");
   const descriptionParts = start[1] ? [start[1]] : [];
-  const limit = Math.min(lines.length, startIndex + 40);
+  const limit = lines.length;
 
   for (let index = startIndex + 1; index < limit; index += 1) {
     const line = lines[index] ?? "";
@@ -609,6 +607,20 @@ function positionedColumnText(
   return orderedPositionedText(stopIndex >= 0 ? ordered.slice(0, stopIndex) : ordered);
 }
 
+function positionedColumnRangeText(
+  items: PositionedText[],
+  startX: number,
+  endX: number,
+): string {
+  const ordered = items
+    .filter((item) => item.x >= startX && item.x < endX)
+    .sort((left, right) => right.y - left.y || left.x - right.x);
+  const stopIndex = ordered.findIndex((item) =>
+    /^(?:note\s+\d+\s*:|about\s+e-gp|copyright\b)/i.test(compactLine(item.str)),
+  );
+  return orderedPositionedText(stopIndex >= 0 ? ordered.slice(0, stopIndex) : ordered);
+}
+
 function parsePositionedPriceSchedulePage(
   items: PositionedText[],
   layout: PriceScheduleLayout,
@@ -628,18 +640,23 @@ function parsePositionedPriceSchedulePage(
     )
     .sort((left, right) => right.y - left.y || left.x - right.x);
   const firstAnchorY = anchors[0]?.y;
-  const leadingDescription = positionedColumnText(
+  const leadingDescription = positionedColumnRangeText(
     bodyItems.filter(
       (item) => firstAnchorY === undefined || item.y > firstAnchorY + 2,
     ),
-    layout.descriptionContentX,
+    layout.itemDescriptionBoundary,
+    layout.descriptionUnitBoundary,
   );
   const rows = anchors.flatMap((anchor, index) => {
     const nextAnchor = anchors[index + 1];
     const rowItems = bodyItems.filter(
       (item) => item.y <= anchor.y + 2 && (!nextAnchor || item.y > nextAnchor.y + 2),
     );
-    const description = positionedColumnText(rowItems, layout.descriptionContentX);
+    const description = positionedColumnRangeText(
+      rowItems,
+      layout.itemDescriptionBoundary,
+      layout.descriptionUnitBoundary,
+    );
     const unitText = orderedPositionedText(
       rowItems.filter(
         (item) =>
@@ -748,6 +765,10 @@ function parsePositionedBillOfQuantitiesPage(
   headerBottom = Number.POSITIVE_INFINITY,
 ): PositionedPageParseResult {
   const bodyItems = items.filter((item) => item.str.trim() && item.y < headerBottom);
+  const descriptionStartBoundary =
+    ((layout.codeContentX ?? layout.itemX) + layout.descriptionContentX) / 2;
+  const descriptionEndBoundary =
+    (layout.descriptionContentX + layout.unitContentX) / 2;
   const serialPattern = new RegExp(`^${ITEM_NO_CAPTURE}$`, "iu");
   const anchors = bodyItems
     .filter(
@@ -758,29 +779,28 @@ function parsePositionedBillOfQuantitiesPage(
     )
     .sort((left, right) => right.y - left.y || left.x - right.x);
   const firstAnchorY = anchors[0]?.y;
-  const leadingDescription = positionedColumnText(
+  const leadingDescription = positionedColumnRangeText(
     bodyItems.filter(
       (item) => firstAnchorY === undefined || item.y > firstAnchorY + 2,
     ),
-    layout.descriptionContentX,
+    descriptionStartBoundary,
+    descriptionEndBoundary,
   );
   const rows = anchors.flatMap((anchor, index) => {
     const nextAnchor = anchors[index + 1];
     const rowItems = bodyItems.filter(
       (item) => item.y <= anchor.y + 2 && (!nextAnchor || item.y > nextAnchor.y + 2),
     );
-    const code = layout.codeContentX
-      ? positionedColumnText(
-          rowItems.filter((item) => Math.abs(item.y - anchor.y) <= 2),
-          layout.codeContentX,
-        )
-      : "";
-    const description = positionedColumnText(rowItems, layout.descriptionContentX);
+    const description = positionedColumnRangeText(
+      rowItems,
+      descriptionStartBoundary,
+      descriptionEndBoundary,
+    );
     const unitText = positionedColumnText(rowItems, layout.unitContentX);
     const quantityText = positionedColumnText(rowItems, layout.quantityContentX);
     const quantity = numbersFrom(quantityText)[0];
     const row = makeRow(
-      `${code} ${description}`.trim(),
+      description,
       unitText,
       quantity === undefined ? undefined : String(quantity),
       anchor.str,
@@ -1067,7 +1087,6 @@ export async function extractTenderCostingPdfs(
             if (previous) {
               previous.description = `${previous.description} ${positioned.leadingDescription}`
                 .replace(/\s+/g, " ")
-                .slice(0, 500)
                 .trim();
             }
           }
@@ -1091,7 +1110,6 @@ export async function extractTenderCostingPdfs(
             if (previous) {
               previous.description = `${previous.description} ${positioned.leadingDescription}`
                 .replace(/\s+/g, " ")
-                .slice(0, 500)
                 .trim();
             }
           }
@@ -1104,7 +1122,6 @@ export async function extractTenderCostingPdfs(
           if (previous) {
             previous.description = `${previous.description} ${positioned.leadingDescription}`
               .replace(/\s+/g, " ")
-              .slice(0, 500)
               .trim();
           }
         }

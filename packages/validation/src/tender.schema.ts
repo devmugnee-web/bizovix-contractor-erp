@@ -61,7 +61,7 @@ export const rejectTenderForCostingSchema = z.object({
 });
 
 export const saveTenderCostingItemSchema = z.object({
-  description: z.string().trim().min(1, "Item description is required").max(500),
+  description: z.string().trim().min(1, "Item description is required"),
   secondaryDescription: optionalTrimmedText(500),
   unit: z.string().trim().min(1, "Unit is required").max(50),
   quantity: z.coerce.number().positive("Quantity must be greater than 0"),

@@ -1,13 +1,44 @@
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const turboBin = path.join(repositoryRoot, "node_modules", "turbo", "bin", "turbo");
+const turboPackageJson = path.join(repositoryRoot, "node_modules", "turbo", "package.json");
 const apiUrl = "http://127.0.0.1:4000/api/v1/auth/dev-login";
 const rendererUrl = "http://127.0.0.1:3010/dashboard";
 const startupTimeoutMs = Number(process.env.BIZOVIX_DEV_STARTUP_TIMEOUT_MS ?? 120_000);
+
+function resolveNativeTurboBin() {
+  const platform = process.platform === "win32" ? "windows" : process.platform;
+  const architecture = process.arch === "x64" ? "64" : process.arch;
+  if (!["windows", "darwin", "linux"].includes(platform) || !["64", "arm64"].includes(architecture)) {
+    return null;
+  }
+
+  try {
+    const { version } = JSON.parse(readFileSync(turboPackageJson, "utf8"));
+    const executable = process.platform === "win32" ? "turbo.exe" : "turbo";
+    const nativeBin = path.join(
+      repositoryRoot,
+      "node_modules",
+      ".pnpm",
+      `@turbo+${platform}-${architecture}@${version}`,
+      "node_modules",
+      "@turbo",
+      `${platform}-${architecture}`,
+      "bin",
+      executable,
+    );
+    return existsSync(nativeBin) ? nativeBin : null;
+  } catch {
+    return null;
+  }
+}
+
+const nativeTurboBin = resolveNativeTurboBin();
 
 function log(message) {
   process.stdout.write(`[dev] ${message}\n`);
@@ -105,7 +136,11 @@ async function main() {
 
   function startRunner(filters, label) {
     log(`Starting ${label}...`);
-    const child = spawn(process.execPath, [turboBin, "run", "dev", ...filters], {
+    const command = nativeTurboBin ?? process.execPath;
+    const args = nativeTurboBin
+      ? ["run", "dev", ...filters]
+      : [turboBin, "run", "dev", ...filters];
+    const child = spawn(command, args, {
       cwd: repositoryRoot,
       env: process.env,
       stdio: "inherit",

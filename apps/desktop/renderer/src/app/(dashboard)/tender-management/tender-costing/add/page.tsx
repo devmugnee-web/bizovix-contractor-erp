@@ -2389,23 +2389,35 @@ export default function TenderCostingEditorPage() {
   const isBudgetValid = Number.isFinite(enteredBudget) && enteredBudget > 0;
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-page-title text-biz-text">Prepare Tender Costing</h1>
-          <p className="mt-0.5 text-[12.5px] text-biz-muted">
-            Use live tender data and save server-calculated costing values.
-          </p>
+    <div className="flex flex-col gap-4 pb-6">
+      <div className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50/70 to-emerald-50/50 px-5 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+        <div className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
+        <div className="absolute -right-12 -top-16 h-40 w-40 rounded-full bg-biz-blue/5" />
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-white text-biz-blue shadow-sm">
+              <FileCheck2 className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="mb-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-biz-blue">
+                Tender Costing Workspace
+              </p>
+              <h1 className="text-page-title text-biz-navy">Prepare Tender Costing</h1>
+              <p className="mt-0.5 text-[12.5px] text-biz-muted">
+                Use live tender data and save server-calculated costing values.
+              </p>
+            </div>
+          </div>
+          <Link href="/tender-management/tender-costing" className="shrink-0">
+            <SecondaryButton className="w-full border-blue-200 bg-white shadow-sm sm:w-auto">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Costing List
+            </SecondaryButton>
+          </Link>
         </div>
-        <Link href="/tender-management/tender-costing">
-          <SecondaryButton>
-            <ArrowLeft className="h-4 w-4" />
-            Back to Costing List
-          </SecondaryButton>
-        </Link>
       </div>
 
-      <div className="grid min-w-0 grid-cols-8 gap-1 sm:gap-2">
+      <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
         <CostingKpi label="Tender ID" value={record.tender.egpTenderId ?? record.tender.id} />
         <CostingKpi label="Product / Work Name" value={record.tender.workName} />
         <CostingKpi
@@ -2461,7 +2473,7 @@ export default function TenderCostingEditorPage() {
       </div>
 
       {budgetNotice && (
-        <p className="rounded-md bg-biz-success/10 px-3 py-2 text-[11.5px] text-biz-success">
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-[11.5px] font-medium text-emerald-700 shadow-sm">
           {budgetNotice}
         </p>
       )}
@@ -2473,33 +2485,67 @@ export default function TenderCostingEditorPage() {
         >
           <div
             ref={intakeSectionRef}
-            className="scroll-mt-20 rounded-lg border border-biz-border bg-biz-surface"
+            className="scroll-mt-20 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-[0_10px_28px_rgba(15,48,92,0.07)]"
           >
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-biz-border px-4 py-3">
-              <div>
-                <h2 className="text-[14px] font-semibold text-biz-text">1. Costing Items Intake</h2>
-                <p className="text-[11px] text-biz-muted">
-                  Add multiple products first; source prices and import charges are entered later.
-                </p>
+            <div className="flex flex-col gap-3 border-b border-blue-100 bg-gradient-to-r from-blue-50/45 via-white to-white px-4 py-3 xl:flex-row xl:items-center">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between xl:contents">
+                <div className="min-w-0 xl:order-1 xl:w-[190px] xl:shrink-0">
+                  <div className="flex items-center gap-2.5 py-1">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-biz-blue text-[10px] font-bold text-white">
+                      1
+                    </span>
+                    <h2 className="text-[13px] font-bold leading-4 text-biz-navy">Costing Items Intake</h2>
+                  </div>
+                </div>
+                <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto xl:order-3 xl:shrink-0">
+                  <input
+                    ref={costingPdfInputRef}
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    multiple
+                    className="hidden"
+                    onChange={(event) =>
+                      void importCostingPdfFiles(Array.from(event.target.files ?? []))
+                    }
+                  />
+                  <SecondaryButton
+                    className="h-11 flex-1 border-biz-blue bg-biz-blue px-4 font-bold text-white shadow-[0_5px_12px_rgba(37,99,235,0.22)] hover:bg-blue-700 hover:text-white sm:flex-none"
+                    disabled={isReadingCostingPdfs}
+                    onClick={() => costingPdfInputRef.current?.click()}
+                    title="Import product rows from one or more BOQ PDFs"
+                  >
+                    {isReadingCostingPdfs ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <UploadCloud className="h-4 w-4" />
+                    )}
+                    {isReadingCostingPdfs ? "Reading PDF..." : "Upload BOQ PDF"}
+                  </SecondaryButton>
+                  <PrimaryButton className="h-11 flex-1 border border-blue-200 bg-white px-4 text-biz-blue shadow-none hover:bg-blue-50 sm:flex-none" onClick={addAnotherItem}>
+                    <Plus className="h-4 w-4" />
+                    Add Another Item
+                  </PrimaryButton>
+                </div>
               </div>
-              <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-1">
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 xl:order-2 xl:min-w-0 xl:flex-1">
+                <label className="flex min-w-0 flex-col gap-1">
                   <span className="text-[10px] font-medium text-biz-muted">
                     Costing Date <RequiredMark />
                   </span>
                   <TextInput
-                    className="h-9 w-[145px] px-2 text-[11px]"
+                    className="h-8 w-full border-slate-200 bg-slate-50/60 px-2 text-[11px] focus:bg-white"
                     type="date"
                     value={header.costingDate}
                     onChange={(event) => updateCommonCostingDate(event.target.value)}
                   />
                 </label>
-                <label className="flex flex-col gap-1">
+                <label className="flex min-w-0 flex-col gap-1">
                   <span className="text-[10px] font-medium text-biz-muted">
                     Prepared By <RequiredMark />
                   </span>
                   <SelectInput
-                    className="h-9 w-[180px] text-[11px]"
+                    className="h-8 w-full border-slate-200 bg-slate-50/60 text-[11px] focus:bg-white"
                     placeholder="Select user"
                     value={effectivePreparedByUserId}
                     options={(options.data?.users ?? []).map((user) => ({
@@ -2509,60 +2555,39 @@ export default function TenderCostingEditorPage() {
                     onChange={(event) => updateCommonPreparedBy(event.target.value)}
                   />
                 </label>
-                <SelectInput
-                  className="h-9 w-[170px] text-[11px]"
-                  value={sourceFilter}
-                  options={SOURCE_FILTER_OPTIONS}
-                  onChange={(event) => setSourceFilter(event.target.value)}
-                />
-                <input
-                  ref={costingPdfInputRef}
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  multiple
-                  className="hidden"
-                  onChange={(event) =>
-                    void importCostingPdfFiles(Array.from(event.target.files ?? []))
-                  }
-                />
-                <SecondaryButton
-                  disabled={isReadingCostingPdfs}
-                  onClick={() => costingPdfInputRef.current?.click()}
-                  title="Import product rows from one or more BOQ PDFs"
-                >
-                  {isReadingCostingPdfs ? (
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <UploadCloud className="h-4 w-4" />
-                  )}
-                  {isReadingCostingPdfs ? "Reading PDF..." : "Upload BOQ PDF"}
-                </SecondaryButton>
-                <PrimaryButton onClick={addAnotherItem}>
-                  <Plus className="h-4 w-4" />
-                  Add Another Row
-                </PrimaryButton>
+                <label className="flex min-w-0 flex-col gap-1">
+                  <span className="text-[10px] font-medium text-biz-muted">Item View</span>
+                  <SelectInput
+                    className="h-8 w-full border-slate-200 bg-slate-50/60 text-[11px] focus:bg-white"
+                    value={sourceFilter}
+                    options={SOURCE_FILTER_OPTIONS}
+                    onChange={(event) => setSourceFilter(event.target.value)}
+                  />
+                </label>
               </div>
             </div>
             {costingPdfNotice && (
               <p
                 aria-live="polite"
-                className="flex items-center gap-2 border-b border-biz-success/20 bg-biz-success/5 px-4 py-2 text-[10.5px] font-medium text-biz-success"
+                className="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-2.5 text-[11px] font-semibold text-emerald-700"
               >
-                <FileCheck2 className="h-4 w-4 shrink-0" />
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                  <FileCheck2 className="h-4 w-4" />
+                </span>
                 <span>{costingPdfNotice}</span>
               </p>
             )}
             {costingPdfError && (
               <p
                 role="alert"
-                className="border-b border-biz-danger/20 bg-biz-danger/5 px-4 py-2 text-[10.5px] font-medium text-biz-danger"
+                className="border-b border-red-200 bg-red-50 px-4 py-2.5 text-[11px] font-semibold text-biz-danger"
               >
                 {costingPdfError}
               </p>
             )}
-            <div className="overflow-hidden">
+            <div className="overflow-x-auto">
               <table className="w-full table-fixed text-left text-[9px] xl:text-[10px]">
-                <thead className="bg-biz-bg text-biz-muted">
+                <thead className="border-b border-blue-100 bg-gradient-to-r from-blue-50/80 to-slate-50 text-biz-muted">
                   <tr>
                     <th className="w-[2%] px-0.5 py-2 text-center">
                       <input
@@ -2588,27 +2613,27 @@ export default function TenderCostingEditorPage() {
                       />
                     </th>
                     <th className="w-[2%] px-0.5 py-2">SL</th>
-                    <th className="w-[12%] px-1 py-2">
+                    <th className="w-[20%] px-2 py-2">
                       Product Name <RequiredMark />
                     </th>
-                    <th className="w-[8%] px-0.5 py-2">Source of Product</th>
-                    <th className="w-[6%] px-0.5 py-2">
+                    <th className="w-[7%] px-0.5 py-2">Source of Product</th>
+                    <th className="w-[5%] px-0.5 py-2">
                       Unit <RequiredMark />
                     </th>
-                    <th className="w-[5%] px-0.5 py-2">
+                    <th className="w-[4%] px-0.5 py-2">
                       Qty <RequiredMark />
                     </th>
                     <th className="w-[7%] px-0.5 py-2 text-right">
                       Unit Price <RequiredMark />
                     </th>
                     <th className="w-[8%] px-0.5 py-2 text-right">Total Price</th>
-                    <th className="w-[7%] px-0.5 py-2 text-right">Profit</th>
+                    <th className="w-[6%] px-0.5 py-2 text-right">Profit</th>
                     <th className="w-[8%] px-0.5 py-2 text-right">Sub Total</th>
-                    <th className="w-[5%] px-0.5 py-2 text-right">VAT</th>
-                    <th className="w-[5%] px-0.5 py-2 text-right">Tax</th>
+                    <th className="w-[4%] px-0.5 py-2 text-right">VAT</th>
+                    <th className="w-[4%] px-0.5 py-2 text-right">Tax</th>
                     <th className="w-[8%] px-0.5 py-2 text-right">Grand Total</th>
                     <th className="w-[8%] px-0.5 py-2 text-right">Unit Sales</th>
-                    <th className="w-[9%] px-0.5 py-2 text-center">Action</th>
+                    <th className="w-[7%] px-0.5 py-2 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2641,17 +2666,17 @@ export default function TenderCostingEditorPage() {
                           )}
                         </td>
                         <td className="px-1 py-2">{item.sourceItemNo || visibleIndex + 1}</td>
-                        <td className="px-1 py-2">
+                        <td className="px-2 py-2">
                           <RequiredRowField>
-                            <TextInput
+                            <textarea
                               data-costing-field
                               data-costing-column="product"
                               aria-invalid={productRequiredError}
-                              hasError={productRequiredError}
-                              className={`h-9 min-w-0 px-1.5 text-[10px] ${
+                              rows={Math.max(1, Math.ceil(Math.max(item.description.length, 1) / 28))}
+                              className={`min-h-9 w-full resize-none overflow-hidden rounded-md border bg-white px-2 py-2 text-[10px] font-medium leading-4 text-biz-text outline-none transition-colors [field-sizing:content] focus:border-biz-blue focus:ring-2 focus:ring-biz-blue/15 ${
                                 productRequiredError
-                                  ? "bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
-                                  : ""
+                                  ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
+                                  : "border-biz-border"
                               }`}
                               value={item.description}
                               placeholder="Enter product"
@@ -2661,7 +2686,11 @@ export default function TenderCostingEditorPage() {
                                   costingStatus: "NOT_COSTED",
                                 })
                               }
-                              onKeyDown={moveAcrossCostingRow}
+                              onKeyDown={(event) =>
+                                moveAcrossCostingRow(
+                                  event as unknown as React.KeyboardEvent<HTMLInputElement>,
+                                )
+                              }
                             />
                           </RequiredRowField>
                         </td>

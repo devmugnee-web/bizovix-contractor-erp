@@ -110,6 +110,36 @@ describe("Tender costing PDF extraction", () => {
     ]);
   });
 
+  it("keeps the complete Description of Item when it is longer than 500 characters", () => {
+    const description =
+      `Supply, installation, testing and commissioning of equipment ` +
+      `with complete technical specifications, accessories and required services. `.repeat(8).trim();
+    const rows = parseTenderCostingPdfText(`
+      Bill of Quantities
+      SL | Group | Description of Item | Measurement Unit | Quantity | Unit Price | Total Price
+      1 | N/A | ${description} | Nos | 2 | 250,000 | 500,000
+    `);
+
+    expect(description.length).toBeGreaterThan(500);
+    expect(rows[0]?.description).toBe(description);
+  });
+
+  it("preserves specification numbers at the start of Description of Item", () => {
+    const rows = parseTenderCostingPdfText(`
+      Bill of Quantities
+      Item No | Description of Item | Measurement Unit | Quantity
+      2 | 5 Thread Over Lock Machine | Nos | 2
+      3 | 4 Thread Overlock Machine | Nos | 1
+      4 | 3 Thread Overlock Machine | Nos | 1
+    `);
+
+    expect(rows.map((row) => row.description)).toEqual([
+      "5 Thread Over Lock Machine",
+      "4 Thread Overlock Machine",
+      "3 Thread Overlock Machine",
+    ]);
+  });
+
   it("validates the PDF signature and rejects an empty upload", async () => {
     expect(hasValidTenderCostingPdfSignature(file("%PDF-1.7 test"))).toBe(true);
     expect(hasValidTenderCostingPdfSignature(file("not a pdf"))).toBe(false);
