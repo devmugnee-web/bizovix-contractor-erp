@@ -3,8 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, BriefcaseBusiness, Save, Search, X } from "lucide-react";
-import { useBankAccounts, useCmsWorkOverview, useCmsWorks, useCreateReceipt, useEligibleBills } from "@bizovix/api-client";
+import { ArrowLeft, BriefcaseBusiness, Check, ChevronDown, Save, Search, X } from "lucide-react";
+import { useBankAccounts, useCmsWorkOverview, useCmsWorks, useCreateReceipt } from "@bizovix/api-client";
 import type { SaveReceiptInput } from "@bizovix/types";
 import { cn } from "@bizovix/ui";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
@@ -23,7 +23,6 @@ const percentage = (amount: number, gross: number) => gross > 0 ? (amount / gros
 const field = "h-9 w-full min-w-0 rounded-sm border border-biz-border bg-white px-2 text-[11px] font-medium text-biz-navy outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-biz-blue focus:ring-2 focus:ring-blue-100";
 const invalidField = "border-red-400 bg-red-50/70 ring-2 ring-red-100 focus:border-red-500 focus:ring-red-100";
 const receiptTypes = [
-  { value: "RUNNING_BILL_PAYMENT", label: "Running Bill" },
   { value: "PROGRESS_PAYMENT", label: "Progress Payment" },
   { value: "ADVANCE_PAYMENT", label: "Advance Payment" },
   { value: "RETENTION_RECEIVED", label: "Retention Received" },
@@ -35,9 +34,8 @@ type DeductionField = "vatDeductedAmount" | "taxDeductedAmount" | "securityDepos
 interface ReceiptFormState {
   receiptDate: string;
   receiptType: string;
-  receivableId: string;
   referenceNo: string;
-  grossAmount: string;
+  receivedAmount: string;
   vatDeductedAmount: string;
   taxDeductedAmount: string;
   securityDepositDeductedAmount: string;
@@ -52,10 +50,9 @@ interface ReceiptFormState {
 
 const emptyForm = (): ReceiptFormState => ({
   receiptDate: today(),
-  receiptType: "RUNNING_BILL_PAYMENT",
-  receivableId: "",
+  receiptType: "PROGRESS_PAYMENT",
   referenceNo: "",
-  grossAmount: "",
+  receivedAmount: "",
   vatDeductedAmount: "",
   taxDeductedAmount: "",
   securityDepositDeductedAmount: "",
@@ -80,28 +77,32 @@ export default function AddProjectReceiptPage() {
   const [form, setForm] = React.useState<ReceiptFormState>(emptyForm);
   const [error, setError] = React.useState("");
   const [showValidation, setShowValidation] = React.useState(false);
+  const [projectPickerOpen, setProjectPickerOpen] = React.useState(false);
+  const [highlightedProjectIndex, setHighlightedProjectIndex] = React.useState(0);
   const submitting = React.useRef(false);
   const projectSearchInitialized = React.useRef(false);
+  const projectPickerRef = React.useRef<HTMLDivElement>(null);
+  const projectInputRef = React.useRef<HTMLInputElement>(null);
+  const receiptDateRef = React.useRef<HTMLInputElement>(null);
   const overview = useCmsWorkOverview(workId || undefined);
-  const bills = useEligibleBills(workId || undefined);
   const project = works.data?.items.find((item) => item.id === workId);
-  const bill = bills.data?.find((item) => item.id === form.receivableId);
   const activeAccounts = (accounts.data ?? []).filter((account) => account.isActive);
   const bankAccounts = activeAccounts.filter((account) => account.accountType === "BANK");
   const cashAccount = activeAccounts.find((account) => account.accountType === "CASH");
   const receivingAccountId = form.paymentMethod === "CASH" ? cashAccount?.id ?? "" : form.accountId;
-  const filteredWorks = (works.data?.items ?? []).filter((item) => item.tenderNumber?.toLowerCase().includes(projectSearch.trim().toLowerCase()));
-  const runningBill = form.receiptType === "RUNNING_BILL_PAYMENT";
+  const filteredWorks = (works.data?.items ?? [])
+    .filter((item) => item.tenderNumber?.toLowerCase().includes(projectSearch.trim().toLowerCase()))
+    .sort((left, right) => (right.tenderNumber ?? "").localeCompare(left.tenderNumber ?? "", undefined, { numeric: true }));
   const selected = overview.data;
 
-  const grossAmount = numberValue(form.grossAmount);
+  const receivedAmount = numberValue(form.receivedAmount);
   const vatAmount = numberValue(form.vatDeductedAmount);
   const taxAmount = numberValue(form.taxDeductedAmount);
   const securityDepositAmount = numberValue(form.securityDepositDeductedAmount);
   const otherDeductionAmount = numberValue(form.otherDeductionAmount);
   const totalDeductions = vatAmount + taxAmount + securityDepositAmount + otherDeductionAmount;
-  const netReceived = grossAmount - totalDeductions;
-  const remainingBill = bill ? Number(bill.outstanding) - netReceived : null;
+  const calculatedBillAmount = receivedAmount + totalDeductions;
+  const amountAfterVatTax = calculatedBillAmount - vatAmount - taxAmount;
 
   const projectName = project?.workName ?? selected?.project.workName;
   const organizationName = project?.organizationMaster.shortName ?? selected?.project.organizationMaster.shortName;
@@ -112,19 +113,18 @@ export default function AddProjectReceiptPage() {
     project: showValidation && !workId,
     receiptDate: showValidation && !form.receiptDate,
     receiptType: showValidation && !form.receiptType,
-    bill: showValidation && runningBill && !form.receivableId,
-    grossAmount: showValidation && grossAmount <= 0,
+    receivedAmount: showValidation && receivedAmount <= 0,
     account: showValidation && !receivingAccountId,
     chequeNo: showValidation && form.paymentMethod === "CHEQUE" && !form.chequeNo.trim(),
     chequeDate: showValidation && form.paymentMethod === "CHEQUE" && !form.chequeDate,
     chequeBankName: showValidation && form.paymentMethod === "CHEQUE" && !form.chequeBankName.trim(),
   };
 
-  const deductions: Array<{ key: DeductionField; label: string; amount: number; showRate: boolean }> = [
-    { key: "vatDeductedAmount", label: "VAT Deducted", amount: vatAmount, showRate: true },
-    { key: "taxDeductedAmount", label: "Tax Deducted", amount: taxAmount, showRate: true },
-    { key: "securityDepositDeductedAmount", label: "SD / Retention", amount: securityDepositAmount, showRate: true },
-    { key: "otherDeductionAmount", label: "Other Deduction", amount: otherDeductionAmount, showRate: false },
+  const deductions: Array<{ key: DeductionField; label: string; amount: number; showRate: boolean; rateBase: number }> = [
+    { key: "vatDeductedAmount", label: "VAT Deducted", amount: vatAmount, showRate: true, rateBase: calculatedBillAmount },
+    { key: "taxDeductedAmount", label: "Tax Deducted", amount: taxAmount, showRate: true, rateBase: calculatedBillAmount },
+    { key: "securityDepositDeductedAmount", label: "SD Retained", amount: securityDepositAmount, showRate: true, rateBase: amountAfterVatTax },
+    { key: "otherDeductionAmount", label: "Other Deduction", amount: otherDeductionAmount, showRate: false, rateBase: calculatedBillAmount },
   ];
 
   React.useEffect(() => {
@@ -134,12 +134,26 @@ export default function AddProjectReceiptPage() {
     }
   }, [project?.tenderNumber]);
 
+  React.useEffect(() => {
+    setHighlightedProjectIndex(0);
+  }, [projectSearch]);
+
+  React.useEffect(() => {
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!projectPickerRef.current?.contains(event.target as Node)) {
+        setProjectPickerOpen(false);
+        setProjectSearch(project?.tenderNumber ?? "");
+      }
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [project?.tenderNumber]);
+
   function clearSettlement(value: ReceiptFormState): ReceiptFormState {
     return {
       ...value,
-      receivableId: "",
       referenceNo: "",
-      grossAmount: "",
+      receivedAmount: "",
       vatDeductedAmount: "",
       taxDeductedAmount: "",
       securityDepositDeductedAmount: "",
@@ -148,28 +162,38 @@ export default function AddProjectReceiptPage() {
   }
 
   function selectWork(id: string) {
+    const nextProject = works.data?.items.find((item) => item.id === id);
     setWorkId(id);
+    setProjectSearch(nextProject?.tenderNumber ?? "");
+    setProjectPickerOpen(false);
+    setHighlightedProjectIndex(0);
     setError("");
-    setForm((value) => clearSettlement(value));
+    if (id !== workId) setForm((value) => clearSettlement(value));
+    window.requestAnimationFrame(() => receiptDateRef.current?.focus());
   }
 
-  function selectBill(id: string) {
-    const selectedBill = bills.data?.find((item) => item.id === id);
-    if (!selectedBill) {
-      setForm((value) => ({ ...clearSettlement(value), receivableId: "" }));
+  function handleProjectKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setProjectPickerOpen(true);
+      setHighlightedProjectIndex((index) => Math.min(index + 1, Math.max(filteredWorks.length - 1, 0)));
       return;
     }
-    const firstAllocation = Number(selectedBill.alreadyReceived) <= 0;
-    setForm((value) => ({
-      ...value,
-      receivableId: id,
-      referenceNo: selectedBill.billNo,
-      grossAmount: firstAllocation ? selectedBill.grossBillAmount : selectedBill.outstanding,
-      vatDeductedAmount: firstAllocation ? selectedBill.vatAmount : "",
-      taxDeductedAmount: firstAllocation ? selectedBill.taxAmount : "",
-      securityDepositDeductedAmount: firstAllocation ? selectedBill.securityDepositAmount : "",
-      otherDeductionAmount: firstAllocation ? selectedBill.otherDeductionAmount : "",
-    }));
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlightedProjectIndex((index) => Math.max(index - 1, 0));
+      return;
+    }
+    if (event.key === "Enter" && projectPickerOpen && filteredWorks[highlightedProjectIndex]) {
+      event.preventDefault();
+      selectWork(filteredWorks[highlightedProjectIndex].id);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setProjectPickerOpen(false);
+      setProjectSearch(project?.tenderNumber ?? "");
+    }
   }
 
   async function submit(addAnother: boolean) {
@@ -177,20 +201,12 @@ export default function AddProjectReceiptPage() {
     setError("");
     setShowValidation(true);
 
-    if (!workId || !form.receiptDate || !form.receiptType || !grossAmount || !receivingAccountId || (runningBill && !form.receivableId)) {
+    if (!workId || !form.receiptDate || !form.receiptType || !receivedAmount || !receivingAccountId) {
       setError("Complete all required receipt cells.");
       return;
     }
     if ([vatAmount, taxAmount, securityDepositAmount, otherDeductionAmount].some((value) => value < 0)) {
       setError("Deduction amounts cannot be negative.");
-      return;
-    }
-    if (netReceived <= 0) {
-      setError("Total deductions must be less than the gross amount.");
-      return;
-    }
-    if (bill && netReceived > Number(bill.outstanding)) {
-      setError(`Net received cannot exceed ${money(bill.outstanding)} outstanding for ${bill.billNo}.`);
       return;
     }
     if (form.paymentMethod === "CHEQUE" && (!form.chequeNo.trim() || !form.chequeDate || !form.chequeBankName.trim())) {
@@ -209,14 +225,13 @@ export default function AddProjectReceiptPage() {
       receiptCategory: "PROJECT",
       receiptType: form.receiptType,
       workId,
-      receivableId: runningBill ? form.receivableId : undefined,
       receivedFrom,
-      grossAmount,
+      grossAmount: calculatedBillAmount,
       vatDeductedAmount: vatAmount,
       taxDeductedAmount: taxAmount,
       securityDepositDeductedAmount: securityDepositAmount,
       otherDeductionAmount,
-      amount: netReceived,
+      amount: receivedAmount,
       receivedInAccountId: receivingAccountId,
       paymentMethod: form.paymentMethod,
       referenceNo: form.paymentMethod === "CHEQUE" ? form.chequeNo.trim() : form.referenceNo.trim() || undefined,
@@ -247,7 +262,7 @@ export default function AddProjectReceiptPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-[24px] font-bold leading-tight">Add Project Receipt</h1>
-          <p className="mt-1 text-[12px] text-biz-muted">Record the gross settlement, deductions and actual money received.</p>
+          <p className="mt-1 text-[12px] text-biz-muted">Record the current bill, actual deductions and net money received.</p>
         </div>
         <Link href="/receipts" className="inline-flex h-10 w-fit items-center gap-2 rounded-md border border-biz-border bg-white px-4 text-[12px] font-semibold transition-colors hover:border-blue-200 hover:bg-blue-50/50">
           <ArrowLeft className="h-4 w-4" />
@@ -303,7 +318,7 @@ export default function AddProjectReceiptPage() {
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-biz-blue text-[10px] font-bold text-white">1</span>
               <h2 className="text-[13px] font-bold text-biz-text">Project Receipt Entry Sheet</h2>
             </div>
-            <p className="mt-1 pl-8 text-[10px] text-biz-muted">Select a bill to load its certified deductions, then adjust only the actual receipt values.</p>
+            <p className="mt-1 pl-8 text-[10px] text-biz-muted">Enter deduction amounts directly. VAT, Tax and SD percentages calculate automatically.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-red-100 bg-white px-2.5 py-1 text-[9px] font-semibold text-biz-muted"><b className="text-red-600">*</b> Required cell</span>
@@ -319,58 +334,84 @@ export default function AddProjectReceiptPage() {
 
         <div className="p-3">
           <div className="overflow-hidden rounded-md border border-biz-border">
-            <div className="hidden grid-cols-[42px_minmax(0,1.55fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1.15fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,1.15fr)] divide-x divide-biz-border bg-slate-100 text-[8px] font-bold uppercase tracking-wide text-biz-muted xl:grid">
+            <div className="hidden grid-cols-[42px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,1.35fr)] divide-x divide-biz-border bg-slate-100 text-[8px] font-bold uppercase tracking-wide text-biz-muted xl:grid">
               <div className="px-2 py-2 text-center">SL</div>
               <div className="px-2 py-2">Tender ID <b className="text-red-600">*</b></div>
               <div className="px-2 py-2">Receipt Date <b className="text-red-600">*</b></div>
               <div className="px-2 py-2">Receipt Type <b className="text-red-600">*</b></div>
-              <div className="px-2 py-2">Bill / Reference <b className="text-red-600">{runningBill ? "*" : ""}</b></div>
-              <div className="px-2 py-2 text-right">Gross Amount <b className="text-red-600">*</b></div>
-              <div className="px-2 py-2 text-right">Net Received</div>
+              <div className="px-2 py-2 text-right">Amount Received <b className="text-red-600">*</b></div>
               <div className="px-2 py-2">Payment Method <b className="text-red-600">*</b></div>
               <div className="px-2 py-2">Receiving Account <b className="text-red-600">*</b></div>
             </div>
 
-            <div className="grid gap-3 bg-white p-3 sm:grid-cols-2 xl:grid-cols-[42px_minmax(0,1.55fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1.15fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,1.15fr)] xl:gap-0 xl:divide-x xl:divide-biz-border xl:p-0">
+            <div className="grid gap-3 bg-white p-3 sm:grid-cols-2 xl:grid-cols-[42px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,1.35fr)] xl:gap-0 xl:divide-x xl:divide-biz-border xl:p-0">
               <div className="hidden items-start justify-center px-1 py-2.5 xl:flex">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-[10px] font-bold text-biz-blue">1</span>
               </div>
 
               <div className="min-w-0 sm:col-span-2 xl:col-span-1 xl:p-2">
                 <p className="mb-1 text-[10px] font-bold text-biz-text xl:hidden">Tender ID <b className="text-red-600">*</b></p>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" />
+                <div ref={projectPickerRef} className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" />
                   <input
-                    list="project-options"
+                    ref={projectInputRef}
+                    role="combobox"
+                    aria-expanded={projectPickerOpen}
+                    aria-controls="tender-id-options"
+                    aria-autocomplete="list"
+                    aria-activedescendant={projectPickerOpen && filteredWorks[highlightedProjectIndex] ? `tender-option-${filteredWorks[highlightedProjectIndex].id}` : undefined}
                     value={projectSearch}
-                    onFocus={(event) => event.currentTarget.select()}
-                    onChange={(event) => {
-                      const input = event.target.value;
-                      setProjectSearch(input);
-                      const normalizedInput = input.trim().toLowerCase();
-                      const match = (works.data?.items ?? []).find((work) => work.tenderNumber?.toLowerCase() === normalizedInput);
-                      if (match) {
-                        selectWork(match.id);
-                      } else if (workId) {
-                        setWorkId("");
-                        setError("");
-                        setForm((value) => clearSettlement(value));
-                      }
+                    onFocus={() => {
+                      setProjectSearch("");
+                      setProjectPickerOpen(true);
                     }}
-                    className={cn(field, "pr-8", missing.project && invalidField)}
+                    onChange={(event) => {
+                      setProjectSearch(event.target.value);
+                      setProjectPickerOpen(true);
+                    }}
+                    onKeyDown={handleProjectKeyDown}
+                    className={cn(field, "pl-8 pr-8", missing.project && invalidField)}
                     placeholder={works.isLoading ? "Loading Tender IDs..." : "Type or select Tender ID..."}
                     aria-label="Tender ID"
                     autoComplete="off"
                   />
-                  <datalist id="project-options">
-                    {filteredWorks.map((work) => work.tenderNumber ? <option key={work.id} value={work.tenderNumber} /> : null)}
-                  </datalist>
+                  <ChevronDown className={cn("pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted transition-transform", projectPickerOpen && "rotate-180")} />
+
+                  {projectPickerOpen && (
+                    <div id="tender-id-options" role="listbox" className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-blue-200 bg-white py-1 shadow-[0_12px_30px_rgba(15,35,75,0.18)]">
+                      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-blue-100 bg-blue-50 px-3 py-1.5 text-[9px] font-semibold text-biz-muted">
+                        <span>Select Tender ID</span>
+                        <span>{filteredWorks.length} found</span>
+                      </div>
+                      {filteredWorks.length > 0 ? filteredWorks.map((work, index) => (
+                        <button
+                          id={`tender-option-${work.id}`}
+                          key={work.id}
+                          type="button"
+                          role="option"
+                          aria-selected={work.id === workId}
+                          onMouseEnter={() => setHighlightedProjectIndex(index)}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => selectWork(work.id)}
+                          className={cn(
+                            "flex w-full items-center justify-between px-3 py-2 text-left text-[11px] font-semibold transition-colors",
+                            index === highlightedProjectIndex ? "bg-blue-50 text-biz-blue" : "text-biz-text hover:bg-slate-50",
+                          )}
+                        >
+                          <span>{work.tenderNumber}</span>
+                          {work.id === workId && <Check className="h-3.5 w-3.5 text-green-600" />}
+                        </button>
+                      )) : (
+                        <div className="px-3 py-4 text-center text-[10px] text-biz-muted">No matching Tender ID found.</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="min-w-0 xl:p-2">
                 <p className="mb-1 text-[10px] font-bold text-biz-text xl:hidden">Receipt Date <b className="text-red-600">*</b></p>
-                <input type="date" aria-label="Receipt Date" value={form.receiptDate} onChange={(event) => setForm((value) => ({ ...value, receiptDate: event.target.value }))} className={cn(field, missing.receiptDate && invalidField)} />
+                <input ref={receiptDateRef} type="date" aria-label="Receipt Date" value={form.receiptDate} onChange={(event) => setForm((value) => ({ ...value, receiptDate: event.target.value }))} className={cn(field, missing.receiptDate && invalidField)} />
               </div>
 
               <div className="min-w-0 xl:p-2">
@@ -385,28 +426,9 @@ export default function AddProjectReceiptPage() {
                 </select>
               </div>
 
-              <div className="min-w-0 xl:p-2">
-                <p className="mb-1 text-[10px] font-bold text-biz-text xl:hidden">Bill / Reference {runningBill && <b className="text-red-600">*</b>}</p>
-                {runningBill ? (
-                  <select aria-label="Bill or Reference Number" value={form.receivableId} onChange={(event) => selectBill(event.target.value)} className={cn(field, missing.bill && invalidField)}>
-                    <option value="">Select bill / IPC</option>
-                    {(bills.data ?? []).map((eligibleBill) => <option key={eligibleBill.id} value={eligibleBill.id}>{eligibleBill.billNo}</option>)}
-                  </select>
-                ) : (
-                  <input aria-label="Bill or Reference Number" value={form.referenceNo} onChange={(event) => setForm((value) => ({ ...value, referenceNo: event.target.value }))} className={field} placeholder="Reference no." />
-                )}
-              </div>
-
               <div className="min-w-0 xl:bg-amber-50/30 xl:p-2">
-                <p className="mb-1 text-[10px] font-bold text-biz-text xl:hidden">Gross Amount <b className="text-red-600">*</b></p>
-                <input type="number" aria-label="Gross Amount" min="0.01" step="0.01" value={form.grossAmount} onChange={(event) => setForm((value) => ({ ...value, grossAmount: event.target.value }))} className={cn(field, "text-right font-bold", missing.grossAmount && invalidField)} placeholder="0.00" />
-              </div>
-
-              <div className="min-w-0 xl:bg-green-50/40 xl:p-2">
-                <p className="mb-1 text-[10px] font-bold text-biz-text xl:hidden">Net Received</p>
-                <div className={cn("flex h-9 items-center justify-end rounded-sm border px-2 text-[11px] font-bold", netReceived > 0 ? "border-green-200 bg-green-50 text-green-700" : "border-red-100 bg-red-50/50 text-red-600")}>
-                  {Number(netReceived || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
+                <p className="mb-1 text-[10px] font-bold text-biz-text xl:hidden">Amount Received <b className="text-red-600">*</b></p>
+                <input type="number" aria-label="Amount Received" min="0.01" step="0.01" value={form.receivedAmount} onChange={(event) => setForm((value) => ({ ...value, receivedAmount: event.target.value }))} className={cn(field, "text-right font-bold", missing.receivedAmount && invalidField)} placeholder="0.00" />
               </div>
 
               <div className="min-w-0 xl:p-2">
@@ -456,8 +478,11 @@ export default function AddProjectReceiptPage() {
                         placeholder="0.00"
                       />
                       {item.showRate && (
-                        <span className="flex h-9 min-w-14 items-center justify-center rounded-r-sm border border-l-0 border-biz-border bg-slate-50 px-2 text-[9px] font-bold text-biz-muted">
-                          {percentage(item.amount, grossAmount)}%
+                        <span
+                          title={item.key === "securityDepositDeductedAmount" ? "Calculated from the amount remaining after VAT and Tax" : "Calculated from the current bill amount"}
+                          className="flex h-9 min-w-14 items-center justify-center rounded-r-sm border border-l-0 border-biz-border bg-slate-50 px-2 text-[9px] font-bold text-biz-muted"
+                        >
+                          {percentage(item.amount, item.rateBase)}%
                         </span>
                       )}
                     </div>
@@ -508,10 +533,10 @@ export default function AddProjectReceiptPage() {
 
           <div className="mt-2 grid overflow-hidden rounded-md border border-blue-100 bg-slate-50 sm:grid-cols-4 sm:divide-x sm:divide-blue-100">
             {[
-              { label: "Gross Settlement", value: grossAmount, tone: "text-biz-blue" },
-              { label: "Total Deductions", value: totalDeductions, tone: "text-orange-600" },
-              { label: "Net Received", value: netReceived, tone: netReceived > 0 ? "text-green-700" : "text-red-600" },
-              { label: "Bill Remaining", value: remainingBill, tone: remainingBill !== null && remainingBill < 0 ? "text-red-600" : "text-biz-text" },
+              { label: "Calculated Bill Amount", value: calculatedBillAmount, tone: "text-biz-blue" },
+              { label: "VAT & Tax Deducted", value: vatAmount + taxAmount, tone: "text-orange-600" },
+              { label: "SD Retained", value: securityDepositAmount, tone: "text-orange-600" },
+              { label: "Amount Received", value: receivedAmount, tone: receivedAmount > 0 ? "text-green-700" : "text-red-600" },
             ].map((item) => (
               <div key={item.label} className="flex items-center justify-between gap-3 border-b border-biz-border px-3 py-2 last:border-b-0 sm:block sm:border-b-0 sm:text-center">
                 <p className="text-[8px] font-bold uppercase tracking-wide text-biz-muted">{item.label}</p>
@@ -519,8 +544,6 @@ export default function AddProjectReceiptPage() {
               </div>
             ))}
           </div>
-
-          {bill && <p className="mt-2 text-right text-[9px] text-biz-muted">Selected bill outstanding before this receipt: <strong className="text-biz-text">{money(bill.outstanding)}</strong></p>}
 
         </div>
 
