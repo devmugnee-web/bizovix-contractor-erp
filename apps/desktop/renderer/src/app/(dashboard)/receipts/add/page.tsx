@@ -19,6 +19,7 @@ const numberValue = (value: string) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const percentage = (amount: number, gross: number) => gross > 0 ? (amount / gross * 100).toFixed(2) : "0.00";
 const field = "h-9 w-full min-w-0 rounded-sm border border-biz-border bg-white px-2 text-[11px] font-medium text-biz-navy outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-biz-blue focus:ring-2 focus:ring-blue-100";
 const invalidField = "border-red-400 bg-red-50/70 ring-2 ring-red-100 focus:border-red-500 focus:ring-red-100";
@@ -95,14 +96,17 @@ export default function AddProjectReceiptPage() {
     .sort((left, right) => (right.tenderNumber ?? "").localeCompare(left.tenderNumber ?? "", undefined, { numeric: true }));
   const selected = overview.data;
 
+  const noaAmount = Number(selected?.financial.noaAmount ?? 0);
   const receivedAmount = numberValue(form.receivedAmount);
   const vatAmount = numberValue(form.vatDeductedAmount);
   const taxAmount = numberValue(form.taxDeductedAmount);
-  const securityDepositAmount = numberValue(form.securityDepositDeductedAmount);
   const otherDeductionAmount = numberValue(form.otherDeductionAmount);
-  const totalDeductions = vatAmount + taxAmount + securityDepositAmount + otherDeductionAmount;
-  const calculatedBillAmount = receivedAmount + totalDeductions;
-  const amountAfterVatTax = calculatedBillAmount - vatAmount - taxAmount;
+  const manuallyAllocatedAmount = roundMoney(receivedAmount + vatAmount + taxAmount + otherDeductionAmount);
+  const allocationRemainder = roundMoney(noaAmount - manuallyAllocatedAmount);
+  const allocationExceedsNoa = noaAmount > 0 && allocationRemainder < 0;
+  const securityDepositAmount = noaAmount > 0 ? Math.max(0, allocationRemainder) : 0;
+  const calculatedBillAmount = noaAmount;
+  const amountAfterVatTax = Math.max(0, roundMoney(noaAmount - vatAmount - taxAmount));
 
   const projectName = project?.workName ?? selected?.project.workName;
   const organizationName = project?.organizationMaster.shortName ?? selected?.project.organizationMaster.shortName;
@@ -121,10 +125,10 @@ export default function AddProjectReceiptPage() {
   };
 
   const deductions: Array<{ key: DeductionField; label: string; amount: number; showRate: boolean; rateBase: number }> = [
-    { key: "vatDeductedAmount", label: "VAT Deducted", amount: vatAmount, showRate: true, rateBase: calculatedBillAmount },
-    { key: "taxDeductedAmount", label: "Tax Deducted", amount: taxAmount, showRate: true, rateBase: calculatedBillAmount },
-    { key: "securityDepositDeductedAmount", label: "SD Retained", amount: securityDepositAmount, showRate: true, rateBase: amountAfterVatTax },
-    { key: "otherDeductionAmount", label: "Other Deduction", amount: otherDeductionAmount, showRate: false, rateBase: calculatedBillAmount },
+    { key: "vatDeductedAmount", label: "VAT Deducted", amount: vatAmount, showRate: true, rateBase: noaAmount },
+    { key: "taxDeductedAmount", label: "Tax Deducted", amount: taxAmount, showRate: true, rateBase: noaAmount },
+    { key: "securityDepositDeductedAmount", label: "SD Retained (Auto)", amount: securityDepositAmount, showRate: true, rateBase: noaAmount },
+    { key: "otherDeductionAmount", label: "Other Deduction", amount: otherDeductionAmount, showRate: false, rateBase: noaAmount },
   ];
 
   React.useEffect(() => {
@@ -201,12 +205,20 @@ export default function AddProjectReceiptPage() {
     setError("");
     setShowValidation(true);
 
-    if (!workId || !form.receiptDate || !form.receiptType || !receivedAmount || !receivingAccountId) {
+    if (!workId || !form.receiptDate || !form.receiptType || receivedAmount <= 0 || !receivingAccountId) {
       setError("Complete all required receipt cells.");
       return;
     }
-    if ([vatAmount, taxAmount, securityDepositAmount, otherDeductionAmount].some((value) => value < 0)) {
+    if (noaAmount <= 0) {
+      setError("The selected project does not have a valid NOA amount.");
+      return;
+    }
+    if ([vatAmount, taxAmount, otherDeductionAmount].some((value) => value < 0)) {
       setError("Deduction amounts cannot be negative.");
+      return;
+    }
+    if (allocationExceedsNoa) {
+      setError(`Amount Received, VAT, Tax and Other Deduction exceed the NOA amount by ${money(Math.abs(allocationRemainder))}.`);
       return;
     }
     if (form.paymentMethod === "CHEQUE" && (!form.chequeNo.trim() || !form.chequeDate || !form.chequeBankName.trim())) {
@@ -262,7 +274,7 @@ export default function AddProjectReceiptPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-[24px] font-bold leading-tight">Add Project Receipt</h1>
-          <p className="mt-1 text-[12px] text-biz-muted">Record the current bill, actual deductions and net money received.</p>
+          <p className="mt-1 text-[12px] text-biz-muted">Record the amount received and actual deductions against the selected project's NOA.</p>
         </div>
         <Link href="/receipts" className="inline-flex h-10 w-fit items-center gap-2 rounded-md border border-biz-border bg-white px-4 text-[12px] font-semibold transition-colors hover:border-blue-200 hover:bg-blue-50/50">
           <ArrowLeft className="h-4 w-4" />
@@ -318,17 +330,17 @@ export default function AddProjectReceiptPage() {
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-biz-blue text-[10px] font-bold text-white">1</span>
               <h2 className="text-[13px] font-bold text-biz-text">Project Receipt Entry Sheet</h2>
             </div>
-            <p className="mt-1 pl-8 text-[10px] text-biz-muted">Enter deduction amounts directly. VAT, Tax and SD percentages calculate automatically.</p>
+            <p className="mt-1 pl-8 text-[10px] text-biz-muted">Enter Amount Received, VAT and Tax. The remaining NOA balance moves to SD automatically.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-red-100 bg-white px-2.5 py-1 text-[9px] font-semibold text-biz-muted"><b className="text-red-600">*</b> Required cell</span>
-            <span className="rounded-full border border-green-100 bg-green-50 px-2.5 py-1 text-[9px] font-semibold text-green-700">Green cells calculate automatically</span>
+            <span className="rounded-full border border-green-100 bg-green-50 px-2.5 py-1 text-[9px] font-semibold text-green-700">SD and percentages calculate automatically</span>
           </div>
         </header>
 
         {error && (
           <div role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2.5 text-[11px] font-semibold text-red-700">
-            {error} Missing cells are highlighted below.
+            {error}
           </div>
         )}
 
@@ -428,7 +440,7 @@ export default function AddProjectReceiptPage() {
 
               <div className="min-w-0 xl:bg-amber-50/30 xl:p-2">
                 <p className="mb-1 text-[10px] font-bold text-biz-text xl:hidden">Amount Received <b className="text-red-600">*</b></p>
-                <input type="number" aria-label="Amount Received" min="0.01" step="0.01" value={form.receivedAmount} onChange={(event) => setForm((value) => ({ ...value, receivedAmount: event.target.value }))} className={cn(field, "text-right font-bold", missing.receivedAmount && invalidField)} placeholder="0.00" />
+                <input type="number" aria-label="Amount Received" min="0.01" step="0.01" value={form.receivedAmount} onChange={(event) => { setForm((value) => ({ ...value, receivedAmount: event.target.value })); setError(""); }} className={cn(field, "text-right font-bold", (missing.receivedAmount || allocationExceedsNoa) && invalidField)} placeholder="0.00" />
               </div>
 
               <div className="min-w-0 xl:p-2">
@@ -463,8 +475,10 @@ export default function AddProjectReceiptPage() {
                 {deductions.map((item) => <div key={item.key} className="px-3 py-2">{item.label} (BDT)</div>)}
               </div>
               <div className="grid grid-cols-1 divide-y divide-biz-border sm:grid-cols-4 sm:divide-x sm:divide-y-0">
-                {deductions.map((item) => (
-                  <div key={item.key} className="min-w-0 p-2">
+                {deductions.map((item) => {
+                  const automaticSd = item.key === "securityDepositDeductedAmount";
+                  return (
+                  <div key={item.key} className={cn("min-w-0 p-2", automaticSd && "bg-emerald-50/70")}>
                     <p className="mb-1 text-[10px] font-bold text-biz-text sm:hidden">{item.label}</p>
                     <div className="flex">
                       <input
@@ -472,22 +486,30 @@ export default function AddProjectReceiptPage() {
                         aria-label={item.label}
                         min="0"
                         step="0.01"
-                        value={form[item.key]}
-                        onChange={(event) => setForm((value) => ({ ...value, [item.key]: event.target.value }))}
-                        className={cn(field, item.showRate ? "rounded-r-none text-right" : "text-right")}
+                        value={automaticSd ? (noaAmount > 0 ? securityDepositAmount.toFixed(2) : "") : form[item.key]}
+                        readOnly={automaticSd}
+                        tabIndex={automaticSd ? -1 : undefined}
+                        onChange={automaticSd ? undefined : (event) => { setForm((value) => ({ ...value, [item.key]: event.target.value })); setError(""); }}
+                        className={cn(
+                          field,
+                          item.showRate ? "rounded-r-none text-right" : "text-right",
+                          automaticSd && "cursor-not-allowed border-emerald-200 bg-emerald-50 font-bold text-emerald-700",
+                          allocationExceedsNoa && invalidField,
+                        )}
                         placeholder="0.00"
                       />
                       {item.showRate && (
                         <span
-                          title={item.key === "securityDepositDeductedAmount" ? "Calculated from the amount remaining after VAT and Tax" : "Calculated from the current bill amount"}
-                          className="flex h-9 min-w-14 items-center justify-center rounded-r-sm border border-l-0 border-biz-border bg-slate-50 px-2 text-[9px] font-bold text-biz-muted"
+                          title={automaticSd ? "NOA minus Amount Received, VAT, Tax and Other Deduction" : "Percentage of the selected project's NOA amount"}
+                          className={cn("flex h-9 min-w-14 items-center justify-center rounded-r-sm border border-l-0 border-biz-border bg-slate-50 px-2 text-[9px] font-bold text-biz-muted", automaticSd && "border-emerald-200 bg-emerald-100/70 text-emerald-700")}
                         >
                           {percentage(item.amount, item.rateBase)}%
                         </span>
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -531,11 +553,12 @@ export default function AddProjectReceiptPage() {
             </div>
           </div>
 
-          <div className="mt-2 grid overflow-hidden rounded-md border border-blue-100 bg-slate-50 sm:grid-cols-4 sm:divide-x sm:divide-blue-100">
+          <div className="mt-2 grid overflow-hidden rounded-md border border-blue-100 bg-slate-50 sm:grid-cols-5 sm:divide-x sm:divide-blue-100">
             {[
-              { label: "Calculated Bill Amount", value: calculatedBillAmount, tone: "text-biz-blue" },
+              { label: "NOA Amount", value: calculatedBillAmount, tone: "text-biz-blue" },
               { label: "VAT & Tax Deducted", value: vatAmount + taxAmount, tone: "text-orange-600" },
-              { label: "SD Retained", value: securityDepositAmount, tone: "text-orange-600" },
+              { label: "After VAT & Tax", value: amountAfterVatTax, tone: "text-biz-text" },
+              { label: "SD Retained (Auto)", value: securityDepositAmount, tone: "text-orange-600" },
               { label: "Amount Received", value: receivedAmount, tone: receivedAmount > 0 ? "text-green-700" : "text-red-600" },
             ].map((item) => (
               <div key={item.label} className="flex items-center justify-between gap-3 border-b border-biz-border px-3 py-2 last:border-b-0 sm:block sm:border-b-0 sm:text-center">
@@ -543,6 +566,14 @@ export default function AddProjectReceiptPage() {
                 <p className={cn("mt-0.5 text-[12px] font-bold", item.tone)}>{item.value === null ? "--" : money(item.value)}</p>
               </div>
             ))}
+          </div>
+
+          <div className={cn(
+            "mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-[10px] font-semibold",
+            allocationExceedsNoa ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-100 bg-emerald-50/70 text-emerald-700",
+          )}>
+            <span>NOA = Amount Received + VAT + Tax + Other Deduction + SD</span>
+            <span>{allocationExceedsNoa ? `Over allocated by ${money(Math.abs(allocationRemainder))}` : `Balanced: ${money(receivedAmount + vatAmount + taxAmount + otherDeductionAmount + securityDepositAmount)}`}</span>
           </div>
 
         </div>

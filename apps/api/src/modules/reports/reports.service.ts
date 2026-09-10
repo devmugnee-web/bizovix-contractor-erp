@@ -512,6 +512,7 @@ export class ReportsService {
     const rows = await this.prisma.cmsWork.findMany({
       where: {
         organizationId: org,
+        id: q.workId,
         status,
         organizationMasterId: q.organizationMasterId,
         workCategory: q.category,
@@ -519,6 +520,7 @@ export class ReportsService {
       },
       include: {
         organizationMaster: true,
+        tender: { select: { egpTenderId: true } },
         projectExpenses: { where: { status: { not: "REJECTED" } }, include: { expenseHead: true } },
         receipts: { where: { status: "RECEIVED" } },
       },
@@ -528,8 +530,11 @@ export class ReportsService {
       const received = r.receipts.reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0)),
         expense = r.projectExpenses.reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0)),
         outstanding = Prisma.Decimal.max(new Prisma.Decimal(0), r.contractValue.minus(received)),
-        profit = r.contractValue.minus(expense);
+        profit = r.contractValue.minus(expense),
+        hasRecordedCost = expense.gt(0);
       return {
+        workId: r.id,
+        tenderId: r.tender?.egpTenderId ?? "-",
         project: r.workName,
         organization: r.organizationMaster.shortName,
         category: r.workCategory,
@@ -538,10 +543,11 @@ export class ReportsService {
         received: s(received),
         expense: s(expense),
         outstanding: s(outstanding),
-        profit: s(profit),
-        margin: r.contractValue.gt(0)
+        profit: hasRecordedCost ? s(profit) : null,
+        margin: hasRecordedCost && r.contractValue.gt(0)
           ? `${profit.div(r.contractValue).mul(100).toFixed(2)}%`
-          : "0.00%",
+          : "Not Calculated",
+        profitStatus: hasRecordedCost ? "CALCULATED" : "NOT_CALCULATED",
         progress: r.tenderId ? "Linked" : "Active",
         completion: r.completionDate?.toISOString() ?? null,
       };
@@ -566,7 +572,10 @@ export class ReportsService {
                         : report === "performance"
                           ? "Project Performance Report"
                           : "Project Summary Report",
-        subtitle: "Project contract, collection, expense and profitability analysis.",
+        subtitle:
+          report === "profit-loss" || report === "profitability"
+            ? "Project contract, collection and recorded-expense profitability. Open a full report for the complete lifecycle."
+            : "Project contract, collection, expense and profitability analysis.",
         kpis: [
           { label: "Total Projects", value: String(rows.length) },
           {
@@ -586,14 +595,17 @@ export class ReportsService {
           },
         ],
         columns: [
+          ...(report === "profit-loss" || report === "profitability"
+            ? [{ key: "tenderId", label: "Tender ID" }]
+            : []),
           { key: "project", label: "Project" },
           { key: "organization", label: "Organization" },
           { key: "category", label: "Category" },
           moneyCol("contract", "Contract Value"),
           moneyCol("received", "Received"),
-          moneyCol("expense", "Total Cost"),
+          moneyCol("expense", report === "profit-loss" ? "Actual Expense" : "Total Cost"),
           moneyCol("outstanding", "Outstanding"),
-          moneyCol("profit", "Estimated Profit"),
+          moneyCol("profit", "Projected Profit"),
           { key: "margin", label: "Profit Margin" },
         ],
         rows: mapped,

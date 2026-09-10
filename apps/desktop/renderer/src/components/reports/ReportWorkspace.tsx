@@ -2,6 +2,7 @@
 import * as React from "react";
 import {
   ArrowLeft,
+  ArrowUpRight,
   FileSpreadsheet,
   Filter,
   Printer,
@@ -29,6 +30,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
     def = findReport(category, report),
     group = REPORT_CATEGORIES.find((c) => c.slug === category),
     parentTitle = group?.shortTitle ?? "Reports";
+  const isProjectProfitLoss = category === "projects" && report === "profit-loss";
   useSetBreadcrumb([
     { label: "Reports", href: "/reports" },
     { label: parentTitle, href: `/reports/${category}` },
@@ -242,11 +244,18 @@ export function ReportWorkspace({ category, report }: { category: string; report
                       {c.label}
                     </th>
                   ))}
+                  {isProjectProfitLoss && <th className="px-3 py-3 print:hidden">Full Report</th>}
                 </tr>
               </thead>
               <tbody>
                 {result.rows.map((row, i) => (
-                  <tr key={i} className="border-t border-biz-border">
+                  <tr
+                    key={String(row.workId ?? i)}
+                    className={cn(
+                      "border-t border-biz-border",
+                      isProjectProfitLoss && "transition-colors hover:bg-blue-50/40",
+                    )}
+                  >
                     <td className="px-3 py-3">
                       {(result.meta.page - 1) * result.meta.limit + i + 1}
                     </td>
@@ -258,13 +267,46 @@ export function ReportWorkspace({ category, report }: { category: string; report
                           c.type === "money" && "text-right font-semibold tabular-nums",
                         )}
                       >
-                        {c.type === "money"
-                          ? money(row[c.key])
-                          : c.type === "date"
-                            ? date(row[c.key])
-                            : String(row[c.key] ?? "-").replaceAll("_", " ")}
+                        {isProjectProfitLoss &&
+                        row.profitStatus === "NOT_CALCULATED" &&
+                        (c.key === "profit" || c.key === "margin") ? (
+                          <span className="whitespace-nowrap font-medium text-amber-700">
+                            Not Calculated
+                          </span>
+                        ) : c.type === "money" ? (
+                          <span className="whitespace-nowrap">{money(row[c.key])}</span>
+                        ) : c.type === "date" ? (
+                          date(row[c.key])
+                        ) : (
+                          String(row[c.key] ?? "-").replaceAll("_", " ")
+                        )}
                       </td>
                     ))}
+                    {isProjectProfitLoss && (
+                      <td className="px-3 py-3 print:hidden">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const resolvedWorkId = String(
+                              row.workId ??
+                                options.data?.works.find((work) => work.workName === row.project)?.id ??
+                                "",
+                            );
+                            if (resolvedWorkId) {
+                              router.push(`/reports/projects/profit-loss/${resolvedWorkId}`);
+                            }
+                          }}
+                          disabled={
+                            !row.workId &&
+                            !options.data?.works.some((work) => work.workName === row.project)
+                          }
+                          className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-blue-200 bg-blue-50 px-3 text-[10px] font-semibold text-biz-blue transition-colors hover:border-biz-blue hover:bg-blue-100"
+                        >
+                          View Full Report
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
