@@ -108,7 +108,8 @@ export class ProjectCostingReportService {
       },
     });
     if (!work) throw new NotFoundException("Project not found");
-    // BOQ belongs directly to this project. A tender costing is neither required nor substituted.
+    // A saved project BOQ remains authoritative. For projects handed off before a
+    // BOQ was created, retain the completed tender costing as the lifecycle report fallback.
     const tenderId = work.tenderId ?? (work.documentPurchase?.organizationId === organizationId ? work.documentPurchase.linkedTenderId : null);
     const project = { id: work.id, workName: work.workName, organizationName: work.organizationMaster.fullName || work.organizationMaster.shortName };
     const [items, tender] = await Promise.all([
@@ -133,11 +134,41 @@ export class ProjectCostingReportService {
       id: item.id, productName: item.description, unit: item.unit, quantity: item.contractQty.toFixed(3),
       unitPrice: item.unitRate.toFixed(2), totalPrice: item.contractAmount.toFixed(2),
     }));
+    if (!rows.length && tenderId) {
+      const costing = await this.prisma.tenderCosting.findFirst({
+        where: { ...completedCostingWhere(organizationId), tenderId },
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        select: {
+          costingDate: true, estimatedCost: true, freightCost: true, installationCost: true, otherCost: true, contingencyAmount: true,
+          items: {
+            where: { organizationId, costingStatus: "COSTED" },
+            orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+            select: { id: true, description: true, unit: true, quantity: true, totalCost: true },
+          },
+        },
+      });
+      if (costing) {
+        const adjustments = [
+          { label: "Freight Cost", value: costing.freightCost }, { label: "Installation Cost", value: costing.installationCost },
+          { label: "Other Cost", value: costing.otherCost }, { label: "Contingency", value: costing.contingencyAmount },
+        ].filter((entry) => !entry.value.isZero()).map((entry) => ({ label: entry.label, amount: entry.value.toFixed(2) }));
+        return {
+          project, tenderNumber: tender?.egpTenderId ?? null, source: "TENDER_COSTING", costingDate: costing.costingDate.toISOString(),
+          pa: { name: pa?.name || null, designation: pa?.designation || null, phone: pa?.mobile || null, email: pa?.email || null, address: pa?.address || null },
+          rows: costing.items.map((item) => ({
+            id: item.id, productName: item.description, unit: item.unit, quantity: item.quantity.toFixed(3),
+            unitPrice: rate(item), totalPrice: item.totalCost.toFixed(2),
+          })),
+          itemsTotalPrice: costing.items.reduce((sum, item) => sum.plus(item.totalCost), new Prisma.Decimal(0)).toFixed(2),
+          adjustments, totalPrice: costing.estimatedCost.toFixed(2), emptyReason: null,
+        };
+      }
+    }
     return {
       project, tenderNumber: tender?.egpTenderId ?? null, source: "PROJECT_BOQ",
       pa: { name: pa?.name || null, designation: pa?.designation || null, phone: pa?.mobile || null, email: pa?.email || null, address: pa?.address || null },
       rows, totalPrice: items.reduce((sum, item) => sum.plus(item.contractAmount), new Prisma.Decimal(0)).toFixed(2),
-      emptyReason: rows.length ? null : "NO_BOQ_ITEMS",
+      emptyReason: rows.length ? null : tenderId ? "NO_COSTED_ITEMS" : "NO_BOQ_ITEMS",
     };
   }
 }

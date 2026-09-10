@@ -31,7 +31,15 @@ type ProfitLossRow = {
   contract: string;
   received: string;
   expense: string;
+  netContract: string;
+  vatDeducted: string;
+  taxDeducted: string;
+  sdRetained: string;
+  sdReleased: string;
+  regularReceivable: string;
+  sdReceivable: string;
   outstanding: string;
+  cashProfit: string;
   profit: string | null;
   margin: string;
   profitStatus: "CALCULATED" | "NOT_CALCULATED";
@@ -173,9 +181,11 @@ export function ProjectProfitLossReport() {
     contract: result.contract + Number(row.contract || 0),
     received: result.received + Number(row.received || 0),
     expense: result.expense + Number(row.expense || 0),
+    sdReceivable: result.sdReceivable + Number(row.sdReceivable || 0),
     outstanding: result.outstanding + Number(row.outstanding || 0),
+    cashProfit: result.cashProfit + Number(row.cashProfit || 0),
     profit: result.profit + (row.profitStatus === "CALCULATED" ? Number(row.profit || 0) : 0),
-  }), { contract: 0, received: 0, expense: 0, outstanding: 0, profit: 0 }), [filteredRows]);
+  }), { contract: 0, received: 0, expense: 0, sdReceivable: 0, outstanding: 0, cashProfit: 0, profit: 0 }), [filteredRows]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -193,16 +203,24 @@ export function ProjectProfitLossReport() {
   };
 
   const exportCsv = () => {
-    const headings = ["Tender ID", "Project", "Organization", "Category", "Contract Value", "Received", "Actual Expense", "Outstanding", "Projected Profit", "Profit Margin"];
+    const headings = ["Tender ID", "Project", "Organization", "Category", "NOA Amount", "Net Contract After VAT & Tax", "Actual Cash Received", "Actual Expense", "VAT Deducted", "Tax Deducted", "SD Retained", "SD Released", "Regular Payment Receivable", "SD Receivable", "Total Outstanding", "Current Cash Profit", "Projected Final Profit", "Projected Margin"];
     const values = filteredRows.map((row) => [
       row.tenderId,
       row.project,
       row.organization,
       row.category,
       row.contract,
+      row.netContract,
       row.received,
       row.expense,
+      row.vatDeducted,
+      row.taxDeducted,
+      row.sdRetained,
+      row.sdReleased,
+      row.regularReceivable,
+      row.sdReceivable,
       row.outstanding,
+      row.cashProfit,
       row.profit ?? "Not Calculated",
       row.margin,
     ]);
@@ -299,11 +317,11 @@ export function ProjectProfitLossReport() {
 
       <section className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
         <KpiCard icon={BriefcaseBusiness} label="Projects" value={String(filteredRows.length)} tone="slate" />
-        <KpiCard icon={Landmark} label="Contract Value" value={money(totals.contract)} tone="blue" />
-        <KpiCard icon={ReceiptText} label="Received" value={money(totals.received)} tone="green" />
+        <KpiCard icon={Landmark} label="NOA Value" value={money(totals.contract)} tone="blue" />
+        <KpiCard icon={ReceiptText} label="Cash Received" value={money(totals.received)} tone="green" />
         <KpiCard icon={WalletCards} label="Actual Expense" value={money(totals.expense)} tone="orange" />
-        <KpiCard icon={CalendarDays} label="Outstanding" value={money(totals.outstanding)} tone="red" />
-        <KpiCard icon={TrendingUp} label="Calculated Profit" value={money(totals.profit)} tone={totals.profit < 0 ? "red" : "green"} />
+        <KpiCard icon={CalendarDays} label="Total Outstanding" value={money(totals.outstanding)} tone="red" />
+        <KpiCard icon={TrendingUp} label="Projected Final Profit" value={money(totals.profit)} tone={totals.profit < 0 ? "red" : "green"} />
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm print:shadow-none">
@@ -350,14 +368,14 @@ export function ProjectProfitLossReport() {
                   </div>
 
                   <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-5">
-                    <FinancialCell label="Contract" value={compactMoney(row.contract)} tone="blue" />
-                    <FinancialCell label="Received" value={compactMoney(row.received)} tone="green" />
+                    <FinancialCell label="NOA Amount" value={compactMoney(row.contract)} tone="blue" />
+                    <FinancialCell label="Cash Received" value={compactMoney(row.received)} tone="green" />
                     <FinancialCell label="Expense" value={compactMoney(row.expense)} tone="orange" />
-                    <FinancialCell label="Outstanding" value={compactMoney(row.outstanding)} tone="red" />
+                    <FinancialCell label="Outstanding" value={compactMoney(row.outstanding)} tone="red" secondary={`SD ${compactMoney(row.sdReceivable)}`} />
                     {calculated ? (
-                      <FinancialCell label="Profit / Loss" value={compactMoney(row.profit)} tone={profit < 0 ? "red" : "green"} secondary={row.margin} />
+                      <FinancialCell label="Projected Profit" value={compactMoney(row.profit)} tone={profit < 0 ? "red" : "green"} secondary={`Cash ${compactMoney(row.cashProfit)} | ${row.margin}`} />
                     ) : (
-                      <FinancialCell label="Profit / Loss" value="Not Calculated" tone="orange" secondary="No expense recorded" />
+                      <FinancialCell label="Projected Profit" value="Not Calculated" tone="orange" secondary="No expense recorded" />
                     )}
                   </div>
 
@@ -382,4 +400,3 @@ export function ProjectProfitLossReport() {
     </div>
   );
 }
-

@@ -26,7 +26,7 @@ function setup() {
 }
 
 describe("Project costing view and PDF", () => {
-  it("uses all of this project's saved BOQ quantities, rates and amounts, never tender costing", async () => {
+  it("uses all of this project's saved BOQ quantities, rates and amounts before tender costing", async () => {
     const { service, db } = setup();
     const report = await service.report("org-a", "work-a");
     expect(db.cmsWork.findFirst.mock.calls[0]![0].where).toEqual({ id: "work-a", organizationId: "org-a" });
@@ -38,6 +38,24 @@ describe("Project costing view and PDF", () => {
     expect(db.boqItem.findMany.mock.calls[0]![0]).not.toHaveProperty("take");
     expect(db.tenderCosting.findFirst).not.toHaveBeenCalled();
     expect(report.pa).toEqual({ name: "Tender PA", designation: "Engineer", phone: "01712345678", address: "Dhaka", email: null });
+  });
+  it("falls back to the linked completed tender costing when the project has no BOQ", async () => {
+    const { service, db } = setup();
+    db.boqItem.findMany.mockResolvedValue([]);
+    db.tenderCosting.findFirst.mockResolvedValue({
+      costingDate: new Date("2026-09-09T00:00:00.000Z"), estimatedCost: D("275.00"),
+      freightCost: D("25.00"), installationCost: D(0), otherCost: D(0), contingencyAmount: D(0),
+      items: [{ id: "cost-item-a", description: "Tender Display", unit: "Nos", quantity: D(2), totalCost: D("250.00") }],
+    });
+
+    const report = await service.report("org-a", "work-a");
+
+    expect(db.tenderCosting.findFirst.mock.calls[0]![0].where).toEqual(expect.objectContaining({ organizationId: "org-a", status: "COMPLETED", tenderId: "tender-a" }));
+    expect(report.source).toBe("TENDER_COSTING");
+    expect(report.rows).toEqual([{ id: "cost-item-a", productName: "Tender Display", unit: "Nos", quantity: "2.000", unitPrice: "125.000000", totalPrice: "250.00" }]);
+    expect(report.itemsTotalPrice).toBe("250.00");
+    expect(report.totalPrice).toBe("275.00");
+    expect(report.adjustments).toEqual([{ label: "Freight Cost", amount: "25.00" }]);
   });
   it("shows BOQ even without a tender and does not invent missing PA information", async () => {
     const { service, db, work } = setup();
@@ -62,7 +80,7 @@ describe("Project costing view and PDF", () => {
     const { service, db } = setup();
     db.boqItem.findMany.mockResolvedValue([]);
     const report = await service.report("org-a", "work-a");
-    expect(report.emptyReason).toBe("NO_BOQ_ITEMS");
+    expect(report.emptyReason).toBe("NO_COSTED_ITEMS");
     expect(report.totalPrice).toBe("0.00");
     expect(report.pa.name).toBe("Tender PA");
   });

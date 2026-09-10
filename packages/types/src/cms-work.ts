@@ -89,7 +89,16 @@ export interface CmsWorkOverview {
     totalVatDeducted: string;
     totalTaxDeducted: string;
     totalSecurityDepositDeducted: string;
+    totalRetentionReceived: string;
     totalOtherDeduction: string;
+    netContractAfterVatTax: string;
+    regularPaymentReceivable: string;
+    securityDepositReceivable: string;
+    totalOutstandingReceivable: string;
+    currentCashProfit: string;
+    projectedFinalProfit: string;
+    currentCashMarginPct: string | null;
+    projectedMarginPct: string | null;
     securityDepositHeld: string | null;
     balanceReceivable: string | null;
     currentMarginPct: string | null;

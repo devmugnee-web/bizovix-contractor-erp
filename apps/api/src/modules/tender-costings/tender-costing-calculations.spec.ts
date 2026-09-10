@@ -148,10 +148,42 @@ describe("calculateTenderCostingTotals", () => {
 
     const item = result.calculatedItems[0]!;
     expect(item.foreignProductValueBdt.toFixed(2)).toBe("10000.00");
-    expect(item.foreignLandedCost.toFixed(2)).toBe("12800.00");
-    expect(item.ourCost.toFixed(2)).toBe("12800.00");
-    expect(item.profitAmount.toFixed(2)).toBe("1280.00");
-    expect(result.estimatedCost.toFixed(2)).toBe("15065.60");
+    expect(item.foreignLandedCost.toFixed(2)).toBe("13800.00");
+    expect(item.ourCost.toFixed(2)).toBe("13800.00");
+    expect(item.profitAmount.toFixed(2)).toBe("1380.00");
+    expect(result.estimatedCost.toFixed(2)).toBe("16242.60");
+  });
+
+  it("matches spreadsheet shipping from quantity, unit weight and BDT per KG", () => {
+    const result = calculateTenderCostingTotals({
+      items: [
+        {
+          quantity: 20,
+          sourcingType: "FOREIGN",
+          costingStatus: "COSTED",
+          selectedSource: "FOREIGN",
+          foreignUnitPrice: 254,
+          foreignExchangeRate: 128,
+          foreignShippingMethod: "DOOR_TO_DOOR_AIR",
+          shippingWeightKg: 70,
+          shippingRateBasis: "PER_KG",
+          shippingRate: 800,
+          marginPercent: 60,
+          foreignVatPercent: 10,
+          foreignTaxPercent: 5,
+        },
+      ],
+      freightCost: 0,
+      installationCost: 0,
+      otherCost: 0,
+      contingencyPercent: 0,
+    });
+
+    const item = result.calculatedItems[0]!;
+    expect(item.foreignProductValueBdt.toFixed(2)).toBe("650240.00");
+    expect(item.foreignLandedCost.toFixed(2)).toBe("1770240.00");
+    expect(item.profitAmount.toFixed(2)).toBe("1062144.00");
+    expect(item.totalCost.toFixed(2)).toBe("3257241.60");
   });
 
   it("uses submitted BDT per KG for simplified Air shipping", () => {

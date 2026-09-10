@@ -167,7 +167,9 @@ function calculateSourcingItem(item: CostingItemInput, quantity: Prisma.Decimal)
     item.shippingRateBasis ?? (foreignShippingMethod.endsWith("AIR") ? "PER_KG" : "PER_CBM");
   const shippingRate = amount(item.shippingRate, "Shipping rate");
   const domesticTransportCost = amount(item.domesticTransportCost, "Domestic transport cost");
-  const shippingCostBdt = shippingWeightKg.mul(shippingRate);
+  // The entered weight is per unit. Spreadsheet-style shipping therefore
+  // uses quantity x unit weight x the submitted BDT/KG rate.
+  const shippingCostBdt = quantity.mul(shippingWeightKg).mul(shippingRate);
   const customsDutyPercent = percentage(item.customsDutyPercent, "Customs duty percentage");
   const regulatoryDutyPercent = percentage(
     item.regulatoryDutyPercent,

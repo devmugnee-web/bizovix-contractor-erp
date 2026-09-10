@@ -639,7 +639,8 @@ function calculateItemPreview(item: CostingItemForm) {
   const isLc = item.foreignShippingMethod.startsWith("LC_");
   const shippingRate = Number(item.shippingRate) || 0;
   const shippingWeightKg = Number(item.shippingWeightKg) || 0;
-  const shippingCostBdt = shippingWeightKg * shippingRate;
+  const totalShippingWeightKg = quantity * shippingWeightKg;
+  const shippingCostBdt = totalShippingWeightKg * shippingRate;
   const foreignTransportFee = Number(item.foreignTransportCharge) || 0;
   const foreignTransportBdt = foreignTransportFee * foreignExchangeRate;
   const usesLegacyDetailedDoorShipping =
@@ -764,6 +765,7 @@ function calculateItemPreview(item: CostingItemForm) {
     foreignUnitValueBdt: roundMoney((Number(item.foreignUnitPrice) || 0) * foreignExchangeRate),
     foreignProductValue,
     foreignTransportBdt,
+    totalShippingWeightKg,
     shippingCostBdt,
     foreignLanded,
     selectedCostBeforeProfit,
@@ -2430,7 +2432,7 @@ export default function TenderCostingEditorPage() {
         </div>
       </div>
 
-      <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+      <div className="grid min-w-0 gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 xl:gap-2">
         <CostingKpi label="Tender ID" value={record.tender.egpTenderId ?? record.tender.id} />
         <CostingKpi label="Product / Work Name" value={record.tender.workName} />
         <CostingKpi
@@ -2460,16 +2462,8 @@ export default function TenderCostingEditorPage() {
           value={hasCalculatedCost ? formatMoney(estimatedTotal) : "Not calculated"}
         />
         <CostingKpi
-          label="Local Profit"
-          value={formatMoney(localProfit)}
-          tone="success"
-          action={
-            !isReadOnly ? <ProfitAction onClick={() => setProfitSettingsOpen(true)} /> : undefined
-          }
-        />
-        <CostingKpi
-          label="Foreign Profit"
-          value={formatMoney(foreignProfit)}
+          label="Total Profit"
+          value={formatMoney(totalProfit)}
           tone="success"
           action={
             !isReadOnly ? <ProfitAction onClick={() => setProfitSettingsOpen(true)} /> : undefined
@@ -3678,15 +3672,65 @@ function CostedItemsList({
   items: CostingItemForm[];
   onEdit: (item: CostingItemForm) => void;
 }) {
+  const spreadsheetValues = (item: CostingItemForm) => {
+    const preview = calculateItemPreview(item);
+    const quantity = Number(item.quantity) || 0;
+    const isForeign = item.selectedSource === "FOREIGN" || item.sourcingType === "FOREIGN";
+    const unitUsd = isForeign ? Number(item.foreignUnitPrice) || 0 : 0;
+    const unitBdt = isForeign
+      ? preview.foreignUnitValueBdt
+      : Number(item.localUnitPrice) || 0;
+    const baseTotal = isForeign
+      ? preview.foreignProductValue
+      : roundMoney(quantity * unitBdt);
+    const unitWeight = isForeign ? Number(item.shippingWeightKg) || 0 : 0;
+    const totalWeight = isForeign ? quantity * unitWeight : 0;
+    const shipping = isForeign ? preview.shippingCostBdt : 0;
+    const landing = preview.selectedCostBeforeProfit;
+    const profit = preview.totalProfit;
+    const totalAfterProfit = preview.subtotalBeforeTax;
+    const vatTax = preview.vatAmount + preview.taxAmount;
+
+    return {
+      preview,
+      quantity,
+      isForeign,
+      unitUsd,
+      unitBdt,
+      baseTotal,
+      unitWeight,
+      totalWeight,
+      shipping,
+      landing,
+      profit,
+      totalAfterProfit,
+      vatTax,
+    };
+  };
+
   const totals = items.reduce(
     (summary, item) => {
-      const preview = calculateItemPreview(item);
-      summary.purchaseCost += preview.selectedUnitCost * (Number(item.quantity) || 0);
-      summary.grandTotal += preview.selectedGrandTotal;
-      summary.profit += preview.totalProfit;
+      const values = spreadsheetValues(item);
+      summary.baseTotal += values.baseTotal;
+      summary.totalWeight += values.totalWeight;
+      summary.shipping += values.shipping;
+      summary.landing += values.landing;
+      summary.profit += values.profit;
+      summary.totalAfterProfit += values.totalAfterProfit;
+      summary.vatTax += values.vatTax;
+      summary.grandTotal += values.preview.selectedGrandTotal;
       return summary;
     },
-    { purchaseCost: 0, grandTotal: 0, profit: 0 },
+    {
+      baseTotal: 0,
+      totalWeight: 0,
+      shipping: 0,
+      landing: 0,
+      profit: 0,
+      totalAfterProfit: 0,
+      vatTax: 0,
+      grandTotal: 0,
+    },
   );
 
   return (
@@ -3701,81 +3745,99 @@ function CostedItemsList({
         </div>
         <StatusBadge label={`${items.length} Costed`} tone="success" />
       </div>
-      <table className="w-full table-fixed text-left text-[9px] xl:text-[10px]">
+      <table className="w-full table-fixed text-left text-[7.5px] xl:text-[8.5px] 2xl:text-[9px]">
         <thead className="bg-biz-bg text-biz-muted">
           <tr>
-            <th className="w-[3%] px-1 py-2">SL</th>
-            <th className="w-[14%] px-1 py-2">Product</th>
-            <th className="w-[6%] px-1 py-2">Source</th>
-            <th className="w-[5%] px-1 py-2 text-right">Qty</th>
-            <th className="w-[5%] px-1 py-2">Unit</th>
-            <th className="w-[8%] px-1 py-2 text-right">Unit Cost</th>
-            <th className="w-[10%] px-1 py-2 text-right">Purchase Price</th>
-            <th className="w-[6%] px-1 py-2 text-right">Profit %</th>
-            <th className="w-[5%] px-1 py-2 text-right">VAT %</th>
-            <th className="w-[5%] px-1 py-2 text-right">Tax %</th>
-            <th className="w-[10%] px-1 py-2 text-right">Grand Total</th>
-            <th className="w-[9%] px-1 py-2 text-right">Unit Sales</th>
-            <th className="w-[8%] px-1 py-2 text-right">Profit</th>
-            <th className="w-[6%] px-1 py-2 text-center">Action</th>
+            <th className="w-[2.5%] px-0.5 py-2">SL</th>
+            <th className="w-[12%] px-0.5 py-2">Item Description</th>
+            <th className="w-[3.5%] px-0.5 py-2">Unit</th>
+            <th className="w-[3.5%] px-0.5 py-2 text-right">Qty</th>
+            <th className="w-[5%] px-0.5 py-2 text-right">Unit USD</th>
+            <th className="w-[5.5%] px-0.5 py-2 text-right">Unit BDT</th>
+            <th className="w-[6%] px-0.5 py-2 text-right">Total BDT</th>
+            <th className="w-[4%] px-0.5 py-2 text-right">Weight</th>
+            <th className="w-[5%] px-0.5 py-2 text-right">Total Weight</th>
+            <th className="w-[6%] px-0.5 py-2 text-right">Shipping</th>
+            <th className="w-[6%] px-0.5 py-2 text-right">Landing</th>
+            <th className="w-[6%] px-0.5 py-2 text-right">Profit</th>
+            <th className="w-[7%] px-0.5 py-2 text-right">Total BDT</th>
+            <th className="w-[6%] px-0.5 py-2 text-right">VAT-TAX</th>
+            <th className="w-[7%] px-0.5 py-2 text-right">Grand Total</th>
+            <th className="w-[8%] px-0.5 py-2 text-right">Quoted Unit Price</th>
+            <th className="w-[7%] px-0.5 py-2 text-center">Action</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item, index) => {
-            const preview = calculateItemPreview(item);
-            const isForeign = item.selectedSource === "FOREIGN" || item.sourcingType === "FOREIGN";
+            const values = spreadsheetValues(item);
             return (
               <tr key={item.id} className="border-t border-biz-border">
-                <td className="px-1 py-2.5">{item.sourceItemNo || index + 1}</td>
-                <td className="px-1 py-2.5 font-medium text-biz-text">
+                <td className="px-0.5 py-2.5">{item.sourceItemNo || index + 1}</td>
+                <td className="px-0.5 py-2 font-medium text-biz-text">
                   <span
-                    className="block cursor-help truncate"
+                    className="line-clamp-2 cursor-help leading-3"
                     title={item.description}
                     aria-label={item.description}
                   >
                     {item.description}
                   </span>
-                </td>
-                <td className="px-1 py-2.5">
-                  <span
-                    className={`rounded-full px-2 py-1 text-[8.5px] font-semibold ${isForeign ? "bg-biz-purple/10 text-biz-purple" : "bg-biz-success/10 text-biz-success"}`}
-                  >
-                    {isForeign ? "Foreign" : "Local"}
+                  <span className={`mt-0.5 inline-block rounded px-1 py-px text-[7px] font-semibold ${values.isForeign ? "bg-biz-purple/10 text-biz-purple" : "bg-biz-success/10 text-biz-success"}`}>
+                    {values.isForeign ? "Foreign" : "Local"}
                   </span>
                 </td>
-                <td className="px-1 py-2.5 text-right">
-                  {formatCompactMoney(Number(item.quantity) || 0)}
+                <td className="px-0.5 py-2.5">{item.unit}</td>
+                <td className="px-0.5 py-2.5 text-right tabular-nums">
+                  {formatCompactMoney(values.quantity)}
                 </td>
-                <td className="px-1 py-2.5">{item.unit}</td>
-                <td className="px-1 py-2.5 text-right">
-                  {formatCompactMoney(preview.selectedUnitCost)}
+                <td className="px-0.5 py-2.5 text-right tabular-nums">
+                  {formatCompactMoney(values.unitUsd)}
                 </td>
-                <td className="px-1 py-2.5 text-right font-semibold text-biz-navy">
-                  {formatCompactMoney(
-                    roundMoney(preview.selectedUnitCost * (Number(item.quantity) || 0)),
-                  )}
+                <td className="px-0.5 py-2.5 text-right tabular-nums">
+                  {formatCompactMoney(values.unitBdt)}
                 </td>
-                <td className="px-1 py-2.5 text-right">
-                  {formatCompactMoney(Number(item.marginPercent) || 0)}%
+                <td className="px-0.5 py-2.5 text-right font-semibold tabular-nums text-biz-navy">
+                  {formatCompactMoney(values.baseTotal)}
                 </td>
-                <td className="px-1 py-2.5 text-right">{preview.selectedVatPercent.toFixed(2)}%</td>
-                <td className="px-1 py-2.5 text-right">{preview.selectedTaxPercent.toFixed(2)}%</td>
-                <td className="px-1 py-2.5 text-right font-semibold">
-                  {formatCompactMoney(preview.selectedGrandTotal)}
+                <td className="px-0.5 py-2.5 text-right tabular-nums">
+                  {formatCompactMoney(values.unitWeight)}
                 </td>
-                <td className="px-1 py-2.5 text-right font-medium text-biz-blue">
-                  {formatCompactMoney(preview.unitSalesPrice)}
+                <td className="px-0.5 py-2.5 text-right font-semibold tabular-nums">
+                  {formatCompactMoney(values.totalWeight)}
                 </td>
-                <td className="px-1 py-2.5 text-right font-semibold text-biz-success">
-                  {formatCompactMoney(preview.totalProfit)}
+                <td className="px-0.5 py-2.5 text-right tabular-nums">
+                  {formatCompactMoney(values.shipping)}
                 </td>
-                <td className="px-1 py-2 text-center">
+                <td className="px-0.5 py-2.5 text-right font-semibold tabular-nums">
+                  {formatCompactMoney(values.landing)}
+                </td>
+                <td className="px-0.5 py-2 text-right font-semibold tabular-nums text-biz-success">
+                  {formatCompactMoney(values.profit)}
+                  <span className="block text-[7px] font-medium text-biz-muted">
+                    {formatCompactMoney(Number(item.marginPercent) || 0)}%
+                  </span>
+                </td>
+                <td className="px-0.5 py-2.5 text-right font-semibold tabular-nums">
+                  {formatCompactMoney(values.totalAfterProfit)}
+                </td>
+                <td className="px-0.5 py-2 text-right tabular-nums">
+                  {formatCompactMoney(values.vatTax)}
+                  <span className="block text-[7px] text-biz-muted">
+                    {values.preview.selectedVatPercent.toFixed(0)}% + {values.preview.selectedTaxPercent.toFixed(0)}%
+                  </span>
+                </td>
+                <td className="px-0.5 py-2.5 text-right font-bold tabular-nums text-biz-blue">
+                  {formatCompactMoney(values.preview.selectedGrandTotal)}
+                </td>
+                <td className="px-0.5 py-2.5 text-right font-semibold tabular-nums text-biz-blue">
+                  {formatCompactMoney(values.preview.unitSalesPrice)}
+                </td>
+                <td className="px-0.5 py-2 text-center">
                   <button
                     type="button"
-                    className="h-8 rounded border border-biz-blue px-2 text-[9px] font-semibold text-biz-blue hover:bg-biz-blue hover:text-white"
+                    className="h-7 rounded border border-biz-blue px-1.5 text-[8px] font-semibold text-biz-blue hover:bg-biz-blue hover:text-white"
                     onClick={() => onEdit(item)}
                   >
-                    Edit Cost
+                    Edit
                   </button>
                 </td>
               </tr>
@@ -3790,23 +3852,72 @@ function CostedItemsList({
             >
               Totals
             </td>
-            <td className="bg-biz-warning/10 px-1 py-2 text-right">
-              <span className="whitespace-nowrap text-[10px] font-bold text-biz-navy">
-                BDT {formatCompactMoney(roundMoney(totals.purchaseCost))}
-              </span>
-            </td>
-            <td colSpan={3} />
-            <td className="bg-biz-blue/5 px-1 py-2 text-right">
-              <span className="whitespace-nowrap text-[10px] font-bold text-biz-blue">
-                BDT {formatCompactMoney(roundMoney(totals.grandTotal))}
-              </span>
+            <td className="bg-biz-bg px-0.5 py-2 text-right font-bold tabular-nums text-biz-navy">
+              <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
+                <span>{formatCompactMoney(roundMoney(totals.baseTotal))}</span>
+                <span className="whitespace-nowrap text-[7px] font-semibold uppercase tracking-wide text-biz-muted">
+                  Product Total
+                </span>
+              </div>
             </td>
             <td />
-            <td className="bg-biz-success/10 px-1 py-2 text-right">
-              <span className="whitespace-nowrap text-[10px] font-bold text-biz-success">
-                BDT {formatCompactMoney(roundMoney(totals.profit))}
-              </span>
+            <td className="bg-biz-bg px-0.5 py-2 text-right font-bold tabular-nums text-biz-text">
+              <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
+                <span>{formatCompactMoney(roundMoney(totals.totalWeight))}</span>
+                <span className="whitespace-nowrap text-[7px] font-semibold uppercase tracking-wide text-biz-muted">
+                  Total Weight
+                </span>
+              </div>
             </td>
+            <td className="bg-biz-warning/10 px-0.5 py-2 text-right font-bold tabular-nums text-biz-navy">
+              <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
+                <span>{formatCompactMoney(roundMoney(totals.shipping))}</span>
+                <span className="whitespace-nowrap text-[7px] font-semibold uppercase tracking-wide text-biz-muted">
+                  Shipping
+                </span>
+              </div>
+            </td>
+            <td className="bg-biz-warning/10 px-0.5 py-2 text-right font-bold tabular-nums text-biz-navy">
+              <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
+                <span>{formatCompactMoney(roundMoney(totals.landing))}</span>
+                <span className="whitespace-nowrap text-[7px] font-semibold uppercase tracking-wide text-biz-muted">
+                  Landing
+                </span>
+              </div>
+            </td>
+            <td className="bg-biz-success/10 px-0.5 py-2 text-right font-bold tabular-nums text-biz-success">
+              <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
+                <span>{formatCompactMoney(roundMoney(totals.profit))}</span>
+                <span className="whitespace-nowrap text-[7px] font-semibold uppercase tracking-wide text-biz-muted">
+                  Profit
+                </span>
+              </div>
+            </td>
+            <td className="bg-biz-blue/5 px-0.5 py-2 text-right font-bold tabular-nums text-biz-blue">
+              <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
+                <span>{formatCompactMoney(roundMoney(totals.totalAfterProfit))}</span>
+                <span className="whitespace-nowrap text-[7px] font-semibold uppercase tracking-wide text-biz-muted">
+                  Cost + Profit
+                </span>
+              </div>
+            </td>
+            <td className="bg-biz-warning/10 px-0.5 py-2 text-right font-bold tabular-nums text-biz-warning">
+              <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
+                <span>{formatCompactMoney(roundMoney(totals.vatTax))}</span>
+                <span className="whitespace-nowrap text-[7px] font-semibold uppercase tracking-wide text-biz-muted">
+                  VAT + TAX
+                </span>
+              </div>
+            </td>
+            <td className="bg-biz-blue/10 px-0.5 py-2 text-right font-bold tabular-nums text-biz-blue">
+              <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
+                <span>{formatCompactMoney(roundMoney(totals.grandTotal))}</span>
+                <span className="whitespace-nowrap text-[7px] font-semibold uppercase tracking-wide text-biz-muted">
+                  Grand Total
+                </span>
+              </div>
+            </td>
+            <td />
             <td />
           </tr>
         </tfoot>
@@ -3963,7 +4074,7 @@ function ForeignBatchTable({
     : allItemsUseDoorToDoor
       ? [
           { label: `Transport (${foreignCurrencyLabel})` },
-          { label: "Weight (KG)", required: true },
+          { label: "Unit Weight (KG)", required: true },
           { label: "Rate (BDT/KG)", required: true },
           { label: "Shipping (BDT)" },
           { label: "Local Transport" },
@@ -3973,7 +4084,7 @@ function ForeignBatchTable({
         ]
       : [
           { label: "Transport / Bank LC" },
-          { label: "Weight / Agent Fee" },
+          { label: "Unit Weight / Agent Fee" },
           { label: "Rate / Container" },
           { label: "Shipping / C&F" },
           { label: "Local Transport" },
@@ -4260,7 +4371,7 @@ function ForeignBatchTable({
                           value={formatCompactMoney(Number(item.foreignTransportCharge) || 0)}
                         />
                       </MiniField>
-                      <MiniField label="Weight KG" required>
+                      <MiniField label="Unit Weight KG" required>
                         <BatchNumberInput
                           column="cost-2"
                           hasError={invalidColumns.has("cost-2")}
@@ -4812,8 +4923,8 @@ function CostingKpi({
     <div
       className={`relative min-w-0 rounded-md border p-1.5 shadow-card sm:p-2 ${tone === "warning" ? "border-biz-warning/30 bg-biz-warning/5" : "border-biz-border bg-biz-surface"}`}
     >
-      <div className="flex min-w-0 items-start justify-between gap-1">
-        <p className="truncate text-[7px] text-biz-muted sm:text-[9px]" title={label}>
+      <div className="flex min-w-0 items-start justify-between gap-1 min-h-[82px] overflow-visible">
+        <p className="text-biz-muted break-words whitespace-normal text-sm leading-tight sm:text-[15px] xl:text-[13px]" title={label}>
           {label}
         </p>
         {action}

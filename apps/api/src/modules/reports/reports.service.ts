@@ -521,16 +521,32 @@ export class ReportsService {
       include: {
         organizationMaster: true,
         tender: { select: { egpTenderId: true } },
+        pgBgWorkflow: { select: { noaAmount: true } },
         projectExpenses: { where: { status: { not: "REJECTED" } }, include: { expenseHead: true } },
         receipts: { where: { status: "RECEIVED" } },
       },
       orderBy: { contractValue: "desc" },
     });
     const mapped = rows.map((r) => {
+      const contractValue = r.pgBgWorkflow?.noaAmount ?? r.contractValue;
       const received = r.receipts.reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0)),
         expense = r.projectExpenses.reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0)),
-        outstanding = Prisma.Decimal.max(new Prisma.Decimal(0), r.contractValue.minus(received)),
-        profit = r.contractValue.minus(expense),
+        vatDeducted = r.receipts.reduce((n, x) => n.add(x.vatDeductedAmount), new Prisma.Decimal(0)),
+        taxDeducted = r.receipts.reduce((n, x) => n.add(x.taxDeductedAmount), new Prisma.Decimal(0)),
+        sdRetained = r.receipts.reduce((n, x) => n.add(x.securityDepositDeductedAmount), new Prisma.Decimal(0)),
+        otherDeducted = r.receipts.reduce((n, x) => n.add(x.otherDeductionAmount), new Prisma.Decimal(0)),
+        sdReleased = r.receipts
+          .filter((x) => x.receiptType === "RETENTION_RECEIVED")
+          .reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0)),
+        netContract = Prisma.Decimal.max(new Prisma.Decimal(0), contractValue.minus(vatDeducted).minus(taxDeducted)),
+        regularReceivable = Prisma.Decimal.max(
+          new Prisma.Decimal(0),
+          contractValue.minus(received).minus(vatDeducted).minus(taxDeducted).minus(sdRetained).minus(otherDeducted),
+        ),
+        sdReceivable = Prisma.Decimal.max(new Prisma.Decimal(0), sdRetained.minus(sdReleased)),
+        outstanding = regularReceivable.plus(sdReceivable),
+        cashProfit = received.minus(expense),
+        profit = netContract.minus(expense),
         hasRecordedCost = expense.gt(0);
       return {
         workId: r.id,
@@ -539,13 +555,21 @@ export class ReportsService {
         organization: r.organizationMaster.shortName,
         category: r.workCategory,
         startDate: r.startDate?.toISOString() ?? null,
-        contract: s(r.contractValue),
+        contract: s(contractValue),
         received: s(received),
         expense: s(expense),
+        netContract: s(netContract),
+        vatDeducted: s(vatDeducted),
+        taxDeducted: s(taxDeducted),
+        sdRetained: s(sdRetained),
+        sdReleased: s(sdReleased),
+        regularReceivable: s(regularReceivable),
+        sdReceivable: s(sdReceivable),
         outstanding: s(outstanding),
+        cashProfit: s(cashProfit),
         profit: hasRecordedCost ? s(profit) : null,
-        margin: hasRecordedCost && r.contractValue.gt(0)
-          ? `${profit.div(r.contractValue).mul(100).toFixed(2)}%`
+        margin: hasRecordedCost && netContract.gt(0)
+          ? `${profit.div(netContract).mul(100).toFixed(2)}%`
           : "Not Calculated",
         profitStatus: hasRecordedCost ? "CALCULATED" : "NOT_CALCULATED",
         progress: r.tenderId ? "Linked" : "Active",
@@ -579,8 +603,8 @@ export class ReportsService {
         kpis: [
           { label: "Total Projects", value: String(rows.length) },
           {
-            label: "Contract Value",
-            value: s(rows.reduce((n, r) => n.add(r.contractValue), new Prisma.Decimal(0))),
+            label: "NOA Value",
+            value: s(mapped.reduce((n, r) => n.add(r.contract), new Prisma.Decimal(0))),
             kind: "money",
           },
           {
@@ -601,12 +625,12 @@ export class ReportsService {
           { key: "project", label: "Project" },
           { key: "organization", label: "Organization" },
           { key: "category", label: "Category" },
-          moneyCol("contract", "Contract Value"),
-          moneyCol("received", "Received"),
+          moneyCol("contract", "NOA Amount"),
+          moneyCol("received", "Actual Cash Received"),
           moneyCol("expense", report === "profit-loss" ? "Actual Expense" : "Total Cost"),
-          moneyCol("outstanding", "Outstanding"),
-          moneyCol("profit", "Projected Profit"),
-          { key: "margin", label: "Profit Margin" },
+          moneyCol("outstanding", "Total Outstanding"),
+          moneyCol("profit", "Projected Final Profit"),
+          { key: "margin", label: "Projected Margin" },
         ],
         rows: mapped,
       },

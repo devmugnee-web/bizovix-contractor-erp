@@ -151,7 +151,19 @@ export class CmsWorksService {
     const totalTaxDeducted = receivedRows.reduce((sum, row) => sum.plus(row.taxDeductedAmount), new Prisma.Decimal(0));
     const totalSecurityDepositDeducted = receivedRows.reduce((sum, row) => sum.plus(row.securityDepositDeductedAmount), new Prisma.Decimal(0));
     const totalOtherDeduction = receivedRows.reduce((sum, row) => sum.plus(row.otherDeductionAmount), new Prisma.Decimal(0));
-    const balanceReceivable = netReceivableAfterSd ? netReceivableAfterSd.minus(totalReceipt) : null;
+    const totalRetentionReceived = receivedRows
+      .filter((row) => row.receiptType === "RETENTION_RECEIVED")
+      .reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
+    const receiptBaseAmount = work.pgBgWorkflow?.noaAmount ?? contractValue;
+    const settledNoaAmount = totalReceipt.plus(totalVatDeducted).plus(totalTaxDeducted).plus(totalSecurityDepositDeducted).plus(totalOtherDeduction);
+    const balanceReceivable = Prisma.Decimal.max(0, receiptBaseAmount.minus(settledNoaAmount));
+    const netContractAfterVatTax = Prisma.Decimal.max(0, receiptBaseAmount.minus(totalVatDeducted).minus(totalTaxDeducted));
+    const securityDepositReceivable = Prisma.Decimal.max(0, totalSecurityDepositDeducted.minus(totalRetentionReceived));
+    const totalOutstandingReceivable = balanceReceivable.plus(securityDepositReceivable);
+    const currentCashProfit = totalReceipt.minus(totalExpense);
+    const projectedFinalProfit = netContractAfterVatTax.minus(totalExpense);
+    const currentCashMarginPct = totalReceipt.gt(0) ? currentCashProfit.div(totalReceipt).mul(100) : null;
+    const projectedMarginPct = netContractAfterVatTax.gt(0) ? projectedFinalProfit.div(netContractAfterVatTax).mul(100) : null;
     const currentMarginPct = valueAfterVatTax?.gt(0) ? totalReceipt.minus(totalExpense).div(valueAfterVatTax).mul(100) : null;
     const transactions = [
       ...expenses.map((row) => ({ id: row.id, date: row.expenseDate.toISOString(), type: "EXPENSE" as const, item: row.expenseHead?.name ?? row.category ?? "Project Expense", amount: row.amount.toFixed(2), party: row.expenseBy?.name ?? "-", referenceNo: row.referenceNo, remarks: row.description })),
@@ -187,7 +199,26 @@ export class CmsWorksService {
         netReceivableAfterSd: netReceivableAfterSd?.toFixed(2) ?? null,
       },
       transactions,
-      summary: { totalExpense: totalExpense.toFixed(2), totalReceipt: totalReceipt.toFixed(2), totalVatDeducted: totalVatDeducted.toFixed(2), totalTaxDeducted: totalTaxDeducted.toFixed(2), totalSecurityDepositDeducted: totalSecurityDepositDeducted.toFixed(2), totalOtherDeduction: totalOtherDeduction.toFixed(2), securityDepositHeld: heldAmount?.toFixed(2) ?? null, balanceReceivable: balanceReceivable?.toFixed(2) ?? null, currentMarginPct: currentMarginPct?.toFixed(2) ?? null },
+      summary: {
+        totalExpense: totalExpense.toFixed(2),
+        totalReceipt: totalReceipt.toFixed(2),
+        totalVatDeducted: totalVatDeducted.toFixed(2),
+        totalTaxDeducted: totalTaxDeducted.toFixed(2),
+        totalSecurityDepositDeducted: totalSecurityDepositDeducted.toFixed(2),
+        totalRetentionReceived: totalRetentionReceived.toFixed(2),
+        totalOtherDeduction: totalOtherDeduction.toFixed(2),
+        netContractAfterVatTax: netContractAfterVatTax.toFixed(2),
+        regularPaymentReceivable: balanceReceivable.toFixed(2),
+        securityDepositReceivable: securityDepositReceivable.toFixed(2),
+        totalOutstandingReceivable: totalOutstandingReceivable.toFixed(2),
+        currentCashProfit: currentCashProfit.toFixed(2),
+        projectedFinalProfit: projectedFinalProfit.toFixed(2),
+        currentCashMarginPct: currentCashMarginPct?.toFixed(2) ?? null,
+        projectedMarginPct: projectedMarginPct?.toFixed(2) ?? null,
+        securityDepositHeld: heldAmount?.toFixed(2) ?? null,
+        balanceReceivable: balanceReceivable.toFixed(2),
+        currentMarginPct: currentMarginPct?.toFixed(2) ?? null,
+      },
     };
   }
 

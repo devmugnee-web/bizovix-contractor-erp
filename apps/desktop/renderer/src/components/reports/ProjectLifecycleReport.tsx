@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import {
   useCmsWorkOverview,
-  useFinalProjectProfitability,
   useProjectClosing,
   useProjectCostingReport,
   useProjectExpenses,
@@ -133,9 +132,9 @@ function Metric({
   };
 
   return (
-    <div className="min-w-0 border-l border-slate-200 pl-4 first:border-l-0 first:pl-0">
+    <div className="min-w-0 rounded-xl border border-white/90 bg-white/80 px-3.5 py-3 shadow-[0_4px_14px_rgba(15,23,42,0.05)] print:border-slate-200 print:bg-white print:shadow-none">
       <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-1 truncate text-sm font-extrabold ${tones[tone]}`} title={value}>
+      <p className={`mt-1.5 whitespace-normal break-words text-[13px] font-extrabold leading-tight tabular-nums sm:text-sm ${tones[tone]}`} title={value}>
         {value}
       </p>
     </div>
@@ -183,14 +182,12 @@ export function ProjectLifecycleReport({ workId }: ProjectLifecycleReportProps) 
   const expensesQuery = useProjectExpenses({ workId, page: 1, limit: 100 });
   const receiptsQuery = useReceipts({ workId, page: 1, limit: 100 });
   const closingQuery = useProjectClosing(workId);
-  const profitabilityQuery = useFinalProjectProfitability(workId);
 
   const overview = overviewQuery.data;
   const costing = costingQuery.data;
   const expenses = expensesQuery.data?.items ?? [];
   const receipts = receiptsQuery.data?.items ?? [];
   const closing = closingQuery.data;
-  const profitability = profitabilityQuery.data;
 
   if (overviewQuery.isLoading) {
     return (
@@ -220,13 +217,17 @@ export function ProjectLifecycleReport({ workId }: ProjectLifecycleReportProps) 
   const project = overview.project;
   const financial = overview.financial;
   const summary = overview.summary;
-  const contractValue = Number(financial.contractValue || project.contractValue || 0);
+  const noaAmount = Number(financial.noaAmount || financial.contractValue || project.contractValue || 0);
   const actualExpense = Number(summary.totalExpense || 0);
-  const currentProfit = profitability?.grossProfitLoss ?? String(contractValue - actualExpense);
   const expenseTotal = expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const receivedTotal = receipts.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const costingTotal = Number(costing?.totalPrice || 0);
-  const profitTone = Number(currentProfit) < 0 ? "red" : "green";
+  const currentCashProfit = Number(summary.currentCashProfit || 0);
+  const projectedFinalProfit = Number(summary.projectedFinalProfit || 0);
+  const costVariance = costingTotal - actualExpense;
+  const cashProfitTone = currentCashProfit < 0 ? "red" : "green";
+  const projectedProfitTone = projectedFinalProfit < 0 ? "red" : "green";
+  const costVarianceTone = costVariance < 0 ? "red" : "green";
   const expenseMeta = expensesQuery.data?.meta;
   const receiptMeta = receiptsQuery.data?.meta;
 
@@ -263,13 +264,18 @@ export function ProjectLifecycleReport({ workId }: ProjectLifecycleReportProps) 
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-4 border-t border-blue-100 pt-4 sm:grid-cols-3 xl:grid-cols-6">
-          <Metric label="NOA Amount" value={money(financial.noaAmount)} tone="blue" />
-          <Metric label="Costing Total" value={money(costingTotal)} />
-          <Metric label="Actual Expense" value={money(summary.totalExpense)} tone="orange" />
-          <Metric label="Total Received" value={money(summary.totalReceipt)} tone="green" />
-          <Metric label="Receivable" value={money(summary.balanceReceivable)} tone="red" />
-          <Metric label={profitability ? "Final Profit / Loss" : "Current Profit / Loss"} value={money(currentProfit)} tone={profitTone} />
+        <div className="mt-5 space-y-2.5 border-t border-blue-100 pt-4">
+          <div className="grid grid-cols-1 gap-2.5 min-[460px]:grid-cols-2 lg:grid-cols-4">
+            <Metric label="NOA Amount" value={money(noaAmount)} tone="blue" />
+            <Metric label="Tender Costing" value={money(costingTotal)} />
+            <Metric label="Actual Expense" value={money(summary.totalExpense)} tone="orange" />
+            <Metric label="Actual Cash Received" value={money(summary.totalReceipt)} tone="green" />
+          </div>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            <Metric label="SD Receivable" value={money(summary.securityDepositReceivable)} tone="blue" />
+            <Metric label="Current Cash Profit" value={money(currentCashProfit)} tone={cashProfitTone} />
+            <Metric label="Projected Final Profit" value={money(projectedFinalProfit)} tone={projectedProfitTone} />
+          </div>
         </div>
       </header>
 
@@ -297,7 +303,7 @@ export function ProjectLifecycleReport({ workId }: ProjectLifecycleReportProps) 
                 <div key={item.id}>
                   <div className="hidden grid-cols-[44px_minmax(0,2.4fr)_80px_90px_130px_140px] items-center px-5 py-3 text-[11px] text-slate-700 md:grid">
                     <span className="font-semibold text-slate-400">{index + 1}</span>
-                    <span className="pr-4 font-semibold leading-5 text-slate-800">{item.productName}</span>
+                    <span className="line-clamp-2 cursor-help pr-4 font-semibold leading-5 text-slate-800" title={item.productName}>{item.productName}</span>
                     <span>{item.unit || "--"}</span>
                     <span className="text-right tabular-nums">{numberFormatter.format(Number(item.quantity || 0))}</span>
                     <span className="text-right tabular-nums">{money(item.unitPrice)}</span>
@@ -305,7 +311,7 @@ export function ProjectLifecycleReport({ workId }: ProjectLifecycleReportProps) 
                   </div>
                   <div className="p-4 md:hidden">
                     <div className="flex items-start justify-between gap-3">
-                      <p className="text-xs font-bold leading-5 text-slate-800">{index + 1}. {item.productName}</p>
+                      <p className="line-clamp-2 cursor-help text-xs font-bold leading-5 text-slate-800" title={item.productName}>{index + 1}. {item.productName}</p>
                       <strong className="shrink-0 text-xs text-blue-700">{money(item.totalPrice)}</strong>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500">
@@ -476,19 +482,26 @@ export function ProjectLifecycleReport({ workId }: ProjectLifecycleReportProps) 
           <SectionHeader icon={Landmark} title="Financial Reconciliation" description="Project value, deductions, collection and remaining receivable." />
           <div className="grid grid-cols-2 gap-px bg-slate-200 sm:grid-cols-3">
             {[
-              ["Contract Value", financial.contractValue, "text-slate-900"],
+              ["NOA Amount", noaAmount, "text-slate-900"],
+              ["Net Contract After VAT & Tax", summary.netContractAfterVatTax, "text-blue-600"],
               ["VAT Deducted", summary.totalVatDeducted, "text-orange-600"],
               ["Tax Deducted", summary.totalTaxDeducted, "text-orange-600"],
-              ["SD Deducted", summary.totalSecurityDepositDeducted, "text-blue-600"],
+              ["SD Retained", summary.totalSecurityDepositDeducted, "text-blue-600"],
+              ["SD Released", summary.totalRetentionReceived, "text-emerald-600"],
               ["Other Deduction", summary.totalOtherDeduction, "text-slate-700"],
-              ["Total Received", summary.totalReceipt, "text-emerald-600"],
+              ["Regular Payment Receivable", summary.regularPaymentReceivable, "text-red-600"],
+              ["SD Receivable", summary.securityDepositReceivable, "text-blue-600"],
+              ["Total Outstanding", summary.totalOutstandingReceivable, "text-red-600"],
+              ["Actual Cash Received", summary.totalReceipt, "text-emerald-600"],
               ["Actual Expense", summary.totalExpense, "text-red-600"],
-              ["Receivable", summary.balanceReceivable, "text-red-600"],
-              ["Current Margin", summary.currentMarginPct ? `${summary.currentMarginPct}%` : "--", "text-blue-600"],
+              ["Current Cash Profit", summary.currentCashProfit, cashProfitTone === "red" ? "text-red-600" : "text-emerald-600"],
+              ["Projected Final Profit", summary.projectedFinalProfit, projectedProfitTone === "red" ? "text-red-600" : "text-emerald-600"],
+              ["Cost Variance", costVariance, costVarianceTone === "red" ? "text-red-600" : "text-emerald-600"],
+              ["Projected Margin", summary.projectedMarginPct ? `${summary.projectedMarginPct}%` : "--", "text-blue-600"],
             ].map(([label, value, tone]) => (
               <div key={label} className="bg-white p-4">
                 <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
-                <p className={`mt-1 text-sm font-extrabold ${tone}`}>{label === "Current Margin" ? value : money(value)}</p>
+                <p className={`mt-1 text-sm font-extrabold ${tone}`}>{label === "Projected Margin" ? value : money(value)}</p>
               </div>
             ))}
           </div>
@@ -503,8 +516,8 @@ export function ProjectLifecycleReport({ workId }: ProjectLifecycleReportProps) 
             <div><p className="text-slate-400">Current Status</p><div className="mt-1"><StatusBadge value={project.status} /></div></div>
             <div><p className="text-slate-400">Completion Certificates</p><p className="mt-1 font-bold text-slate-800">{closing?.certificates.length ?? 0}</p></div>
             <div><p className="text-slate-400">Handovers</p><p className="mt-1 font-bold text-slate-800">{closing?.handovers.length ?? 0}</p></div>
-            <div><p className="text-slate-400">Retention Held</p><p className="mt-1 font-bold text-blue-600">{money(profitability?.retentionHeld ?? summary.securityDepositHeld)}</p></div>
-            <div><p className="text-slate-400">Retention Released</p><p className="mt-1 font-bold text-emerald-600">{money(profitability?.retentionReleased)}</p></div>
+            <div><p className="text-slate-400">Retention Held</p><p className="mt-1 font-bold text-blue-600">{money(summary.totalSecurityDepositDeducted)}</p></div>
+            <div><p className="text-slate-400">Retention Released</p><p className="mt-1 font-bold text-emerald-600">{money(summary.totalRetentionReceived)}</p></div>
           </div>
         </div>
       </section>
