@@ -52,6 +52,14 @@ export const createContractSchema = z
     const releasedAmount = Number(data.securityDepositReleasedAmount ?? 0);
     const hasReleasedDate = Boolean(data.securityDepositReleasedDate);
 
+    if (data.securityDepositReleasedDate && new Date(data.securityDepositReleasedDate) > new Date()) {
+      context.addIssue({
+        code: "custom",
+        path: ["securityDepositReleasedDate"],
+        message: "SD released date cannot be in the future",
+      });
+    }
+
     if (sdRate > 0 && !data.securityDepositMethod) {
       context.addIssue({
         code: "custom",

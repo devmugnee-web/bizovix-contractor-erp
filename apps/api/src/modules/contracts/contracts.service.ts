@@ -49,6 +49,12 @@ function toDto(record: ContractRecord) {
 
 const COMPLETING_SOON_DAYS = 30;
 
+function assertReleasedDateNotFuture(value?: string | null) {
+  if (value && new Date(value) > new Date()) {
+    throw new BadRequestException("SD released date cannot be in the future");
+  }
+}
+
 @Injectable()
 export class ContractsService {
   constructor(
@@ -174,6 +180,7 @@ export class ContractsService {
   }
 
   async create(organizationId: string, userId: string, dto: CreateContractDto) {
+    assertReleasedDateNotFuture(dto.securityDepositReleasedDate);
     const work = await this.assertRelations(organizationId, dto);
     if (!work) throw new BadRequestException("Linked Project / Work is required");
     await this.lifecycle.assertOperationalMutationAllowed(
@@ -264,6 +271,7 @@ export class ContractsService {
   }
 
   async update(organizationId: string, userId: string, id: string, dto: UpdateContractDto) {
+    assertReleasedDateNotFuture(dto.securityDepositReleasedDate);
     const existing = await this.prisma.projectContract.findFirst({
       where: { id, organizationId },
       include: includeRelations,

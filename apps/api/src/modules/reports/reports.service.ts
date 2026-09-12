@@ -153,38 +153,122 @@ export class ReportsService {
         where: {
           organizationId: org,
           securityDepositPct: { gt: 0 },
+          securityDepositReleaseDueDate: this.dates(q),
           cmsWorkId: q.workId,
           organizationMasterId: q.organizationMasterId,
         },
         include: { cmsWork: true, organizationMaster: true },
         orderBy: { securityDepositReleaseDueDate: "asc" },
       });
-      const rows = contracts.map((contract) => {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const day7 = new Date(today.getTime() + 7 * 864e5);
+      const day15 = new Date(today.getTime() + 15 * 864e5);
+      const search = q.search?.trim().toLocaleLowerCase();
+      const allRows = contracts.flatMap((contract) => {
         const amount = contract.currentContractValue.mul(contract.securityDepositPct!).div(100);
         const released = contract.securityDepositReleasedAmount ?? new Prisma.Decimal(0);
-        return {
+        const outstanding = Prisma.Decimal.max(0, amount.sub(released));
+        const dueDate = contract.securityDepositReleaseDueDate;
+        const dueDay = dueDate
+          ? new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate())
+          : null;
+        const daysRemaining = dueDay
+          ? Math.round((dueDay.getTime() - today.getTime()) / 864e5)
+          : null;
+        const recordedReleaseStatus = contract.securityDepositStatus ?? "NOT_CONFIGURED";
+        const financiallyReleased = outstanding.lte(0) && amount.gt(0);
+        const releasedDate = contract.securityDepositReleasedDate;
+        const releasedDay = releasedDate
+          ? new Date(releasedDate.getFullYear(), releasedDate.getMonth(), releasedDate.getDate())
+          : null;
+        const isOpen = outstanding.gt(0) && ["HELD", "PARTIALLY_RELEASED"].includes(recordedReleaseStatus);
+        const effectiveStatus =
+          financiallyReleased && releasedDay && releasedDay > today
+            ? "INVALID_RELEASE_DATE"
+            : financiallyReleased && !releasedDay
+              ? "RELEASE_DATE_NOT_SET"
+              : financiallyReleased
+                ? "RELEASED"
+                : isOpen && !dueDay
+                  ? "DATE_NOT_SET"
+                  : isOpen && dueDay && dueDay < today
+            ? "EXPIRED"
+            : isOpen && dueDay?.getTime() === today.getTime()
+              ? "DUE_TODAY"
+              : isOpen && dueDay && dueDay <= day7
+                ? "DUE_WITHIN_7"
+                : isOpen && dueDay && dueDay <= day15
+                  ? "DUE_WITHIN_15"
+                  : isOpen && dueDay
+                    ? "UPCOMING"
+                    : recordedReleaseStatus;
+        if (
+          search &&
+          ![
+            contract.contractNo,
+            contract.cmsWork.workName,
+            contract.organizationMaster.shortName,
+            contract.securityDepositMethod,
+          ].some((value) => value?.toLocaleLowerCase().includes(search))
+        ) return [];
+        return [{
           contract: contract.contractNo,
           project: contract.cmsWork.workName,
           organization: contract.organizationMaster.shortName,
           method: contract.securityDepositMethod ?? "-",
-          status: contract.securityDepositStatus ?? "NOT CONFIGURED",
+          releaseStatus: recordedReleaseStatus,
+          status: effectiveStatus,
           amount: s(amount),
           released: s(released),
-          outstanding: s(Prisma.Decimal.max(0, amount.sub(released))),
-          dueDate: contract.securityDepositReleaseDueDate?.toISOString() ?? null,
-        };
+          outstanding: s(outstanding),
+          dueDate: dueDate?.toISOString() ?? null,
+          timeRemaining:
+            effectiveStatus === "EXPIRED" && daysRemaining !== null
+              ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} overdue`
+              : effectiveStatus === "DUE_TODAY"
+                ? "Today"
+                : effectiveStatus === "DATE_NOT_SET"
+                  ? "Due date not set"
+                  : effectiveStatus === "RELEASE_DATE_NOT_SET"
+                    ? "Release date not set"
+                    : effectiveStatus === "INVALID_RELEASE_DATE"
+                      ? "Check release date"
+                : isOpen && daysRemaining !== null
+                  ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
+                  : "-",
+          releasedDate: releasedDate?.toISOString() ?? null,
+        }];
       });
+      const rows = q.status
+        ? allRows.filter((row) => {
+            if (q.status === "DUE_WITHIN_7") return ["DUE_TODAY", "DUE_WITHIN_7"].includes(row.status);
+            if (q.status === "DUE_WITHIN_15") return ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(row.status);
+            if (q.status === "NEEDS_ATTENTION") return ["DATE_NOT_SET", "RELEASE_DATE_NOT_SET", "INVALID_RELEASE_DATE"].includes(row.status);
+            return row.status === q.status || row.releaseStatus === q.status;
+          })
+        : allRows;
       return this.finish(
         {
           title: "SD",
           subtitle: "Contract security deposits and their release position.",
           kpis: [
-            { label: "Security Deposits", value: String(rows.length) },
+            { label: "Security Deposits", value: String(allRows.length) },
             {
-              label: "Outstanding",
-              value: s(rows.reduce((sum, row) => sum.add(row.outstanding), new Prisma.Decimal(0))),
+              label: "SD Amount",
+              value: s(allRows.reduce((sum, row) => sum.add(row.amount), new Prisma.Decimal(0))),
               kind: "money",
             },
+            {
+              label: "Outstanding",
+              value: s(allRows.reduce((sum, row) => sum.add(row.outstanding), new Prisma.Decimal(0))),
+              kind: "money",
+            },
+            { label: "Upcoming", value: String(allRows.filter((row) => row.status === "UPCOMING").length) },
+            { label: "Within 15 Days", value: String(allRows.filter((row) => ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(row.status)).length) },
+            { label: "Within 7 Days", value: String(allRows.filter((row) => ["DUE_TODAY", "DUE_WITHIN_7"].includes(row.status)).length) },
+            { label: "Expired", value: String(allRows.filter((row) => row.status === "EXPIRED").length) },
+            { label: "Needs Attention", value: String(allRows.filter((row) => ["DATE_NOT_SET", "RELEASE_DATE_NOT_SET", "INVALID_RELEASE_DATE"].includes(row.status)).length) },
           ],
           columns: [
             { key: "contract", label: "Contract No" },
@@ -195,7 +279,10 @@ export class ReportsService {
             moneyCol("released", "Released"),
             moneyCol("outstanding", "Outstanding"),
             { key: "dueDate", label: "Release Due Date", type: "date" },
-            { key: "status", label: "Status" },
+            { key: "timeRemaining", label: "Time Remaining" },
+            { key: "releasedDate", label: "Actual Release Date", type: "date" },
+            { key: "releaseStatus", label: "SD Status" },
+            { key: "status", label: "Timeline" },
           ],
           rows,
         },

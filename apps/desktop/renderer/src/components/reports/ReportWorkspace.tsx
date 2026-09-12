@@ -32,7 +32,9 @@ export function ReportWorkspace({ category, report }: { category: string; report
   const isProjectProfitLoss = category === "projects" && report === "profit-loss";
   const isTenderSecurity = category === "tenders" && report === "tender-security";
   const isPgBg = category === "tenders" && report === "pg-bg";
-  const isExpiryMonitoring = isTenderSecurity || isPgBg;
+  const isSecurityDeposit = category === "tenders" && report === "security-deposit";
+  const isExpiryMonitoring = isTenderSecurity || isPgBg || isSecurityDeposit;
+  const isCompactExpiryTable = isPgBg || isSecurityDeposit;
   useSetBreadcrumb([
     { label: "Reports", href: "/reports" },
     { label: parentTitle, href: `/reports/${category}` },
@@ -88,10 +90,14 @@ export function ReportWorkspace({ category, report }: { category: string; report
     "Total PG/BG": "",
     "Guarantee Amount": "",
     "Active Exposure": "",
+    "Security Deposits": "",
+    "SD Amount": "",
+    Outstanding: "",
     Upcoming: "UPCOMING",
     "Within 15 Days": "DUE_WITHIN_15",
     "Within 7 Days": "DUE_WITHIN_7",
     Expired: "EXPIRED",
+    "Needs Attention": "NEEDS_ATTENTION",
   };
   const firstVisiblePage = result
     ? Math.max(1, Math.min(page - 2, Math.max(1, result.meta.totalPages - 4)))
@@ -138,8 +144,10 @@ export function ReportWorkspace({ category, report }: { category: string; report
         <div
           className={cn(
             "grid items-end gap-2 sm:grid-cols-2",
-            isExpiryMonitoring
+            isTenderSecurity || isPgBg
               ? "xl:grid-cols-[105px_105px_125px_130px_125px_125px_minmax(115px,1fr)_78px]"
+              : isSecurityDeposit
+                ? "xl:grid-cols-[115px_115px_150px_165px_145px_minmax(140px,1fr)_88px]"
               : "xl:grid-cols-[130px_130px_155px_165px_155px_minmax(130px,1fr)_88px]",
           )}
         >
@@ -191,7 +199,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
           ) : (
             <div />
           )}
-          <label className="text-[10px] font-semibold">
+          {!isSecurityDeposit && <label className="text-[10px] font-semibold">
             Account
             <SelectInput
               className="mt-1"
@@ -203,7 +211,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
                 label: x.accountName,
               }))}
             />
-          </label>
+          </label>}
           {isExpiryMonitoring && (
             <label className="text-[10px] font-semibold">
               Status
@@ -212,7 +220,18 @@ export function ReportWorkspace({ category, report }: { category: string; report
                 placeholder="All Statuses"
                 value={draft.status}
                 onChange={(e) => setDraft((v) => ({ ...v, status: e.target.value }))}
-                options={[
+                options={isSecurityDeposit ? [
+                  { value: "UPCOMING", label: "Upcoming (After 15 Days)" },
+                  { value: "DUE_WITHIN_15", label: "Release Within 15 Days" },
+                  { value: "DUE_WITHIN_7", label: "Release Within 7 Days" },
+                  { value: "DUE_TODAY", label: "Release Due Today" },
+                  { value: "EXPIRED", label: "Expired" },
+                  { value: "NEEDS_ATTENTION", label: "Needs Attention" },
+                  { value: "HELD", label: "Held — Date Not Set" },
+                  { value: "PARTIALLY_RELEASED", label: "Partially Released" },
+                  { value: "RELEASED", label: "Released" },
+                  { value: "NOT_CONFIGURED", label: "Not Configured" },
+                ] : [
                   { value: "UPCOMING", label: "Upcoming (After 15 Days)" },
                   { value: "DUE_WITHIN_15", label: "Release Within 15 Days" },
                   { value: "DUE_WITHIN_7", label: "Release Within 7 Days" },
@@ -245,7 +264,9 @@ export function ReportWorkspace({ category, report }: { category: string; report
         <div
           className={cn(
             "grid gap-3",
-            result.kpis.length === 6
+            result.kpis.length >= 8
+              ? "sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8"
+              : result.kpis.length === 6
               ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
               : result.kpis.length >= 7
                 ? "sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"
@@ -259,13 +280,13 @@ export function ReportWorkspace({ category, report }: { category: string; report
             const isClickable = isExpiryMonitoring && kpiStatus !== undefined;
             const isActive = isClickable
               && draft.status === kpiStatus
-              && (kpiStatus !== "" || ["Total Securities", "Total PG/BG"].includes(k.label));
+              && (kpiStatus !== "" || ["Total Securities", "Total PG/BG", "Security Deposits"].includes(k.label));
             const kpiTone =
-              k.label === "Active Exposure"
+              k.label === "Active Exposure" || k.label === "Outstanding"
                 ? "before:bg-emerald-500"
                 : k.label === "Within 15 Days" || k.label === "Within 7 Days"
                   ? "before:bg-amber-500"
-                  : k.label === "Expired"
+                : k.label === "Expired" || k.label === "Needs Attention"
                     ? "before:bg-red-500"
                     : "before:bg-biz-blue/70";
             return (
@@ -296,7 +317,11 @@ export function ReportWorkspace({ category, report }: { category: string; report
               <p
                 className={cn(
                   "mt-1.5 font-bold",
-                  result.kpis.length >= 7 ? "whitespace-nowrap text-[13px] xl:text-[13px]" : "text-[17px]",
+                  result.kpis.length >= 8
+                    ? "whitespace-nowrap text-[12px]"
+                    : result.kpis.length >= 7
+                      ? "whitespace-nowrap text-[13px] xl:text-[13px]"
+                      : "text-[17px]",
                   k.kind === "money" ? "text-biz-blue" : "text-biz-text",
                 )}
               >
@@ -325,8 +350,8 @@ export function ReportWorkspace({ category, report }: { category: string; report
             No report data found for the selected filters.
           </div>
         ) : (
-          <div className={cn(isPgBg ? "overflow-hidden" : "overflow-x-auto")}>
-              <table className={cn("w-full text-left", isPgBg ? "table-fixed text-[9px]" : "min-w-[980px] text-[11px]")}>
+          <div className={cn(isCompactExpiryTable ? "overflow-hidden" : "overflow-x-auto")}>
+              <table className={cn("w-full text-left", isCompactExpiryTable ? "table-fixed text-[9px]" : "min-w-[980px] text-[11px]")}>
                {isPgBg && (
                  <colgroup>
                    {[3, 17, 9, 4, 6, 9, 7, 8, 7, 7, 7, 7, 9].map((width, index) => (
@@ -334,11 +359,18 @@ export function ReportWorkspace({ category, report }: { category: string; report
                    ))}
                  </colgroup>
                )}
+               {isSecurityDeposit && (
+                 <colgroup>
+                   {[3, 6, 16, 9, 6, 8, 8, 8, 7, 6, 7, 7, 9].map((width, index) => (
+                     <col key={index} style={{ width: `${width}%` }} />
+                   ))}
+                 </colgroup>
+               )}
                <thead className="border-b border-blue-100 bg-gradient-to-r from-slate-50 to-blue-50/60 text-[10px] font-semibold text-biz-navy">
                 <tr>
-                  <th className={cn(isPgBg ? "px-1.5 py-2" : "px-3 py-3")}>SL</th>
+                  <th className={cn(isCompactExpiryTable ? "px-1.5 py-2" : "px-3 py-3")}>SL</th>
                   {result.columns.map((c) => (
-                    <th key={c.key} className={cn(isPgBg ? "px-1.5 py-2 leading-tight" : "px-3 py-3")}>
+                    <th key={c.key} className={cn(isCompactExpiryTable ? "px-1.5 py-2 leading-tight" : "px-3 py-3")}>
                       {c.label}
                     </th>
                   ))}
@@ -354,14 +386,14 @@ export function ReportWorkspace({ category, report }: { category: string; report
                       isProjectProfitLoss && "transition-colors hover:bg-blue-50/40",
                     )}
                   >
-                    <td className={cn("align-middle", isPgBg ? "px-1.5 py-2" : "px-3 py-3")}>
+                    <td className={cn("align-middle", isCompactExpiryTable ? "px-1.5 py-2" : "px-3 py-3")}>
                       {(result.meta.page - 1) * result.meta.limit + i + 1}
                     </td>
                     {result.columns.map((c) => (
                       <td
                         key={c.key}
                         className={cn(
-                          isPgBg ? "px-1.5 py-2 align-middle leading-tight" : "px-3 py-3",
+                          isCompactExpiryTable ? "px-1.5 py-2 align-middle leading-tight" : "px-3 py-3",
                           c.type === "money" && "text-right font-semibold tabular-nums",
                         )}
                       >
@@ -371,12 +403,14 @@ export function ReportWorkspace({ category, report }: { category: string; report
                           <span className="whitespace-nowrap font-medium text-amber-700">
                             Not Calculated
                           </span>
-                        ) : isExpiryMonitoring && c.key === "status" ? (
+                        ) : isExpiryMonitoring && ["status", "releaseStatus"].includes(c.key) ? (
                           <span
                             className={cn(
                               "inline-flex max-w-full rounded-full px-1.5 py-1 text-[8px] font-bold leading-none",
                               row[c.key] === "EXPIRED"
                                 ? "bg-red-50 text-red-700"
+                                : ["DATE_NOT_SET", "RELEASE_DATE_NOT_SET", "INVALID_RELEASE_DATE"].includes(String(row[c.key]))
+                                  ? "bg-red-50 text-red-700"
                                 : ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(String(row[c.key]))
                                   ? "bg-amber-50 text-amber-700"
                                   : row[c.key] === "UPCOMING"
@@ -389,7 +423,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
                           >
                             {String(row[c.key] ?? "-").replaceAll("_", " ")}
                           </span>
-                        ) : isPgBg && ["work", "organization"].includes(c.key) ? (
+                        ) : isCompactExpiryTable && ["work", "project", "organization"].includes(c.key) ? (
                           <span
                             className="line-clamp-2 break-words"
                             title={String(row[c.key] ?? "-")}
