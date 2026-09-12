@@ -36,10 +36,11 @@ export function ReportWorkspace({ category, report }: { category: string; report
   const isCashFlow = category === "cash-bank" && report === "cash-flow";
   const isBillMaturity = category === "expiry-due" && report === "bill-maturity";
   const isExpenseCategory = category === "expenses" && report === "category";
+  const isBalanceSheet = category === "financial" && report === "balance-sheet";
   const usesLedgerAccounts = category === "financial";
   const isExpiryMonitoring = isTenderSecurity || isPgBg || isSecurityDeposit || isBillMaturity;
   const isCompactExpiryTable = isPgBg || isSecurityDeposit || isBillMaturity;
-  const isCompactTable = isCompactExpiryTable || isExpenseCategory;
+  const isCompactTable = isCompactExpiryTable || isExpenseCategory || isBalanceSheet;
   useSetBreadcrumb([
     { label: "Reports", href: "/reports" },
     { label: parentTitle, href: `/reports/${category}` },
@@ -122,7 +123,12 @@ export function ReportWorkspace({ category, report }: { category: string; report
     : [];
   return (
     <div className="flex flex-col gap-4 print:block">
-      <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-blue-100 bg-gradient-to-r from-white via-blue-50/50 to-emerald-50/30 px-4 py-3 shadow-[0_8px_24px_rgba(15,48,92,0.06)] sm:flex-row sm:items-center sm:gap-4">
+      <div
+        className={cn(
+          "flex flex-col items-start justify-between gap-3 rounded-xl border border-blue-100 bg-gradient-to-r from-white via-blue-50/50 to-emerald-50/30 px-4 py-3 shadow-[0_8px_24px_rgba(15,48,92,0.06)] sm:gap-4",
+          isBalanceSheet ? "xl:flex-row xl:items-center" : "sm:flex-row sm:items-center",
+        )}
+      >
         <div className="min-w-0 flex-1">
           <h1 className="text-page-title text-biz-text">
             {result?.title ?? def?.title ?? "Report"}
@@ -148,7 +154,9 @@ export function ReportWorkspace({ category, report }: { category: string; report
         <p className="text-lg font-bold">BIZOVIX Contractor ERP</p>
         <p className="font-semibold">{result?.title ?? def?.title ?? "Report"}</p>
         <p className="text-xs">
-          Date range: {filters.dateFrom || "Beginning"} to {filters.dateTo || "Today"}
+          {isBalanceSheet
+            ? `As of: ${filters.dateTo || "Today"}`
+            : `Date range: ${filters.dateFrom || "Beginning"} to ${filters.dateTo || "Today"}`}
         </p>
         <p className="text-xs">Generated: {new Date().toLocaleString("en-GB")}</p>
       </div>
@@ -156,7 +164,9 @@ export function ReportWorkspace({ category, report }: { category: string; report
         <div
           className={cn(
             "grid items-end gap-2 sm:grid-cols-2",
-            isCashFlow
+            isBalanceSheet
+              ? "xl:grid-cols-[180px_220px_minmax(220px,1fr)_88px]"
+              : isCashFlow
               ? "xl:grid-cols-[140px_140px_180px_minmax(180px,1fr)_88px]"
               : isBillMaturity
                 ? "xl:grid-cols-[120px_120px_155px_175px_155px_minmax(150px,1fr)_88px]"
@@ -167,7 +177,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
               : "xl:grid-cols-[130px_130px_155px_165px_155px_minmax(130px,1fr)_88px]",
           )}
         >
-          <label className="text-[10px] font-semibold">
+          {!isBalanceSheet && <label className="text-[10px] font-semibold">
             {isBillMaturity ? "Due From" : isExpiryMonitoring ? "Expiry From" : "From"}
             <TextInput
               className="mt-1"
@@ -175,9 +185,15 @@ export function ReportWorkspace({ category, report }: { category: string; report
               value={draft.dateFrom}
               onChange={(e) => setDraft((v) => ({ ...v, dateFrom: e.target.value }))}
             />
-          </label>
+          </label>}
           <label className="text-[10px] font-semibold">
-            {isBillMaturity ? "Due To" : isExpiryMonitoring ? "Expiry To" : "To"}
+            {isBalanceSheet
+              ? "As of Date"
+              : isBillMaturity
+                ? "Due To"
+                : isExpiryMonitoring
+                  ? "Expiry To"
+                  : "To"}
             <TextInput
               className="mt-1"
               type="date"
@@ -185,7 +201,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
               onChange={(e) => setDraft((v) => ({ ...v, dateTo: e.target.value }))}
             />
           </label>
-          {!isCashFlow && <label className="text-[10px] font-semibold">
+          {!isCashFlow && !isBalanceSheet && <label className="text-[10px] font-semibold">
             Organization
             <SelectInput
               className="mt-1"
@@ -198,7 +214,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
               }))}
             />
           </label>}
-          {!isCashFlow && (
+          {!isCashFlow && !isBalanceSheet && (
             category !== "expenses" || report !== "general" ? (
               <label className="text-[10px] font-semibold">
                 Project
@@ -291,7 +307,9 @@ export function ReportWorkspace({ category, report }: { category: string; report
         <div
           className={cn(
             "grid gap-3",
-            result.kpis.length >= 8
+            isBalanceSheet
+              ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+              : result.kpis.length >= 8
               ? "sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8"
               : result.kpis.length === 6
               ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
@@ -308,8 +326,14 @@ export function ReportWorkspace({ category, report }: { category: string; report
             const isActive = isClickable
               && draft.status === kpiStatus
               && (kpiStatus !== "" || ["Total Securities", "Total PG/BG", "Security Deposits", "Total Outstanding"].includes(k.label));
+            const isBalanceDifference = isBalanceSheet && k.label === "Difference";
+            const isBalanced = isBalanceDifference && Number(k.value) === 0;
             const kpiTone =
-              k.label === "Active Exposure" || k.label === "Outstanding"
+              isBalanceDifference
+                ? isBalanced
+                  ? "before:bg-emerald-500"
+                  : "before:bg-red-500"
+              : k.label === "Active Exposure" || k.label === "Outstanding"
                 ? "before:bg-emerald-500"
                 : k.label === "Within 15 Days" || k.label === "Within 7 Days" || k.label === "Due in 1-7 Days" || k.label === "Due in 8-15 Days"
                   ? "before:bg-amber-500"
@@ -349,7 +373,13 @@ export function ReportWorkspace({ category, report }: { category: string; report
                     : result.kpis.length >= 7
                       ? "whitespace-nowrap text-[13px] xl:text-[13px]"
                       : "text-[17px]",
-                  k.kind === "money" ? "text-biz-blue" : "text-biz-text",
+                  isBalanceDifference
+                    ? isBalanced
+                      ? "text-emerald-600"
+                      : "text-red-600"
+                    : k.kind === "money"
+                      ? "text-biz-blue"
+                      : "text-biz-text",
                 )}
               >
                 {k.kind === "money" ? money(k.value) : k.value}
@@ -382,6 +412,13 @@ export function ReportWorkspace({ category, report }: { category: string; report
                {isExpenseCategory && (
                  <colgroup>
                    {[7, 43, 20, 15, 15].map((width, index) => (
+                     <col key={index} style={{ width: `${width}%` }} />
+                   ))}
+                 </colgroup>
+               )}
+               {isBalanceSheet && (
+                 <colgroup>
+                   {[5, 14, 14, 39, 20, 8].map((width, index) => (
                      <col key={index} style={{ width: `${width}%` }} />
                    ))}
                  </colgroup>
@@ -421,7 +458,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
               <tbody>
                 {result.rows.map((row, i) => (
                   <tr
-                    key={String(row.workId ?? i)}
+                    key={String(row.workId ?? row.accountId ?? i)}
                     className={cn(
                        "border-t border-biz-border transition-colors hover:bg-blue-50/35",
                       isProjectProfitLoss && "transition-colors hover:bg-blue-50/40",
@@ -484,6 +521,23 @@ export function ReportWorkspace({ category, report }: { category: string; report
                           </span>
                         ) : isPgBg && ["reference", "releaseReference", "bankConfirmation"].includes(c.key) ? (
                           <span className="block truncate" title={String(row[c.key] ?? "-")}>
+                            {String(row[c.key] ?? "-")}
+                          </span>
+                        ) : isBalanceSheet && c.key === "section" ? (
+                          <span
+                            className={cn(
+                              "inline-flex rounded-full px-2 py-1 text-[9px] font-bold",
+                              row[c.key] === "ASSET"
+                                ? "bg-blue-50 text-blue-700"
+                                : row[c.key] === "LIABILITY"
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-violet-50 text-violet-700",
+                            )}
+                          >
+                            {String(row[c.key] ?? "-")}
+                          </span>
+                        ) : isBalanceSheet && c.key === "balanceSide" ? (
+                          <span className="font-bold text-biz-muted">
                             {String(row[c.key] ?? "-")}
                           </span>
                         ) : isExpenseCategory && c.key === "category" ? (

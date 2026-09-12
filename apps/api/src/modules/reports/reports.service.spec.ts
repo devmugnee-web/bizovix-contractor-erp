@@ -257,3 +257,91 @@ describe("ReportsService expense category report", () => {
     });
   });
 });
+
+describe("ReportsService balance sheet report", () => {
+  const journalLineFindMany = jest.fn();
+  const service = new ReportsService(
+    { journalLine: { findMany: journalLineFindMany } } as never,
+    {} as never,
+  );
+  const line = (
+    accountId: string,
+    code: string,
+    name: string,
+    accountType: string,
+    debit: number,
+    credit: number,
+  ) => ({
+    accountId,
+    debit: new Prisma.Decimal(debit),
+    credit: new Prisma.Decimal(credit),
+    account: { code, name, accountType },
+  });
+
+  beforeEach(() => {
+    journalLineFindMany.mockReset();
+    journalLineFindMany.mockResolvedValue([
+      line("bank", "1020", "Bank", "ASSET", 1_000, 0),
+      line("receivable", "1100", "Accounts Receivable", "ASSET", 500, 0),
+      line("payable", "2010", "Accounts Payable", "LIABILITY", 0, 200),
+      line("capital", "3010", "Opening Capital", "EQUITY", 0, 1_000),
+      line("revenue", "4010", "Project Revenue", "INCOME", 0, 600),
+      line("expense", "5010", "Project Expense", "EXPENSE", 300, 0),
+    ]);
+  });
+
+  it("adds unclosed earnings to equity and produces a balanced as-of statement", async () => {
+    const result = await service.run("org-1", "financial", "balance-sheet", {
+      dateFrom: "2026-01-01",
+      dateTo: "2026-09-12",
+      page: 1,
+      limit: 10,
+    });
+
+    expect(journalLineFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          journalEntry: {
+            organizationId: "org-1",
+            status: "POSTED",
+            journalDate: { lte: new Date("2026-09-12T23:59:59.999Z") },
+          },
+        },
+      }),
+    );
+    expect(Object.fromEntries(result.kpis.map((kpi) => [kpi.label, kpi.value]))).toEqual({
+      "Total Assets": "1500",
+      "Total Liabilities": "200",
+      "Total Equity": "1300",
+      "Current Earnings": "300",
+      Difference: "0",
+    });
+    expect(result.rows).toEqual([
+      expect.objectContaining({ section: "ASSET", account: "Bank", balance: "1000" }),
+      expect.objectContaining({
+        section: "ASSET",
+        account: "Accounts Receivable",
+        balance: "500",
+      }),
+      expect.objectContaining({ section: "LIABILITY", account: "Accounts Payable", balance: "200" }),
+      expect.objectContaining({ section: "EQUITY", account: "Opening Capital", balance: "1000" }),
+      expect.objectContaining({
+        section: "EQUITY",
+        account: "Current Earnings (Unclosed)",
+        balance: "300",
+      }),
+    ]);
+  });
+
+  it("filters only the account breakdown while keeping full statement totals", async () => {
+    const result = await service.run("org-1", "financial", "balance-sheet", {
+      accountId: "bank",
+      search: "bank",
+    });
+
+    expect(result.rows).toEqual([
+      expect.objectContaining({ accountId: "bank", account: "Bank" }),
+    ]);
+    expect(result.kpis.find((kpi) => kpi.label === "Difference")?.value).toBe("0");
+  });
+});

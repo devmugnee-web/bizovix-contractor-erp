@@ -2830,6 +2830,139 @@ export class ReportsService {
         q,
       );
     }
+    if (report === "balance-sheet") {
+      const asOf = q.dateTo ? new Date(`${q.dateTo}T23:59:59.999Z`) : new Date();
+      const lines = await this.prisma.journalLine.findMany({
+        where: {
+          journalEntry: {
+            organizationId: org,
+            status: "POSTED",
+            journalDate: { lte: asOf },
+          },
+        },
+        select: {
+          accountId: true,
+          debit: true,
+          credit: true,
+          account: { select: { code: true, name: true, accountType: true } },
+        },
+      });
+      const groups = new Map<
+        string,
+        {
+          id: string;
+          code: string;
+          name: string;
+          type: string;
+          debit: Prisma.Decimal;
+          credit: Prisma.Decimal;
+        }
+      >();
+      for (const line of lines) {
+        const group = groups.get(line.accountId) ?? {
+          id: line.accountId,
+          code: line.account.code,
+          name: line.account.name,
+          type: line.account.accountType.toUpperCase(),
+          debit: new Prisma.Decimal(0),
+          credit: new Prisma.Decimal(0),
+        };
+        group.debit = group.debit.add(line.debit);
+        group.credit = group.credit.add(line.credit);
+        groups.set(line.accountId, group);
+      }
+      const accountGroups = [...groups.values()];
+      const statementBalance = (group: (typeof accountGroups)[number]) => {
+        const netDebit = group.debit.sub(group.credit);
+        return group.type === "ASSET" ? netDebit : netDebit.negated();
+      };
+      const sumType = (types: string[]) =>
+        accountGroups
+          .filter((group) => types.includes(group.type))
+          .reduce((total, group) => total.add(statementBalance(group)), new Prisma.Decimal(0));
+      const assets = sumType(["ASSET"]);
+      const liabilities = sumType(["LIABILITY"]);
+      const openingEquity = sumType(["EQUITY"]);
+      const income = sumType(["INCOME", "REVENUE"]);
+      const expenses = accountGroups
+        .filter((group) => ["EXPENSE", "COST"].includes(group.type))
+        .reduce(
+          (total, group) => total.add(group.debit).sub(group.credit),
+          new Prisma.Decimal(0),
+        );
+      const currentEarnings = income.sub(expenses);
+      const equity = openingEquity.add(currentEarnings);
+      const liabilitiesAndEquity = liabilities.add(equity);
+      const difference = assets.sub(liabilitiesAndEquity);
+      const sectionOrder: Record<string, number> = { ASSET: 0, LIABILITY: 1, EQUITY: 2 };
+      const search = q.search?.trim().toLocaleLowerCase();
+      const rows = accountGroups
+        .filter((group) => sectionOrder[group.type] !== undefined)
+        .map((group) => {
+          const netDebit = group.debit.sub(group.credit);
+          return {
+            accountId: group.id,
+            section: group.type,
+            code: group.code,
+            account: group.name,
+            balance: s(statementBalance(group).abs()),
+            balanceSide: netDebit.gt(0) ? "Dr" : netDebit.lt(0) ? "Cr" : "-",
+          };
+        })
+        .filter((row) => new Prisma.Decimal(row.balance).abs().gt(0));
+      if (!currentEarnings.isZero()) {
+        rows.push({
+          accountId: "current-earnings",
+          section: "EQUITY",
+          code: "-",
+          account: currentEarnings.gte(0)
+            ? "Current Earnings (Unclosed)"
+            : "Current Loss (Unclosed)",
+          balance: s(currentEarnings.abs()),
+          balanceSide: currentEarnings.gte(0) ? "Cr" : "Dr",
+        });
+      }
+      const filteredRows = rows
+        .filter((row) => !q.accountId || row.accountId === q.accountId)
+        .filter(
+          (row) =>
+            !search ||
+            [row.section, row.code, row.account, row.balanceSide].some((value) =>
+              value.toLocaleLowerCase().includes(search),
+            ),
+        )
+        .sort(
+          (a, b) =>
+            sectionOrder[a.section]! - sectionOrder[b.section]! ||
+            (a.accountId === "current-earnings" ? 1 : 0) -
+              (b.accountId === "current-earnings" ? 1 : 0) ||
+            a.code.localeCompare(b.code, undefined, { numeric: true }) ||
+            a.account.localeCompare(b.account),
+        );
+      return this.finish(
+        {
+          title: "Balance Sheet",
+          subtitle:
+            "Financial position as of the selected date, including unclosed current earnings from posted journals.",
+          kpis: [
+            { label: "Total Assets", value: s(assets), kind: "money" },
+            { label: "Total Liabilities", value: s(liabilities), kind: "money" },
+            { label: "Total Equity", value: s(equity), kind: "money" },
+            { label: "Current Earnings", value: s(currentEarnings), kind: "money" },
+            { label: "Difference", value: s(difference.abs()), kind: "money" },
+          ],
+          columns: [
+            { key: "section", label: "Section" },
+            { key: "code", label: "Account Code" },
+            { key: "account", label: "Account Name" },
+            moneyCol("balance", "Closing Balance"),
+            { key: "balanceSide", label: "Dr / Cr" },
+          ],
+          rows: filteredRows,
+        },
+        q,
+      );
+    }
     const lines = await this.prisma.journalLine.findMany({
       where: {
         accountId: q.accountId,
@@ -2905,35 +3038,6 @@ export class ReportsService {
               amount: s(net),
               percentage: `${income.isZero() ? "0.00" : net.div(income).mul(100).toFixed(2)}%`,
             },
-          ],
-        },
-        q,
-      );
-    }
-    if (report === "balance-sheet") {
-      const by = (type: string) =>
-        [...groups.values()]
-          .filter((g) => g.type.toUpperCase() === type)
-          .reduce((n, g) => n.add(g.debit).sub(g.credit), new Prisma.Decimal(0));
-      const assets = by("ASSET"),
-        liabilities = by("LIABILITY").negated(),
-        equity = by("EQUITY").negated(),
-        difference = assets.sub(liabilities.add(equity));
-      return this.finish(
-        {
-          title: "Balance Sheet",
-          subtitle: "Posted ledger balances only; missing setup remains visible as an imbalance.",
-          kpis: [
-            { label: "Total Assets", value: s(assets), kind: "money" },
-            { label: "Liabilities + Equity", value: s(liabilities.add(equity)), kind: "money" },
-            { label: "Difference", value: s(difference.abs()), kind: "money" },
-          ],
-          columns: [{ key: "section", label: "Section" }, moneyCol("amount", "Amount")],
-          rows: [
-            { section: "TOTAL ASSETS", amount: s(assets) },
-            { section: "TOTAL LIABILITIES", amount: s(liabilities) },
-            { section: "TOTAL EQUITY", amount: s(equity) },
-            { section: "BALANCE DIFFERENCE", amount: s(difference) },
           ],
         },
         q,
