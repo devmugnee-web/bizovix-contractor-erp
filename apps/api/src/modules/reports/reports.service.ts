@@ -2351,6 +2351,111 @@ export class ReportsService {
         q,
       );
     }
+    if (report === "cash-flow") {
+      const searchFilter: Prisma.FinancialTransactionWhereInput["OR"] = q.search
+        ? [
+            { transactionNo: { contains: q.search, mode: "insensitive" } },
+            { referenceNo: { contains: q.search, mode: "insensitive" } },
+            { description: { contains: q.search, mode: "insensitive" } },
+          ]
+        : undefined;
+      const scope: Prisma.FinancialTransactionWhereInput = {
+        organizationId: org,
+        accountId: q.accountId,
+        account: { accountType: { in: ["BANK", "CASH"] } },
+        status: "POSTED",
+        OR: searchFilter,
+      };
+      const [rows, openingRows] = await Promise.all([
+        this.prisma.financialTransaction.findMany({
+          where: { ...scope, transactionDate: this.dates(q) },
+          include: { account: true },
+          orderBy: [{ transactionDate: "asc" }, { createdAt: "asc" }],
+        }),
+        q.dateFrom
+          ? this.prisma.financialTransaction.findMany({
+              where: { ...scope, transactionDate: { lt: new Date(q.dateFrom) } },
+              select: { direction: true, amount: true },
+            })
+          : Promise.resolve([]),
+      ]);
+      const signedTotal = (items: Array<{ direction: string; amount: Prisma.Decimal }>) =>
+        items.reduce(
+          (total, item) => item.direction === "IN" ? total.add(item.amount) : total.sub(item.amount),
+          new Prisma.Decimal(0),
+        );
+      const isTransferMovement = (row: (typeof rows)[number]) =>
+        row.sourceType === "TRANSFER_IN" || row.sourceType === "TRANSFER_OUT";
+      const isOpeningMovement = (row: (typeof rows)[number]) =>
+        row.sourceType.includes("OPENING_BALANCE");
+      const isAdjustmentMovement = (row: (typeof rows)[number]) =>
+        row.sourceType.includes("BALANCE_ADJUSTMENT");
+      const isExternalMovement = (row: (typeof rows)[number]) =>
+        !isTransferMovement(row) && !isOpeningMovement(row) && !isAdjustmentMovement(row);
+      const externalIn = rows.reduce(
+        (total, row) => row.direction === "IN" && isExternalMovement(row) ? total.add(row.amount) : total,
+        new Prisma.Decimal(0),
+      );
+      const externalOut = rows.reduce(
+        (total, row) => row.direction === "OUT" && isExternalMovement(row) ? total.add(row.amount) : total,
+        new Prisma.Decimal(0),
+      );
+      const transfers = new Map<string, Prisma.Decimal>();
+      for (const row of rows.filter(isTransferMovement)) {
+        const current = transfers.get(`${row.sourceModule}:${row.sourceId}`);
+        if (!current || row.amount.gt(current)) transfers.set(`${row.sourceModule}:${row.sourceId}`, row.amount);
+      }
+      const openingBalance = signedTotal(openingRows).add(signedTotal(rows.filter(isOpeningMovement)));
+      const balanceAdjustments = signedTotal(rows.filter(isAdjustmentMovement));
+      const closingBalance = signedTotal(openingRows).add(signedTotal(rows));
+      const internalTransfers = [...transfers.values()].reduce(
+        (total, amount) => total.add(amount),
+        new Prisma.Decimal(0),
+      );
+
+      return this.finish(
+        {
+          title: "Cash Flow Report",
+          subtitle: "Cash and bank movements with internal transfers separated from operating inflow and outflow.",
+          kpis: [
+            { label: "Opening Balance", value: s(openingBalance), kind: "money" },
+            { label: "External Cash In", value: s(externalIn), kind: "money" },
+            { label: "External Cash Out", value: s(externalOut), kind: "money" },
+            { label: "Internal Transfers", value: s(internalTransfers), kind: "money" },
+            { label: "Balance Adjustments", value: s(balanceAdjustments), kind: "money" },
+            { label: "Net Cash Flow", value: s(externalIn.sub(externalOut)), kind: "money" },
+            { label: "Closing Balance", value: s(closingBalance), kind: "money" },
+          ],
+          columns: [
+            { key: "date", label: "Date", type: "date" },
+            { key: "no", label: "Transaction No." },
+            { key: "account", label: "Account" },
+            { key: "movement", label: "Movement" },
+            { key: "description", label: "Description" },
+            moneyCol("in", "Cash / Bank In"),
+            moneyCol("out", "Cash / Bank Out"),
+            moneyCol("balance", "Account Balance After Transaction"),
+          ],
+          rows: rows.map((row) => ({
+            date: row.transactionDate.toISOString(),
+            no: row.transactionNo,
+            account: row.account.accountName,
+            movement: isTransferMovement(row)
+              ? "Internal Transfer"
+              : isOpeningMovement(row)
+                ? "Opening Balance"
+                : isAdjustmentMovement(row)
+                  ? "Balance Adjustment"
+                  : row.sourceModule.replaceAll("_", " "),
+            description: row.description,
+            in: row.direction === "IN" ? s(row.amount) : "0",
+            out: row.direction === "OUT" ? s(row.amount) : "0",
+            balance: s(row.balanceAfter),
+          })),
+        },
+        q,
+      );
+    }
     const accountType = report === "cash-book" || report === "petty-cash" ? "CASH" : "BANK";
     const namedCashAccount =
       report === "cash-book" ? "Main Cash" : report === "petty-cash" ? "Petty Cash" : undefined;
@@ -2381,9 +2486,7 @@ export class ReportsService {
                 ? "Main Cash Report"
                 : report === "transactions"
                   ? "Bank Transaction Report"
-                  : report === "cash-flow"
-                    ? "Cash Flow Report"
-                    : "Cash & Bank Summary",
+                  : "Cash & Bank Summary",
         subtitle:
           "Account movements including internal transfers without treating them as revenue.",
         kpis: [

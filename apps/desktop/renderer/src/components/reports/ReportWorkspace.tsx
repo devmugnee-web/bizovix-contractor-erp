@@ -33,6 +33,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
   const isTenderSecurity = category === "tenders" && report === "tender-security";
   const isPgBg = category === "tenders" && report === "pg-bg";
   const isSecurityDeposit = category === "tenders" && report === "security-deposit";
+  const isCashFlow = category === "cash-bank" && report === "cash-flow";
   const isExpiryMonitoring = isTenderSecurity || isPgBg || isSecurityDeposit;
   const isCompactExpiryTable = isPgBg || isSecurityDeposit;
   useSetBreadcrumb([
@@ -111,13 +112,13 @@ export function ReportWorkspace({ category, report }: { category: string; report
   return (
     <div className="flex flex-col gap-4 print:block">
       <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-blue-100 bg-gradient-to-r from-white via-blue-50/50 to-emerald-50/30 px-4 py-3 shadow-[0_8px_24px_rgba(15,48,92,0.06)] sm:flex-row sm:items-center sm:gap-4">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-page-title text-biz-text">
             {result?.title ?? def?.title ?? "Report"}
           </h1>
           <p className="mt-1 text-[13px] text-biz-muted">{result?.subtitle ?? def?.description}</p>
         </div>
-        <div className="flex flex-wrap gap-2 print:hidden">
+        <div className={cn("flex flex-wrap gap-2 print:hidden", isCashFlow && "sm:flex-nowrap")}>
           <SecondaryButton onClick={() => router.push(`/reports/${category}`)}>
             <ArrowLeft className="h-4 w-4" />
             Back to {parentTitle}
@@ -144,7 +145,9 @@ export function ReportWorkspace({ category, report }: { category: string; report
         <div
           className={cn(
             "grid items-end gap-2 sm:grid-cols-2",
-            isTenderSecurity || isPgBg
+            isCashFlow
+              ? "xl:grid-cols-[140px_140px_180px_minmax(180px,1fr)_88px]"
+              : isTenderSecurity || isPgBg
               ? "xl:grid-cols-[105px_105px_125px_130px_125px_125px_minmax(115px,1fr)_78px]"
               : isSecurityDeposit
                 ? "xl:grid-cols-[115px_115px_150px_165px_145px_minmax(140px,1fr)_88px]"
@@ -169,7 +172,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
               onChange={(e) => setDraft((v) => ({ ...v, dateTo: e.target.value }))}
             />
           </label>
-          <label className="text-[10px] font-semibold">
+          {!isCashFlow && <label className="text-[10px] font-semibold">
             Organization
             <SelectInput
               className="mt-1"
@@ -181,23 +184,25 @@ export function ReportWorkspace({ category, report }: { category: string; report
                 label: x.shortName,
               }))}
             />
-          </label>
-          {category !== "expenses" || report !== "general" ? (
-            <label className="text-[10px] font-semibold">
-              Project
-              <SelectInput
-                className="mt-1"
-                placeholder="All Projects"
-                value={draft.workId}
-                onChange={(e) => setDraft((v) => ({ ...v, workId: e.target.value }))}
-                options={(options.data?.works ?? []).map((x) => ({
-                  value: x.id,
-                  label: x.workName,
-                }))}
-              />
-            </label>
-          ) : (
-            <div />
+          </label>}
+          {!isCashFlow && (
+            category !== "expenses" || report !== "general" ? (
+              <label className="text-[10px] font-semibold">
+                Project
+                <SelectInput
+                  className="mt-1"
+                  placeholder="All Projects"
+                  value={draft.workId}
+                  onChange={(e) => setDraft((v) => ({ ...v, workId: e.target.value }))}
+                  options={(options.data?.works ?? []).map((x) => ({
+                    value: x.id,
+                    label: x.workName,
+                  }))}
+                />
+              </label>
+            ) : (
+              <div />
+            )
           )}
           {!isSecurityDeposit && <label className="text-[10px] font-semibold">
             Account
