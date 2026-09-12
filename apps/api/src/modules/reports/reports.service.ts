@@ -79,7 +79,7 @@ export class ReportsService {
     };
   }
   async options(org: string) {
-    const [organizations, works, accounts, categories] = await Promise.all([
+    const [organizations, works, accounts, ledgerAccounts, categories] = await Promise.all([
       this.prisma.organizationMaster.findMany({
         where: { organizationId: org },
         select: { id: true, shortName: true },
@@ -95,13 +95,27 @@ export class ReportsService {
         select: { id: true, accountName: true },
         orderBy: { accountName: "asc" },
       }),
+      this.prisma.ledgerAccount.findMany({
+        where: { organizationId: org, isActive: true },
+        select: { id: true, code: true, name: true },
+        orderBy: [{ code: "asc" }, { name: "asc" }],
+      }),
       this.prisma.cmsWork.findMany({
         where: { organizationId: org },
         distinct: ["workCategory"],
         select: { workCategory: true },
       }),
     ]);
-    return { organizations, works, accounts, categories: categories.map((x) => x.workCategory) };
+    return {
+      organizations,
+      works,
+      accounts,
+      ledgerAccounts: ledgerAccounts.map((account) => ({
+        id: account.id,
+        accountName: `${account.code} - ${account.name}`,
+      })),
+      categories: categories.map((x) => x.workCategory),
+    };
   }
   async run(org: string, category: string, report: string, q: QueryReportDto): Promise<Report> {
     if (category === "tenders") return this.tenders(org, report, q);
@@ -2542,6 +2556,127 @@ export class ReportsService {
     if (report === "retention-register") return this.retentionRegister(org, q);
     if (report === "bill-receivable") return this.billReceivableReport(org, q);
     if (report === "vat-ait") return this.vatAitReport(org, q);
+    if (report === "trial-balance" || report === "account-balance") {
+      const lineWhere = (
+        journalDate: Prisma.DateTimeFilter | undefined,
+      ): Prisma.JournalLineWhereInput => ({
+        accountId: q.accountId,
+        projectId: q.workId,
+        project: q.organizationMasterId
+          ? { organizationMasterId: q.organizationMasterId }
+          : undefined,
+        journalEntry: {
+          organizationId: org,
+          status: "POSTED",
+          journalDate,
+        },
+        OR: q.search
+          ? [
+              { account: { code: { contains: q.search, mode: "insensitive" } } },
+              { account: { name: { contains: q.search, mode: "insensitive" } } },
+              { description: { contains: q.search, mode: "insensitive" } },
+              { journalEntry: { journalNo: { contains: q.search, mode: "insensitive" } } },
+              { journalEntry: { referenceNo: { contains: q.search, mode: "insensitive" } } },
+              { journalEntry: { description: { contains: q.search, mode: "insensitive" } } },
+            ]
+          : undefined,
+      });
+      const selection = {
+        accountId: true,
+        debit: true,
+        credit: true,
+        account: { select: { code: true, name: true, accountType: true } },
+      } satisfies Prisma.JournalLineSelect;
+      const [openingLines, periodLines] = await Promise.all([
+        q.dateFrom
+          ? this.prisma.journalLine.findMany({
+              where: lineWhere({ lt: new Date(q.dateFrom) }),
+              select: selection,
+            })
+          : Promise.resolve([]),
+        this.prisma.journalLine.findMany({
+          where: lineWhere(this.dates(q)),
+          select: selection,
+        }),
+      ]);
+      const groups = new Map<
+        string,
+        {
+          code: string;
+          name: string;
+          type: string;
+          openingNet: Prisma.Decimal;
+          periodDebit: Prisma.Decimal;
+          periodCredit: Prisma.Decimal;
+        }
+      >();
+      const groupFor = (line: (typeof periodLines)[number]) => {
+        const group = groups.get(line.accountId) ?? {
+          code: line.account.code,
+          name: line.account.name,
+          type: line.account.accountType,
+          openingNet: new Prisma.Decimal(0),
+          periodDebit: new Prisma.Decimal(0),
+          periodCredit: new Prisma.Decimal(0),
+        };
+        groups.set(line.accountId, group);
+        return group;
+      };
+      for (const line of openingLines) {
+        const group = groupFor(line);
+        group.openingNet = group.openingNet.add(line.debit).sub(line.credit);
+      }
+      for (const line of periodLines) {
+        const group = groupFor(line);
+        group.periodDebit = group.periodDebit.add(line.debit);
+        group.periodCredit = group.periodCredit.add(line.credit);
+      }
+      const rows = [...groups.values()]
+        .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }))
+        .map((group) => {
+          const closingNet = group.openingNet.add(group.periodDebit).sub(group.periodCredit);
+          return {
+            code: group.code,
+            name: group.name,
+            type: group.type,
+            openingDebit: s(Prisma.Decimal.max(group.openingNet, 0)),
+            openingCredit: s(Prisma.Decimal.max(group.openingNet.negated(), 0)),
+            periodDebit: s(group.periodDebit),
+            periodCredit: s(group.periodCredit),
+            closingDebit: s(Prisma.Decimal.max(closingNet, 0)),
+            closingCredit: s(Prisma.Decimal.max(closingNet.negated(), 0)),
+          };
+        });
+      const sumColumn = (key: "closingDebit" | "closingCredit") =>
+        rows.reduce((total, row) => total.add(row[key]), new Prisma.Decimal(0));
+      const closingDebit = sumColumn("closingDebit");
+      const closingCredit = sumColumn("closingCredit");
+      return this.finish(
+        {
+          title: report === "trial-balance" ? "Trial Balance" : "Account Balance Summary",
+          subtitle:
+            "Opening, period and closing balances from posted double-entry accounting data.",
+          kpis: [
+            { label: "Closing Debit Total", value: s(closingDebit), kind: "money" },
+            { label: "Closing Credit Total", value: s(closingCredit), kind: "money" },
+            { label: "Difference", value: s(closingDebit.sub(closingCredit).abs()), kind: "money" },
+          ],
+          columns: [
+            { key: "code", label: "Account Code" },
+            { key: "name", label: "Account Name" },
+            { key: "type", label: "Account Type" },
+            moneyCol("openingDebit", "Opening Debit"),
+            moneyCol("openingCredit", "Opening Credit"),
+            moneyCol("periodDebit", "Period Debit"),
+            moneyCol("periodCredit", "Period Credit"),
+            moneyCol("closingDebit", "Closing Debit"),
+            moneyCol("closingCredit", "Closing Credit"),
+          ],
+          rows,
+        },
+        q,
+      );
+    }
     const lines = await this.prisma.journalLine.findMany({
       where: {
         accountId: q.accountId,
@@ -2622,47 +2757,6 @@ export class ReportsService {
       g.debit = g.debit.add(x.debit);
       g.credit = g.credit.add(x.credit);
       groups.set(x.accountId, g);
-    }
-    if (report === "trial-balance" || report === "account-balance") {
-      const rows = [...groups.values()].map((g) => {
-        const net = g.debit.sub(g.credit);
-        return {
-          code: g.code,
-          name: g.name,
-          type: g.type,
-          openingDebit: "0",
-          openingCredit: "0",
-          periodDebit: s(g.debit),
-          periodCredit: s(g.credit),
-          closingDebit: s(Prisma.Decimal.max(net, 0)),
-          closingCredit: s(Prisma.Decimal.max(net.negated(), 0)),
-        };
-      });
-      return this.finish(
-        {
-          title: report === "trial-balance" ? "Trial Balance" : "Account Balance Summary",
-          subtitle:
-            "Balances from posted double-entry accounting data. Any imbalance is shown, never hidden.",
-          kpis: [
-            { label: "Total Debit", value: s(debit), kind: "money" },
-            { label: "Total Credit", value: s(credit), kind: "money" },
-            { label: "Difference", value: s(debit.sub(credit).abs()), kind: "money" },
-          ],
-          columns: [
-            { key: "code", label: "Account Code" },
-            { key: "name", label: "Account Name" },
-            { key: "type", label: "Account Type" },
-            moneyCol("openingDebit", "Opening Debit"),
-            moneyCol("openingCredit", "Opening Credit"),
-            moneyCol("periodDebit", "Period Debit"),
-            moneyCol("periodCredit", "Period Credit"),
-            moneyCol("closingDebit", "Closing Debit"),
-            moneyCol("closingCredit", "Closing Credit"),
-          ],
-          rows,
-        },
-        q,
-      );
     }
     const totals = (types: string[]) =>
       [...groups.values()]

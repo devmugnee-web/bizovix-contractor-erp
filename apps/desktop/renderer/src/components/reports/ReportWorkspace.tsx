@@ -34,6 +34,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
   const isPgBg = category === "tenders" && report === "pg-bg";
   const isSecurityDeposit = category === "tenders" && report === "security-deposit";
   const isCashFlow = category === "cash-bank" && report === "cash-flow";
+  const usesLedgerAccounts = category === "financial";
   const isExpiryMonitoring = isTenderSecurity || isPgBg || isSecurityDeposit;
   const isCompactExpiryTable = isPgBg || isSecurityDeposit;
   useSetBreadcrumb([
@@ -205,13 +206,13 @@ export function ReportWorkspace({ category, report }: { category: string; report
             )
           )}
           {!isSecurityDeposit && <label className="text-[10px] font-semibold">
-            Account
+            {usesLedgerAccounts ? "Ledger Account" : "Account"}
             <SelectInput
               className="mt-1"
-              placeholder="All Accounts"
+              placeholder={usesLedgerAccounts ? "All Ledger Accounts" : "All Accounts"}
               value={draft.accountId}
               onChange={(e) => setDraft((v) => ({ ...v, accountId: e.target.value }))}
-              options={(options.data?.accounts ?? []).map((x) => ({
+              options={((usesLedgerAccounts ? options.data?.ledgerAccounts : options.data?.accounts) ?? []).map((x) => ({
                 value: x.id,
                 label: x.accountName,
               }))}
