@@ -209,6 +209,7 @@ export class ReportsService {
           purchaseDate: this.dates(q),
           organizationMasterId: q.organizationMasterId,
           paymentFromAccountId: q.accountId,
+          cmsWork: q.workId ? { id: q.workId } : undefined,
           purchaseType: q.category as never,
           OR: q.search
             ? [
@@ -245,7 +246,7 @@ export class ReportsService {
             { key: "work", label: "Tender / Work Name" },
             moneyCol("price", "Document Price"),
             { key: "account", label: "Payment From" },
-            { key: "status", label: "Status" },
+            { key: "status", label: "Tender Security Status" },
           ],
           rows: rows.map((x) => ({
             date: x.purchaseDate.toISOString(),
@@ -262,30 +263,122 @@ export class ReportsService {
       );
     }
     if (report === "tender-security") {
-      const rows = await this.prisma.tenderSecurity.findMany({
+      const securities = await this.prisma.tenderSecurity.findMany({
         where: {
           organizationId: org,
-          issueDate: this.dates(q),
-          status: q.status as never,
-          organizationMasterId: q.organizationMasterId,
+          expiryDate: this.dates(q),
+          bankAccountId: q.accountId,
         },
-        include: { organizationMaster: true, bankAccount: true, tender: true },
+        include: {
+          bankAccount: true,
+          items: {
+            include: {
+              documentPurchase: {
+                include: { organizationMaster: true, cmsWork: true },
+              },
+            },
+          },
+        },
         orderBy: { issueDate: "desc" },
       });
-      const total = rows.reduce((n, r) => n.add(r.amount), new Prisma.Decimal(0));
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const day7 = new Date(today.getTime() + 7 * 864e5);
+      const day15 = new Date(today.getTime() + 15 * 864e5);
+      const search = q.search?.trim().toLocaleLowerCase();
+      const allRows = securities.flatMap((security) =>
+        security.items.flatMap((item) => {
+          const purchase = item.documentPurchase;
+          const expiryDay = new Date(
+            security.expiryDate.getFullYear(),
+            security.expiryDate.getMonth(),
+            security.expiryDate.getDate(),
+          );
+          const daysRemaining = Math.round((expiryDay.getTime() - today.getTime()) / 864e5);
+          const effectiveStatus =
+            security.status === "ACTIVE" && expiryDay < today
+              ? "EXPIRED"
+              : security.status === "ACTIVE" && expiryDay.getTime() === today.getTime()
+                ? "DUE_TODAY"
+                : security.status === "ACTIVE" && expiryDay <= day7
+                  ? "DUE_WITHIN_7"
+                  : security.status === "ACTIVE" && expiryDay <= day15
+                    ? "DUE_WITHIN_15"
+                    : security.status === "ACTIVE"
+                      ? "UPCOMING"
+                : security.status;
+          if (q.organizationMasterId && purchase.organizationMasterId !== q.organizationMasterId) {
+            return [];
+          }
+          if (q.workId && purchase.cmsWork?.id !== q.workId) return [];
+          if (
+            search &&
+            ![
+              purchase.egpTenderId,
+              purchase.tenderWorkName,
+              purchase.organizationMaster.shortName,
+              security.bankAccount?.accountName,
+              item.referenceNo,
+            ].some((value) => value?.toLocaleLowerCase().includes(search))
+          ) {
+            return [];
+          }
+          return [{
+            tender: purchase.egpTenderId ?? "-",
+            organization: purchase.organizationMaster.shortName,
+            work: purchase.tenderWorkName,
+            type: security.securityType,
+            bank: security.bankAccount?.accountName ?? "-",
+            amount: s(item.securityAmount),
+            margin: s(item.marginAmount),
+            issueDate: security.issueDate.toISOString(),
+            expiryDate: security.expiryDate.toISOString(),
+            timeRemaining:
+              effectiveStatus === "EXPIRED"
+                ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} overdue`
+                : effectiveStatus === "DUE_TODAY"
+                  ? "Today"
+                  : security.status === "ACTIVE"
+                    ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
+                    : "-",
+            status: effectiveStatus,
+          }];
+        }),
+      );
+      const rows = q.status
+        ? allRows.filter((row) => {
+            if (q.status === "DUE_WITHIN_7") {
+              return ["DUE_TODAY", "DUE_WITHIN_7"].includes(row.status);
+            }
+            if (q.status === "DUE_WITHIN_15") {
+              return ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(row.status);
+            }
+            return row.status === q.status;
+          })
+        : allRows;
+      const total = allRows.reduce((n, r) => n.add(r.amount), new Prisma.Decimal(0));
       return this.finish(
         {
           title: "Tender Security",
           subtitle: "Security instruments, margin and expiry status.",
           kpis: [
-            { label: "Total Securities", value: String(rows.length) },
+            { label: "Total Securities", value: String(allRows.length) },
             { label: "Total Security Amount", value: s(total), kind: "money" },
-            { label: "Active", value: String(rows.filter((r) => r.status === "ACTIVE").length) },
             {
-              label: "Expired / Expiring",
-              value: String(
-                rows.filter((r) => r.expiryDate <= new Date(Date.now() + 30 * 864e5)).length,
-              ),
+              label: "Upcoming",
+              value: String(allRows.filter((r) => r.status === "UPCOMING").length),
+            },
+            {
+              label: "Within 15 Days",
+              value: String(allRows.filter((r) => ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(r.status)).length),
+            },
+            {
+              label: "Within 7 Days",
+              value: String(allRows.filter((r) => ["DUE_TODAY", "DUE_WITHIN_7"].includes(r.status)).length),
+            },
+            {
+              label: "Expired",
+              value: String(allRows.filter((r) => r.status === "EXPIRED").length),
             },
           ],
           columns: [
@@ -297,21 +390,11 @@ export class ReportsService {
             moneyCol("amount", "Security Amount"),
             moneyCol("margin", "Margin Amount"),
             { key: "issueDate", label: "Issue Date", type: "date" },
-            { key: "expiryDate", label: "Expiry Date", type: "date" },
+            { key: "expiryDate", label: "Release Due / Expiry", type: "date" },
+            { key: "timeRemaining", label: "Time Remaining" },
             { key: "status", label: "Status" },
           ],
-          rows: rows.map((r) => ({
-            tender: r.tender?.egpTenderId ?? "-",
-            organization: r.organizationMaster?.shortName ?? "-",
-            work: r.tender?.workName ?? r.remarks ?? "-",
-            type: r.securityType,
-            bank: r.bankAccount?.accountName ?? "-",
-            amount: s(r.amount),
-            margin: s(r.marginAmount),
-            issueDate: r.issueDate.toISOString(),
-            expiryDate: r.expiryDate.toISOString(),
-            status: r.status,
-          })),
+          rows,
         },
         q,
       );
@@ -2687,7 +2770,7 @@ export class ReportsService {
     throw new NotFoundException("Expiry & Due report not found");
   }
   async export(org: string, userId: string, category: string, report: string, q: QueryReportDto) {
-    const result = await this.run(org, category, report, { ...q, page: 1, limit: 100 });
+    const result = await this.run(org, category, report, { ...q, page: 1, limit: 100_000 });
     const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
     const lines = [
       result.columns.map((c) => esc(c.label)).join(","),

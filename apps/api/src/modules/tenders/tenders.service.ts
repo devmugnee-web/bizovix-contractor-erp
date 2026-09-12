@@ -412,6 +412,9 @@ export class TendersService {
               : null,
             preBidDate: dto.preBidDate ? new Date(dto.preBidDate) : null,
             submissionDeadline: dto.submissionDeadline ? new Date(dto.submissionDeadline) : null,
+            tenderSecurityValidUpTo: dto.tenderSecurityValidUpTo
+              ? new Date(dto.tenderSecurityValidUpTo)
+              : null,
             openingDate: dto.openingDate ? new Date(dto.openingDate) : null,
             tenderSecurityRequired: dto.tenderSecurityRequired ?? false,
             estimatedTenderSecurityAmount: dto.estimatedTenderSecurityAmount,
@@ -530,6 +533,13 @@ export class TendersService {
               ? {
                   submissionDeadline: dto.submissionDeadline
                     ? new Date(dto.submissionDeadline)
+                    : null,
+                }
+              : {}),
+            ...(dto.tenderSecurityValidUpTo !== undefined
+              ? {
+                  tenderSecurityValidUpTo: dto.tenderSecurityValidUpTo
+                    ? new Date(dto.tenderSecurityValidUpTo)
                     : null,
                 }
               : {}),

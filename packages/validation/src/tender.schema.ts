@@ -18,6 +18,7 @@ export const createTenderSchema = z.object({
   tenderType: optionalTrimmedText(100),
   procurementMethod: z.enum(TENDER_PROCUREMENT_METHODS).default("OTM"),
   submissionDeadline: z.string().min(1, "Closing / submission date is required"),
+  tenderSecurityValidUpTo: z.string().optional().or(z.literal("")),
   description: optionalTrimmedText(2000),
   foundByName: optionalTrimmedText(150),
   findingDate: z.string().optional().or(z.literal("")),

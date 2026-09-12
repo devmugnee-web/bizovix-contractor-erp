@@ -1151,6 +1151,7 @@ model Tender {
   paAddress                     String?
   noticeOrganization            String?
   submissionDeadline            DateTime?
+  tenderSecurityValidUpTo       DateTime?
   openingDate                   DateTime?
   tenderSecurityRequired        Boolean   @default(false)
   estimatedTenderSecurityAmount Decimal?  @db.Decimal(18, 2)

@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Building2,
-  Calendar,
   Check,
   CircleX,
   Eye,
@@ -72,6 +71,16 @@ function addMonths(date: string, months: number) {
   const next = new Date(date);
   next.setMonth(next.getMonth() + months);
   return isoDateInput(next);
+}
+
+function monthsUntil(issueDate: string, expiryDate: string) {
+  const [issueYear, issueMonth, issueDay] = issueDate.split("-").map(Number);
+  const [expiryYear, expiryMonth, expiryDay] = expiryDate.split("-").map(Number);
+  if (![issueYear, issueMonth, issueDay, expiryYear, expiryMonth, expiryDay].every(Number.isFinite)) {
+    return 0;
+  }
+  const wholeMonths = (expiryYear! - issueYear!) * 12 + (expiryMonth! - issueMonth!);
+  return Math.max(1, wholeMonths + (expiryDay! > issueDay! ? 1 : 0));
 }
 
 function makeReference(tenderId: string | null, securityType: SecurityType) {
@@ -187,6 +196,8 @@ function TenderSecurityWorkspace() {
   const [companyAccountId, setCompanyAccountId] = React.useState("");
   const [issueDate, setIssueDate] = React.useState(() => isoDateInput(new Date()));
   const [validityMonths, setValidityMonths] = React.useState("4");
+  const [preferCalculatedExpiry, setPreferCalculatedExpiry] = React.useState(false);
+  const [manualExpiryDate, setManualExpiryDate] = React.useState("");
   const [interestRate, setInterestRate] = React.useState("15.00");
   const [remarks, setRemarks] = React.useState("PO will be issued for selected tenders");
   const [message, setMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -209,7 +220,20 @@ function TenderSecurityWorkspace() {
       ? [toSelectedTender(guidedRow, securityType, defaultMarginPct)]
       : []);
   const selectedIds = new Set(selectedRows.map((row) => row.id));
-  const expiryDate = addMonths(issueDate, Number(validityMonths || 0));
+  const selectedNoticeExpiryDates = [
+    ...new Set(
+      selectedRows
+        .map((row) => row.tenderSecurityValidUpTo?.slice(0, 10) ?? "")
+        .filter(Boolean),
+    ),
+  ];
+  const suggestedNoticeExpiryDate =
+    selectedNoticeExpiryDates.length === 1 ? selectedNoticeExpiryDates[0]! : "";
+  const noticeExpiryDate = preferCalculatedExpiry ? "" : suggestedNoticeExpiryDate;
+  const fixedExpiryDate = manualExpiryDate || noticeExpiryDate;
+  const fixedExpiryValidityMonths = fixedExpiryDate ? monthsUntil(issueDate, fixedExpiryDate) : 0;
+  const effectiveValidityMonths = fixedExpiryValidityMonths || Number(validityMonths || 0);
+  const expiryDate = fixedExpiryDate || addMonths(issueDate, effectiveValidityMonths);
   const activeBankAccounts = React.useMemo(
     () => (bankAccounts.data ?? []).filter((account) => account.accountType === "BANK" && account.isActive && account.bankName?.trim()),
     [bankAccounts.data],
@@ -225,6 +249,8 @@ function TenderSecurityWorkspace() {
 
   function toggleRow(row: PendingTenderSecurity) {
     if (!row.eligible || !row.documentPurchaseId) return;
+    setPreferCalculatedExpiry(false);
+    setManualExpiryDate("");
     updateSelectedRows((rows) => {
       if (rows.some((item) => item.id === row.id)) return rows.filter((item) => item.id !== row.id);
       return [...rows, toSelectedTender(row, securityType, defaultMarginPct)];
@@ -232,6 +258,8 @@ function TenderSecurityWorkspace() {
   }
 
   function toggleAll() {
+    setPreferCalculatedExpiry(false);
+    setManualExpiryDate("");
     const eligibleItems = pendingItems.filter((item) => item.eligible && item.documentPurchaseId);
     const allSelected = eligibleItems.length > 0 && eligibleItems.every((item) => selectedIds.has(item.id));
     if (allSelected) {
@@ -284,7 +312,7 @@ function TenderSecurityWorkspace() {
   const hasInvalidSecurityAmount = selectedRows.some((row) => !Number.isFinite(Number(row.securityAmount)) || Number(row.securityAmount) <= 0);
   const hasInvalidMargin = selectedRows.some((row) => !Number.isFinite(Number(row.marginPercentage)) || Number(row.marginPercentage) < 0 || Number(row.marginPercentage) > 100);
   const hasMissingReference = selectedRows.some((row) => !row.referenceNo.trim());
-  const hasInvalidValidity = !Number.isFinite(Number(validityMonths)) || Number(validityMonths) < 1;
+  const hasInvalidValidity = !Number.isFinite(effectiveValidityMonths) || effectiveValidityMonths < 1;
   const hasInvalidInterest = fundingType === "LOAN" && (!Number.isFinite(Number(interestRate)) || Number(interestRate) < 0);
   const canSave = selectedRows.length > 0
     && !!effectiveCompanyAccountId
@@ -295,6 +323,8 @@ function TenderSecurityWorkspace() {
     && !hasInvalidInterest;
 
   function removeSelectedTender(id: string) {
+    setPreferCalculatedExpiry(false);
+    setManualExpiryDate("");
     updateSelectedRows((rows) => rows.filter((row) => row.id !== id));
   }
 
@@ -306,7 +336,7 @@ function TenderSecurityWorkspace() {
         bankId: effectiveCompanyAccountId,
         fundingType,
         issueDate,
-        validityMonths: Number(validityMonths),
+        validityMonths: effectiveValidityMonths,
         expiryDate,
         interestRate: fundingType === "LOAN" ? Number(interestRate) : 0,
         chargeFromAccountId: effectiveCompanyAccountId,
@@ -319,6 +349,7 @@ function TenderSecurityWorkspace() {
         })),
       });
       setSelectedRowsOverride([]);
+      setManualExpiryDate("");
       setShowDetails(false);
       await pendingQuery.refetch();
     } catch (error) {
@@ -332,6 +363,7 @@ function TenderSecurityWorkspace() {
       await markNotRequired.mutateAsync({ documentPurchaseIds: selectedRows.map((row) => row.documentPurchaseId!) });
       setMessage({ type: "success", text: "Selected tenders marked as not required." });
       setSelectedRowsOverride([]);
+      setManualExpiryDate("");
       setShowDetails(false);
       await pendingQuery.refetch();
     } catch (error) {
@@ -706,11 +738,13 @@ function TenderSecurityWorkspace() {
               </div>
               <div>
                 <label className="mb-1 block text-[12px] font-semibold text-biz-navy">Validity (Months) <span className="text-biz-danger">*</span></label>
-                <TextInput type="number" min={1} value={validityMonths} onChange={(e) => setValidityMonths(e.target.value)} />
+                <TextInput type="number" min={1} value={fixedExpiryValidityMonths || validityMonths} onChange={(e) => { setValidityMonths(e.target.value); setPreferCalculatedExpiry(true); setManualExpiryDate(""); }} />
+                {fixedExpiryDate && <p className="mt-1 text-[10px] font-medium text-emerald-700">Calculated from {manualExpiryDate ? "adjusted expiry" : "Tender Notice expiry"}</p>}
               </div>
               <div>
                 <label className="mb-1 block text-[12px] font-semibold text-biz-navy">Expiry Date</label>
-                <div className="relative"><Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-biz-muted" /><input value={displayDate(expiryDate)} readOnly className="h-11 w-full rounded-sm border border-biz-border bg-slate-50 px-3 pl-9 text-[13px] text-biz-text" /></div>
+                <DateInput value={expiryDate} min={issueDate} onChange={(e) => setManualExpiryDate(e.target.value)} />
+                {(noticeExpiryDate || manualExpiryDate) && <p className="mt-1 text-[10px] font-medium text-emerald-700">{manualExpiryDate ? "Manually adjusted" : "From Tender Notice"}</p>}
               </div>
               <div className={fundingType === "CASH" ? "md:col-span-2 xl:col-span-1" : "md:col-span-2"}>
                 <label className="mb-1 block text-[12px] font-semibold text-biz-navy">Remarks (optional)</label>

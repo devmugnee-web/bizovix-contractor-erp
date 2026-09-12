@@ -100,6 +100,10 @@ export class CreateTenderDto {
 
   @IsOptional()
   @IsDateString()
+  tenderSecurityValidUpTo?: string;
+
+  @IsOptional()
+  @IsDateString()
   openingDate?: string;
 
   @IsOptional()

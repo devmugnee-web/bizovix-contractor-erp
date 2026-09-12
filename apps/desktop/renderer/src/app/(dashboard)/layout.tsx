@@ -99,7 +99,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       : null;
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col print:block print:h-auto">
       <Topbar
         user={me.data}
         onToggleSidebar={() => {
@@ -114,7 +114,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           !pathname.startsWith("/quotation-sales")
         }
       />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden print:block print:overflow-visible">
         <Sidebar
           remindersCount={activeRemindersCount}
           trial={trial}
@@ -123,8 +123,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           mobileOpen={mobileSidebarOpen}
           onMobileClose={() => setMobileSidebarOpen(false)}
         />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <main className={`min-h-0 flex-1 overflow-y-auto bg-biz-bg p-2 sm:p-3 ${pathname === "/dashboard" ? "md:overflow-hidden" : ""}`}>{children}</main>
+        <div className="flex min-w-0 flex-1 flex-col print:block">
+          <main className={`min-h-0 flex-1 overflow-y-auto bg-biz-bg p-2 sm:p-3 print:overflow-visible print:bg-white print:p-0 ${pathname === "/dashboard" ? "md:overflow-hidden" : ""}`}>{children}</main>
         </div>
       </div>
     </div>

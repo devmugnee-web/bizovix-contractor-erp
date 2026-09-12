@@ -496,6 +496,18 @@ function defaultShippingRate(method: TenderCostingShippingMethod): string {
 
 const DEFAULT_VAT_PERCENT = "10";
 const DEFAULT_TAX_PERCENT = "5";
+let costingItemIdSequence = 0;
+
+function createCostingItemId(): string {
+  if (
+    typeof globalThis.crypto !== "undefined" &&
+    typeof globalThis.crypto.randomUUID === "function"
+  ) {
+    return `costing-item-${globalThis.crypto.randomUUID()}`;
+  }
+  costingItemIdSequence += 1;
+  return `costing-item-${Date.now().toString(36)}-${costingItemIdSequence.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function countryOptionsWithCurrent(country: string) {
   return country && !COUNTRY_OPTIONS.some((option) => option.value === country)
@@ -510,7 +522,7 @@ function blankItem(
   sourcingType: TenderCostingSourcingType = "LOCAL",
 ): CostingItemForm {
   return {
-    id: `costing-item-${crypto.randomUUID()}`,
+    id: createCostingItemId(),
     costingDate,
     preparedByUserId,
     description,
@@ -935,7 +947,7 @@ export default function TenderCostingEditorPage() {
         seenIds.add(item.id);
         return item;
       }
-      const nextId = `costing-item-${crypto.randomUUID()}`;
+      const nextId = createCostingItemId();
       seenIds.add(nextId);
       replacements.push({ previousId: item.id, nextId });
       return { ...item, id: nextId };
@@ -1525,7 +1537,7 @@ export default function TenderCostingEditorPage() {
       setCostingPdfNotice(`${details.join(" · ")}. Review the rows before saving.`);
     } catch (error) {
       setCostingPdfError(
-        error instanceof ApiError ? error.message : "Could not read the selected BOQ PDF files.",
+        error instanceof Error ? error.message : "Could not read the selected BOQ PDF files.",
       );
     } finally {
       setIsReadingCostingPdfs(false);

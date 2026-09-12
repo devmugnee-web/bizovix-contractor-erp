@@ -160,6 +160,7 @@ export function TenderForm({
       tenderType: tender?.tenderType ?? "",
       procurementMethod: tender?.procurementMethod ?? "OTM",
       submissionDeadline: tender?.submissionDeadline?.slice(0, 10) ?? "",
+      tenderSecurityValidUpTo: tender?.tenderSecurityValidUpTo?.slice(0, 10) ?? "",
       description: tender?.description ?? "",
       foundByName: tender?.foundBy?.name ?? tender?.foundByName ?? "",
       findingDate: tender?.findingDate?.slice(0, 10) ?? localDate(),
@@ -215,6 +216,8 @@ export function TenderForm({
           tenderType: data.tenderType ?? current.tenderType,
           procurementMethod: data.procurementMethod ?? current.procurementMethod,
           submissionDeadline: data.submissionDeadline ?? current.submissionDeadline,
+          tenderSecurityValidUpTo:
+            data.tenderSecurityValidUpTo ?? current.tenderSecurityValidUpTo,
           remarks: data.remarks ?? current.remarks,
         },
         { keepDefaultValues: true },
@@ -268,6 +271,7 @@ export function TenderForm({
       tenderType: values.tenderType || undefined,
       procurementMethod: values.procurementMethod,
       submissionDeadline: values.submissionDeadline,
+      tenderSecurityValidUpTo: values.tenderSecurityValidUpTo || undefined,
       description: values.description || values.remarks || undefined,
       foundByUserId: selectedUser?.id ?? "",
       foundByName: selectedUser ? "" : foundByText,
@@ -463,6 +467,20 @@ export function TenderForm({
               <Controller
                 control={control}
                 name="submissionDeadline"
+                render={({ field }) => <DateInput {...field} />}
+              />
+            </FormField>
+          </div>
+
+          <div className="lg:col-span-4">
+            <FormField
+              label="Tender/Proposal Security Valid Up to"
+              helper="Automatically filled from the uploaded Tender Notice when available"
+              error={errors.tenderSecurityValidUpTo?.message}
+            >
+              <Controller
+                control={control}
+                name="tenderSecurityValidUpTo"
                 render={({ field }) => <DateInput {...field} />}
               />
             </FormField>

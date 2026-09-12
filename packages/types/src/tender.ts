@@ -54,6 +54,7 @@ export interface TenderRecord {
   paAddress: string | null;
   noticeOrganization: string | null;
   submissionDeadline: string | null;
+  tenderSecurityValidUpTo: string | null;
   openingDate: string | null;
   tenderSecurityRequired: boolean;
   estimatedTenderSecurityAmount: string | null;
@@ -165,6 +166,7 @@ export interface CreateTenderInput {
   paAddress?: string;
   noticeOrganization?: string;
   submissionDeadline?: string;
+  tenderSecurityValidUpTo?: string;
   openingDate?: string;
   tenderSecurityRequired?: boolean;
   estimatedTenderSecurityAmount?: number | null;
@@ -193,6 +195,7 @@ export interface TenderPdfExtractedData {
   tenderType?: string;
   procurementMethod?: TenderProcurementMethod;
   submissionDeadline?: string;
+  tenderSecurityValidUpTo?: string;
   remarks?: string;
 }
 

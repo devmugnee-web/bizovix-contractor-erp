@@ -13,6 +13,13 @@ function file(content: string, mimetype = "application/pdf"): UploadedTenderPdf 
 }
 
 describe("Tender PDF extraction", () => {
+  it("extracts Tender/Proposal Security Valid Up to", () => {
+    expect(
+      parseTenderPdfText(
+        "Tender/Proposal ID: 123456 Tender/Proposal Security Valid Up to: 12-Mar-2027",
+      ).tenderSecurityValidUpTo,
+    ).toBe("2027-03-12");
+  });
   const tableItem = (str: string, x: number, y: number, width: number) => ({ str, x, y, width, fontSize: 7 });
   const securityTableHeader = [
     tableItem("Lot No.", 40, 65, 23),

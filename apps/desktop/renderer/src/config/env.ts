@@ -8,7 +8,7 @@ function resolveApiBaseUrl(): string {
     // baked-in "localhost" API URL would point at the wrong machine, so derive
     // the API origin from whatever host served this page instead.
     if (!isLocalHost && (!configured || configured.includes("localhost") || configured.includes("127.0.0.1"))) {
-      return `${window.location.origin}/api/backend`;
+      return `${window.location.protocol}//${hostname}:4000/api/v1`;
     }
   }
 

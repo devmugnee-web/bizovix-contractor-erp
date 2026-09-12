@@ -39,7 +39,7 @@ const DEFAULT_PRIORITY: Record<ReminderRuleType, string> = {
 const DEFAULT_OFFSETS: Record<ReminderRuleType, number[]> = {
   TENDER_OPENING: [7, 3],
   TENDER_CLOSING: [7, 3],
-  TENDER_SECURITY_EXPIRY: [30, 15],
+  TENDER_SECURITY_EXPIRY: [15, 7, 0],
   PG_EXPIRY: [30, 15],
   BG_EXPIRY: [30, 15],
   SECURITY_DEPOSIT_EXPIRY: [30],

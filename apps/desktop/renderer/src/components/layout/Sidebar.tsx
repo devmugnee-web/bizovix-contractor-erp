@@ -132,7 +132,7 @@ export function Sidebar({
         />
       )}
       <aside
-        className={`${mobileOpen ? "fixed bottom-0 left-0 top-7 z-40 flex" : "hidden"} ${collapsed ? "md:hidden" : "md:static md:flex"} h-[calc(100vh-1.75rem)] w-[256px] max-w-[88vw] shrink-0 flex-col bg-biz-navy md:h-full md:max-w-none`}
+        className={`${mobileOpen ? "fixed bottom-0 left-0 top-7 z-40 flex" : "hidden"} ${collapsed ? "md:hidden" : "md:static md:flex"} h-[calc(100vh-1.75rem)] w-[256px] max-w-[88vw] shrink-0 flex-col bg-biz-navy md:h-full md:max-w-none print:hidden`}
       >
         <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">{upperItems.map(renderItem)}</ul>

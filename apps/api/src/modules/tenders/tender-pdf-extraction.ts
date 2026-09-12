@@ -187,6 +187,16 @@ function extractSubmissionDeadline(text: string): string | undefined {
   return parseDate(patterns.map((pattern) => pattern.exec(compact)?.[1]).find(Boolean));
 }
 
+function extractTenderSecurityValidUpTo(text: string): string | undefined {
+  const compact = singleLineText(text);
+  const patterns = [
+    new RegExp(`Tender\\/Proposal\\s+Security\\s+Valid\\s+Up\\s+to\\s*:?\\s*(${DATE_VALUE_PATTERN})`, "i"),
+    new RegExp(`Tender\\s+Security\\s+Valid\\s+Up\\s+to\\s*:?\\s*(${DATE_VALUE_PATTERN})`, "i"),
+    new RegExp(`Proposal\\s+Security\\s+Valid\\s+Up\\s+to\\s*:?\\s*(${DATE_VALUE_PATTERN})`, "i"),
+  ];
+  return parseDate(patterns.map((pattern) => pattern.exec(compact)?.[1]).find(Boolean));
+}
+
 function cleanWorkName(value: string | undefined): string | undefined {
   if (!value) return undefined;
   let cleaned = value
@@ -439,6 +449,7 @@ export function parseTenderPdfText(rawText: string): TenderPdfExtractedData {
   const tenderType = extractTenderType(text);
   const procurementMethod = extractProcurementMethod(text);
   const submissionDeadline = extractSubmissionDeadline(text);
+  const tenderSecurityValidUpTo = extractTenderSecurityValidUpTo(text);
   const remarks = extractRemarks(text);
 
   if (egpTenderId) data.egpTenderId = egpTenderId;
@@ -446,6 +457,7 @@ export function parseTenderPdfText(rawText: string): TenderPdfExtractedData {
   if (tenderType) data.tenderType = tenderType;
   if (procurementMethod) data.procurementMethod = procurementMethod;
   if (submissionDeadline) data.submissionDeadline = submissionDeadline;
+  if (tenderSecurityValidUpTo) data.tenderSecurityValidUpTo = tenderSecurityValidUpTo;
   if (remarks) data.remarks = remarks;
   return data;
 }

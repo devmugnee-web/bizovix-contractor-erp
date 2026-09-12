@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ArrowUpRight,
   FileSpreadsheet,
-  Filter,
   Printer,
   RotateCcw,
   Search,
@@ -31,12 +30,14 @@ export function ReportWorkspace({ category, report }: { category: string; report
     group = REPORT_CATEGORIES.find((c) => c.slug === category),
     parentTitle = group?.shortTitle ?? "Reports";
   const isProjectProfitLoss = category === "projects" && report === "profit-loss";
+  const isTenderSecurity = category === "tenders" && report === "tender-security";
   useSetBreadcrumb([
     { label: "Reports", href: "/reports" },
     { label: parentTitle, href: `/reports/${category}` },
     { label: def?.title ?? report },
   ]);
   const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(5);
   const [draft, setDraft] = React.useState<ReportQuery>({
     dateFrom: "",
     dateTo: "",
@@ -48,7 +49,14 @@ export function ReportWorkspace({ category, report }: { category: string; report
     accountId: "",
   });
   const [filters, setFilters] = React.useState<ReportQuery>(draft);
-  const query = { ...filters, page, limit: 10 };
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setFilters(draft);
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [draft]);
+  const query = { ...filters, page, limit: pageSize };
   const data = useReport(category, report, query),
     options = useReportOptions(),
     exporter = useExportReport(category, report);
@@ -72,10 +80,27 @@ export function ReportWorkspace({ category, report }: { category: string; report
     download(r.filename, r.content);
   }
   const result = data.data;
+  const tenderSecurityKpiStatus: Record<string, string> = {
+    "Total Securities": "",
+    "Total Security Amount": "",
+    Upcoming: "UPCOMING",
+    "Within 15 Days": "DUE_WITHIN_15",
+    "Within 7 Days": "DUE_WITHIN_7",
+    Expired: "EXPIRED",
+  };
+  const firstVisiblePage = result
+    ? Math.max(1, Math.min(page - 2, Math.max(1, result.meta.totalPages - 4)))
+    : 1;
+  const visiblePages = result
+    ? Array.from(
+        { length: Math.min(5, result.meta.totalPages) },
+        (_, index) => firstVisiblePage + index,
+      )
+    : [];
   return (
     <div className="flex flex-col gap-4 print:block">
-      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:gap-4">
-        <div>
+      <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-blue-100 bg-gradient-to-r from-white via-blue-50/50 to-emerald-50/30 px-4 py-3 shadow-[0_8px_24px_rgba(15,48,92,0.06)] sm:flex-row sm:items-center sm:gap-4">
+        <div className="min-w-0">
           <h1 className="text-page-title text-biz-text">
             {result?.title ?? def?.title ?? "Report"}
           </h1>
@@ -104,10 +129,17 @@ export function ReportWorkspace({ category, report }: { category: string; report
         </p>
         <p className="text-xs">Generated: {new Date().toLocaleString("en-GB")}</p>
       </div>
-      <section className="rounded-lg border border-biz-border bg-white p-4 shadow-card print:hidden">
-        <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-7">
+      <section className="rounded-xl border border-biz-border bg-white p-3 shadow-[0_8px_24px_rgba(15,48,92,0.06)] print:hidden">
+        <div
+          className={cn(
+            "grid items-end gap-2 sm:grid-cols-2",
+            isTenderSecurity
+              ? "xl:grid-cols-[105px_105px_125px_130px_125px_125px_minmax(115px,1fr)_78px]"
+              : "xl:grid-cols-[130px_130px_155px_165px_155px_minmax(130px,1fr)_88px]",
+          )}
+        >
           <label className="text-[10px] font-semibold">
-            From
+            {isTenderSecurity ? "Expiry From" : "From"}
             <TextInput
               className="mt-1"
               type="date"
@@ -116,7 +148,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
             />
           </label>
           <label className="text-[10px] font-semibold">
-            To
+            {isTenderSecurity ? "Expiry To" : "To"}
             <TextInput
               className="mt-1"
               type="date"
@@ -167,26 +199,40 @@ export function ReportWorkspace({ category, report }: { category: string; report
               }))}
             />
           </label>
+          {isTenderSecurity && (
+            <label className="text-[10px] font-semibold">
+              Status
+              <SelectInput
+                className="mt-1"
+                placeholder="All Statuses"
+                value={draft.status}
+                onChange={(e) => setDraft((v) => ({ ...v, status: e.target.value }))}
+                options={[
+                  { value: "UPCOMING", label: "Upcoming (After 15 Days)" },
+                  { value: "DUE_WITHIN_15", label: "Release Within 15 Days" },
+                  { value: "DUE_WITHIN_7", label: "Release Within 7 Days" },
+                  { value: "DUE_TODAY", label: "Release Due Today" },
+                  { value: "EXPIRED", label: "Expired" },
+                  { value: "RELEASE_REQUESTED", label: "Release Requested" },
+                  { value: "RELEASED", label: "Released" },
+                  { value: "RETURNED", label: "Returned" },
+                  { value: "ENCASHED", label: "Encashed" },
+                  { value: "CANCELLED", label: "Cancelled" },
+                ]}
+              />
+            </label>
+          )}
           <TextInput
             icon={Search}
             placeholder="Search..."
             value={draft.search}
             onChange={(e) => setDraft((v) => ({ ...v, search: e.target.value }))}
           />
-          <div className="flex gap-1">
-            <SecondaryButton className="px-3" onClick={clear} title="Clear filters">
+          <div className="flex justify-end">
+            <SecondaryButton className="w-full px-2" onClick={clear} title="Clear all filters">
               <RotateCcw className="h-4 w-4" />
+              Reset
             </SecondaryButton>
-            <PrimaryButton
-              className="flex-1"
-              onClick={() => {
-                setFilters(draft);
-                setPage(1);
-              }}
-            >
-              <Filter className="h-4 w-4" />
-              Filter
-            </PrimaryButton>
           </div>
         </div>
       </section>
@@ -194,28 +240,54 @@ export function ReportWorkspace({ category, report }: { category: string; report
         <div
           className={cn(
             "grid gap-3",
-            result.kpis.length >= 4 ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3",
+            result.kpis.length >= 6
+              ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+              : result.kpis.length >= 4
+                ? "sm:grid-cols-2 xl:grid-cols-4"
+                : "sm:grid-cols-3",
           )}
         >
-          {result.kpis.map((k) => (
+          {result.kpis.map((k) => {
+            const kpiStatus = tenderSecurityKpiStatus[k.label];
+            const isClickable = isTenderSecurity && kpiStatus !== undefined;
+            const isActive = isClickable && draft.status === kpiStatus;
+            return (
             <div
               key={k.label}
-              className="rounded-lg border border-biz-border bg-white p-4 shadow-card"
+              onClick={() => {
+                if (isClickable) setDraft((value) => ({ ...value, status: kpiStatus }));
+              }}
+              onKeyDown={(event) => {
+                if (isClickable && (event.key === "Enter" || event.key === " ")) {
+                  event.preventDefault();
+                  setDraft((value) => ({ ...value, status: kpiStatus }));
+                }
+              }}
+              role={isClickable ? "button" : undefined}
+              tabIndex={isClickable ? 0 : undefined}
+              className={cn(
+                "relative overflow-hidden rounded-xl border bg-white p-3 text-left shadow-[0_6px_18px_rgba(15,48,92,0.06)] before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-biz-blue/70",
+                isClickable && "cursor-pointer transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md",
+                isActive ? "border-biz-blue bg-blue-50/60 ring-2 ring-blue-100" : "border-biz-border",
+                !isClickable && "cursor-default",
+              )}
+              aria-pressed={isClickable ? isActive : undefined}
+              title={isClickable ? `Show ${k.label}` : undefined}
             >
               <p className="text-[11px] font-semibold text-biz-muted">{k.label}</p>
               <p
                 className={cn(
-                  "mt-2 text-[18px] font-bold",
+                  "mt-1.5 text-[17px] font-bold",
                   k.kind === "money" ? "text-biz-blue" : "text-biz-text",
                 )}
               >
                 {k.kind === "money" ? money(k.value) : k.value}
               </p>
             </div>
-          ))}
+          );})}
         </div>
       )}
-      <section className="overflow-hidden rounded-lg border border-biz-border bg-white shadow-card">
+      <section className="overflow-hidden rounded-xl border border-biz-border bg-white shadow-[0_8px_24px_rgba(15,48,92,0.06)]">
         {data.isLoading ? (
           <>
             {Array.from({ length: 7 }).map((_, i) => (
@@ -235,8 +307,8 @@ export function ReportWorkspace({ category, report }: { category: string; report
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-[11px]">
-              <thead className="bg-[#f4f7fb] text-[10px] font-semibold">
+              <table className="w-full min-w-[980px] text-left text-[11px]">
+               <thead className="border-b border-blue-100 bg-gradient-to-r from-slate-50 to-blue-50/60 text-[10px] font-semibold text-biz-navy">
                 <tr>
                   <th className="px-3 py-3">SL</th>
                   {result.columns.map((c) => (
@@ -252,7 +324,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
                   <tr
                     key={String(row.workId ?? i)}
                     className={cn(
-                      "border-t border-biz-border",
+                       "border-t border-biz-border transition-colors hover:bg-blue-50/35",
                       isProjectProfitLoss && "transition-colors hover:bg-blue-50/40",
                     )}
                   >
@@ -314,42 +386,63 @@ export function ReportWorkspace({ category, report }: { category: string; report
           </div>
         )}
         {result && (
-          <div className="flex items-center justify-between border-t px-4 py-3 text-[11px] text-biz-muted print:hidden">
-            <span>
-              Showing {result.meta.total ? (result.meta.page - 1) * result.meta.limit + 1 : 0} to{" "}
-              {Math.min(result.meta.page * result.meta.limit, result.meta.total)} of{" "}
-              {result.meta.total}
-            </span>
-            <div className="flex gap-1">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-                className="h-8 w-9 rounded border"
-              >
-                &lt;
-              </button>
-              {Array.from({ length: Math.min(5, result.meta.totalPages) }, (_, i) => i + 1).map(
-                (n) => (
+          <div className="flex flex-col gap-2 border-t px-4 py-3 text-[11px] text-biz-muted print:hidden sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span>
+                Showing {result.meta.total ? (result.meta.page - 1) * result.meta.limit + 1 : 0} to{" "}
+                {Math.min(result.meta.page * result.meta.limit, result.meta.total)} of{" "}
+                {result.meta.total}
+              </span>
+              <label className="flex items-center gap-1.5 whitespace-nowrap">
+                Show
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setPage(1);
+                  }}
+                  className="h-8 rounded-md border border-biz-border bg-white px-2 font-semibold text-biz-navy outline-none focus:border-biz-blue"
+                  aria-label="Rows per page"
+                >
+                  {[5, 10, 20, 50].map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+                rows
+              </label>
+            </div>
+            {result.meta.total > pageSize && (
+              <div className="flex gap-1">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage((current) => current - 1)}
+                  className="h-8 w-9 rounded-md border border-biz-border bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Previous page"
+                >
+                  &lt;
+                </button>
+                {visiblePages.map((n) => (
                   <button
                     key={n}
                     onClick={() => setPage(n)}
                     className={cn(
-                      "h-8 min-w-9 rounded border",
+                      "h-8 min-w-9 rounded-md border border-biz-border bg-white px-2",
                       n === page && "border-biz-blue bg-biz-blue text-white",
                     )}
                   >
                     {n}
                   </button>
-                ),
-              )}
-              <button
-                disabled={page >= result.meta.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="h-8 w-9 rounded border"
-              >
-                &gt;
-              </button>
-            </div>
+                ))}
+                <button
+                  disabled={page >= result.meta.totalPages}
+                  onClick={() => setPage((current) => current + 1)}
+                  className="h-8 w-9 rounded-md border border-biz-border bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Next page"
+                >
+                  &gt;
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>

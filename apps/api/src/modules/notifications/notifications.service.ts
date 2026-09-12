@@ -144,6 +144,11 @@ export class NotificationsService {
   private resolveStage(reminder: ReminderForNotification, daysUntilDue: number): string | null {
     if (reminder.status === "OVERDUE") return "OVERDUE";
     if (reminder.status === "DUE_TODAY") return "DUE_TODAY";
+    if (reminder.sourceModule === "TENDER_SECURITY") {
+      if (daysUntilDue <= 7) return "TENDER_SECURITY_7_DAYS";
+      if (daysUntilDue <= 15) return "TENDER_SECURITY_15_DAYS";
+      return null;
+    }
     if (daysUntilDue <= 1) return "URGENT";
     const window = reminder.notificationBefore > 0 ? reminder.notificationBefore : (PRIORITY_WINDOW_DAYS[reminder.priority] ?? 3);
     return daysUntilDue <= window ? "UPCOMING" : null;
@@ -157,11 +162,23 @@ export class NotificationsService {
         ? `is overdue by ${Math.abs(daysUntilDue)} day${Math.abs(daysUntilDue) === 1 ? "" : "s"}`
         : stage === "DUE_TODAY"
           ? "is due today"
+          : stage === "TENDER_SECURITY_7_DAYS" || stage === "TENDER_SECURITY_15_DAYS"
+            ? `expires in ${daysUntilDue} days`
           : stage === "URGENT"
             ? "is due tomorrow"
             : `is due in ${daysUntilDue} days`;
     const stageTitle =
-      stage === "OVERDUE" ? "overdue" : stage === "DUE_TODAY" ? "due today" : stage === "URGENT" ? "due tomorrow" : "upcoming";
+      stage === "OVERDUE"
+        ? "overdue"
+        : stage === "DUE_TODAY"
+          ? "expires today"
+          : stage === "TENDER_SECURITY_7_DAYS"
+            ? "expires within 7 days"
+            : stage === "TENDER_SECURITY_15_DAYS"
+              ? "expires within 15 days"
+              : stage === "URGENT"
+                ? "due tomorrow"
+                : "upcoming";
 
     return {
       title: `${reminder.type} ${stageTitle}`,

@@ -68,7 +68,7 @@ export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: Top
   }
 
   return (
-    <header className="relative flex h-7 shrink-0 items-center border-b border-biz-border bg-white px-3 shadow-[0_1px_3px_rgba(13,27,62,0.04)] sm:px-4">
+    <header className="relative flex h-7 shrink-0 items-center border-b border-biz-border bg-white px-3 shadow-[0_1px_3px_rgba(13,27,62,0.04)] sm:px-4 print:hidden">
       <div className="flex w-[204px] shrink-0 items-center gap-4">
         <div className="flex items-center gap-2" aria-label="Bizovix Contractor ERP">
           <span className="text-[16px] font-black leading-none text-biz-blue">X</span>
