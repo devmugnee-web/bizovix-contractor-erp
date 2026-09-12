@@ -57,6 +57,32 @@ function InfoRow({
   );
 }
 
+function FinancialMetric({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "default" | "primary" | "success";
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border px-3 py-2.5",
+        tone === "primary"
+          ? "border-blue-200 bg-blue-50/60"
+          : tone === "success"
+            ? "border-emerald-200 bg-emerald-50/60"
+            : "border-slate-200 bg-slate-50/70",
+      )}
+    >
+      <p className="text-[9px] font-semibold uppercase tracking-wide text-biz-muted">{label}</p>
+      <p className="mt-1 text-[12px] font-bold text-biz-navy">{value}</p>
+    </div>
+  );
+}
+
 export default function OngoingWorkDetailsPage() {
   const { id } = useParams<{ id: string }>();
   return <ApprovedWorkDetails workId={id} mode="ONGOING" />;
@@ -155,14 +181,15 @@ export function ApprovedWorkDetails({
   }
 
   return (
-    <div className="space-y-3 text-biz-text">
-      <header className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-[22px] font-bold text-biz-navy">{project.workName}</h1>
+    <div className="space-y-4 text-biz-text">
+      <header className="rounded-xl border border-blue-100 bg-gradient-to-r from-white via-blue-50/45 to-emerald-50/35 p-4 shadow-[0_8px_24px_rgba(15,48,92,0.06)]">
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-3">
+              <h1 className="max-w-[820px] text-[22px] font-bold leading-tight text-biz-navy">{project.workName}</h1>
             <span
               className={cn(
-                "rounded-full border px-3 py-1 text-[10px] font-bold",
+                "mt-0.5 shrink-0 rounded-full border px-3 py-1 text-[9px] font-bold uppercase tracking-wide",
                 archived
                   ? "border-purple-200 bg-purple-50 text-purple-700"
                   : "border-green-200 bg-green-50 text-green-700",
@@ -171,35 +198,35 @@ export function ApprovedWorkDetails({
               {project.status}
             </span>
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-biz-muted">
-            <span>
+          <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-biz-muted">
+            <span className="rounded-md border border-white/80 bg-white/80 px-2.5 py-1.5 shadow-sm">
               Tender ID: <b className="text-biz-navy">{project.tenderNumber ?? "Manual Work"}</b>
             </span>
-            <span>
+            <span className="rounded-md border border-white/80 bg-white/80 px-2.5 py-1.5 shadow-sm">
               Work Category: <b className="text-biz-navy">{project.workCategory}</b>
             </span>
-            <span>
+            <span className="rounded-md border border-white/80 bg-white/80 px-2.5 py-1.5 shadow-sm">
               Started: <b className="text-biz-navy">{dateText(project.startDate)}</b>
             </span>
             {archived ? (
               <>
-                <span>
+                <span className="rounded-md border border-white/80 bg-white/80 px-2.5 py-1.5 shadow-sm">
                   Completed: <b className="text-biz-navy">{dateText(project.completionDate)}</b>
                 </span>
-                <span>
+                <span className="rounded-md border border-white/80 bg-white/80 px-2.5 py-1.5 shadow-sm">
                   Completion Date:{" "}
                   <b className="text-biz-navy">{dateText(project.completionDate)}</b>
                 </span>
               </>
             ) : (
-              <span>
+              <span className="rounded-md border border-white/80 bg-white/80 px-2.5 py-1.5 shadow-sm">
                 Expected Completion:{" "}
                 <b className="text-biz-navy">{dateText(project.expectedCompletionDate)}</b>
               </span>
             )}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2 lg:max-w-[280px] lg:justify-end">
           {archived && (
             <Link
               href={listHref}
@@ -251,17 +278,18 @@ export function ApprovedWorkDetails({
             <Plus className="h-4 w-4" />
             Add Receipt
           </Link>
+          </div>
         </div>
       </header>
 
       <div className="grid gap-3 xl:grid-cols-2">
-        <section className="rounded-lg border border-biz-border bg-white p-4 shadow-card">
-          <h2 className="mb-3 flex items-center gap-2 text-[13px] font-bold text-biz-navy">
-            <UserRound className="h-5 w-5 text-biz-blue" />
+        <section className="rounded-xl border border-biz-border bg-white p-4 shadow-[0_8px_24px_rgba(15,48,92,0.06)]">
+          <h2 className="mb-3 flex items-center gap-2 border-b border-slate-100 pb-3 text-[13px] font-bold text-biz-navy">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-biz-blue"><UserRound className="h-4 w-4" /></span>
             Project &amp; Contact Information
           </h2>
           <div className="grid gap-4 md:grid-cols-2">
-            <div>
+            <div className="rounded-lg bg-slate-50/70 px-3 py-2">
               <InfoRow label="Organization" value={project.organizationMaster.shortName} />
               <InfoRow label="PE Name" value={data.primaryContact?.name ?? "Not Configured"} />
               <InfoRow
@@ -272,7 +300,7 @@ export function ApprovedWorkDetails({
               <InfoRow label="Address" value={data.primaryContact?.address ?? "Not Configured"} />
             </div>
             <div>
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex h-8 items-center justify-between">
                 <h3 className="text-[11px] font-bold text-biz-navy">Other Contacts</h3>
                 <button
                   type="button"
@@ -280,7 +308,7 @@ export function ApprovedWorkDetails({
                     setContactError("");
                     setContactOpen(true);
                   }}
-                  className="flex h-8 items-center gap-1 rounded border border-biz-blue px-2 text-[10px] font-semibold text-biz-blue"
+                  className="flex h-8 items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[10px] font-semibold text-biz-blue transition-colors hover:bg-blue-100"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add Contact
@@ -311,10 +339,10 @@ export function ApprovedWorkDetails({
             </div>
           </div>
         </section>
-        <section className="rounded-lg border border-biz-border bg-white p-4 shadow-card">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <section className="rounded-xl border border-biz-border bg-white p-4 shadow-[0_8px_24px_rgba(15,48,92,0.06)]">
+          <div className="mb-3 flex flex-col gap-2 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="flex items-center gap-2 text-[13px] font-bold text-biz-navy">
-              <WalletCards className="h-5 w-5 text-green-700" />
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700"><WalletCards className="h-4 w-4" /></span>
               Project Financial Information
             </h2>
             <div className="w-full sm:w-auto">
@@ -347,21 +375,13 @@ export function ApprovedWorkDetails({
               </Link>
             </div>
           </div>
-          <InfoRow
-            label="Contract Value (Including VAT & Tax)"
-            value={money(financial.contractValue)}
-            strong
-          />
-          <InfoRow
-            label={`VAT${financial.vatRate ? ` (${Number(financial.vatRate)}%)` : ""}`}
-            value={money(financial.vatAmount)}
-          />
-          <InfoRow
-            label={`Tax${financial.taxRate ? ` (${Number(financial.taxRate)}%)` : ""}`}
-            value={money(financial.taxAmount)}
-          />
-          <InfoRow label="Value After VAT & Tax" value={money(financial.valueAfterVatTax)} strong />
-          <div className="mt-2 rounded-md border border-green-200 bg-green-50/40 p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <FinancialMetric label="Contract Value (Incl. VAT & Tax)" value={money(financial.contractValue)} tone="primary" />
+            <FinancialMetric label="Value After VAT & Tax" value={money(financial.valueAfterVatTax)} tone="success" />
+            <FinancialMetric label={`VAT${financial.vatRate ? ` (${Number(financial.vatRate)}%)` : ""}`} value={money(financial.vatAmount)} />
+            <FinancialMetric label={`Tax${financial.taxRate ? ` (${Number(financial.taxRate)}%)` : ""}`} value={money(financial.taxAmount)} />
+          </div>
+          <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
             <div className="mb-2 flex items-center justify-between text-[11px] font-bold text-biz-navy">
               <span>Security Deposit (SD)</span>
               <span>{sdLabel}</span>

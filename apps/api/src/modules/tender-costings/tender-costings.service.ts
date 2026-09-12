@@ -418,7 +418,11 @@ export class TenderCostingsService {
     if (existing.status === "CANCELLED") {
       throw new BadRequestException(`A ${existing.status.toLowerCase()} costing cannot be edited`);
     }
-    if (existing.status === "COMPLETED" && dto.status === TenderCostingStatus.READY) {
+    if (
+      existing.status === "COMPLETED" &&
+      dto.status === TenderCostingStatus.READY &&
+      dto.items.length > 0
+    ) {
       throw new BadRequestException("A completed costing can only be reopened as In Progress");
     }
     if (!existing.costingBudget || existing.costingBudget.lte(0)) {

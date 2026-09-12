@@ -167,10 +167,8 @@ function TenderSecurityWorkspace() {
   const [filtersOpen, setFiltersOpen] = React.useState(false);
   const pendingQuery = usePendingTenderSecurities({ ...query, securityStatus: "PENDING" });
   const completedSecurities = usePendingTenderSecurities({
-    ...query,
     page: 1,
-    limit: 5,
-    tenderStatus: undefined,
+    limit: 100,
     securityStatus: "CREATED",
   });
   const organizations = useAllOrganizations();
