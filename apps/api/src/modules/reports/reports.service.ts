@@ -279,7 +279,7 @@ export class ReportsService {
             },
           },
         },
-        orderBy: { issueDate: "desc" },
+        orderBy: { expiryDate: "asc" },
       });
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -452,57 +452,141 @@ export class ReportsService {
       );
     }
     if (report === "pg-bg") {
-      const rows = await this.prisma.performanceGuarantee.findMany({
+      const guarantees = await this.prisma.performanceGuarantee.findMany({
         where: {
           organizationId: org,
-          issueDate: this.dates(q),
-          status: q.status as never,
+          expiryDate: this.dates(q),
           organizationMasterId: q.organizationMasterId,
+          bankAccountId: q.accountId,
         },
-        include: { tender: true, organizationMaster: true, bankAccount: true, pgBgWorkflow: true },
-        orderBy: { issueDate: "desc" },
+        include: {
+          tender: true,
+          organizationMaster: true,
+          bankAccount: true,
+          pgBgWorkflow: { include: { cmsWork: true } },
+        },
+        orderBy: { expiryDate: "asc" },
       });
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const day7 = new Date(today.getTime() + 7 * 864e5);
+      const day15 = new Date(today.getTime() + 15 * 864e5);
+      const search = q.search?.trim().toLocaleLowerCase();
+      const allRows = guarantees.flatMap((guarantee) => {
+        const expiryDay = new Date(
+          guarantee.expiryDate.getFullYear(),
+          guarantee.expiryDate.getMonth(),
+          guarantee.expiryDate.getDate(),
+        );
+        const daysRemaining = Math.round((expiryDay.getTime() - today.getTime()) / 864e5);
+        const effectiveStatus =
+          guarantee.status === "ACTIVE" && expiryDay < today
+            ? "EXPIRED"
+            : guarantee.status === "ACTIVE" && expiryDay.getTime() === today.getTime()
+              ? "DUE_TODAY"
+              : guarantee.status === "ACTIVE" && expiryDay <= day7
+                ? "DUE_WITHIN_7"
+                : guarantee.status === "ACTIVE" && expiryDay <= day15
+                  ? "DUE_WITHIN_15"
+                  : guarantee.status === "ACTIVE"
+                    ? "UPCOMING"
+                    : guarantee.status;
+        const work = guarantee.tender?.workName ?? guarantee.pgBgWorkflow?.cmsWork?.workName ?? guarantee.pgBgWorkflow?.workCategory ?? "-";
+        if (q.workId && guarantee.pgBgWorkflow?.cmsWork?.id !== q.workId) return [];
+        if (
+          search &&
+          ![
+            guarantee.instrumentNo,
+            guarantee.tender?.egpTenderId,
+            work,
+            guarantee.organizationMaster?.shortName,
+            guarantee.bankAccount?.accountName,
+            guarantee.releaseReference,
+            guarantee.bankConfirmation,
+          ].some((value) => value?.toLocaleLowerCase().includes(search))
+        ) return [];
+        return [{
+          reference: guarantee.instrumentNo?.trim() || guarantee.id,
+          work,
+          organization: guarantee.organizationMaster?.shortName ?? "-",
+          type: guarantee.type,
+          bank: guarantee.bankAccount?.accountName ?? "-",
+          amount: s(guarantee.amount),
+          issueDate: guarantee.issueDate.toISOString(),
+          expiryDate: guarantee.expiryDate.toISOString(),
+          releaseDate: guarantee.releaseDate?.toISOString() ?? null,
+          releaseReference: guarantee.releaseReference ?? "-",
+          bankConfirmation: guarantee.bankConfirmation ?? "-",
+          timeRemaining:
+            effectiveStatus === "EXPIRED"
+              ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} overdue`
+              : effectiveStatus === "DUE_TODAY"
+                ? "Today"
+                : guarantee.status === "ACTIVE"
+                  ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
+                  : "-",
+          status: effectiveStatus,
+        }];
+      });
+      const rows = q.status
+        ? allRows.filter((row) => {
+            if (q.status === "DUE_WITHIN_7") return ["DUE_TODAY", "DUE_WITHIN_7"].includes(row.status);
+            if (q.status === "DUE_WITHIN_15") return ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(row.status);
+            return row.status === q.status;
+          })
+        : allRows;
       return this.finish(
         {
           title: "PG / BG",
           subtitle: "Performance and bank guarantee exposure.",
           kpis: [
-            { label: "Total PG/BG", value: String(rows.length) },
+            { label: "Total PG/BG", value: String(allRows.length) },
             {
               label: "Guarantee Amount",
-              value: s(rows.reduce((n, r) => n.add(r.amount), new Prisma.Decimal(0))),
+              value: s(allRows.reduce((n, r) => n.add(r.amount), new Prisma.Decimal(0))),
               kind: "money",
             },
-            { label: "Active", value: String(rows.filter((r) => r.status === "ACTIVE").length) },
             {
-              label: "Expiring Soon",
-              value: String(
-                rows.filter((r) => r.expiryDate <= new Date(Date.now() + 30 * 864e5)).length,
+              label: "Active Exposure",
+              value: s(
+                allRows
+                  .filter((r) => ["UPCOMING", "DUE_WITHIN_15", "DUE_WITHIN_7", "DUE_TODAY"].includes(r.status))
+                  .reduce((n, r) => n.add(r.amount), new Prisma.Decimal(0)),
               ),
+              kind: "money",
+            },
+            {
+              label: "Upcoming",
+              value: String(allRows.filter((r) => r.status === "UPCOMING").length),
+            },
+            {
+              label: "Within 15 Days",
+              value: String(allRows.filter((r) => ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(r.status)).length),
+            },
+            {
+              label: "Within 7 Days",
+              value: String(allRows.filter((r) => ["DUE_TODAY", "DUE_WITHIN_7"].includes(r.status)).length),
+            },
+            {
+              label: "Expired",
+              value: String(allRows.filter((r) => r.status === "EXPIRED").length),
             },
           ],
           columns: [
-            { key: "reference", label: "Reference" },
             { key: "work", label: "Tender / Project" },
             { key: "organization", label: "Organization" },
             { key: "type", label: "Type" },
             { key: "bank", label: "Bank" },
             moneyCol("amount", "Guarantee Amount"),
             { key: "issueDate", label: "Issue Date", type: "date" },
-            { key: "expiryDate", label: "Expiry Date", type: "date" },
+            { key: "expiryDate", label: "Release Due / Expiry", type: "date" },
+            { key: "timeRemaining", label: "Time Remaining" },
+            { key: "releaseDate", label: "Actual Release Date", type: "date" },
+            { key: "releaseReference", label: "Release Reference" },
+            { key: "bankConfirmation", label: "Bank Confirmation" },
             { key: "status", label: "Status" },
           ],
-          rows: rows.map((r) => ({
-            reference: r.instrumentNo ?? r.id,
-            work: r.tender?.workName ?? r.pgBgWorkflow?.workCategory ?? "-",
-            organization: r.organizationMaster?.shortName ?? "-",
-            type: r.type,
-            bank: r.bankAccount?.accountName ?? "-",
-            amount: s(r.amount),
-            issueDate: r.issueDate.toISOString(),
-            expiryDate: r.expiryDate.toISOString(),
-            status: r.status,
-          })),
+          rows,
         },
         q,
       );

@@ -31,6 +31,8 @@ export function ReportWorkspace({ category, report }: { category: string; report
     parentTitle = group?.shortTitle ?? "Reports";
   const isProjectProfitLoss = category === "projects" && report === "profit-loss";
   const isTenderSecurity = category === "tenders" && report === "tender-security";
+  const isPgBg = category === "tenders" && report === "pg-bg";
+  const isExpiryMonitoring = isTenderSecurity || isPgBg;
   useSetBreadcrumb([
     { label: "Reports", href: "/reports" },
     { label: parentTitle, href: `/reports/${category}` },
@@ -80,9 +82,12 @@ export function ReportWorkspace({ category, report }: { category: string; report
     download(r.filename, r.content);
   }
   const result = data.data;
-  const tenderSecurityKpiStatus: Record<string, string> = {
+  const expiryKpiStatus: Record<string, string> = {
     "Total Securities": "",
     "Total Security Amount": "",
+    "Total PG/BG": "",
+    "Guarantee Amount": "",
+    "Active Exposure": "",
     Upcoming: "UPCOMING",
     "Within 15 Days": "DUE_WITHIN_15",
     "Within 7 Days": "DUE_WITHIN_7",
@@ -133,13 +138,13 @@ export function ReportWorkspace({ category, report }: { category: string; report
         <div
           className={cn(
             "grid items-end gap-2 sm:grid-cols-2",
-            isTenderSecurity
+            isExpiryMonitoring
               ? "xl:grid-cols-[105px_105px_125px_130px_125px_125px_minmax(115px,1fr)_78px]"
               : "xl:grid-cols-[130px_130px_155px_165px_155px_minmax(130px,1fr)_88px]",
           )}
         >
           <label className="text-[10px] font-semibold">
-            {isTenderSecurity ? "Expiry From" : "From"}
+            {isExpiryMonitoring ? "Expiry From" : "From"}
             <TextInput
               className="mt-1"
               type="date"
@@ -148,7 +153,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
             />
           </label>
           <label className="text-[10px] font-semibold">
-            {isTenderSecurity ? "Expiry To" : "To"}
+            {isExpiryMonitoring ? "Expiry To" : "To"}
             <TextInput
               className="mt-1"
               type="date"
@@ -199,7 +204,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
               }))}
             />
           </label>
-          {isTenderSecurity && (
+          {isExpiryMonitoring && (
             <label className="text-[10px] font-semibold">
               Status
               <SelectInput
@@ -240,17 +245,29 @@ export function ReportWorkspace({ category, report }: { category: string; report
         <div
           className={cn(
             "grid gap-3",
-            result.kpis.length >= 6
+            result.kpis.length === 6
               ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+              : result.kpis.length >= 7
+                ? "sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"
               : result.kpis.length >= 4
                 ? "sm:grid-cols-2 xl:grid-cols-4"
                 : "sm:grid-cols-3",
           )}
         >
           {result.kpis.map((k) => {
-            const kpiStatus = tenderSecurityKpiStatus[k.label];
-            const isClickable = isTenderSecurity && kpiStatus !== undefined;
-            const isActive = isClickable && draft.status === kpiStatus;
+            const kpiStatus = expiryKpiStatus[k.label];
+            const isClickable = isExpiryMonitoring && kpiStatus !== undefined;
+            const isActive = isClickable
+              && draft.status === kpiStatus
+              && (kpiStatus !== "" || ["Total Securities", "Total PG/BG"].includes(k.label));
+            const kpiTone =
+              k.label === "Active Exposure"
+                ? "before:bg-emerald-500"
+                : k.label === "Within 15 Days" || k.label === "Within 7 Days"
+                  ? "before:bg-amber-500"
+                  : k.label === "Expired"
+                    ? "before:bg-red-500"
+                    : "before:bg-biz-blue/70";
             return (
             <div
               key={k.label}
@@ -266,7 +283,8 @@ export function ReportWorkspace({ category, report }: { category: string; report
               role={isClickable ? "button" : undefined}
               tabIndex={isClickable ? 0 : undefined}
               className={cn(
-                "relative overflow-hidden rounded-xl border bg-white p-3 text-left shadow-[0_6px_18px_rgba(15,48,92,0.06)] before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-biz-blue/70",
+                "relative min-w-0 overflow-hidden rounded-xl border bg-white p-2.5 text-left shadow-[0_6px_18px_rgba(15,48,92,0.06)] outline-none before:absolute before:inset-x-0 before:top-0 before:h-0.5 focus-visible:ring-2 focus-visible:ring-blue-200",
+                kpiTone,
                 isClickable && "cursor-pointer transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md",
                 isActive ? "border-biz-blue bg-blue-50/60 ring-2 ring-blue-100" : "border-biz-border",
                 !isClickable && "cursor-default",
@@ -277,7 +295,8 @@ export function ReportWorkspace({ category, report }: { category: string; report
               <p className="text-[11px] font-semibold text-biz-muted">{k.label}</p>
               <p
                 className={cn(
-                  "mt-1.5 text-[17px] font-bold",
+                  "mt-1.5 font-bold",
+                  result.kpis.length >= 7 ? "whitespace-nowrap text-[13px] xl:text-[13px]" : "text-[17px]",
                   k.kind === "money" ? "text-biz-blue" : "text-biz-text",
                 )}
               >
@@ -306,13 +325,20 @@ export function ReportWorkspace({ category, report }: { category: string; report
             No report data found for the selected filters.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-left text-[11px]">
+          <div className={cn(isPgBg ? "overflow-hidden" : "overflow-x-auto")}>
+              <table className={cn("w-full text-left", isPgBg ? "table-fixed text-[9px]" : "min-w-[980px] text-[11px]")}>
+               {isPgBg && (
+                 <colgroup>
+                   {[3, 17, 9, 4, 6, 9, 7, 8, 7, 7, 7, 7, 9].map((width, index) => (
+                     <col key={index} style={{ width: `${width}%` }} />
+                   ))}
+                 </colgroup>
+               )}
                <thead className="border-b border-blue-100 bg-gradient-to-r from-slate-50 to-blue-50/60 text-[10px] font-semibold text-biz-navy">
                 <tr>
-                  <th className="px-3 py-3">SL</th>
+                  <th className={cn(isPgBg ? "px-1.5 py-2" : "px-3 py-3")}>SL</th>
                   {result.columns.map((c) => (
-                    <th key={c.key} className="px-3 py-3">
+                    <th key={c.key} className={cn(isPgBg ? "px-1.5 py-2 leading-tight" : "px-3 py-3")}>
                       {c.label}
                     </th>
                   ))}
@@ -328,14 +354,14 @@ export function ReportWorkspace({ category, report }: { category: string; report
                       isProjectProfitLoss && "transition-colors hover:bg-blue-50/40",
                     )}
                   >
-                    <td className="px-3 py-3">
+                    <td className={cn("align-middle", isPgBg ? "px-1.5 py-2" : "px-3 py-3")}>
                       {(result.meta.page - 1) * result.meta.limit + i + 1}
                     </td>
                     {result.columns.map((c) => (
                       <td
                         key={c.key}
                         className={cn(
-                          "px-3 py-3",
+                          isPgBg ? "px-1.5 py-2 align-middle leading-tight" : "px-3 py-3",
                           c.type === "money" && "text-right font-semibold tabular-nums",
                         )}
                       >
@@ -344,6 +370,35 @@ export function ReportWorkspace({ category, report }: { category: string; report
                         (c.key === "profit" || c.key === "margin") ? (
                           <span className="whitespace-nowrap font-medium text-amber-700">
                             Not Calculated
+                          </span>
+                        ) : isExpiryMonitoring && c.key === "status" ? (
+                          <span
+                            className={cn(
+                              "inline-flex max-w-full rounded-full px-1.5 py-1 text-[8px] font-bold leading-none",
+                              row[c.key] === "EXPIRED"
+                                ? "bg-red-50 text-red-700"
+                                : ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(String(row[c.key]))
+                                  ? "bg-amber-50 text-amber-700"
+                                  : row[c.key] === "UPCOMING"
+                                    ? "bg-blue-50 text-blue-700"
+                                    : row[c.key] === "RELEASED" || row[c.key] === "RETURNED"
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "bg-slate-100 text-slate-600",
+                            )}
+                            title={String(row[c.key] ?? "-").replaceAll("_", " ")}
+                          >
+                            {String(row[c.key] ?? "-").replaceAll("_", " ")}
+                          </span>
+                        ) : isPgBg && ["work", "organization"].includes(c.key) ? (
+                          <span
+                            className="line-clamp-2 break-words"
+                            title={String(row[c.key] ?? "-")}
+                          >
+                            {String(row[c.key] ?? "-")}
+                          </span>
+                        ) : isPgBg && ["reference", "releaseReference", "bankConfirmation"].includes(c.key) ? (
+                          <span className="block truncate" title={String(row[c.key] ?? "-")}>
+                            {String(row[c.key] ?? "-")}
                           </span>
                         ) : c.type === "money" ? (
                           <span className="whitespace-nowrap">{money(row[c.key])}</span>
