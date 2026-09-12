@@ -1904,18 +1904,41 @@ export class ReportsService {
     // (category/person/account/monthly) span both — restricting them to project-only would
     // silently exclude general expenses from what should be a company-wide breakdown.
     const project = report === "project" ? true : report === "general" ? false : undefined;
+    const workIdFilter: Prisma.ExpenseWhereInput["workId"] = q.workId
+      ? q.workId
+      : project === true
+        ? { not: null }
+        : project === false
+          ? null
+          : undefined;
+    const search = q.search?.trim();
     const rows = await this.prisma.expense.findMany({
       where: {
         organizationId: org,
-        workId: project === true ? { not: null } : project === false ? null : undefined,
+        workId: workIdFilter,
         expenseDate: this.dates(q),
-        work: { organizationMasterId: q.organizationMasterId },
+        ...(q.organizationMasterId
+          ? { work: { organizationMasterId: q.organizationMasterId } }
+          : {}),
         expenseHeadId: q.category,
-        status: { not: "REJECTED" },
-        OR: q.search
+        paidFromAccountId: q.accountId,
+        status: { notIn: ["REJECTED", "CANCELLED", "AMENDED"] },
+        OR: search
           ? [
-              { description: { contains: q.search, mode: "insensitive" } },
-              { expenseHead: { name: { contains: q.search, mode: "insensitive" } } },
+              { description: { contains: search, mode: "insensitive" } },
+              { referenceNo: { contains: search, mode: "insensitive" } },
+              { category: { contains: search, mode: "insensitive" } },
+              { expenseHead: { name: { contains: search, mode: "insensitive" } } },
+              { expenseBy: { name: { contains: search, mode: "insensitive" } } },
+              { paidFromAccount: { accountName: { contains: search, mode: "insensitive" } } },
+              { work: { workName: { contains: search, mode: "insensitive" } } },
+              {
+                work: {
+                  organizationMaster: {
+                    shortName: { contains: search, mode: "insensitive" },
+                  },
+                },
+              },
             ]
           : undefined,
       },
@@ -1973,13 +1996,21 @@ export class ReportsService {
         groups.set(k, g);
       });
       const total = rows.reduce((n, r) => n.add(r.amount), new Prisma.Decimal(0));
+      const groupedRows = [...groups];
+      if (report === "category") {
+        groupedRows.sort(
+          ([nameA, groupA], [nameB, groupB]) =>
+            groupB.amount.comparedTo(groupA.amount) || nameA.localeCompare(nameB),
+        );
+      }
       return this.finish(
         {
           title: grouping.title,
           subtitle: grouping.subtitle,
           kpis: [
             { label: "Total Expense", value: s(total), kind: "money" },
-            { label: "Groups", value: String(groups.size) },
+            { label: report === "category" ? "Categories" : "Groups", value: String(groups.size) },
+            { label: "Transactions", value: String(rows.length) },
           ],
           columns: [
             { key: "category", label: grouping.columnLabel },
@@ -1987,7 +2018,7 @@ export class ReportsService {
             { key: "percentage", label: "Percentage" },
             { key: "count", label: "Transaction Count" },
           ],
-          rows: [...groups].map(([category, g]) => ({
+          rows: groupedRows.map(([category, g]) => ({
             category,
             total: s(g.amount),
             percentage: `${total.gt(0) ? g.amount.div(total).mul(100).toFixed(2) : "0.00"}%`,
@@ -2556,6 +2587,128 @@ export class ReportsService {
     if (report === "retention-register") return this.retentionRegister(org, q);
     if (report === "bill-receivable") return this.billReceivableReport(org, q);
     if (report === "vat-ait") return this.vatAitReport(org, q);
+    if (report === "ledger") {
+      const structuralWhere = (
+        journalDate: Prisma.DateTimeFilter | undefined,
+      ): Prisma.JournalLineWhereInput => ({
+        accountId: q.accountId,
+        projectId: q.workId,
+        project: q.organizationMasterId
+          ? { organizationMasterId: q.organizationMasterId }
+          : undefined,
+        journalEntry: {
+          organizationId: org,
+          status: "POSTED",
+          journalDate,
+        },
+      });
+      const searchWhere: Prisma.JournalLineWhereInput["OR"] = q.search
+        ? [
+            { account: { code: { contains: q.search, mode: "insensitive" } } },
+            { account: { name: { contains: q.search, mode: "insensitive" } } },
+            { partyName: { contains: q.search, mode: "insensitive" } },
+            { description: { contains: q.search, mode: "insensitive" } },
+            { project: { workName: { contains: q.search, mode: "insensitive" } } },
+            { journalEntry: { journalNo: { contains: q.search, mode: "insensitive" } } },
+            { journalEntry: { referenceNo: { contains: q.search, mode: "insensitive" } } },
+            { journalEntry: { description: { contains: q.search, mode: "insensitive" } } },
+            { journalEntry: { sourceModule: { contains: q.search, mode: "insensitive" } } },
+          ]
+        : undefined;
+      const periodLines = await this.prisma.journalLine.findMany({
+        where: { ...structuralWhere(this.dates(q)), OR: searchWhere },
+        include: { account: true, project: true, journalEntry: true },
+        orderBy: [{ journalEntry: { journalDate: "asc" } }, { createdAt: "asc" }],
+      });
+      const visibleAccountIds = [...new Set(periodLines.map((line) => line.accountId))];
+      const restrictOpeningToVisibleAccounts = Boolean(q.search && !q.accountId);
+      const canLoadOpening = Boolean(
+        q.dateFrom && (!restrictOpeningToVisibleAccounts || visibleAccountIds.length),
+      );
+      const openingLines = canLoadOpening
+        ? await this.prisma.journalLine.findMany({
+            where: {
+              ...structuralWhere({ lt: new Date(q.dateFrom!) }),
+              accountId: q.accountId
+                ?? (restrictOpeningToVisibleAccounts ? { in: visibleAccountIds } : undefined),
+            },
+            select: { accountId: true, debit: true, credit: true },
+          })
+        : [];
+      const openingByAccount = new Map<string, Prisma.Decimal>();
+      for (const line of openingLines) {
+        openingByAccount.set(
+          line.accountId,
+          (openingByAccount.get(line.accountId) ?? new Prisma.Decimal(0))
+            .add(line.debit)
+            .sub(line.credit),
+        );
+      }
+      const runningByAccount = new Map(openingByAccount);
+      const rows = periodLines.map((line) => {
+        const running = (runningByAccount.get(line.accountId) ?? new Prisma.Decimal(0))
+          .add(line.debit)
+          .sub(line.credit);
+        runningByAccount.set(line.accountId, running);
+        return {
+          date: line.journalEntry.journalDate.toISOString(),
+          journal: line.journalEntry.journalNo,
+          reference: line.journalEntry.referenceNo ?? "-",
+          account: `${line.account.code} - ${line.account.name}`,
+          party: line.partyName ?? "-",
+          project: line.project?.workName ?? "-",
+          description: line.description ?? line.journalEntry.description,
+          source: line.journalEntry.sourceModule.replaceAll("_", " "),
+          debit: s(line.debit),
+          credit: s(line.credit),
+          balance: s(running.abs()),
+          balanceSide: running.gt(0) ? "Dr" : running.lt(0) ? "Cr" : "-",
+        };
+      });
+      const periodDebit = periodLines.reduce(
+        (total, line) => total.add(line.debit),
+        new Prisma.Decimal(0),
+      );
+      const periodCredit = periodLines.reduce(
+        (total, line) => total.add(line.credit),
+        new Prisma.Decimal(0),
+      );
+      const openingNet = [...openingByAccount.values()].reduce(
+        (total, balance) => total.add(balance),
+        new Prisma.Decimal(0),
+      );
+      const closingNet = [...runningByAccount.values()].reduce(
+        (total, balance) => total.add(balance),
+        new Prisma.Decimal(0),
+      );
+      return this.finish(
+        {
+          title: "Ledger Breakdown",
+          subtitle: "Account-wise opening, debit, credit and running balances from posted journals.",
+          kpis: [
+            { label: "Opening Net Balance", value: s(openingNet), kind: "money" },
+            { label: "Period Debit", value: s(periodDebit), kind: "money" },
+            { label: "Period Credit", value: s(periodCredit), kind: "money" },
+            { label: "Closing Net Balance", value: s(closingNet), kind: "money" },
+          ],
+          columns: [
+            { key: "date", label: "Date", type: "date" },
+            { key: "journal", label: "Voucher / Journal No" },
+            { key: "reference", label: "Reference" },
+            { key: "account", label: "Ledger Account" },
+            { key: "party", label: "Party" },
+            { key: "project", label: "Project" },
+            { key: "source", label: "Source Module" },
+            moneyCol("debit", "Debit"),
+            moneyCol("credit", "Credit"),
+            moneyCol("balance", "Account Running Balance"),
+            { key: "balanceSide", label: "Dr / Cr" },
+          ],
+          rows,
+        },
+        q,
+      );
+    }
     if (report === "trial-balance" || report === "account-balance") {
       const lineWhere = (
         journalDate: Prisma.DateTimeFilter | undefined,
@@ -2698,50 +2851,6 @@ export class ReportsService {
     });
     const debit = lines.reduce((n, x) => n.add(x.debit), new Prisma.Decimal(0));
     const credit = lines.reduce((n, x) => n.add(x.credit), new Prisma.Decimal(0));
-    if (report === "ledger") {
-      let running = new Prisma.Decimal(0);
-      const rows = lines.map((x) => {
-        running = running.add(x.debit).sub(x.credit);
-        return {
-          date: x.journalEntry.journalDate.toISOString(),
-          journal: x.journalEntry.journalNo,
-          reference: x.journalEntry.referenceNo ?? "-",
-          account: `${x.account.code} - ${x.account.name}`,
-          party: x.partyName ?? "-",
-          project: x.project?.workName ?? "-",
-          description: x.description ?? x.journalEntry.description,
-          source: x.journalEntry.sourceModule,
-          debit: s(x.debit),
-          credit: s(x.credit),
-          balance: s(running),
-        };
-      });
-      return this.finish(
-        {
-          title: "Ledger Breakdown",
-          subtitle: "Posted double-entry journal lines only.",
-          kpis: [
-            { label: "Total Debit", value: s(debit), kind: "money" },
-            { label: "Total Credit", value: s(credit), kind: "money" },
-            { label: "Closing Balance", value: s(debit.sub(credit)), kind: "money" },
-          ],
-          columns: [
-            { key: "date", label: "Date", type: "date" },
-            { key: "journal", label: "Voucher / Journal No" },
-            { key: "reference", label: "Reference" },
-            { key: "account", label: "Account" },
-            { key: "party", label: "Party" },
-            { key: "project", label: "Project" },
-            { key: "source", label: "Source Module" },
-            moneyCol("debit", "Debit"),
-            moneyCol("credit", "Credit"),
-            moneyCol("balance", "Running Balance"),
-          ],
-          rows,
-        },
-        q,
-      );
-    }
     const groups = new Map<
       string,
       { code: string; name: string; type: string; debit: Prisma.Decimal; credit: Prisma.Decimal }
@@ -3010,7 +3119,145 @@ export class ReportsService {
         q,
       );
     }
-    if (report === "payables" || report === "bill-maturity") {
+    if (report === "bill-maturity") {
+      const dueDate = this.dates(q);
+      const projectWhere = {
+        id: q.workId,
+        organizationMasterId: q.organizationMasterId,
+      };
+      const search = q.search?.trim();
+      const [payables, receivables] = await Promise.all([
+        this.prisma.payable.findMany({
+          where: {
+            organizationId: org,
+            status: { notIn: ["PAID", "CANCELLED"] },
+            dueDate,
+            project: q.workId || q.organizationMasterId ? projectWhere : undefined,
+            OR: search
+              ? [
+                  { billNo: { contains: search, mode: "insensitive" } },
+                  { partyName: { contains: search, mode: "insensitive" } },
+                  { description: { contains: search, mode: "insensitive" } },
+                  { project: { workName: { contains: search, mode: "insensitive" } } },
+                  { project: { organizationMaster: { shortName: { contains: search, mode: "insensitive" } } } },
+                ]
+              : undefined,
+          },
+          include: { project: { include: { organizationMaster: true } } },
+        }),
+        this.prisma.receivable.findMany({
+          where: {
+            organizationId: org,
+            status: { notIn: ["RECEIVED", "CANCELLED"] },
+            dueDate,
+            project: projectWhere,
+            OR: search
+              ? [
+                  { billNo: { contains: search, mode: "insensitive" } },
+                  { partyName: { contains: search, mode: "insensitive" } },
+                  { description: { contains: search, mode: "insensitive" } },
+                  { project: { workName: { contains: search, mode: "insensitive" } } },
+                  { project: { organizationMaster: { shortName: { contains: search, mode: "insensitive" } } } },
+                ]
+              : undefined,
+          },
+          include: { project: { include: { organizationMaster: true } } },
+        }),
+      ]);
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const maturityStatus = (date: Date | null) => {
+        if (!date) return "DATE_NOT_SET";
+        const dueDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const days = Math.round((dueDay.getTime() - today.getTime()) / 864e5);
+        if (days < 0) return "OVERDUE";
+        if (days === 0) return "DUE_TODAY";
+        if (days <= 7) return "DUE_WITHIN_7";
+        if (days <= 15) return "DUE_WITHIN_15";
+        return "UPCOMING";
+      };
+      const remainingLabel = (date: Date | null) => {
+        if (!date) return "Date not set";
+        const dueDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const days = Math.round((dueDay.getTime() - today.getTime()) / 864e5);
+        if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue`;
+        if (days === 0) return "Due today";
+        return `${days} day${days === 1 ? "" : "s"} remaining`;
+      };
+      const rows = [
+        ...payables.map((bill) => ({
+          type: "PAYABLE",
+          bill: bill.billNo,
+          party: bill.partyName,
+          project: bill.project?.workName ?? "-",
+          organization: bill.project?.organizationMaster.shortName ?? "-",
+          billDate: bill.billDate.toISOString(),
+          dueDate: bill.dueDate?.toISOString() ?? null,
+          timeRemaining: remainingLabel(bill.dueDate),
+          amount: s(Prisma.Decimal.max(0, bill.amount.sub(bill.paidAmount))),
+          status: maturityStatus(bill.dueDate),
+        })),
+        ...receivables.map((bill) => ({
+          type: "RECEIVABLE",
+          bill: bill.billNo,
+          party: bill.partyName,
+          project: bill.project.workName,
+          organization: bill.project.organizationMaster.shortName,
+          billDate: bill.billDate.toISOString(),
+          dueDate: bill.dueDate?.toISOString() ?? null,
+          timeRemaining: remainingLabel(bill.dueDate),
+          amount: s(Prisma.Decimal.max(0, bill.amount.sub(bill.receivedAmount))),
+          status: maturityStatus(bill.dueDate),
+        })),
+      ]
+        .filter((row) => new Prisma.Decimal(row.amount).gt(0))
+        .filter((row) => {
+          if (!q.status) return true;
+          if (q.status === "PAYABLE" || q.status === "RECEIVABLE") return row.type === q.status;
+          return row.status === q.status;
+        })
+        .sort((a, b) => {
+          if (!a.dueDate && !b.dueDate) return a.bill.localeCompare(b.bill);
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        });
+      const amountFor = (predicate: (row: (typeof rows)[number]) => boolean) =>
+        rows.filter(predicate).reduce(
+          (total, row) => total.add(row.amount),
+          new Prisma.Decimal(0),
+        );
+      return this.finish(
+        {
+          title: "Bill Maturity",
+          subtitle: "Outstanding payable and receivable bills monitored by their actual due dates.",
+          kpis: [
+            { label: "Total Outstanding", value: s(amountFor(() => true)), kind: "money" },
+            { label: "Payable Outstanding", value: s(amountFor((row) => row.type === "PAYABLE")), kind: "money" },
+            { label: "Receivable Outstanding", value: s(amountFor((row) => row.type === "RECEIVABLE")), kind: "money" },
+            { label: "Overdue", value: String(rows.filter((row) => row.status === "OVERDUE").length) },
+            { label: "Due in 1-7 Days", value: String(rows.filter((row) => row.status === "DUE_WITHIN_7").length) },
+            { label: "Due in 8-15 Days", value: String(rows.filter((row) => row.status === "DUE_WITHIN_15").length) },
+            { label: "Upcoming", value: String(rows.filter((row) => row.status === "UPCOMING").length) },
+            { label: "Date Not Set", value: String(rows.filter((row) => row.status === "DATE_NOT_SET").length) },
+          ],
+          columns: [
+            { key: "type", label: "Bill Type" },
+            { key: "bill", label: "Bill No." },
+            { key: "party", label: "Party" },
+            { key: "project", label: "Project" },
+            { key: "organization", label: "Organization" },
+            { key: "billDate", label: "Bill Date", type: "date" },
+            { key: "dueDate", label: "Due Date", type: "date" },
+            { key: "timeRemaining", label: "Time Remaining" },
+            moneyCol("amount", "Outstanding"),
+            { key: "status", label: "Status" },
+          ],
+          rows,
+        },
+        q,
+      );
+    }
+    if (report === "payables") {
       const rows = await this.prisma.payable.findMany({
         where: { organizationId: org, status: { not: "PAID" }, dueDate: { lte: to } },
         orderBy: { dueDate: "asc" },
@@ -3022,49 +3269,13 @@ export class ReportsService {
         status: r.dueDate && r.dueDate < now ? "EXPIRED" : "DUE SOON",
         amount: s(r.amount.sub(r.paidAmount)),
       }));
-      if (report === "payables") {
-        return this.finish(
-          {
-            title: "Payable Due",
-            subtitle: "Outstanding vendor/party bills approaching or past their due date.",
-            kpis: this.expiryTotals(mapped),
-            columns: this.expiryColumns,
-            rows: mapped,
-          },
-          q,
-        );
-      }
-      // bill-maturity: a broader "bills due" view spanning both payables and outstanding receivables.
-      const projects = await this.prisma.cmsWork.findMany({
-        where: { organizationId: org, expectedCompletionDate: { lte: to } },
-        include: { receipts: { where: { status: "RECEIVED" } } },
-      });
-      const receivableRows = projects
-        .map((r) => {
-          const received = r.receipts.reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0));
-          const outstanding = Prisma.Decimal.max(
-            new Prisma.Decimal(0),
-            r.contractValue.minus(received),
-          );
-          return {
-            type: "Receivable",
-            reference: r.workName,
-            dueDate: r.expectedCompletionDate?.toISOString() ?? null,
-            status:
-              r.expectedCompletionDate && r.expectedCompletionDate < now ? "EXPIRED" : "DUE SOON",
-            amount: s(outstanding),
-          };
-        })
-        .filter((r) => new Prisma.Decimal(r.amount).gt(0));
-      const combined = [...mapped, ...receivableRows];
       return this.finish(
         {
-          title: "Bill Maturity",
-          subtitle:
-            "Upcoming and overdue bills — both payable and receivable — by maturity bucket.",
-          kpis: this.expiryTotals(combined),
+          title: "Payable Due",
+          subtitle: "Outstanding vendor/party bills approaching or past their due date.",
+          kpis: this.expiryTotals(mapped),
           columns: this.expiryColumns,
-          rows: combined,
+          rows: mapped,
         },
         q,
       );

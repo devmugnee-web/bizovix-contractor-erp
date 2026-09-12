@@ -34,9 +34,12 @@ export function ReportWorkspace({ category, report }: { category: string; report
   const isPgBg = category === "tenders" && report === "pg-bg";
   const isSecurityDeposit = category === "tenders" && report === "security-deposit";
   const isCashFlow = category === "cash-bank" && report === "cash-flow";
+  const isBillMaturity = category === "expiry-due" && report === "bill-maturity";
+  const isExpenseCategory = category === "expenses" && report === "category";
   const usesLedgerAccounts = category === "financial";
-  const isExpiryMonitoring = isTenderSecurity || isPgBg || isSecurityDeposit;
-  const isCompactExpiryTable = isPgBg || isSecurityDeposit;
+  const isExpiryMonitoring = isTenderSecurity || isPgBg || isSecurityDeposit || isBillMaturity;
+  const isCompactExpiryTable = isPgBg || isSecurityDeposit || isBillMaturity;
+  const isCompactTable = isCompactExpiryTable || isExpenseCategory;
   useSetBreadcrumb([
     { label: "Reports", href: "/reports" },
     { label: parentTitle, href: `/reports/${category}` },
@@ -100,6 +103,13 @@ export function ReportWorkspace({ category, report }: { category: string; report
     "Within 7 Days": "DUE_WITHIN_7",
     Expired: "EXPIRED",
     "Needs Attention": "NEEDS_ATTENTION",
+    "Total Outstanding": "",
+    "Payable Outstanding": "PAYABLE",
+    "Receivable Outstanding": "RECEIVABLE",
+    Overdue: "OVERDUE",
+    "Due in 1-7 Days": "DUE_WITHIN_7",
+    "Due in 8-15 Days": "DUE_WITHIN_15",
+    "Date Not Set": "DATE_NOT_SET",
   };
   const firstVisiblePage = result
     ? Math.max(1, Math.min(page - 2, Math.max(1, result.meta.totalPages - 4)))
@@ -148,6 +158,8 @@ export function ReportWorkspace({ category, report }: { category: string; report
             "grid items-end gap-2 sm:grid-cols-2",
             isCashFlow
               ? "xl:grid-cols-[140px_140px_180px_minmax(180px,1fr)_88px]"
+              : isBillMaturity
+                ? "xl:grid-cols-[120px_120px_155px_175px_155px_minmax(150px,1fr)_88px]"
               : isTenderSecurity || isPgBg
               ? "xl:grid-cols-[105px_105px_125px_130px_125px_125px_minmax(115px,1fr)_78px]"
               : isSecurityDeposit
@@ -156,7 +168,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
           )}
         >
           <label className="text-[10px] font-semibold">
-            {isExpiryMonitoring ? "Expiry From" : "From"}
+            {isBillMaturity ? "Due From" : isExpiryMonitoring ? "Expiry From" : "From"}
             <TextInput
               className="mt-1"
               type="date"
@@ -165,7 +177,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
             />
           </label>
           <label className="text-[10px] font-semibold">
-            {isExpiryMonitoring ? "Expiry To" : "To"}
+            {isBillMaturity ? "Due To" : isExpiryMonitoring ? "Expiry To" : "To"}
             <TextInput
               className="mt-1"
               type="date"
@@ -205,7 +217,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
               <div />
             )
           )}
-          {!isSecurityDeposit && <label className="text-[10px] font-semibold">
+          {!isSecurityDeposit && !isBillMaturity && <label className="text-[10px] font-semibold">
             {usesLedgerAccounts ? "Ledger Account" : "Account"}
             <SelectInput
               className="mt-1"
@@ -226,7 +238,16 @@ export function ReportWorkspace({ category, report }: { category: string; report
                 placeholder="All Statuses"
                 value={draft.status}
                 onChange={(e) => setDraft((v) => ({ ...v, status: e.target.value }))}
-                options={isSecurityDeposit ? [
+                options={isBillMaturity ? [
+                  { value: "PAYABLE", label: "Payable Bills" },
+                  { value: "RECEIVABLE", label: "Receivable Bills" },
+                  { value: "OVERDUE", label: "Overdue" },
+                  { value: "DUE_TODAY", label: "Due Today" },
+                  { value: "DUE_WITHIN_7", label: "Due in 1-7 Days" },
+                  { value: "DUE_WITHIN_15", label: "Due in 8-15 Days" },
+                  { value: "UPCOMING", label: "Upcoming (After 15 Days)" },
+                  { value: "DATE_NOT_SET", label: "Date Not Set" },
+                ] : isSecurityDeposit ? [
                   { value: "UPCOMING", label: "Upcoming (After 15 Days)" },
                   { value: "DUE_WITHIN_15", label: "Release Within 15 Days" },
                   { value: "DUE_WITHIN_7", label: "Release Within 7 Days" },
@@ -286,13 +307,13 @@ export function ReportWorkspace({ category, report }: { category: string; report
             const isClickable = isExpiryMonitoring && kpiStatus !== undefined;
             const isActive = isClickable
               && draft.status === kpiStatus
-              && (kpiStatus !== "" || ["Total Securities", "Total PG/BG", "Security Deposits"].includes(k.label));
+              && (kpiStatus !== "" || ["Total Securities", "Total PG/BG", "Security Deposits", "Total Outstanding"].includes(k.label));
             const kpiTone =
               k.label === "Active Exposure" || k.label === "Outstanding"
                 ? "before:bg-emerald-500"
-                : k.label === "Within 15 Days" || k.label === "Within 7 Days"
+                : k.label === "Within 15 Days" || k.label === "Within 7 Days" || k.label === "Due in 1-7 Days" || k.label === "Due in 8-15 Days"
                   ? "before:bg-amber-500"
-                : k.label === "Expired" || k.label === "Needs Attention"
+                : k.label === "Expired" || k.label === "Overdue" || k.label === "Needs Attention" || k.label === "Date Not Set"
                     ? "before:bg-red-500"
                     : "before:bg-biz-blue/70";
             return (
@@ -356,8 +377,15 @@ export function ReportWorkspace({ category, report }: { category: string; report
             No report data found for the selected filters.
           </div>
         ) : (
-          <div className={cn(isCompactExpiryTable ? "overflow-hidden" : "overflow-x-auto")}>
-              <table className={cn("w-full text-left", isCompactExpiryTable ? "table-fixed text-[9px]" : "min-w-[980px] text-[11px]")}>
+          <div className={cn(isCompactTable ? "overflow-hidden" : "overflow-x-auto")}>
+              <table className={cn("w-full text-left", isCompactTable ? "table-fixed" : "min-w-[980px]", isCompactExpiryTable ? "text-[9px]" : "text-[11px]")}>
+               {isExpenseCategory && (
+                 <colgroup>
+                   {[7, 43, 20, 15, 15].map((width, index) => (
+                     <col key={index} style={{ width: `${width}%` }} />
+                   ))}
+                 </colgroup>
+               )}
                {isPgBg && (
                  <colgroup>
                    {[3, 17, 9, 4, 6, 9, 7, 8, 7, 7, 7, 7, 9].map((width, index) => (
@@ -372,11 +400,18 @@ export function ReportWorkspace({ category, report }: { category: string; report
                    ))}
                  </colgroup>
                )}
+               {isBillMaturity && (
+                 <colgroup>
+                   {[3, 6, 8, 10, 15, 12, 7, 7, 9, 12, 11].map((width, index) => (
+                     <col key={index} style={{ width: `${width}%` }} />
+                   ))}
+                 </colgroup>
+               )}
                <thead className="border-b border-blue-100 bg-gradient-to-r from-slate-50 to-blue-50/60 text-[10px] font-semibold text-biz-navy">
                 <tr>
-                  <th className={cn(isCompactExpiryTable ? "px-1.5 py-2" : "px-3 py-3")}>SL</th>
+                  <th className={cn(isCompactTable ? "px-2 py-2.5" : "px-3 py-3")}>SL</th>
                   {result.columns.map((c) => (
-                    <th key={c.key} className={cn(isCompactExpiryTable ? "px-1.5 py-2 leading-tight" : "px-3 py-3")}>
+                    <th key={c.key} className={cn(isCompactTable ? "px-2 py-2.5 leading-tight" : "px-3 py-3")}>
                       {c.label}
                     </th>
                   ))}
@@ -392,14 +427,14 @@ export function ReportWorkspace({ category, report }: { category: string; report
                       isProjectProfitLoss && "transition-colors hover:bg-blue-50/40",
                     )}
                   >
-                    <td className={cn("align-middle", isCompactExpiryTable ? "px-1.5 py-2" : "px-3 py-3")}>
+                    <td className={cn("align-middle", isCompactTable ? "px-2 py-2.5" : "px-3 py-3")}>
                       {(result.meta.page - 1) * result.meta.limit + i + 1}
                     </td>
                     {result.columns.map((c) => (
                       <td
                         key={c.key}
                         className={cn(
-                          isCompactExpiryTable ? "px-1.5 py-2 align-middle leading-tight" : "px-3 py-3",
+                          isCompactTable ? "px-2 py-2.5 align-middle leading-tight" : "px-3 py-3",
                           c.type === "money" && "text-right font-semibold tabular-nums",
                         )}
                       >
@@ -413,7 +448,7 @@ export function ReportWorkspace({ category, report }: { category: string; report
                           <span
                             className={cn(
                               "inline-flex max-w-full rounded-full px-1.5 py-1 text-[8px] font-bold leading-none",
-                              row[c.key] === "EXPIRED"
+                              row[c.key] === "EXPIRED" || row[c.key] === "OVERDUE"
                                 ? "bg-red-50 text-red-700"
                                 : ["DATE_NOT_SET", "RELEASE_DATE_NOT_SET", "INVALID_RELEASE_DATE"].includes(String(row[c.key]))
                                   ? "bg-red-50 text-red-700"
@@ -429,7 +464,18 @@ export function ReportWorkspace({ category, report }: { category: string; report
                           >
                             {String(row[c.key] ?? "-").replaceAll("_", " ")}
                           </span>
-                        ) : isCompactExpiryTable && ["work", "project", "organization"].includes(c.key) ? (
+                        ) : isBillMaturity && c.key === "type" ? (
+                          <span
+                            className={cn(
+                              "inline-flex rounded-full px-1.5 py-1 text-[8px] font-bold leading-none",
+                              row[c.key] === "RECEIVABLE"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-blue-50 text-blue-700",
+                            )}
+                          >
+                            {String(row[c.key] ?? "-")}
+                          </span>
+                        ) : isCompactExpiryTable && ["work", "project", "organization", "party", "bill"].includes(c.key) ? (
                           <span
                             className="line-clamp-2 break-words"
                             title={String(row[c.key] ?? "-")}
@@ -438,6 +484,10 @@ export function ReportWorkspace({ category, report }: { category: string; report
                           </span>
                         ) : isPgBg && ["reference", "releaseReference", "bankConfirmation"].includes(c.key) ? (
                           <span className="block truncate" title={String(row[c.key] ?? "-")}>
+                            {String(row[c.key] ?? "-")}
+                          </span>
+                        ) : isExpenseCategory && c.key === "category" ? (
+                          <span className="block truncate font-medium text-biz-navy" title={String(row[c.key] ?? "-")}>
                             {String(row[c.key] ?? "-")}
                           </span>
                         ) : c.type === "money" ? (

@@ -13,7 +13,7 @@ const TYPES = ["PROGRESS_PAYMENT", "RUNNING_BILL_PAYMENT", "ADVANCE_PAYMENT", "G
 const TYPE_LABELS: Record<(typeof TYPES)[number], string> & Record<string, string> = { PROGRESS_PAYMENT: "Progress Payment", RUNNING_BILL_PAYMENT: "Running Bill Payment", ADVANCE_PAYMENT: "Advance Payment", GENERAL_RECEIPT: "General Receipt", RETENTION_RECEIVED: "Retention Received" };
 const TYPE_TONES: Record<string, string> = { PROGRESS_PAYMENT: "bg-blue-50 text-blue-600", RUNNING_BILL_PAYMENT: "bg-blue-50 text-blue-600", ADVANCE_PAYMENT: "bg-green-50 text-green-700", GENERAL_RECEIPT: "bg-orange-50 text-orange-600", RETENTION_RECEIVED: "bg-purple-50 text-purple-600" };
 
-function formatMoney(value: string | number) { return Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function formatMoney(value: string | number | null | undefined) { return Number(value ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function compactMoney(value: string | number) { const amount = Number(value); return amount >= 10_000_000 ? `BDT ${(amount / 10_000_000).toFixed(2)} Cr` : `BDT ${(amount / 100_000).toFixed(2)} Lac`; }
 function dateText(value: string) { return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value)); }
 function safe(value?: string) { return (value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!); }
