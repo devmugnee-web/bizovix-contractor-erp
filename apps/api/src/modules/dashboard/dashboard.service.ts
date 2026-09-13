@@ -1,7 +1,16 @@
-import { Injectable } from "@nestjs/common";
-import type { DashboardResponse } from "@bizovix/types";
+import { BadRequestException, Injectable } from "@nestjs/common";
+import type { DashboardQuery, DashboardResponse } from "@bizovix/types";
 import { Prisma, type TenderStatus } from "@bizovix/database";
 import { PrismaService } from "../prisma/prisma.service";
+import { AuditLogService } from "../audit-logs/audit-log.service";
+import { calculateCompletedProjectReceivable } from "../accounting/completed-project-receivable";
+import {
+  calculateAchievementRate,
+  distributeTargetAmount,
+  normalizeProgress,
+  outstandingRetention,
+} from "./dashboard.calculations";
+import type { SetMonthlyTargetDto } from "./dto/set-monthly-target.dto";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "LED Display": "#0B5CFF",
@@ -22,24 +31,121 @@ function startOfYear(): Date {
   return new Date(new Date().getFullYear(), 0, 1);
 }
 
+type DateRange = { from: Date; to: Date };
+
+function selectedDateRange(dateFrom?: string, dateTo?: string): DateRange | undefined {
+  if (!dateFrom && !dateTo) return undefined;
+  if (!dateFrom || !dateTo) {
+    throw new BadRequestException("Both From date and To date are required");
+  }
+  const from = new Date(`${dateFrom}T00:00:00.000Z`);
+  const to = new Date(`${dateTo}T23:59:59.999Z`);
+  if (from > to) throw new BadRequestException("From date cannot be after To date");
+  return { from, to };
+}
+
+function dateFilter(range: DateRange | undefined, fallbackFrom: Date) {
+  return range ? { gte: range.from, lte: range.to } : { gte: fallbackFrom };
+}
+
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
-  async getDashboard(organizationId: string): Promise<DashboardResponse> {
-    const [kpis, targetVsAchievement, tenderPerformance, businessByCategory, upcomingReminders, remindersCount, recentTransactions, topProjects] =
-      await Promise.all([
-        this.getKpis(organizationId),
-        this.getTargetVsAchievement(organizationId),
-        this.getTenderPerformance(organizationId),
-        this.getBusinessByCategory(organizationId),
-        this.getUpcomingReminders(organizationId),
-        this.prisma.reminder.count({ where: { organizationId, isResolved: false } }),
-        this.getRecentTransactions(organizationId),
-        this.getTopProjects(organizationId),
-      ]);
+  async setMonthlyTarget(organizationId: string, userId: string, dto: SetMonthlyTargetDto) {
+    const range = selectedDateRange(dto.dateFrom, dto.dateTo)!;
+    const months: Array<{ year: number; month: number }> = [];
+    const cursor = new Date(Date.UTC(range.from.getUTCFullYear(), range.from.getUTCMonth(), 1));
+    const finalMonth = new Date(Date.UTC(range.to.getUTCFullYear(), range.to.getUTCMonth(), 1));
+    while (cursor <= finalMonth) {
+      months.push({ year: cursor.getUTCFullYear(), month: cursor.getUTCMonth() + 1 });
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
 
-    return { kpis, targetVsAchievement, tenderPerformance, businessByCategory, upcomingReminders, remindersCount, recentTransactions, topProjects };
+    const monthlyAmounts = distributeTargetAmount(dto.targetAmount, months.length);
+
+    return this.prisma.$transaction(async (tx) => {
+      const targets = await Promise.all(
+        months.map(({ year, month }, index) => {
+          const targetAmount = new Prisma.Decimal(monthlyAmounts[index]!);
+          return tx.monthlyTarget.upsert({
+            where: { organizationId_year_month: { organizationId, year, month } },
+            create: { organizationId, year, month, targetAmount },
+            update: { targetAmount },
+          });
+        }),
+      );
+
+      await this.auditLog.record(
+        {
+          organizationId,
+          userId,
+          action: "TARGET_PERIOD_UPDATED",
+          module: "Dashboard",
+          description: `Updated target for ${dto.dateFrom} to ${dto.dateTo}`,
+          referenceNo: `${dto.dateFrom} / ${dto.dateTo}`,
+          entityType: "MonthlyTarget",
+          entityId: targets[0]?.id,
+          newValue: {
+            dateFrom: dto.dateFrom,
+            dateTo: dto.dateTo,
+            targetAmount: dto.targetAmount.toFixed(2),
+            monthsUpdated: targets.length,
+          },
+        },
+        tx,
+      );
+
+      return {
+        dateFrom: dto.dateFrom,
+        dateTo: dto.dateTo,
+        targetAmount: dto.targetAmount.toFixed(2),
+        monthsUpdated: targets.length,
+      };
+    });
+  }
+
+  async getDashboard(organizationId: string, query?: DashboardQuery): Promise<DashboardResponse> {
+    const commonRange = selectedDateRange(query?.dateFrom, query?.dateTo);
+    const targetRange =
+      selectedDateRange(query?.targetDateFrom, query?.targetDateTo) ?? commonRange;
+    const tenderRange =
+      selectedDateRange(query?.tenderDateFrom, query?.tenderDateTo) ?? commonRange;
+    const businessRange =
+      selectedDateRange(query?.businessDateFrom, query?.businessDateTo) ?? commonRange;
+    const [
+      kpis,
+      targetVsAchievement,
+      tenderPerformance,
+      businessByCategory,
+      upcomingReminders,
+      remindersCount,
+      recentTransactions,
+      topProjects,
+    ] = await Promise.all([
+      this.getKpis(organizationId),
+      this.getTargetVsAchievement(organizationId, targetRange),
+      this.getTenderPerformance(organizationId, tenderRange),
+      this.getBusinessByCategory(organizationId, businessRange),
+      this.getUpcomingReminders(organizationId),
+      this.prisma.reminder.count({ where: { organizationId, isResolved: false } }),
+      this.getRecentTransactions(organizationId),
+      this.getTopProjects(organizationId),
+    ]);
+
+    return {
+      kpis,
+      targetVsAchievement,
+      tenderPerformance,
+      businessByCategory,
+      upcomingReminders,
+      remindersCount,
+      recentTransactions,
+      topProjects,
+    };
   }
 
   private async getKpis(organizationId: string) {
@@ -50,9 +156,10 @@ export class DashboardService {
       tenderSecurityAgg,
       pgBgAgg,
       receivables,
+      completedProjects,
       outstandingPayables,
       bankAccounts,
-      securityDepositContracts,
+      heldRetentionBills,
     ] = await Promise.all([
       this.prisma.cmsWork.aggregate({
         where: { organizationId, status: "ONGOING" },
@@ -69,33 +176,88 @@ export class DashboardService {
         _count: true,
         _sum: { amount: true },
       }),
-      this.prisma.receivable.findMany({ where: { organizationId, status: { not: "RECEIVED" } }, select: { amount: true, receivedAmount: true, dueDate: true } }),
+      this.prisma.receivable.findMany({
+        where: {
+          organizationId,
+          status: { not: "RECEIVED" },
+          project: { status: { not: "COMPLETED" } },
+        },
+        select: { amount: true, receivedAmount: true, dueDate: true },
+      }),
+      this.prisma.cmsWork.findMany({
+        where: { organizationId, status: "COMPLETED" },
+        select: {
+          id: true,
+          contractValue: true,
+          receipts: {
+            where: { status: "RECEIVED" },
+            select: {
+              amount: true,
+              vatDeductedAmount: true,
+              taxDeductedAmount: true,
+              otherDeductionAmount: true,
+              securityDepositDeductedAmount: true,
+            },
+          },
+          contracts: {
+            where: { status: { not: "CANCELLED" } },
+            orderBy: { updatedAt: "desc" },
+            take: 1,
+            select: { securityDepositReleasedAmount: true },
+          },
+        },
+      }),
       // Real accounts-payable sub-ledger — Expense.status is never transitioned to PENDING by
       // any create/update path in this app, so it cannot be used as a live payables signal.
       this.prisma.payable.findMany({
         where: { organizationId, status: { not: "PAID" } },
         select: { amount: true, paidAmount: true, dueDate: true },
       }),
-      this.prisma.bankAccount.findMany({ where: { organizationId, isActive: true }, select: { currentBalance: true } }),
-      this.prisma.projectContract.findMany({
+      this.prisma.bankAccount.findMany({
+        where: { organizationId, isActive: true },
+        select: { currentBalance: true },
+      }),
+      this.prisma.projectBill.findMany({
         where: {
           organizationId,
-          status: { not: "CANCELLED" },
-          securityDepositPct: { gt: 0 },
+          status: { in: ["CERTIFIED", "PARTIALLY_RECEIVED", "RECEIVED"] },
+          retentionAmount: { gt: 0 },
         },
         select: {
           cmsWorkId: true,
-          currentContractValue: true,
-          securityDepositPct: true,
-          securityDepositStatus: true,
-          securityDepositReleasedAmount: true,
+          retentionAmount: true,
+          retentionReleasedAmount: true,
         },
       }),
     ]);
 
     const bankAndCashTotal = bankAccounts.reduce((sum, acc) => sum + Number(acc.currentBalance), 0);
-    const receivableTotal = receivables.reduce((sum, row) => sum + Number(row.amount) - Number(row.receivedAmount), 0);
-    const overdueReceivableTotal = receivables.filter((row) => row.dueDate && row.dueDate < now).reduce((sum, row) => sum + Number(row.amount) - Number(row.receivedAmount), 0);
+    const outstandingReceivables = receivables.filter(
+      (row) => Number(row.amount) - Number(row.receivedAmount) > 0,
+    );
+    const receivableTotal = outstandingReceivables.reduce(
+      (sum, row) => sum + Number(row.amount) - Number(row.receivedAmount),
+      0,
+    );
+    const overdueReceivableTotal = outstandingReceivables
+      .filter((row) => row.dueDate && row.dueDate < now)
+      .reduce((sum, row) => sum + Number(row.amount) - Number(row.receivedAmount), 0);
+    const completedProjectReceivables = completedProjects.map((project) => ({
+      projectId: project.id,
+      ...calculateCompletedProjectReceivable({
+        contractValue: project.contractValue,
+        receipts: project.receipts,
+        securityDepositReleasedAmount: project.contracts[0]?.securityDepositReleasedAmount,
+      }),
+    }));
+    const completedProjectTotal = completedProjectReceivables.reduce(
+      (sum, row) => sum.add(row.outstanding),
+      new Prisma.Decimal(0),
+    );
+    const completedProjectSd = completedProjectReceivables.reduce(
+      (sum, row) => sum.add(row.sdReceivable),
+      new Prisma.Decimal(0),
+    );
     const outstandingPayableTotal = outstandingPayables.reduce(
       (sum, p) => sum + (Number(p.amount) - Number(p.paidAmount)),
       0,
@@ -106,14 +268,9 @@ export class DashboardService {
     const overduePayableTotal = outstandingPayables
       .filter((p) => p.dueDate && p.dueDate < now)
       .reduce((sum, p) => sum + (Number(p.amount) - Number(p.paidAmount)), 0);
-    const heldSecurityDeposits = securityDepositContracts.map((contract) => {
-      const total = contract.currentContractValue.mul(contract.securityDepositPct!).div(100);
-      const released = contract.securityDepositReleasedAmount ?? new Prisma.Decimal(0);
-      const outstanding =
-        contract.securityDepositStatus === "RELEASED"
-          ? new Prisma.Decimal(0)
-          : Prisma.Decimal.max(0, total.sub(released));
-      return { cmsWorkId: contract.cmsWorkId, outstanding };
+    const heldSecurityDeposits = heldRetentionBills.map((bill) => {
+      const outstanding = outstandingRetention(bill.retentionAmount, bill.retentionReleasedAmount);
+      return { cmsWorkId: bill.cmsWorkId, outstanding };
     });
     const activeSecurityDeposits = heldSecurityDeposits.filter((row) => row.outstanding.gt(0));
     const securityDepositTotal = activeSecurityDeposits.reduce(
@@ -140,8 +297,12 @@ export class DashboardService {
         available: true,
       },
       receivables: {
-        amount: receivableTotal.toFixed(2),
+        amount: new Prisma.Decimal(receivableTotal).add(completedProjectTotal).toFixed(2),
         overdue: overdueReceivableTotal.toFixed(2),
+        bills:
+          outstandingReceivables.length +
+          completedProjectReceivables.filter((row) => row.outstanding.gt(0)).length,
+        securityDeposit: completedProjectSd.toFixed(2),
       },
       payables: {
         amount: outstandingPayableTotal.toFixed(2),
@@ -159,36 +320,55 @@ export class DashboardService {
     };
   }
 
-  private async getTargetVsAchievement(organizationId: string) {
+  private async getTargetVsAchievement(organizationId: string, range?: DateRange) {
     const now = new Date();
-    const [target, achievementAgg] = await Promise.all([
-      this.prisma.monthlyTarget.findUnique({
-        where: { organizationId_year_month: { organizationId, year: now.getFullYear(), month: now.getMonth() + 1 } },
+    const targetFrom = range?.from ?? new Date(now.getFullYear(), now.getMonth(), 1);
+    const targetTo = range?.to ?? now;
+    const fromYear = targetFrom.getUTCFullYear();
+    const fromMonth = targetFrom.getUTCMonth() + 1;
+    const toYear = targetTo.getUTCFullYear();
+    const toMonth = targetTo.getUTCMonth() + 1;
+
+    const [targetAgg, achievementAgg] = await Promise.all([
+      this.prisma.monthlyTarget.aggregate({
+        where: {
+          organizationId,
+          AND: [
+            { OR: [{ year: { gt: fromYear } }, { year: fromYear, month: { gte: fromMonth } }] },
+            { OR: [{ year: { lt: toYear } }, { year: toYear, month: { lte: toMonth } }] },
+          ],
+        },
+        _sum: { targetAmount: true },
       }),
       this.prisma.receipt.aggregate({
-        where: { organizationId, status: "RECEIVED", receiptDate: { gte: startOfMonth() } },
+        where: {
+          organizationId,
+          status: "RECEIVED",
+          receiptDate: dateFilter(range, startOfMonth()),
+        },
         _sum: { amount: true },
       }),
     ]);
 
-    const targetAmount = Number(target?.targetAmount ?? 0);
+    const targetAmount = Number(targetAgg._sum.targetAmount ?? 0);
     const achievement = Number(achievementAgg._sum.amount ?? 0);
 
     return {
       target: targetAmount.toString(),
       achievement: achievement.toString(),
-      achievementRate: targetAmount > 0 ? Number(((achievement / targetAmount) * 100).toFixed(2)) : 0,
+      achievementRate: calculateAchievementRate(targetAmount, achievement),
     };
   }
 
-  private async getTenderPerformance(organizationId: string) {
+  private async getTenderPerformance(organizationId: string, range?: DateRange) {
     const yearStart = startOfYear();
+    const submittedAt = dateFilter(range, yearStart);
     const [submitted, won, underProcess] = await Promise.all([
-      this.prisma.tender.count({ where: { organizationId, submittedAt: { gte: yearStart } } }),
+      this.prisma.tender.count({ where: { organizationId, submittedAt } }),
       this.prisma.tender.count({
-        where: { organizationId, submittedAt: { gte: yearStart }, status: { in: WON_STATUSES } },
+        where: { organizationId, submittedAt, status: { in: WON_STATUSES } },
       }),
-      this.prisma.tender.count({ where: { organizationId, submittedAt: { gte: yearStart }, status: "UNDER_PROCESS" } }),
+      this.prisma.tender.count({ where: { organizationId, submittedAt, status: "UNDER_PROCESS" } }),
     ]);
 
     return {
@@ -199,12 +379,12 @@ export class DashboardService {
     };
   }
 
-  private async getBusinessByCategory(organizationId: string) {
+  private async getBusinessByCategory(organizationId: string, range?: DateRange) {
     const grouped = await this.prisma.tender.groupBy({
       by: ["category"],
       where: {
         organizationId,
-        submittedAt: { gte: startOfYear() },
+        submittedAt: dateFilter(range, startOfYear()),
         status: { in: WON_STATUSES },
       },
       _sum: { contractValue: true },
@@ -246,17 +426,65 @@ export class DashboardService {
   }
 
   private async getRecentTransactions(organizationId: string) {
-    const [tenderSecurities, expenses, receipts, guarantees, creditCommitments] = await Promise.all([
-      this.prisma.tenderSecurity.findMany({ where: { organizationId }, orderBy: { issueDate: "desc" }, take: 5 }),
-      this.prisma.expense.findMany({ where: { organizationId }, orderBy: { expenseDate: "desc" }, take: 5 }),
-      this.prisma.receipt.findMany({ where: { organizationId }, orderBy: { receiptDate: "desc" }, take: 5 }),
-      this.prisma.performanceGuarantee.findMany({ where: { organizationId }, orderBy: { issueDate: "desc" }, take: 5 }),
-      this.prisma.creditCommitment.findMany({
-        where: { organizationId, isCharged: true },
-        orderBy: { chargeDate: "desc" },
-        take: 5,
-      }),
-    ]);
+    const [tenderSecurities, expenses, receipts, guarantees, creditCommitments, cashActivity] =
+      await Promise.all([
+        this.prisma.tenderSecurity.findMany({
+          where: { organizationId },
+          orderBy: { issueDate: "desc" },
+          take: 5,
+        }),
+        this.prisma.expense.findMany({
+          where: { organizationId },
+          orderBy: { expenseDate: "desc" },
+          take: 5,
+        }),
+        this.prisma.receipt.findMany({
+          where: { organizationId },
+          orderBy: { receiptDate: "desc" },
+          take: 5,
+        }),
+        this.prisma.performanceGuarantee.findMany({
+          where: { organizationId },
+          orderBy: { issueDate: "desc" },
+          take: 5,
+        }),
+        this.prisma.creditCommitment.findMany({
+          where: { organizationId, isCharged: true },
+          orderBy: { chargeDate: "desc" },
+          take: 5,
+        }),
+        this.prisma.financialTransaction.findMany({
+          where: {
+            organizationId,
+            status: "POSTED",
+            sourceModule: {
+              in: [
+                "MAIN_CASH",
+                "PETTY_CASH",
+                "BANK_TRANSFER",
+                "SUPPLIER_PAYMENT",
+                "GENERAL_EXPENSE",
+              ],
+            },
+          },
+          orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+          take: 20,
+        }),
+      ]);
+
+    const activityBySource = new Map<string, (typeof cashActivity)[number]>();
+    for (const activity of cashActivity) {
+      const key = `${activity.sourceModule}:${activity.sourceId}`;
+      const current = activityBySource.get(key);
+      if (!current || activity.amount.gt(current.amount)) activityBySource.set(key, activity);
+    }
+    const activityTitles: Record<string, string> = {
+      MAIN_CASH: "Main Cash Adjusted",
+      PETTY_CASH: "Petty Cash Updated",
+      BANK_TRANSFER: "Bank Transfer Completed",
+      SUPPLIER_PAYMENT: "Supplier Payment Made",
+      GENERAL_EXPENSE: "General Expense Added",
+    };
 
     const combined = [
       ...tenderSecurities.map((t) => ({
@@ -304,6 +532,15 @@ export class DashboardService {
         status: "Charged",
         occurredAt: c.chargeDate,
       })),
+      ...Array.from(activityBySource.values()).map((activity) => ({
+        id: activity.sourceId,
+        type: activity.sourceModule,
+        title: activityTitles[activity.sourceModule] ?? "Financial Activity",
+        reference: activity.referenceNo || activity.transactionNo,
+        amount: activity.amount.toString(),
+        status: "Posted",
+        occurredAt: activity.transactionDate,
+      })),
     ];
 
     return combined
@@ -317,7 +554,12 @@ export class DashboardService {
       where: { organizationId, status: "ONGOING" },
       orderBy: { contractValue: "desc" },
       take: 5,
-      select: { id: true, workName: true, contractValue: true },
+      select: {
+        id: true,
+        workName: true,
+        contractValue: true,
+        tender: { select: { progressPercentage: true } },
+      },
     });
 
     const boqItems = projects.length
@@ -346,9 +588,11 @@ export class DashboardService {
         id: project.id,
         name: project.workName,
         contractValue: project.contractValue.toString(),
-        progressPercentage: progress?.contract.gt(0)
-          ? Number(progress.executed.div(progress.contract).mul(100).toFixed(2))
-          : 0,
+        progressPercentage: normalizeProgress(
+          progress?.contract.gt(0)
+            ? Number(progress.executed.div(progress.contract).mul(100).toFixed(2))
+            : (project.tender?.progressPercentage ?? 0),
+        ),
       };
     });
   }

@@ -3,6 +3,7 @@ import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException 
 import { Prisma } from "@bizovix/database";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { calculateCompletedProjectReceivable } from "./completed-project-receivable";
 import { CashBankService } from "../cash-bank/cash-bank.service";
 import { FinanceSettingsService } from "../settings-finance/finance-settings.service";
 import type {
@@ -554,10 +555,11 @@ export class AccountingService {
   async receivables(org: string, q: QueryAccountingDto) {
     const page = q.page ?? 1,
       limit = q.limit ?? 10;
-    const rows = await this.prisma.receivable.findMany({
+    const [rows, completedProjects] = await Promise.all([this.prisma.receivable.findMany({
       where: {
         organizationId: org,
         projectId: q.projectId,
+        project: { status: { not: "COMPLETED" } },
         status: { not: "RECEIVED" },
         OR: q.search
           ? [
@@ -571,8 +573,24 @@ export class AccountingService {
         project: { include: { organizationMaster: true } },
       },
       orderBy: { billDate: "desc" },
-    });
-    const items = rows
+    }), this.prisma.cmsWork.findMany({
+      where: {
+        organizationId: org,
+        status: "COMPLETED",
+        id: q.projectId,
+        OR: q.search ? [
+          { workName: { contains: q.search, mode: "insensitive" } },
+          { organizationMaster: { shortName: { contains: q.search, mode: "insensitive" } } },
+        ] : undefined,
+      },
+      include: {
+        organizationMaster: true,
+        receipts: { where: { status: "RECEIVED" }, select: { amount: true, vatDeductedAmount: true, taxDeductedAmount: true, otherDeductionAmount: true, securityDepositDeductedAmount: true } },
+        contracts: { where: { status: { not: "CANCELLED" } }, orderBy: { updatedAt: "desc" }, take: 1, select: { securityDepositReleasedAmount: true } },
+      },
+      orderBy: { completionDate: "desc" },
+    })]);
+    const billItems = rows
       .map((r) => {
         const received = r.receivedAmount,
           outstanding = Prisma.Decimal.max(D(0), r.amount.sub(received)),
@@ -585,6 +603,7 @@ export class AccountingService {
           contractValue: r.amount,
           totalBilled: r.amount,
           totalReceived: received,
+          sdReceivable: D(0),
           outstanding,
           dueDate: due,
           overdueDays: days,
@@ -598,6 +617,23 @@ export class AccountingService {
         };
       })
       .filter((r) => r.outstanding.gt(0));
+    const completedItems = completedProjects.map((project) => {
+      const calculated = calculateCompletedProjectReceivable({ contractValue: project.contractValue, receipts: project.receipts, securityDepositReleasedAmount: project.contracts[0]?.securityDepositReleasedAmount });
+      return {
+        id: `completed:${project.id}`,
+        project: project.workName,
+        organization: project.organizationMaster.shortName,
+        contractValue: project.contractValue,
+        totalBilled: project.contractValue,
+        totalReceived: calculated.receivedCash,
+        sdReceivable: calculated.sdReceivable,
+        outstanding: calculated.outstanding,
+        dueDate: null,
+        overdueDays: 0,
+        status: calculated.outstanding.eq(0) ? "CLEARED" : calculated.receivedCash.gt(0) ? "PARTIALLY_RECEIVED" : "CURRENT",
+      };
+    }).filter((row) => row.outstanding.gt(0));
+    const items = [...completedItems, ...billItems];
     const total = items.length;
     return {
       items: items.slice((page - 1) * limit, page * limit),

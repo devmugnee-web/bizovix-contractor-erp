@@ -4,7 +4,7 @@ export interface DashboardKpis {
   pgBg: { amount: string; instruments: number };
   /** Outstanding held amount derived from configured project contracts. */
   securityDeposit: { amount: string; projects: number; available: boolean };
-  receivables: { amount: string; overdue: string };
+  receivables: { amount: string; overdue: string; bills: number; securityDeposit: string };
   /** Derived from the real Payable model (amount - paidAmount), not Expense.status. */
   payables: { amount: string; dueSoon: string; overdue: string };
   bankAndCash: { amount: string };
@@ -35,6 +35,31 @@ export interface BusinessByCategoryItem {
 export interface BusinessByCategory {
   items: BusinessByCategoryItem[];
   totalBusiness: string;
+}
+
+export interface DashboardQuery {
+  /** Legacy common range; individual ranges take precedence when provided. */
+  dateFrom?: string;
+  dateTo?: string;
+  targetDateFrom?: string;
+  targetDateTo?: string;
+  tenderDateFrom?: string;
+  tenderDateTo?: string;
+  businessDateFrom?: string;
+  businessDateTo?: string;
+}
+
+export interface SetDashboardTargetInput {
+  dateFrom: string;
+  dateTo: string;
+  targetAmount: number;
+}
+
+export interface DashboardMonthlyTarget {
+  dateFrom: string;
+  dateTo: string;
+  targetAmount: string;
+  monthsUpdated: number;
 }
 
 export interface UpcomingReminder {

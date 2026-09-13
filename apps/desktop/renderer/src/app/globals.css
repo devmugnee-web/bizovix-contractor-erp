@@ -12,6 +12,24 @@ body {
   box-sizing: border-box;
 }
 
+/* Dashboard-only typography tuned for dense financial information. */
+.dashboard-workspace {
+  font-family:
+    "Segoe UI Variable Text",
+    "Segoe UI Variable",
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  font-feature-settings:
+    "tnum" 1,
+    "cv02" 1,
+    "cv03" 1,
+    "cv04" 1;
+  text-rendering: optimizeLegibility;
+}
+
 /* Keep number fields visually consistent with text fields across the ERP. */
 input[type="number"] {
   appearance: textfield;

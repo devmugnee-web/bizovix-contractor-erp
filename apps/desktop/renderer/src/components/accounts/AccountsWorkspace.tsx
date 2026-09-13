@@ -522,6 +522,7 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                       "Organization",
                       "Contract Value",
                       "Total Received",
+                      "SD Receivable",
                       "Outstanding",
                       "Due Date",
                       "Overdue Days",
@@ -536,6 +537,7 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                         <td>{r.organization}</td>
                         <td>{money(r.contractValue)}</td>
                         <td>{money(r.totalReceived)}</td>
+                        <td>{money(r.sdReceivable)}</td>
                         <td className="font-semibold text-red-600">{money(r.outstanding)}</td>
                         <td>{date(r.dueDate)}</td>
                         <td>{r.overdueDays}</td>

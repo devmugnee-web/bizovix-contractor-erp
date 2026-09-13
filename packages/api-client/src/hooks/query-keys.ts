@@ -1,6 +1,6 @@
 export const queryKeys = {
   me: ["auth", "me"] as const,
-  dashboard: ["dashboard"] as const,
+  dashboard: (params?: unknown) => ["dashboard", params ?? {}] as const,
   organizations: (search?: string) => ["organizations", search ?? ""] as const,
   bankAccounts: ["bank-accounts"] as const,
   tenders: (params?: unknown) => ["tenders", params ?? {}] as const,

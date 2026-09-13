@@ -15,7 +15,7 @@ import type { DashboardKpis } from "@bizovix/types";
 
 export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
   return (
-    <div className="grid grid-cols-8 gap-1 sm:gap-2">
+    <div className="grid grid-cols-8 gap-1.5 sm:gap-2 2xl:gap-3">
       <Link
         href="/cms/ongoing-works"
         className="min-w-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-biz-blue"
@@ -95,10 +95,18 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           iconClassName="bg-biz-success-soft text-biz-success"
           value={formatBDTLakh(kpis.receivables.amount)}
         >
-          Overdue:{" "}
-          <span className="font-medium text-biz-danger">
-            {formatBDTLakh(kpis.receivables.overdue)}
-          </span>
+          {kpis.receivables.bills > 0 ? (
+            <>
+              Outstanding Bills: {kpis.receivables.bills}
+              <br />
+              SD: {formatBDTLakh(kpis.receivables.securityDeposit)} · Overdue:{" "}
+              <span className="font-medium text-biz-danger">
+                {formatBDTLakh(kpis.receivables.overdue)}
+              </span>
+            </>
+          ) : (
+            "No outstanding certified bills"
+          )}
         </DashboardKpiCard>
       </Link>
 
@@ -140,14 +148,18 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="Loans & EMI"
         icon={CircleDollarSign}
         iconClassName="bg-biz-purple-soft text-biz-purple"
-        value={kpis.loansAndEmi.configured ? formatBDTLakh(kpis.loansAndEmi.amount) : "Not Configured"}
+        value={
+          kpis.loansAndEmi.configured ? formatBDTLakh(kpis.loansAndEmi.amount) : "Not Configured"
+        }
       >
         {kpis.loansAndEmi.configured ? (
           <>
             Next EMI:
             <br />
             {kpis.loansAndEmi.nextEmiDate ? (
-              <span className="font-medium text-biz-danger">{formatDate(kpis.loansAndEmi.nextEmiDate)}</span>
+              <span className="font-medium text-biz-danger">
+                {formatDate(kpis.loansAndEmi.nextEmiDate)}
+              </span>
             ) : (
               "—"
             )}
