@@ -196,7 +196,8 @@ export class ReportsService {
         const releasedDay = releasedDate
           ? new Date(releasedDate.getFullYear(), releasedDate.getMonth(), releasedDate.getDate())
           : null;
-        const isOpen = outstanding.gt(0) && ["HELD", "PARTIALLY_RELEASED"].includes(recordedReleaseStatus);
+        const isOpen =
+          outstanding.gt(0) && ["HELD", "PARTIALLY_RELEASED"].includes(recordedReleaseStatus);
         const effectiveStatus =
           financiallyReleased && releasedDay && releasedDay > today
             ? "INVALID_RELEASE_DATE"
@@ -207,16 +208,16 @@ export class ReportsService {
                 : isOpen && !dueDay
                   ? "DATE_NOT_SET"
                   : isOpen && dueDay && dueDay < today
-            ? "EXPIRED"
-            : isOpen && dueDay?.getTime() === today.getTime()
-              ? "DUE_TODAY"
-              : isOpen && dueDay && dueDay <= day7
-                ? "DUE_WITHIN_7"
-                : isOpen && dueDay && dueDay <= day15
-                  ? "DUE_WITHIN_15"
-                  : isOpen && dueDay
-                    ? "UPCOMING"
-                    : recordedReleaseStatus;
+                    ? "EXPIRED"
+                    : isOpen && dueDay?.getTime() === today.getTime()
+                      ? "DUE_TODAY"
+                      : isOpen && dueDay && dueDay <= day7
+                        ? "DUE_WITHIN_7"
+                        : isOpen && dueDay && dueDay <= day15
+                          ? "DUE_WITHIN_15"
+                          : isOpen && dueDay
+                            ? "UPCOMING"
+                            : recordedReleaseStatus;
         if (
           search &&
           ![
@@ -225,40 +226,48 @@ export class ReportsService {
             contract.organizationMaster.shortName,
             contract.securityDepositMethod,
           ].some((value) => value?.toLocaleLowerCase().includes(search))
-        ) return [];
-        return [{
-          contract: contract.contractNo,
-          project: contract.cmsWork.workName,
-          organization: contract.organizationMaster.shortName,
-          method: contract.securityDepositMethod ?? "-",
-          releaseStatus: recordedReleaseStatus,
-          status: effectiveStatus,
-          amount: s(amount),
-          released: s(released),
-          outstanding: s(outstanding),
-          dueDate: dueDate?.toISOString() ?? null,
-          timeRemaining:
-            effectiveStatus === "EXPIRED" && daysRemaining !== null
-              ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} overdue`
-              : effectiveStatus === "DUE_TODAY"
-                ? "Today"
-                : effectiveStatus === "DATE_NOT_SET"
-                  ? "Due date not set"
-                  : effectiveStatus === "RELEASE_DATE_NOT_SET"
-                    ? "Release date not set"
-                    : effectiveStatus === "INVALID_RELEASE_DATE"
-                      ? "Check release date"
-                : isOpen && daysRemaining !== null
-                  ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
-                  : "-",
-          releasedDate: releasedDate?.toISOString() ?? null,
-        }];
+        )
+          return [];
+        return [
+          {
+            contract: contract.contractNo,
+            project: contract.cmsWork.workName,
+            organization: contract.organizationMaster.shortName,
+            method: contract.securityDepositMethod ?? "-",
+            releaseStatus: recordedReleaseStatus,
+            status: effectiveStatus,
+            amount: s(amount),
+            released: s(released),
+            outstanding: s(outstanding),
+            dueDate: dueDate?.toISOString() ?? null,
+            timeRemaining:
+              effectiveStatus === "EXPIRED" && daysRemaining !== null
+                ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} overdue`
+                : effectiveStatus === "DUE_TODAY"
+                  ? "Today"
+                  : effectiveStatus === "DATE_NOT_SET"
+                    ? "Due date not set"
+                    : effectiveStatus === "RELEASE_DATE_NOT_SET"
+                      ? "Release date not set"
+                      : effectiveStatus === "INVALID_RELEASE_DATE"
+                        ? "Check release date"
+                        : isOpen && daysRemaining !== null
+                          ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
+                          : "-",
+            releasedDate: releasedDate?.toISOString() ?? null,
+          },
+        ];
       });
       const rows = q.status
         ? allRows.filter((row) => {
-            if (q.status === "DUE_WITHIN_7") return ["DUE_TODAY", "DUE_WITHIN_7"].includes(row.status);
-            if (q.status === "DUE_WITHIN_15") return ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(row.status);
-            if (q.status === "NEEDS_ATTENTION") return ["DATE_NOT_SET", "RELEASE_DATE_NOT_SET", "INVALID_RELEASE_DATE"].includes(row.status);
+            if (q.status === "DUE_WITHIN_7")
+              return ["DUE_TODAY", "DUE_WITHIN_7"].includes(row.status);
+            if (q.status === "DUE_WITHIN_15")
+              return ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(row.status);
+            if (q.status === "NEEDS_ATTENTION")
+              return ["DATE_NOT_SET", "RELEASE_DATE_NOT_SET", "INVALID_RELEASE_DATE"].includes(
+                row.status,
+              );
             return row.status === q.status || row.releaseStatus === q.status;
           })
         : allRows;
@@ -275,14 +284,43 @@ export class ReportsService {
             },
             {
               label: "Outstanding",
-              value: s(allRows.reduce((sum, row) => sum.add(row.outstanding), new Prisma.Decimal(0))),
+              value: s(
+                allRows.reduce((sum, row) => sum.add(row.outstanding), new Prisma.Decimal(0)),
+              ),
               kind: "money",
             },
-            { label: "Upcoming", value: String(allRows.filter((row) => row.status === "UPCOMING").length) },
-            { label: "Within 15 Days", value: String(allRows.filter((row) => ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(row.status)).length) },
-            { label: "Within 7 Days", value: String(allRows.filter((row) => ["DUE_TODAY", "DUE_WITHIN_7"].includes(row.status)).length) },
-            { label: "Expired", value: String(allRows.filter((row) => row.status === "EXPIRED").length) },
-            { label: "Needs Attention", value: String(allRows.filter((row) => ["DATE_NOT_SET", "RELEASE_DATE_NOT_SET", "INVALID_RELEASE_DATE"].includes(row.status)).length) },
+            {
+              label: "Upcoming",
+              value: String(allRows.filter((row) => row.status === "UPCOMING").length),
+            },
+            {
+              label: "Within 15 Days",
+              value: String(
+                allRows.filter((row) =>
+                  ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(row.status),
+                ).length,
+              ),
+            },
+            {
+              label: "Within 7 Days",
+              value: String(
+                allRows.filter((row) => ["DUE_TODAY", "DUE_WITHIN_7"].includes(row.status)).length,
+              ),
+            },
+            {
+              label: "Expired",
+              value: String(allRows.filter((row) => row.status === "EXPIRED").length),
+            },
+            {
+              label: "Needs Attention",
+              value: String(
+                allRows.filter((row) =>
+                  ["DATE_NOT_SET", "RELEASE_DATE_NOT_SET", "INVALID_RELEASE_DATE"].includes(
+                    row.status,
+                  ),
+                ).length,
+              ),
+            },
           ],
           columns: [
             { key: "contract", label: "Contract No" },
@@ -407,7 +445,7 @@ export class ReportsService {
                     ? "DUE_WITHIN_15"
                     : security.status === "ACTIVE"
                       ? "UPCOMING"
-                : security.status;
+                      : security.status;
           if (q.organizationMasterId && purchase.organizationMasterId !== q.organizationMasterId) {
             return [];
           }
@@ -424,26 +462,28 @@ export class ReportsService {
           ) {
             return [];
           }
-          return [{
-            tender: purchase.egpTenderId ?? "-",
-            organization: purchase.organizationMaster.shortName,
-            work: purchase.tenderWorkName,
-            type: security.securityType,
-            bank: security.bankAccount?.accountName ?? "-",
-            amount: s(item.securityAmount),
-            margin: s(item.marginAmount),
-            issueDate: security.issueDate.toISOString(),
-            expiryDate: security.expiryDate.toISOString(),
-            timeRemaining:
-              effectiveStatus === "EXPIRED"
-                ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} overdue`
-                : effectiveStatus === "DUE_TODAY"
-                  ? "Today"
-                  : security.status === "ACTIVE"
-                    ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
-                    : "-",
-            status: effectiveStatus,
-          }];
+          return [
+            {
+              tender: purchase.egpTenderId ?? "-",
+              organization: purchase.organizationMaster.shortName,
+              work: purchase.tenderWorkName,
+              type: security.securityType,
+              bank: security.bankAccount?.accountName ?? "-",
+              amount: s(item.securityAmount),
+              margin: s(item.marginAmount),
+              issueDate: security.issueDate.toISOString(),
+              expiryDate: security.expiryDate.toISOString(),
+              timeRemaining:
+                effectiveStatus === "EXPIRED"
+                  ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} overdue`
+                  : effectiveStatus === "DUE_TODAY"
+                    ? "Today"
+                    : security.status === "ACTIVE"
+                      ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
+                      : "-",
+              status: effectiveStatus,
+            },
+          ];
         }),
       );
       const rows = q.status
@@ -471,11 +511,17 @@ export class ReportsService {
             },
             {
               label: "Within 15 Days",
-              value: String(allRows.filter((r) => ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(r.status)).length),
+              value: String(
+                allRows.filter((r) =>
+                  ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(r.status),
+                ).length,
+              ),
             },
             {
               label: "Within 7 Days",
-              value: String(allRows.filter((r) => ["DUE_TODAY", "DUE_WITHIN_7"].includes(r.status)).length),
+              value: String(
+                allRows.filter((r) => ["DUE_TODAY", "DUE_WITHIN_7"].includes(r.status)).length,
+              ),
             },
             {
               label: "Expired",
@@ -592,7 +638,11 @@ export class ReportsService {
                   : guarantee.status === "ACTIVE"
                     ? "UPCOMING"
                     : guarantee.status;
-        const work = guarantee.tender?.workName ?? guarantee.pgBgWorkflow?.cmsWork?.workName ?? guarantee.pgBgWorkflow?.workCategory ?? "-";
+        const work =
+          guarantee.tender?.workName ??
+          guarantee.pgBgWorkflow?.cmsWork?.workName ??
+          guarantee.pgBgWorkflow?.workCategory ??
+          "-";
         if (q.workId && guarantee.pgBgWorkflow?.cmsWork?.id !== q.workId) return [];
         if (
           search &&
@@ -605,34 +655,39 @@ export class ReportsService {
             guarantee.releaseReference,
             guarantee.bankConfirmation,
           ].some((value) => value?.toLocaleLowerCase().includes(search))
-        ) return [];
-        return [{
-          reference: guarantee.instrumentNo?.trim() || guarantee.id,
-          work,
-          organization: guarantee.organizationMaster?.shortName ?? "-",
-          type: guarantee.type,
-          bank: guarantee.bankAccount?.accountName ?? "-",
-          amount: s(guarantee.amount),
-          issueDate: guarantee.issueDate.toISOString(),
-          expiryDate: guarantee.expiryDate.toISOString(),
-          releaseDate: guarantee.releaseDate?.toISOString() ?? null,
-          releaseReference: guarantee.releaseReference ?? "-",
-          bankConfirmation: guarantee.bankConfirmation ?? "-",
-          timeRemaining:
-            effectiveStatus === "EXPIRED"
-              ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} overdue`
-              : effectiveStatus === "DUE_TODAY"
-                ? "Today"
-                : guarantee.status === "ACTIVE"
-                  ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
-                  : "-",
-          status: effectiveStatus,
-        }];
+        )
+          return [];
+        return [
+          {
+            reference: guarantee.instrumentNo?.trim() || guarantee.id,
+            work,
+            organization: guarantee.organizationMaster?.shortName ?? "-",
+            type: guarantee.type,
+            bank: guarantee.bankAccount?.accountName ?? "-",
+            amount: s(guarantee.amount),
+            issueDate: guarantee.issueDate.toISOString(),
+            expiryDate: guarantee.expiryDate.toISOString(),
+            releaseDate: guarantee.releaseDate?.toISOString() ?? null,
+            releaseReference: guarantee.releaseReference ?? "-",
+            bankConfirmation: guarantee.bankConfirmation ?? "-",
+            timeRemaining:
+              effectiveStatus === "EXPIRED"
+                ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} overdue`
+                : effectiveStatus === "DUE_TODAY"
+                  ? "Today"
+                  : guarantee.status === "ACTIVE"
+                    ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
+                    : "-",
+            status: effectiveStatus,
+          },
+        ];
       });
       const rows = q.status
         ? allRows.filter((row) => {
-            if (q.status === "DUE_WITHIN_7") return ["DUE_TODAY", "DUE_WITHIN_7"].includes(row.status);
-            if (q.status === "DUE_WITHIN_15") return ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(row.status);
+            if (q.status === "DUE_WITHIN_7")
+              return ["DUE_TODAY", "DUE_WITHIN_7"].includes(row.status);
+            if (q.status === "DUE_WITHIN_15")
+              return ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(row.status);
             return row.status === q.status;
           })
         : allRows;
@@ -651,7 +706,9 @@ export class ReportsService {
               label: "Active Exposure",
               value: s(
                 allRows
-                  .filter((r) => ["UPCOMING", "DUE_WITHIN_15", "DUE_WITHIN_7", "DUE_TODAY"].includes(r.status))
+                  .filter((r) =>
+                    ["UPCOMING", "DUE_WITHIN_15", "DUE_WITHIN_7", "DUE_TODAY"].includes(r.status),
+                  )
                   .reduce((n, r) => n.add(r.amount), new Prisma.Decimal(0)),
               ),
               kind: "money",
@@ -662,11 +719,17 @@ export class ReportsService {
             },
             {
               label: "Within 15 Days",
-              value: String(allRows.filter((r) => ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(r.status)).length),
+              value: String(
+                allRows.filter((r) =>
+                  ["DUE_TODAY", "DUE_WITHIN_7", "DUE_WITHIN_15"].includes(r.status),
+                ).length,
+              ),
             },
             {
               label: "Within 7 Days",
-              value: String(allRows.filter((r) => ["DUE_TODAY", "DUE_WITHIN_7"].includes(r.status)).length),
+              value: String(
+                allRows.filter((r) => ["DUE_TODAY", "DUE_WITHIN_7"].includes(r.status)).length,
+              ),
             },
             {
               label: "Expired",
@@ -799,17 +862,37 @@ export class ReportsService {
       const contractValue = r.pgBgWorkflow?.noaAmount ?? r.contractValue;
       const received = r.receipts.reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0)),
         expense = r.projectExpenses.reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0)),
-        vatDeducted = r.receipts.reduce((n, x) => n.add(x.vatDeductedAmount), new Prisma.Decimal(0)),
-        taxDeducted = r.receipts.reduce((n, x) => n.add(x.taxDeductedAmount), new Prisma.Decimal(0)),
-        sdRetained = r.receipts.reduce((n, x) => n.add(x.securityDepositDeductedAmount), new Prisma.Decimal(0)),
-        otherDeducted = r.receipts.reduce((n, x) => n.add(x.otherDeductionAmount), new Prisma.Decimal(0)),
+        vatDeducted = r.receipts.reduce(
+          (n, x) => n.add(x.vatDeductedAmount),
+          new Prisma.Decimal(0),
+        ),
+        taxDeducted = r.receipts.reduce(
+          (n, x) => n.add(x.taxDeductedAmount),
+          new Prisma.Decimal(0),
+        ),
+        sdRetained = r.receipts.reduce(
+          (n, x) => n.add(x.securityDepositDeductedAmount),
+          new Prisma.Decimal(0),
+        ),
+        otherDeducted = r.receipts.reduce(
+          (n, x) => n.add(x.otherDeductionAmount),
+          new Prisma.Decimal(0),
+        ),
         sdReleased = r.receipts
           .filter((x) => x.receiptType === "RETENTION_RECEIVED")
           .reduce((n, x) => n.add(x.amount), new Prisma.Decimal(0)),
-        netContract = Prisma.Decimal.max(new Prisma.Decimal(0), contractValue.minus(vatDeducted).minus(taxDeducted)),
+        netContract = Prisma.Decimal.max(
+          new Prisma.Decimal(0),
+          contractValue.minus(vatDeducted).minus(taxDeducted),
+        ),
         regularReceivable = Prisma.Decimal.max(
           new Prisma.Decimal(0),
-          contractValue.minus(received).minus(vatDeducted).minus(taxDeducted).minus(sdRetained).minus(otherDeducted),
+          contractValue
+            .minus(received)
+            .minus(vatDeducted)
+            .minus(taxDeducted)
+            .minus(sdRetained)
+            .minus(otherDeducted),
         ),
         sdReceivable = Prisma.Decimal.max(new Prisma.Decimal(0), sdRetained.minus(sdReleased)),
         outstanding = regularReceivable.plus(sdReceivable),
@@ -836,9 +919,10 @@ export class ReportsService {
         outstanding: s(outstanding),
         cashProfit: s(cashProfit),
         profit: hasRecordedCost ? s(profit) : null,
-        margin: hasRecordedCost && netContract.gt(0)
-          ? `${profit.div(netContract).mul(100).toFixed(2)}%`
-          : "Not Calculated",
+        margin:
+          hasRecordedCost && netContract.gt(0)
+            ? `${profit.div(netContract).mul(100).toFixed(2)}%`
+            : "Not Calculated",
         profitStatus: hasRecordedCost ? "CALCULATED" : "NOT_CALCULATED",
         progress: r.tenderId ? "Linked" : "Active",
         completion: r.completionDate?.toISOString() ?? null,
@@ -2426,7 +2510,8 @@ export class ReportsService {
       ]);
       const signedTotal = (items: Array<{ direction: string; amount: Prisma.Decimal }>) =>
         items.reduce(
-          (total, item) => item.direction === "IN" ? total.add(item.amount) : total.sub(item.amount),
+          (total, item) =>
+            item.direction === "IN" ? total.add(item.amount) : total.sub(item.amount),
           new Prisma.Decimal(0),
         );
       const isTransferMovement = (row: (typeof rows)[number]) =>
@@ -2438,19 +2523,24 @@ export class ReportsService {
       const isExternalMovement = (row: (typeof rows)[number]) =>
         !isTransferMovement(row) && !isOpeningMovement(row) && !isAdjustmentMovement(row);
       const externalIn = rows.reduce(
-        (total, row) => row.direction === "IN" && isExternalMovement(row) ? total.add(row.amount) : total,
+        (total, row) =>
+          row.direction === "IN" && isExternalMovement(row) ? total.add(row.amount) : total,
         new Prisma.Decimal(0),
       );
       const externalOut = rows.reduce(
-        (total, row) => row.direction === "OUT" && isExternalMovement(row) ? total.add(row.amount) : total,
+        (total, row) =>
+          row.direction === "OUT" && isExternalMovement(row) ? total.add(row.amount) : total,
         new Prisma.Decimal(0),
       );
       const transfers = new Map<string, Prisma.Decimal>();
       for (const row of rows.filter(isTransferMovement)) {
         const current = transfers.get(`${row.sourceModule}:${row.sourceId}`);
-        if (!current || row.amount.gt(current)) transfers.set(`${row.sourceModule}:${row.sourceId}`, row.amount);
+        if (!current || row.amount.gt(current))
+          transfers.set(`${row.sourceModule}:${row.sourceId}`, row.amount);
       }
-      const openingBalance = signedTotal(openingRows).add(signedTotal(rows.filter(isOpeningMovement)));
+      const openingBalance = signedTotal(openingRows).add(
+        signedTotal(rows.filter(isOpeningMovement)),
+      );
       const balanceAdjustments = signedTotal(rows.filter(isAdjustmentMovement));
       const closingBalance = signedTotal(openingRows).add(signedTotal(rows));
       const internalTransfers = [...transfers.values()].reduce(
@@ -2461,7 +2551,8 @@ export class ReportsService {
       return this.finish(
         {
           title: "Cash Flow Report",
-          subtitle: "Cash and bank movements with internal transfers separated from operating inflow and outflow.",
+          subtitle:
+            "Cash and bank movements with internal transfers separated from operating inflow and outflow.",
           kpis: [
             { label: "Opening Balance", value: s(openingBalance), kind: "money" },
             { label: "External Cash In", value: s(externalIn), kind: "money" },
@@ -2629,8 +2720,9 @@ export class ReportsService {
         ? await this.prisma.journalLine.findMany({
             where: {
               ...structuralWhere({ lt: new Date(q.dateFrom!) }),
-              accountId: q.accountId
-                ?? (restrictOpeningToVisibleAccounts ? { in: visibleAccountIds } : undefined),
+              accountId:
+                q.accountId ??
+                (restrictOpeningToVisibleAccounts ? { in: visibleAccountIds } : undefined),
             },
             select: { accountId: true, debit: true, credit: true },
           })
@@ -2650,6 +2742,7 @@ export class ReportsService {
           .add(line.debit)
           .sub(line.credit);
         runningByAccount.set(line.accountId, running);
+        const creditNormal = ["LIABILITY", "INCOME", "EQUITY"].includes(line.account.accountType);
         return {
           date: line.journalEntry.journalDate.toISOString(),
           journal: line.journalEntry.journalNo,
@@ -2661,8 +2754,9 @@ export class ReportsService {
           source: line.journalEntry.sourceModule.replaceAll("_", " "),
           debit: s(line.debit),
           credit: s(line.credit),
+          increase: s(creditNormal ? line.credit : line.debit),
+          decrease: s(creditNormal ? line.debit : line.credit),
           balance: s(running.abs()),
-          balanceSide: running.gt(0) ? "Dr" : running.lt(0) ? "Cr" : "-",
         };
       });
       const periodDebit = periodLines.reduce(
@@ -2684,11 +2778,15 @@ export class ReportsService {
       return this.finish(
         {
           title: "Ledger Breakdown",
-          subtitle: "Account-wise opening, debit, credit and running balances from posted journals.",
+          subtitle:
+            "Account-wise increases, decreases and running balances from posted transactions.",
           kpis: [
             { label: "Opening Net Balance", value: s(openingNet), kind: "money" },
-            { label: "Period Debit", value: s(periodDebit), kind: "money" },
-            { label: "Period Credit", value: s(periodCredit), kind: "money" },
+            {
+              label: "Total Movement",
+              value: s(periodDebit.add(periodCredit).div(2)),
+              kind: "money",
+            },
             { label: "Closing Net Balance", value: s(closingNet), kind: "money" },
           ],
           columns: [
@@ -2699,10 +2797,9 @@ export class ReportsService {
             { key: "party", label: "Party" },
             { key: "project", label: "Project" },
             { key: "source", label: "Source Module" },
-            moneyCol("debit", "Debit"),
-            moneyCol("credit", "Credit"),
+            moneyCol("increase", "Increase"),
+            moneyCol("decrease", "Decrease"),
             moneyCol("balance", "Account Running Balance"),
-            { key: "balanceSide", label: "Dr / Cr" },
           ],
           rows,
         },
@@ -2788,14 +2885,17 @@ export class ReportsService {
         .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }))
         .map((group) => {
           const closingNet = group.openingNet.add(group.periodDebit).sub(group.periodCredit);
+          const creditNormal = ["LIABILITY", "INCOME", "EQUITY"].includes(group.type);
+          const openingBalance = creditNormal ? group.openingNet.negated() : group.openingNet;
+          const closingBalance = creditNormal ? closingNet.negated() : closingNet;
           return {
             code: group.code,
             name: group.name,
             type: group.type,
-            openingDebit: s(Prisma.Decimal.max(group.openingNet, 0)),
-            openingCredit: s(Prisma.Decimal.max(group.openingNet.negated(), 0)),
-            periodDebit: s(group.periodDebit),
-            periodCredit: s(group.periodCredit),
+            openingBalance: s(openingBalance),
+            periodIncrease: s(creditNormal ? group.periodCredit : group.periodDebit),
+            periodDecrease: s(creditNormal ? group.periodDebit : group.periodCredit),
+            closingBalance: s(closingBalance),
             closingDebit: s(Prisma.Decimal.max(closingNet, 0)),
             closingCredit: s(Prisma.Decimal.max(closingNet.negated(), 0)),
           };
@@ -2806,24 +2906,46 @@ export class ReportsService {
       const closingCredit = sumColumn("closingCredit");
       return this.finish(
         {
-          title: report === "trial-balance" ? "Trial Balance" : "Account Balance Summary",
+          title: report === "trial-balance" ? "Balance Check" : "Account Balance Summary",
           subtitle:
-            "Opening, period and closing balances from posted double-entry accounting data.",
+            "Opening balance, account movement and closing balance from posted transactions.",
           kpis: [
-            { label: "Closing Debit Total", value: s(closingDebit), kind: "money" },
-            { label: "Closing Credit Total", value: s(closingCredit), kind: "money" },
-            { label: "Difference", value: s(closingDebit.sub(closingCredit).abs()), kind: "money" },
+            {
+              label: "Total Movement",
+              value: s(
+                periodLines
+                  .reduce(
+                    (total, line) => total.add(line.debit).add(line.credit),
+                    new Prisma.Decimal(0),
+                  )
+                  .div(2),
+              ),
+              kind: "money",
+            },
+            {
+              label: "Closing Balances",
+              value: s(
+                rows.reduce(
+                  (total, row) => total.add(new Prisma.Decimal(row.closingBalance).abs()),
+                  new Prisma.Decimal(0),
+                ),
+              ),
+              kind: "money",
+            },
+            {
+              label: "System Check Difference",
+              value: s(closingDebit.sub(closingCredit).abs()),
+              kind: "money",
+            },
           ],
           columns: [
             { key: "code", label: "Account Code" },
             { key: "name", label: "Account Name" },
             { key: "type", label: "Account Type" },
-            moneyCol("openingDebit", "Opening Debit"),
-            moneyCol("openingCredit", "Opening Credit"),
-            moneyCol("periodDebit", "Period Debit"),
-            moneyCol("periodCredit", "Period Credit"),
-            moneyCol("closingDebit", "Closing Debit"),
-            moneyCol("closingCredit", "Closing Credit"),
+            moneyCol("openingBalance", "Opening Balance"),
+            moneyCol("periodIncrease", "Increase"),
+            moneyCol("periodDecrease", "Decrease"),
+            moneyCol("closingBalance", "Closing Balance"),
           ],
           rows,
         },
@@ -2886,10 +3008,7 @@ export class ReportsService {
       const income = sumType(["INCOME", "REVENUE"]);
       const expenses = accountGroups
         .filter((group) => ["EXPENSE", "COST"].includes(group.type))
-        .reduce(
-          (total, group) => total.add(group.debit).sub(group.credit),
-          new Prisma.Decimal(0),
-        );
+        .reduce((total, group) => total.add(group.debit).sub(group.credit), new Prisma.Decimal(0));
       const currentEarnings = income.sub(expenses);
       const equity = openingEquity.add(currentEarnings);
       const liabilitiesAndEquity = liabilities.add(equity);
@@ -2899,14 +3018,12 @@ export class ReportsService {
       const rows = accountGroups
         .filter((group) => sectionOrder[group.type] !== undefined)
         .map((group) => {
-          const netDebit = group.debit.sub(group.credit);
           return {
             accountId: group.id,
             section: group.type,
             code: group.code,
             account: group.name,
             balance: s(statementBalance(group).abs()),
-            balanceSide: netDebit.gt(0) ? "Dr" : netDebit.lt(0) ? "Cr" : "-",
           };
         })
         .filter((row) => new Prisma.Decimal(row.balance).abs().gt(0));
@@ -2919,7 +3036,6 @@ export class ReportsService {
             ? "Current Earnings (Unclosed)"
             : "Current Loss (Unclosed)",
           balance: s(currentEarnings.abs()),
-          balanceSide: currentEarnings.gte(0) ? "Cr" : "Dr",
         });
       }
       const filteredRows = rows
@@ -2927,7 +3043,7 @@ export class ReportsService {
         .filter(
           (row) =>
             !search ||
-            [row.section, row.code, row.account, row.balanceSide].some((value) =>
+            [row.section, row.code, row.account].some((value) =>
               value.toLocaleLowerCase().includes(search),
             ),
         )
@@ -2956,7 +3072,6 @@ export class ReportsService {
             { key: "code", label: "Account Code" },
             { key: "account", label: "Account Name" },
             moneyCol("balance", "Closing Balance"),
-            { key: "balanceSide", label: "Dr / Cr" },
           ],
           rows: filteredRows,
         },
@@ -3049,8 +3164,8 @@ export class ReportsService {
         subtitle:
           "Posted ledger architecture is available; configure cash-flow account mappings to classify activities without inventing balances.",
         kpis: [
-          { label: "Posted Debit", value: s(debit), kind: "money" },
-          { label: "Posted Credit", value: s(credit), kind: "money" },
+          { label: "Total Movement", value: s(debit.add(credit).div(2)), kind: "money" },
+          { label: "System Check Difference", value: s(debit.sub(credit).abs()), kind: "money" },
         ],
         columns: [
           { key: "status", label: "Status" },
@@ -3243,7 +3358,11 @@ export class ReportsService {
                   { partyName: { contains: search, mode: "insensitive" } },
                   { description: { contains: search, mode: "insensitive" } },
                   { project: { workName: { contains: search, mode: "insensitive" } } },
-                  { project: { organizationMaster: { shortName: { contains: search, mode: "insensitive" } } } },
+                  {
+                    project: {
+                      organizationMaster: { shortName: { contains: search, mode: "insensitive" } },
+                    },
+                  },
                 ]
               : undefined,
           },
@@ -3261,7 +3380,11 @@ export class ReportsService {
                   { partyName: { contains: search, mode: "insensitive" } },
                   { description: { contains: search, mode: "insensitive" } },
                   { project: { workName: { contains: search, mode: "insensitive" } } },
-                  { project: { organizationMaster: { shortName: { contains: search, mode: "insensitive" } } } },
+                  {
+                    project: {
+                      organizationMaster: { shortName: { contains: search, mode: "insensitive" } },
+                    },
+                  },
                 ]
               : undefined,
           },
@@ -3326,23 +3449,43 @@ export class ReportsService {
           return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         });
       const amountFor = (predicate: (row: (typeof rows)[number]) => boolean) =>
-        rows.filter(predicate).reduce(
-          (total, row) => total.add(row.amount),
-          new Prisma.Decimal(0),
-        );
+        rows.filter(predicate).reduce((total, row) => total.add(row.amount), new Prisma.Decimal(0));
       return this.finish(
         {
           title: "Bill Maturity",
           subtitle: "Outstanding payable and receivable bills monitored by their actual due dates.",
           kpis: [
             { label: "Total Outstanding", value: s(amountFor(() => true)), kind: "money" },
-            { label: "Payable Outstanding", value: s(amountFor((row) => row.type === "PAYABLE")), kind: "money" },
-            { label: "Receivable Outstanding", value: s(amountFor((row) => row.type === "RECEIVABLE")), kind: "money" },
-            { label: "Overdue", value: String(rows.filter((row) => row.status === "OVERDUE").length) },
-            { label: "Due in 1-7 Days", value: String(rows.filter((row) => row.status === "DUE_WITHIN_7").length) },
-            { label: "Due in 8-15 Days", value: String(rows.filter((row) => row.status === "DUE_WITHIN_15").length) },
-            { label: "Upcoming", value: String(rows.filter((row) => row.status === "UPCOMING").length) },
-            { label: "Date Not Set", value: String(rows.filter((row) => row.status === "DATE_NOT_SET").length) },
+            {
+              label: "Payable Outstanding",
+              value: s(amountFor((row) => row.type === "PAYABLE")),
+              kind: "money",
+            },
+            {
+              label: "Receivable Outstanding",
+              value: s(amountFor((row) => row.type === "RECEIVABLE")),
+              kind: "money",
+            },
+            {
+              label: "Overdue",
+              value: String(rows.filter((row) => row.status === "OVERDUE").length),
+            },
+            {
+              label: "Due in 1-7 Days",
+              value: String(rows.filter((row) => row.status === "DUE_WITHIN_7").length),
+            },
+            {
+              label: "Due in 8-15 Days",
+              value: String(rows.filter((row) => row.status === "DUE_WITHIN_15").length),
+            },
+            {
+              label: "Upcoming",
+              value: String(rows.filter((row) => row.status === "UPCOMING").length),
+            },
+            {
+              label: "Date Not Set",
+              value: String(rows.filter((row) => row.status === "DATE_NOT_SET").length),
+            },
           ],
           columns: [
             { key: "type", label: "Bill Type" },

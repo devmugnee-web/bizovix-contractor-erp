@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,12 +10,16 @@ const turboBin = path.join(repositoryRoot, "node_modules", "turbo", "bin", "turb
 const turboPackageJson = path.join(repositoryRoot, "node_modules", "turbo", "package.json");
 const apiUrl = "http://127.0.0.1:4000/api/v1/auth/dev-login";
 const rendererUrl = "http://127.0.0.1:3010/dashboard";
+const apiBuildDirectory = path.join(repositoryRoot, "apps", "api", "dist");
 const startupTimeoutMs = Number(process.env.BIZOVIX_DEV_STARTUP_TIMEOUT_MS ?? 120_000);
 
 function resolveNativeTurboBin() {
   const platform = process.platform === "win32" ? "windows" : process.platform;
   const architecture = process.arch === "x64" ? "64" : process.arch;
-  if (!["windows", "darwin", "linux"].includes(platform) || !["64", "arm64"].includes(architecture)) {
+  if (
+    !["windows", "darwin", "linux"].includes(platform) ||
+    !["64", "arm64"].includes(architecture)
+  ) {
     return null;
   }
 
@@ -42,6 +47,13 @@ const nativeTurboBin = resolveNativeTurboBin();
 
 function log(message) {
   process.stdout.write(`[dev] ${message}\n`);
+}
+
+async function clearStaleApiBuild() {
+  if (!existsSync(apiBuildDirectory)) return;
+
+  log("Clearing the generated API build from the previous run...");
+  await rm(apiBuildDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 });
 }
 
 async function apiIsReady() {
@@ -137,9 +149,7 @@ async function main() {
   function startRunner(filters, label) {
     log(`Starting ${label}...`);
     const command = nativeTurboBin ?? process.execPath;
-    const args = nativeTurboBin
-      ? ["run", "dev", ...filters]
-      : [turboBin, "run", "dev", ...filters];
+    const args = nativeTurboBin ? ["run", "dev", ...filters] : [turboBin, "run", "dev", ...filters];
     const child = spawn(command, args, {
       cwd: repositoryRoot,
       env: process.env,
@@ -187,6 +197,7 @@ async function main() {
     initialLabels.push("renderer");
     launchedRenderer = true;
   }
+  if (launchedApi) await clearStaleApiBuild();
   startRunner(initialFilters, initialLabels.join(" and "));
 
   const startupDeadline = Date.now() + startupTimeoutMs;
@@ -196,6 +207,7 @@ async function main() {
 
     if (!apiReady && !launchedApi && (await portIsAvailable(4000))) {
       log("The reused API stopped during startup; recovering it automatically.");
+      await clearStaleApiBuild();
       startRunner(["--filter=@bizovix/api"], "API");
       launchedApi = true;
     }

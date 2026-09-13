@@ -8,6 +8,19 @@ import { AccountingService } from "../accounting/accounting.service";
 
 type Tx = Prisma.TransactionClient;
 
+const MAIN_CASH_COUNTERPART_ACCOUNT: Record<string, string> = {
+  "Owner Investment": "OWNERS_CAPITAL",
+  "Cash Sale": "OTHER_INCOME",
+  "Customer Payment": "ACCOUNTS_RECEIVABLE",
+  "Refund Received": "GENERAL_EXPENSE",
+  "Other Cash In": "OTHER_INCOME",
+  "Office Expense": "GENERAL_EXPENSE",
+  "Supplier Payment": "ACCOUNTS_PAYABLE",
+  "Staff Advance": "ADVANCES",
+  "Owner Withdrawal": "OWNERS_CAPITAL",
+  "Other Cash Out": "GENERAL_EXPENSE",
+};
+
 @Injectable()
 export class CashBankService {
   constructor(
@@ -174,6 +187,8 @@ export class CashBankService {
     const account = await this.namedCash(this.prisma, organizationId, "Main Cash");
     const sourceId = randomUUID();
     const description = `${dto.party}: ${dto.description || dto.category}`;
+    const counterpartSystemKey = MAIN_CASH_COUNTERPART_ACCOUNT[dto.category]
+      ?? (dto.direction === "IN" ? "OTHER_INCOME" : "GENERAL_EXPENSE");
     const row = await this.prisma.$transaction(async (tx) => {
       const posted = await this.post(tx, { organizationId, accountId: account.id, direction: dto.direction, amount: dto.amount, sourceModule: "MAIN_CASH", sourceType: dto.category, sourceId, referenceNo: dto.referenceNo, description, transactionDate: new Date(dto.transactionDate), createdById: userId });
       await this.accounting.post(tx, {
@@ -186,8 +201,8 @@ export class CashBankService {
         sourceType: dto.category,
         sourceId,
         lines: dto.direction === "IN"
-          ? [{ bankAccountId: account.id, debit: dto.amount, credit: 0 }, { systemKey: "OTHER_INCOME", partyName: dto.party, debit: 0, credit: dto.amount }]
-          : [{ systemKey: "GENERAL_EXPENSE", partyName: dto.party, debit: dto.amount, credit: 0 }, { bankAccountId: account.id, debit: 0, credit: dto.amount }],
+          ? [{ bankAccountId: account.id, debit: dto.amount, credit: 0 }, { systemKey: counterpartSystemKey, partyName: dto.party, debit: 0, credit: dto.amount }]
+          : [{ systemKey: counterpartSystemKey, partyName: dto.party, debit: dto.amount, credit: 0 }, { bankAccountId: account.id, debit: 0, credit: dto.amount }],
       });
       return posted;
     });
@@ -231,7 +246,22 @@ export class CashBankService {
   }
   async replenish(organizationId: string, userId: string, dto: Omit<CreateTransferDto, "toAccountId">) { const petty = await this.namedCash(this.prisma, organizationId, "Petty Cash"); return this.transfer(organizationId, userId, { ...dto, toAccountId: petty.id }, true); }
 
-  async transfers(organizationId: string, query: QueryLedgerDto) { const page = Math.max(1, query.page ?? 1), limit = Math.min(100, query.limit ?? 10); const where: Prisma.FundTransferWhereInput = { organizationId, ...(query.dateFrom || query.dateTo ? { transferDate: { gte: query.dateFrom ? new Date(query.dateFrom) : undefined, lte: query.dateTo ? new Date(`${query.dateTo}T23:59:59.999Z`) : undefined } } : {}) }; const [items, total] = await this.prisma.$transaction([this.prisma.fundTransfer.findMany({ where, include: { fromAccount: true, toAccount: true }, orderBy: { transferDate: "desc" }, skip: (page - 1) * limit, take: limit }), this.prisma.fundTransfer.count({ where })]); return { items, meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } }; }
+  async transfers(organizationId: string, query: QueryLedgerDto) {
+    const page = Math.max(1, query.page ?? 1), limit = Math.min(100, query.limit ?? 10);
+    const where: Prisma.FundTransferWhereInput = {
+      organizationId,
+      ...(query.dateFrom || query.dateTo ? { transferDate: { gte: query.dateFrom ? new Date(query.dateFrom) : undefined, lte: query.dateTo ? new Date(`${query.dateTo}T23:59:59.999Z`) : undefined } } : {}),
+      AND: [
+        ...(query.accountId ? [{ OR: [{ fromAccountId: query.accountId }, { toAccountId: query.accountId }] }] : []),
+        ...(query.search ? [{ OR: [{ transferNo: { contains: query.search, mode: "insensitive" as const } }, { referenceNo: { contains: query.search, mode: "insensitive" as const } }, { description: { contains: query.search, mode: "insensitive" as const } }, { fromAccount: { accountName: { contains: query.search, mode: "insensitive" as const } } }, { toAccount: { accountName: { contains: query.search, mode: "insensitive" as const } } }] }] : []),
+      ],
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.fundTransfer.findMany({ where, include: { fromAccount: true, toAccount: true }, orderBy: { transferDate: "desc" }, skip: (page - 1) * limit, take: limit }),
+      this.prisma.fundTransfer.count({ where }),
+    ]);
+    return { items, meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } };
+  }
 
   async ledger(organizationId: string, query: QueryLedgerDto) { const page = Math.max(1, query.page ?? 1), limit = Math.min(100, query.limit ?? 10); const where: Prisma.FinancialTransactionWhereInput = { organizationId, accountId: query.accountId, direction: query.direction, sourceModule: query.sourceModule, transactionDate: query.dateFrom || query.dateTo ? { gte: query.dateFrom ? new Date(query.dateFrom) : undefined, lte: query.dateTo ? new Date(`${query.dateTo}T23:59:59.999Z`) : undefined } : undefined, OR: query.search ? [{ transactionNo: { contains: query.search, mode: "insensitive" } }, { referenceNo: { contains: query.search, mode: "insensitive" } }, { description: { contains: query.search, mode: "insensitive" } }] : undefined }; const [items, total, sums] = await this.prisma.$transaction([this.prisma.financialTransaction.findMany({ where, include: { account: true }, orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * limit, take: limit }), this.prisma.financialTransaction.count({ where }), this.prisma.financialTransaction.groupBy({ by: ["direction"], where, orderBy: { direction: "asc" }, _sum: { amount: true } })]); return { items, summary: Object.fromEntries(sums.map((s) => [s.direction, s._sum?.amount ?? 0])), meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } }; }
 

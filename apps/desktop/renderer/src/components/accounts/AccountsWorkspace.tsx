@@ -39,7 +39,7 @@ const titles: Record<AccountsView, [string, string]> = {
   ],
   chart: ["Chart of Accounts", "Manage the hierarchical accounting classification structure."],
   journals: ["Journal Entries", "Create balanced manual and adjustment accounting entries."],
-  ledger: ["General Ledger", "Review every posted debit and credit by account."],
+  ledger: ["Account Activity", "Review every posted increase, decrease and balance by account."],
   receivables: ["Receivables", "Track project and organization amounts still receivable."],
   payables: ["Payables", "Track vendor, supplier and subcontractor liabilities."],
   projects: ["Project Accounts", "Analyze project-wise collections, cost and profitability."],
@@ -50,6 +50,12 @@ const money = (v: unknown) =>
   `BDT ${Number(v ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const date = (v: unknown) => (v ? new Date(String(v)).toLocaleDateString("en-GB") : "-");
 const today = () => new Date().toISOString().slice(0, 10);
+const normalBalanceForType = (accountType: string | undefined) =>
+  ["ASSET", "EXPENSE"].includes(accountType ?? "") ? "DEBIT" : "CREDIT";
+const isIncrease = (account: LedgerAccountRecord, debit: unknown, credit: unknown) =>
+  account.normalBalance === "DEBIT" ? debit : credit;
+const isDecrease = (account: LedgerAccountRecord, debit: unknown, credit: unknown) =>
+  account.normalBalance === "DEBIT" ? credit : debit;
 function Modal({
   title,
   onClose,
@@ -223,7 +229,7 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
           name: form.name,
           parentId: form.parentId || undefined,
           accountType: form.accountType,
-          normalBalance: form.normalBalance,
+          normalBalance: normalBalanceForType(form.accountType),
           description: form.description,
           isActive: true,
         });
@@ -234,6 +240,25 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
           credit: Number(l.credit || 0),
           description: l.description,
         }));
+        if (
+          journalLines.some(
+            (line) =>
+              !line.accountId ||
+              (line.debit <= 0 && line.credit <= 0) ||
+              (line.debit > 0 && line.credit > 0),
+          )
+        ) {
+          setNotice("Select an account and enter either an increase or a decrease on every line.");
+          return;
+        }
+        const difference = journalLines.reduce(
+          (total, line) => total + line.debit - line.credit,
+          0,
+        );
+        if (Math.abs(difference) >= 0.005) {
+          setNotice("The entry is not balanced yet. Adjust the increase or decrease amounts.");
+          return;
+        }
         if (modal === "journal")
           await createJournal.mutateAsync({
             journalDate: form.date!,
@@ -272,7 +297,12 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
       setNotice("Saved successfully.");
       setTimeout(() => setNotice(""), 2500);
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Could not save accounting record.");
+      const message = e instanceof Error ? e.message : "Could not save accounting record.";
+      setNotice(
+        /\b(debit|credit)\b/i.test(message)
+          ? "The entry could not be saved. Check that every line has one amount and the entry is balanced."
+          : message,
+      );
     }
   }
   const accountOpts = (chart.data ?? [])
@@ -393,17 +423,7 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
           <State query={chart} empty={!chart.data?.length} />
           {!!chart.data?.length && (
             <table className="w-full text-left text-[11px]">
-              <Head
-                labels={[
-                  "Code",
-                  "Account Name",
-                  "Type",
-                  "Normal Balance",
-                  "Status",
-                  "System",
-                  "Transactions",
-                ]}
-              />
+              <Head labels={["Code", "Account Name", "Type", "Status", "System", "Transactions"]} />
               <tbody>
                 {chart.data.map((a) => (
                   <tr key={a.id} className="border-t">
@@ -413,7 +433,6 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                       {a.name}
                     </td>
                     <td>{a.accountType}</td>
-                    <td>{a.normalBalance}</td>
                     <td className={a.isActive ? "text-green-700" : "text-red-600"}>
                       {a.isActive ? "Active" : "Inactive"}
                     </td>
@@ -433,8 +452,12 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
           <Kpis
             items={[
               ["Opening Balance", ledger.data?.summary?.openingBalance, "text-biz-text"],
-              ["Total Debit", ledger.data?.summary?.totalDebit, "text-green-700"],
-              ["Total Credit", ledger.data?.summary?.totalCredit, "text-red-600"],
+              [
+                "Total Movement",
+                Number(ledger.data?.summary?.totalDebit ?? 0) +
+                  Number(ledger.data?.summary?.totalCredit ?? 0),
+                "text-green-700",
+              ],
               ["Closing Balance", ledger.data?.summary?.closingBalance, "text-blue-600"],
             ]}
           />
@@ -451,8 +474,8 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                       "Reference",
                       "Description",
                       "Source",
-                      "Debit",
-                      "Credit",
+                      "Increase",
+                      "Decrease",
                       "Running Balance",
                     ]}
                   />
@@ -465,8 +488,8 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                         <td>{l.journalEntry.referenceNo ?? "-"}</td>
                         <td>{l.description ?? l.journalEntry.description}</td>
                         <td>{l.journalEntry.sourceModule}</td>
-                        <td>{money(l.debit)}</td>
-                        <td>{money(l.credit)}</td>
+                        <td>{money(isIncrease(l.account, l.debit, l.credit))}</td>
+                        <td>{money(isDecrease(l.account, l.debit, l.credit))}</td>
                         <td className="font-semibold">{money(l.runningBalance)}</td>
                       </tr>
                     ))}
@@ -601,8 +624,67 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
         <section className="overflow-hidden rounded-lg border bg-white shadow-card">
           <State query={projects} empty={!projects.data?.length} />
           {!!projects.data?.length && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-left text-[11px]">
+            <>
+              <div className="grid gap-3 p-3 sm:grid-cols-2 xl:hidden">
+                {projects.data.map((r) => {
+                  const financialCharges =
+                    Number(r.tenderSecurityCost) +
+                    Number(r.creditCommitmentCost) +
+                    Number(r.pgBgCost) +
+                    Number(r.bankCharges) +
+                    Number(r.otherCosts);
+                  return (
+                    <article key={r.id} className="min-w-0 rounded-lg border border-biz-border bg-white p-4 shadow-sm">
+                      <h3
+                        className="line-clamp-2 cursor-help break-words text-[13px] font-bold leading-5 text-biz-navy"
+                        title={r.project}
+                      >
+                        {r.project}
+                      </h3>
+                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-biz-muted" title={r.organization}>
+                        {r.organization}
+                      </p>
+                      <span className="mt-2 inline-flex rounded-full bg-blue-50 px-2 py-1 text-[9px] font-semibold text-biz-blue">
+                        {r.category}
+                      </span>
+                      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-biz-border pt-3 text-[10px]">
+                        {[
+                          ["Contract Value", money(r.contractValue)],
+                          ["Received", money(r.totalReceived)],
+                          ["Outstanding", money(r.outstanding)],
+                          ["Project Expense", money(r.projectExpense)],
+                          ["Financial Charges", money(financialCharges)],
+                          ["Total Cost", money(r.totalCost)],
+                          ["Estimated Profit", money(r.estimatedProfit)],
+                          ["Margin", `${Number(r.profitMargin).toFixed(2)}%`],
+                        ].map(([label, value]) => (
+                          <div key={label} className="min-w-0">
+                            <dt className="text-[9px] text-biz-muted">{label}</dt>
+                            <dd className={cn("mt-0.5 break-words font-semibold tabular-nums text-biz-navy", label === "Estimated Profit" && "text-green-700")}>
+                              {value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="hidden xl:block">
+              <table className="w-full table-fixed text-left text-[9px]">
+                <colgroup>
+                  <col className="w-[20%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[6%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[8%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[8%]" />
+                  <col className="w-[8%]" />
+                  <col className="w-[7%]" />
+                  <col className="w-[8%]" />
+                  <col className="w-[5%]" />
+                </colgroup>
                 <Head
                   labels={[
                     "Project",
@@ -620,15 +702,17 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                 />
                 <tbody>
                   {projects.data.map((r) => (
-                    <tr key={r.id} className="border-t">
-                      <td className="p-3 font-semibold">{r.project}</td>
-                      <td>{r.organization}</td>
-                      <td>{r.category}</td>
-                      <td>{money(r.contractValue)}</td>
-                      <td>{money(r.totalReceived)}</td>
-                      <td>{money(r.outstanding)}</td>
-                      <td>{money(r.projectExpense)}</td>
-                      <td>
+                    <tr key={r.id} className="border-t border-biz-border align-top hover:bg-blue-50/30">
+                      <td className="px-2 py-3 font-semibold">
+                        <p className="line-clamp-2 cursor-help break-words leading-4" title={r.project}>{r.project}</p>
+                      </td>
+                      <td className="break-words px-2 py-3 leading-4">{r.organization}</td>
+                      <td className="break-words px-2 py-3">{r.category}</td>
+                      <td className="break-words px-2 py-3 tabular-nums">{money(r.contractValue)}</td>
+                      <td className="break-words px-2 py-3 tabular-nums">{money(r.totalReceived)}</td>
+                      <td className="break-words px-2 py-3 tabular-nums">{money(r.outstanding)}</td>
+                      <td className="break-words px-2 py-3 tabular-nums">{money(r.projectExpense)}</td>
+                      <td className="break-words px-2 py-3 tabular-nums">
                         {money(
                           Number(r.tenderSecurityCost) +
                             Number(r.creditCommitmentCost) +
@@ -637,14 +721,15 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                             Number(r.otherCosts),
                         )}
                       </td>
-                      <td>{money(r.totalCost)}</td>
-                      <td className="font-semibold text-green-700">{money(r.estimatedProfit)}</td>
-                      <td>{Number(r.profitMargin).toFixed(2)}%</td>
+                      <td className="break-words px-2 py-3 tabular-nums">{money(r.totalCost)}</td>
+                      <td className="break-words px-2 py-3 font-semibold tabular-nums text-green-700">{money(r.estimatedProfit)}</td>
+                      <td className="px-2 py-3 tabular-nums">{Number(r.profitMargin).toFixed(2)}%</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </>
           )}
         </section>
       )}
@@ -667,8 +752,8 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                     "Reference",
                     "Source",
                     "Description",
-                    "Debit",
-                    "Credit",
+                    "Increase",
+                    "Decrease",
                     "Running Balance",
                   ]}
                 />
@@ -679,8 +764,8 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                       <td>{l.journalEntry.referenceNo}</td>
                       <td>{l.journalEntry.sourceModule}</td>
                       <td>{l.description ?? l.journalEntry.description}</td>
-                      <td>{money(l.debit)}</td>
-                      <td>{money(l.credit)}</td>
+                      <td>{money(isIncrease(l.account, l.debit, l.credit))}</td>
+                      <td>{money(isDecrease(l.account, l.debit, l.credit))}</td>
                       <td>{money(l.runningBalance)}</td>
                     </tr>
                   ))}
@@ -720,10 +805,6 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                   "Account Type",
                   ["ASSET", "LIABILITY", "INCOME", "EXPENSE", "EQUITY"].map((v) => [v, v]),
                 )}
-                {select("normalBalance", "Normal Balance", [
-                  ["DEBIT", "Debit"],
-                  ["CREDIT", "Credit"],
-                ])}
                 {input("description", "Description")}
               </>
             )}
@@ -772,83 +853,105 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
             <div className="px-5 pb-5">
               <div className="mb-2 grid grid-cols-[1.8fr_1fr_1fr_2fr_32px] gap-2 text-[10px] font-semibold">
                 <span>Account</span>
-                <span>Debit</span>
-                <span>Credit</span>
+                <span>Increase</span>
+                <span>Decrease</span>
                 <span>Description</span>
                 <span />
               </div>
-              {lines.map((l, i) => (
-                <div key={i} className="mb-2 grid grid-cols-[1.8fr_1fr_1fr_2fr_32px] gap-2">
-                  <select
-                    title="Account"
-                    className="h-9 rounded border px-2 text-[11px]"
-                    value={l.accountId}
-                    onChange={(e) =>
-                      setLines((v) =>
-                        v.map((x, j) => (j === i ? { ...x, accountId: e.target.value } : x)),
-                      )
-                    }
-                  >
-                    <option value="">Select account</option>
-                    {accountOpts.map(([v, n]) => (
-                      <option key={v} value={v}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    title="Debit"
-                    className="h-9 rounded border px-2 text-[11px]"
-                    type="number"
-                    value={l.debit}
-                    onChange={(e) =>
-                      setLines((v) =>
-                        v.map((x, j) =>
-                          j === i
-                            ? {
-                                ...x,
-                                debit: e.target.value,
-                                credit: e.target.value ? "" : x.credit,
-                              }
-                            : x,
-                        ),
-                      )
-                    }
-                  />
-                  <input
-                    title="Credit"
-                    className="h-9 rounded border px-2 text-[11px]"
-                    type="number"
-                    value={l.credit}
-                    onChange={(e) =>
-                      setLines((v) =>
-                        v.map((x, j) =>
-                          j === i
-                            ? { ...x, credit: e.target.value, debit: e.target.value ? "" : x.debit }
-                            : x,
-                        ),
-                      )
-                    }
-                  />
-                  <input
-                    title="Line description"
-                    className="h-9 rounded border px-2 text-[11px]"
-                    value={l.description}
-                    onChange={(e) =>
-                      setLines((v) =>
-                        v.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)),
-                      )
-                    }
-                  />
-                  <button
-                    title="Remove line"
-                    onClick={() => setLines((v) => v.filter((_, j) => j !== i))}
-                    className="text-red-600"
-                  >
-                    x
-                  </button>
-                </div>
-              ))}
+              {lines.map((l, i) => {
+                const selectedAccount = chart.data?.find((account) => account.id === l.accountId);
+                const increasesOnDebit = selectedAccount?.normalBalance !== "CREDIT";
+                const increaseValue = increasesOnDebit ? l.debit : l.credit;
+                const decreaseValue = increasesOnDebit ? l.credit : l.debit;
+                return (
+                  <div key={i} className="mb-2 grid grid-cols-[1.8fr_1fr_1fr_2fr_32px] gap-2">
+                    <select
+                      title="Account"
+                      className="h-9 rounded border px-2 text-[11px]"
+                      value={l.accountId}
+                      onChange={(e) =>
+                        setLines((v) =>
+                          v.map((x, j) => (j === i ? { ...x, accountId: e.target.value } : x)),
+                        )
+                      }
+                    >
+                      <option value="">Select account</option>
+                      {accountOpts.map(([v, n]) => (
+                        <option key={v} value={v}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      title="Increase"
+                      className="h-9 rounded border px-2 text-[11px]"
+                      type="number"
+                      value={increaseValue}
+                      onChange={(e) =>
+                        setLines((v) =>
+                          v.map((x, j) =>
+                            j === i
+                              ? increasesOnDebit
+                                ? {
+                                    ...x,
+                                    debit: e.target.value,
+                                    credit: e.target.value ? "" : x.credit,
+                                  }
+                                : {
+                                    ...x,
+                                    credit: e.target.value,
+                                    debit: e.target.value ? "" : x.debit,
+                                  }
+                              : x,
+                          ),
+                        )
+                      }
+                    />
+                    <input
+                      title="Decrease"
+                      className="h-9 rounded border px-2 text-[11px]"
+                      type="number"
+                      value={decreaseValue}
+                      onChange={(e) =>
+                        setLines((v) =>
+                          v.map((x, j) =>
+                            j === i
+                              ? increasesOnDebit
+                                ? {
+                                    ...x,
+                                    credit: e.target.value,
+                                    debit: e.target.value ? "" : x.debit,
+                                  }
+                                : {
+                                    ...x,
+                                    debit: e.target.value,
+                                    credit: e.target.value ? "" : x.credit,
+                                  }
+                              : x,
+                          ),
+                        )
+                      }
+                    />
+                    <input
+                      title="Line description"
+                      className="h-9 rounded border px-2 text-[11px]"
+                      value={l.description}
+                      onChange={(e) =>
+                        setLines((v) =>
+                          v.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)),
+                        )
+                      }
+                    />
+                    <button
+                      title="Remove line"
+                      onClick={() => setLines((v) => v.filter((_, j) => j !== i))}
+                      className="text-red-600"
+                    >
+                      x
+                    </button>
+                  </div>
+                );
+              })}
               <div className="flex items-center justify-between">
                 <SecondaryButton
                   onClick={() =>
@@ -862,8 +965,11 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
                   Add Line
                 </SecondaryButton>
                 <div className="text-[12px] font-semibold">
-                  Debit: {money(lines.reduce((n, l) => n + Number(l.debit || 0), 0))} | Credit:{" "}
-                  {money(lines.reduce((n, l) => n + Number(l.credit || 0), 0))}
+                  {Math.abs(
+                    lines.reduce((n, l) => n + Number(l.debit || 0) - Number(l.credit || 0), 0),
+                  ) < 0.005
+                    ? "Entry balanced"
+                    : `Adjustment needed: ${money(Math.abs(lines.reduce((n, l) => n + Number(l.debit || 0) - Number(l.credit || 0), 0)))}`}
                 </div>
               </div>
             </div>
@@ -894,15 +1000,13 @@ function JournalTable({
                 "Reference",
                 "Description",
                 "Source",
-                "Debit",
-                "Credit",
+                "Total Amount",
                 "Status",
               ]}
             />
             <tbody>
               {rows.map((r, i) => {
-                const dr = r.lines.reduce((n, l) => n + Number(l.debit), 0),
-                  cr = r.lines.reduce((n, l) => n + Number(l.credit), 0);
+                const totalAmount = r.lines.reduce((n, l) => n + Number(l.debit), 0);
                 return (
                   <tr key={r.id} className="border-t">
                     <td className="p-3">{i + 1}</td>
@@ -911,8 +1015,7 @@ function JournalTable({
                     <td>{r.referenceNo ?? "-"}</td>
                     <td>{r.description}</td>
                     <td>{r.sourceModule.replaceAll("_", " ")}</td>
-                    <td>{money(dr)}</td>
-                    <td>{money(cr)}</td>
+                    <td>{money(totalAmount)}</td>
                     <td>{r.status}</td>
                   </tr>
                 );

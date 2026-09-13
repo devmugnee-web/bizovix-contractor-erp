@@ -64,7 +64,7 @@ export const REPORT_CATEGORIES: ReportCategoryDef[] = [
         "General Profit/Loss Statement",
         "Income and expense from posted accounting data.",
       ),
-      r("trial-balance", "Trial Balance", "Posted ledger debit and credit balances."),
+      r("trial-balance", "Balance Check", "Check that all posted account movements are balanced."),
       r("ledger", "Ledger Breakdown", "Posted journal detail and running balances."),
       r("balance-sheet", "Balance Sheet", "Assets, liabilities and equity from posted entries."),
     ],
