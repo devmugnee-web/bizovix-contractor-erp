@@ -105,10 +105,10 @@ export default function TenderDetailPage() {
   const remarks = t.remarks || t.description;
 
   return (
-    <div className="flex flex-col gap-5">
-      <section className="overflow-hidden rounded-lg border border-biz-border bg-biz-surface shadow-card">
-        <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
-          <div className="relative z-20 order-2 flex w-full flex-wrap gap-2 xl:col-start-2 xl:row-start-1 xl:w-auto xl:justify-end">
+    <div className="scrollbar-hidden flex min-h-full flex-col gap-2 overflow-y-auto subpixel-antialiased lg:h-full lg:min-h-0 lg:overflow-hidden 2xl:gap-3">
+      <section className="shrink-0 overflow-hidden rounded-lg border border-biz-border bg-white shadow-card">
+        <div className="grid grid-cols-1 gap-2.5 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center xl:px-4 2xl:px-5 2xl:py-3">
+          <div className="relative z-20 order-2 flex w-full flex-wrap gap-2 sm:col-start-2 sm:row-start-1 sm:w-auto sm:justify-end [&_button]:h-9 [&_button]:text-[11px] 2xl:[&_button]:h-10 2xl:[&_button]:text-[13px]">
             <SecondaryButton type="button" onClick={() => router.push("/tenders")}>
               <ArrowLeft className="h-4 w-4" />
               Back
@@ -133,29 +133,31 @@ export default function TenderDetailPage() {
             )}
           </div>
 
-          <div className="order-1 min-w-0 xl:col-start-1 xl:row-start-1">
-            <div className="relative sm:pl-[52px]">
-              <span className="absolute left-0 top-0 hidden h-10 w-10 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue sm:flex">
-                <ClipboardList className="h-5 w-5" />
+          <div className="order-1 min-w-0 sm:col-start-1 sm:row-start-1">
+            <div className="relative pl-11 2xl:pl-12">
+              <span className="absolute left-0 top-0 flex h-9 w-9 items-center justify-center rounded-lg bg-biz-blue-soft text-biz-blue 2xl:h-10 2xl:w-10">
+                <ClipboardList className="h-[18px] w-[18px] 2xl:h-5 2xl:w-5" />
               </span>
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-biz-muted">
-                  Tender details
+                <p className="text-[10px] font-bold uppercase tracking-[0.09em] text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+                  Tender record
                 </p>
                 <StatusBadge label={statusMeta.label} tone={statusMeta.tone} />
               </div>
-              <h1 className="mt-1 text-justify text-[20px] font-bold leading-7 text-biz-text sm:text-[22px] sm:leading-8">
+              <h1 className="mt-0.5 break-words text-[18px] font-bold leading-tight text-biz-text xl:text-[20px] 2xl:text-[24px]">
                 {t.workName}
               </h1>
-              <p className="mt-2 flex items-start gap-1.5 text-[12px] leading-5 text-biz-muted">
-                <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>{organizationName}</span>
+              <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-slate-500 xl:text-[12px] 2xl:text-[13px]">
+                <Building2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate" title={organizationName}>
+                  {organizationName}
+                </span>
               </p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 border-t border-biz-border bg-biz-bg/60 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-px border-t border-biz-border bg-biz-border sm:grid-cols-3 xl:grid-cols-6">
           <DetailItem icon={Hash} label="e-GP Tender ID" value={t.egpTenderId ?? "Not set"} />
           <DetailItem
             icon={ClipboardList}
@@ -181,252 +183,308 @@ export default function TenderDetailPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-biz-border bg-biz-surface p-4 shadow-card" aria-labelledby="notice-details-title">
-        <h2 id="notice-details-title" className="mb-3 text-[14px] font-semibold">Notice & PA Information</h2>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            ["Document Fee", t.documentFee != null ? formatBDT(t.documentFee) : "Not set"],
-            ["Tender Security Amount", t.estimatedTenderSecurityAmount != null ? formatBDT(t.estimatedTenderSecurityAmount) : "Not set"],
-            ["Meeting End (Bangladesh Time)", t.preBidEndDate ? new Date(t.preBidEndDate).toLocaleString("en-GB", { timeZone: "Asia/Dhaka", weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Not set"],
-            ["PA Name", t.paName || "Not set"],
-            ["PA Designation", t.paDesignation || "Not set"],
-            ["PA Phone", t.paPhone || "Not set"],
-            ["PE Address", t.paAddress || "Not set"],
-          ].map(([label, value]) => (
-            <div key={label} className="min-w-0">
-              <dt className="text-xs text-biz-muted">{label}</dt>
-              <dd className="mt-1 break-words text-sm font-medium">{value}</dd>
+      <main className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto rounded-xl border border-biz-border bg-slate-50/70 shadow-card">
+        <div className="flex flex-col gap-2.5 p-2.5 xl:gap-3 xl:p-3 2xl:gap-4 2xl:p-4">
+          <section
+            className="order-3 overflow-hidden rounded-lg border border-biz-border bg-white"
+            aria-labelledby="notice-details-title"
+          >
+            <SectionHeading
+              id="notice-details-title"
+              title="Notice & PA Information"
+              description="Tender notice, procuring authority and contact details"
+            />
+            <dl className="grid grid-cols-1 gap-px bg-biz-border sm:grid-cols-2 lg:grid-cols-4 lg:[&>div:last-child]:col-span-2">
+              {[
+                ["Document Fee", t.documentFee != null ? formatBDT(t.documentFee) : "Not set"],
+                [
+                  "Tender Security Amount",
+                  t.estimatedTenderSecurityAmount != null
+                    ? formatBDT(t.estimatedTenderSecurityAmount)
+                    : "Not set",
+                ],
+                [
+                  "Meeting End (Bangladesh Time)",
+                  t.preBidEndDate
+                    ? new Date(t.preBidEndDate).toLocaleString("en-GB", {
+                        timeZone: "Asia/Dhaka",
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "Not set",
+                ],
+                ["PA Name", t.paName || "Not set"],
+                ["PA Designation", t.paDesignation || "Not set"],
+                ["PA Phone", t.paPhone || "Not set"],
+                ["PE Address", t.paAddress || "Not set"],
+              ].map(([label, value]) => (
+                <div key={label} className="min-w-0 bg-white px-3 py-2.5 2xl:px-4 2xl:py-3">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+                    {label}
+                  </dt>
+                  <dd className="mt-1 break-words text-[12px] font-semibold leading-4 text-biz-text xl:text-[13px] 2xl:text-[14px] 2xl:leading-5">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <section
+            className="order-1 overflow-hidden rounded-lg border border-biz-border bg-white"
+            aria-labelledby="tender-summary-title"
+          >
+            <SectionHeading
+              id="tender-summary-title"
+              title="Tender Summary"
+              description="Important financial and submission details"
+            />
+            <div className="grid grid-cols-1 gap-px bg-biz-border sm:grid-cols-2 sm:[&>div:last-child]:col-span-2 lg:grid-cols-3 lg:[&>div:last-child]:col-span-2 xl:grid-cols-5 xl:[&>div:last-child]:col-span-1">
+              <InfoCard
+                icon={Banknote}
+                label="Estimated Value"
+                value={formatBDT(t.contractValue)}
+              />
+              <InfoCard
+                icon={CalendarClock}
+                label="Submission Deadline"
+                value={t.submissionDeadline ? formatDate(t.submissionDeadline) : "Not set"}
+              />
+              <InfoCard
+                icon={CalendarDays}
+                label="Opening Date"
+                value={t.openingDate ? formatDate(t.openingDate) : "Not set"}
+              />
+              <InfoCard
+                icon={Wallet}
+                label="Quoted Amount"
+                value={t.quotedAmount != null ? formatBDT(t.quotedAmount) : "Not set"}
+              />
+              <InfoCard
+                icon={UserRound}
+                label="Assigned To"
+                value={t.assignedToName ?? "Unassigned"}
+              />
             </div>
-          ))}
-        </dl>
-      </section>
+          </section>
 
-      <section aria-labelledby="tender-summary-title">
-        <h2 id="tender-summary-title" className="mb-2 text-[14px] font-semibold text-biz-text">
-          Tender Summary
-        </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <InfoCard icon={Banknote} label="Estimated Value" value={formatBDT(t.contractValue)} />
-          <InfoCard
-            icon={CalendarClock}
-            label="Submission Deadline"
-            value={t.submissionDeadline ? formatDate(t.submissionDeadline) : "Not set"}
-          />
-          <InfoCard
-            icon={CalendarDays}
-            label="Opening Date"
-            value={t.openingDate ? formatDate(t.openingDate) : "Not set"}
-          />
-          <InfoCard
-            icon={Wallet}
-            label="Quoted Amount"
-            value={t.quotedAmount ? formatBDT(t.quotedAmount) : "Not set"}
-          />
-          <InfoCard icon={UserRound} label="Assigned To" value={t.assignedToName ?? "Unassigned"} />
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-biz-border bg-biz-surface p-4 shadow-card sm:p-5">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-[14px] font-semibold text-biz-text">Tender Lifecycle</h2>
-            <p className="mt-1 text-[12px] text-biz-muted">
-              Track this tender from creation to project handover.
-            </p>
-          </div>
-          <p className="text-[12px] font-semibold text-biz-text">
-            {completedCount} of {TIMELINE_STEPS.length} stages completed
-          </p>
-        </div>
-
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-biz-border">
-          <div
-            className="h-full rounded-full bg-biz-success transition-all"
-            style={{ width: `${(completedCount / TIMELINE_STEPS.length) * 100}%` }}
-          />
-        </div>
-
-        <ol className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9">
-          {TIMELINE_STEPS.map((step, index) => {
-            const isComplete = completed[index];
-            const isNext = index === nextStepIndex;
-
-            return (
-              <li
-                key={step}
-                className={
-                  isComplete
-                    ? "flex min-h-16 items-center gap-2 rounded-md border border-green-200 bg-biz-success-soft px-2.5 py-2"
-                    : isNext
-                      ? "flex min-h-16 items-center gap-2 rounded-md border border-blue-300 bg-biz-blue-soft px-2.5 py-2"
-                      : "flex min-h-16 items-center gap-2 rounded-md border border-biz-border bg-biz-bg/60 px-2.5 py-2"
-                }
-              >
-                <span
-                  className={
-                    isComplete
-                      ? "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-biz-success text-white"
-                      : isNext
-                        ? "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-biz-blue text-white"
-                        : "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-biz-border bg-white text-biz-muted"
-                  }
-                >
-                  {isComplete ? <Check className="h-3.5 w-3.5" /> : index + 1}
-                </span>
-                <span
-                  className={
-                    isComplete || isNext
-                      ? "text-[11px] font-semibold leading-4 text-biz-text"
-                      : "text-[11px] font-medium leading-4 text-biz-muted"
-                  }
-                >
-                  {step}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
-
-      {remarks && (
-        <section className="rounded-lg border border-biz-border bg-biz-surface p-4 shadow-card sm:p-5">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue">
-              <FileText className="h-4 w-4" />
-            </span>
-            <div>
-              <h2 className="text-[14px] font-semibold text-biz-text">Remarks</h2>
-              <p className="mt-1 whitespace-pre-wrap text-[13px] leading-5 text-biz-muted">
-                {remarks}
+          <section className="order-2 overflow-hidden rounded-lg border border-biz-border bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-biz-border bg-slate-50/60 px-3 py-2 2xl:px-4 2xl:py-2.5">
+              <div className="min-w-0">
+                <h2 className="text-[12px] font-bold text-biz-text xl:text-[13px] 2xl:text-[15px]">
+                  Tender Lifecycle
+                </h2>
+                <p className="text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+                  Track this tender from creation to project handover.
+                </p>
+              </div>
+              <p className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 xl:text-[11px] 2xl:text-[12px]">
+                {completedCount} of {TIMELINE_STEPS.length} completed
               </p>
             </div>
-          </div>
-        </section>
-      )}
 
-      <section aria-labelledby="related-records-title">
-        <div className="mb-3">
-          <h2 id="related-records-title" className="text-[14px] font-semibold text-biz-text">
-            Related Records
-          </h2>
-          <p className="mt-1 text-[12px] text-biz-muted">
-            Documents, securities and project records linked with this tender.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <LinkedCard
-            icon={Landmark}
-            title="Document Purchase"
-            count={t.linked.documentPurchases.length}
-            emptyAction={
-              <Link
-                href={
-                  t.costingApprovalStatus === "APPROVED"
-                    ? "/bank-instruments/document-purchase"
-                    : `/bank-instruments/document-purchase/create?tenderId=${t.id}`
+            <div className="p-3 2xl:p-4">
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-biz-success transition-all"
+                  style={{ width: `${(completedCount / TIMELINE_STEPS.length) * 100}%` }}
+                />
+              </div>
+
+              <ol className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 2xl:gap-2">
+                {TIMELINE_STEPS.map((step, index) => {
+                  const isComplete = completed[index];
+                  const isNext = index === nextStepIndex;
+
+                  return (
+                    <li
+                      key={step}
+                      className={
+                        isComplete
+                          ? "flex min-h-[54px] items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/80 px-2 py-1.5 2xl:min-h-[62px] 2xl:px-2.5"
+                          : isNext
+                            ? "flex min-h-[54px] items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-2 py-1.5 2xl:min-h-[62px] 2xl:px-2.5"
+                            : "flex min-h-[54px] items-center gap-2 rounded-md border border-biz-border bg-slate-50 px-2 py-1.5 2xl:min-h-[62px] 2xl:px-2.5"
+                      }
+                    >
+                      <span
+                        className={
+                          isComplete
+                            ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-biz-success text-white 2xl:h-7 2xl:w-7"
+                            : isNext
+                              ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-biz-blue text-white 2xl:h-7 2xl:w-7"
+                              : "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-biz-border bg-white text-[10px] font-bold text-slate-500 2xl:h-7 2xl:w-7"
+                        }
+                      >
+                        {isComplete ? <Check className="h-3.5 w-3.5" /> : index + 1}
+                      </span>
+                      <span
+                        className={
+                          isComplete || isNext
+                            ? "text-[10px] font-bold leading-[1.25] text-biz-text xl:text-[11px] 2xl:text-[12px]"
+                            : "text-[10px] font-semibold leading-[1.25] text-slate-500 xl:text-[11px] 2xl:text-[12px]"
+                        }
+                      >
+                        {step}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          </section>
+
+          {remarks && (
+            <section className="order-4 rounded-lg border border-biz-border bg-white p-3 2xl:p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue 2xl:h-9 2xl:w-9">
+                  <FileText className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-[12px] font-bold text-biz-text xl:text-[13px] 2xl:text-[15px]">
+                    Remarks
+                  </h2>
+                  <p className="mt-1 whitespace-pre-wrap text-[11px] font-medium leading-4 text-slate-600 xl:text-[12px] xl:leading-5 2xl:text-[13px]">
+                    {remarks}
+                  </p>
+                </div>
+              </div>
+            </section>
+          )}
+
+          <section
+            className="order-5 overflow-hidden rounded-lg border border-biz-border bg-white"
+            aria-labelledby="related-records-title"
+          >
+            <SectionHeading
+              id="related-records-title"
+              title="Related Records"
+              description="Documents, securities and project records linked with this tender"
+            />
+            <div className="grid grid-cols-1 gap-2 p-2.5 md:grid-cols-2 xl:grid-cols-3 2xl:gap-3 2xl:p-3">
+              <LinkedCard
+                icon={Landmark}
+                title="Document Purchase"
+                count={t.linked.documentPurchases.length}
+                emptyAction={
+                  <Link
+                    href={
+                      t.costingApprovalStatus === "APPROVED"
+                        ? "/bank-instruments/document-purchase"
+                        : `/bank-instruments/document-purchase/create?tenderId=${t.id}`
+                    }
+                  >
+                    <SecondaryButton>
+                      <Plus className="h-4 w-4" />
+                      {t.costingApprovalStatus === "APPROVED"
+                        ? "Review Purchase Request"
+                        : "Purchase Document"}
+                    </SecondaryButton>
+                  </Link>
+                }
+                viewHref="/bank-instruments/document-purchase"
+              >
+                {t.linked.documentPurchases.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between text-[12px]">
+                    <span className="text-biz-text">{d.tenderWorkName}</span>
+                    <span className="text-biz-muted">{formatBDT(d.documentPrice)}</span>
+                  </div>
+                ))}
+              </LinkedCard>
+
+              <LinkedCard
+                icon={ShieldCheck}
+                title="Tender Security"
+                count={t.linked.tenderSecurities.length}
+                viewHref="/bank-instruments/tender-security"
+              >
+                {t.linked.tenderSecurities.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between text-[12px]">
+                    <span className="text-biz-text">
+                      {s.instrumentNo ?? "Pending Instrument No."}
+                    </span>
+                    <span className="text-biz-muted">{formatBDT(s.amount)}</span>
+                  </div>
+                ))}
+              </LinkedCard>
+
+              <LinkedCard
+                icon={Wallet}
+                title="Credit Commitment"
+                count={t.linked.creditCommitments.length}
+                viewHref="/bank-instruments/credit-commitment"
+              >
+                {t.linked.creditCommitments.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between text-[12px]">
+                    <span className="text-biz-text">{c.isCharged ? "Charged" : "Pending"}</span>
+                    <span className="text-biz-muted">{formatBDT(c.amount)}</span>
+                  </div>
+                ))}
+              </LinkedCard>
+
+              <LinkedCard
+                icon={Award}
+                title="PG / BG"
+                count={t.linked.performanceGuarantees.length}
+                viewHref="/bank-instruments/pg-bg"
+              >
+                {t.linked.performanceGuarantees.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between text-[12px]">
+                    <span className="text-biz-text">
+                      {p.type} — {p.instrumentNo ?? "Pending"}
+                    </span>
+                    <span className="text-biz-muted">{formatBDT(p.amount)}</span>
+                  </div>
+                ))}
+              </LinkedCard>
+
+              <LinkedCard
+                icon={FolderOpen}
+                title="Project (CMS)"
+                count={t.linked.cmsWorks.length}
+                viewHref="/cms/ongoing-works"
+                emptyAction={
+                  canCreateWork ? (
+                    <Link href={`/cms/ongoing-works/create?tenderId=${t.id}`}>
+                      <SecondaryButton>
+                        <Plus className="h-4 w-4" />
+                        Create Ongoing Work
+                      </SecondaryButton>
+                    </Link>
+                  ) : undefined
                 }
               >
-                <SecondaryButton>
-                  <Plus className="h-4 w-4" />
-                  {t.costingApprovalStatus === "APPROVED" ? "Review Purchase Request" : "Purchase Document"}
-                </SecondaryButton>
-              </Link>
-            }
-            viewHref="/bank-instruments/document-purchase"
-          >
-            {t.linked.documentPurchases.map((d) => (
-              <div key={d.id} className="flex items-center justify-between text-[12px]">
-                <span className="text-biz-text">{d.tenderWorkName}</span>
-                <span className="text-biz-muted">{formatBDT(d.documentPrice)}</span>
-              </div>
-            ))}
-          </LinkedCard>
+                {t.linked.cmsWorks.map((w) => (
+                  <div key={w.id} className="flex items-center justify-between text-[12px]">
+                    <span className="text-biz-text">{w.workName}</span>
+                    <span className="text-biz-muted">{formatBDT(w.contractValue)}</span>
+                  </div>
+                ))}
+              </LinkedCard>
 
-          <LinkedCard
-            icon={ShieldCheck}
-            title="Tender Security"
-            count={t.linked.tenderSecurities.length}
-            viewHref="/bank-instruments/tender-security"
-          >
-            {t.linked.tenderSecurities.map((s) => (
-              <div key={s.id} className="flex items-center justify-between text-[12px]">
-                <span className="text-biz-text">{s.instrumentNo ?? "Pending Instrument No."}</span>
-                <span className="text-biz-muted">{formatBDT(s.amount)}</span>
-              </div>
-            ))}
-          </LinkedCard>
-
-          <LinkedCard
-            icon={Wallet}
-            title="Credit Commitment"
-            count={t.linked.creditCommitments.length}
-            viewHref="/bank-instruments/credit-commitment"
-          >
-            {t.linked.creditCommitments.map((c) => (
-              <div key={c.id} className="flex items-center justify-between text-[12px]">
-                <span className="text-biz-text">{c.isCharged ? "Charged" : "Pending"}</span>
-                <span className="text-biz-muted">{formatBDT(c.amount)}</span>
-              </div>
-            ))}
-          </LinkedCard>
-
-          <LinkedCard
-            icon={Award}
-            title="PG / BG"
-            count={t.linked.performanceGuarantees.length}
-            viewHref="/bank-instruments/pg-bg"
-          >
-            {t.linked.performanceGuarantees.map((p) => (
-              <div key={p.id} className="flex items-center justify-between text-[12px]">
-                <span className="text-biz-text">
-                  {p.type} — {p.instrumentNo ?? "Pending"}
-                </span>
-                <span className="text-biz-muted">{formatBDT(p.amount)}</span>
-              </div>
-            ))}
-          </LinkedCard>
-
-          <LinkedCard
-            icon={FolderOpen}
-            title="Project (CMS)"
-            count={t.linked.cmsWorks.length}
-            viewHref="/cms/ongoing-works"
-            emptyAction={
-              canCreateWork ? (
-                <Link href={`/cms/ongoing-works/create?tenderId=${t.id}`}>
-                  <SecondaryButton>
-                    <Plus className="h-4 w-4" />
-                    Create Ongoing Work
-                  </SecondaryButton>
-                </Link>
-              ) : undefined
-            }
-          >
-            {t.linked.cmsWorks.map((w) => (
-              <div key={w.id} className="flex items-center justify-between text-[12px]">
-                <span className="text-biz-text">{w.workName}</span>
-                <span className="text-biz-muted">{formatBDT(w.contractValue)}</span>
-              </div>
-            ))}
-          </LinkedCard>
-
-          <LinkedCard
-            icon={FileText}
-            title="Documents"
-            count={t.linked.documents.length}
-            viewHref="/documents/tenders"
-          >
-            {t.linked.documents.map((d) => (
-              <div key={d.id} className="flex items-center justify-between text-[12px]">
-                <span className="text-biz-text">{d.name}</span>
-                <span className="text-biz-muted">
-                  {d.expiryDate ? formatDate(d.expiryDate) : "No expiry"}
-                </span>
-              </div>
-            ))}
-          </LinkedCard>
+              <LinkedCard
+                icon={FileText}
+                title="Documents"
+                count={t.linked.documents.length}
+                viewHref="/documents/tenders"
+              >
+                {t.linked.documents.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between text-[12px]">
+                    <span className="text-biz-text">{d.name}</span>
+                    <span className="text-biz-muted">
+                      {d.expiryDate ? formatDate(d.expiryDate) : "No expiry"}
+                    </span>
+                  </div>
+                ))}
+              </LinkedCard>
+            </div>
+          </section>
         </div>
-      </section>
+      </main>
 
       <SubmitTenderModal open={submitOpen} onClose={() => setSubmitOpen(false)} tenderId={t.id} />
       <RecordOpeningModal
@@ -434,6 +492,27 @@ export default function TenderDetailPage() {
         onClose={() => setOpeningOpen(false)}
         tenderId={t.id}
       />
+    </div>
+  );
+}
+
+function SectionHeading({
+  id,
+  title,
+  description,
+}: {
+  id: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="border-b border-biz-border bg-slate-50/60 px-3 py-2 2xl:px-4 2xl:py-2.5">
+      <h2 id={id} className="text-[12px] font-bold text-biz-text xl:text-[13px] 2xl:text-[15px]">
+        {title}
+      </h2>
+      <p className="text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+        {description}
+      </p>
     </div>
   );
 }
@@ -448,11 +527,13 @@ function DetailItem({
   value: string;
 }) {
   return (
-    <div className="flex min-w-0 items-start gap-2.5 px-3 py-3 sm:px-4">
-      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-biz-blue" />
+    <div className="flex min-w-0 items-start gap-2 bg-slate-50/70 px-3 py-2.5 2xl:px-4 2xl:py-3">
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-biz-blue 2xl:h-4 2xl:w-4" />
       <div className="min-w-0">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-biz-muted">{label}</p>
-        <p className="mt-1 break-words text-[12px] font-semibold leading-4 text-biz-text">
+        <p className="text-[9px] font-bold uppercase tracking-wide text-slate-500 xl:text-[10px] 2xl:text-[11px]">
+          {label}
+        </p>
+        <p className="mt-1 break-words text-[11px] font-semibold leading-4 text-biz-text xl:text-[12px] 2xl:text-[13px]">
           {value}
         </p>
       </div>
@@ -470,13 +551,15 @@ function InfoCard({
   value: string;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-lg border border-biz-border bg-biz-surface p-3.5 shadow-card">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue">
-        <Icon className="h-4 w-4" />
+    <div className="flex min-w-0 items-center gap-2.5 bg-white px-3 py-2.5 2xl:px-4 2xl:py-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue 2xl:h-9 2xl:w-9">
+        <Icon className="h-4 w-4 2xl:h-[18px] 2xl:w-[18px]" />
       </span>
       <div className="min-w-0">
-        <p className="text-[11px] font-medium text-biz-muted">{label}</p>
-        <p className="mt-0.5 break-words text-[14px] font-semibold leading-5 text-biz-text">
+        <p className="text-[10px] font-semibold text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+          {label}
+        </p>
+        <p className="mt-0.5 break-words text-[12px] font-bold leading-4 text-biz-text xl:text-[13px] 2xl:text-[15px] 2xl:leading-5">
           {value}
         </p>
       </div>
@@ -500,30 +583,39 @@ function LinkedCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-[150px] flex-col rounded-lg border border-biz-border bg-biz-surface p-4 shadow-card transition-shadow hover:shadow-card-hover">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue">
-            <Icon className="h-4 w-4" />
+    <div className="flex min-h-[126px] min-w-0 flex-col rounded-lg border border-biz-border bg-white p-3 transition-colors hover:border-blue-200 hover:bg-blue-50/20 2xl:min-h-[140px] 2xl:p-3.5">
+      <div className="mb-2.5 flex items-start justify-between gap-3 2xl:mb-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue 2xl:h-8 2xl:w-8">
+            <Icon className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
           </span>
           <div className="min-w-0">
-            <h3 className="text-[13px] font-semibold text-biz-text">{title}</h3>
-            <p className="mt-0.5 text-[11px] text-biz-muted">
+            <h3 className="truncate text-[11px] font-bold text-biz-text xl:text-[12px] 2xl:text-[14px]">
+              {title}
+            </h3>
+            <p className="mt-0.5 text-[9px] font-medium text-slate-500 xl:text-[10px] 2xl:text-[11px]">
               {count} linked {count === 1 ? "record" : "records"}
             </p>
           </div>
         </div>
-        <Link href={viewHref} className="text-[11px] font-medium text-biz-blue hover:underline">
+        <Link
+          href={viewHref}
+          className="shrink-0 text-[10px] font-semibold text-biz-blue hover:underline 2xl:text-[12px]"
+        >
           View all
         </Link>
       </div>
       {count === 0 ? (
-        <div className="flex flex-1 flex-col items-start justify-center gap-2 rounded-md bg-biz-bg/60 p-3">
-          <p className="text-[12px] text-biz-muted">No records linked to this tender yet.</p>
+        <div className="flex flex-1 flex-col items-start justify-center gap-2 rounded-md bg-slate-50 px-2.5 py-2 [&_button]:h-8 [&_button]:text-[10px]">
+          <p className="text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+            No records linked to this tender yet.
+          </p>
           {emptyAction}
         </div>
       ) : (
-        <div className="flex flex-col gap-2 rounded-md bg-biz-bg/60 p-3">{children}</div>
+        <div className="scrollbar-hidden flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto rounded-md bg-slate-50 px-2.5 py-2 [&>div]:min-w-0 [&>div]:gap-3 [&>div]:text-[10px] [&>div]:font-medium [&>div>span:first-child]:truncate [&>div>span:last-child]:shrink-0 xl:[&>div]:text-[11px] 2xl:[&>div]:text-[12px]">
+          {children}
+        </div>
       )}
     </div>
   );

@@ -700,7 +700,7 @@ export default function TendersListPage() {
               key: "tender",
               header: "Tender",
               className:
-                "w-[30%] overflow-hidden px-2.5 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
+                "w-[29%] overflow-hidden px-2.5 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
               render: (row) => (
                 <div className="min-w-0">
                   <Link
@@ -743,32 +743,38 @@ export default function TendersListPage() {
               key: "dates",
               header: "Dates",
               className:
-                "w-[18%] overflow-hidden px-2 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
+                "w-[20%] overflow-hidden px-2 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
               render: (row) => {
                 const deadline = getDeadlineMeta(row.submissionDeadline, row.status);
+                const closingDate = row.submissionDeadline
+                  ? formatDate(row.submissionDeadline)
+                  : "Not recorded";
+                const findingDate = row.findingDate ? formatDate(row.findingDate) : "Not recorded";
                 return (
-                  <div className="min-w-0 leading-tight">
-                    <p className="truncate">
-                      <span className="text-biz-muted">Closing </span>
-                      <span className={cn("font-medium", deadline?.className)}>
-                        {row.submissionDeadline
-                          ? formatDate(row.submissionDeadline)
-                          : "Not recorded"}
+                  <div
+                    className="min-w-0 leading-tight"
+                    title={`Closing ${closingDate}; Found ${findingDate}${deadline ? `; ${deadline.label}` : ""}`}
+                  >
+                    <p className="flex items-baseline gap-1.5 whitespace-nowrap">
+                      <span className="shrink-0 text-biz-muted">Closing</span>
+                      <span className={cn("font-medium", deadline?.className)}>{closingDate}</span>
+                    </p>
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+                      <span className="whitespace-nowrap text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+                        Found {findingDate}
                       </span>
                       {deadline && (
                         <span
                           className={cn(
-                            "ml-1 text-[10px] font-semibold xl:text-[11px] 2xl:text-[12px]",
+                            "inline-flex shrink-0 whitespace-nowrap rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold leading-none xl:text-[10px] 2xl:text-[11px]",
                             deadline.className,
                           )}
+                          title={`Closing deadline: ${deadline.label}`}
                         >
-                          · {deadline.label}
+                          {deadline.label}
                         </span>
                       )}
-                    </p>
-                    <p className="mt-1 truncate text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
-                      Found {row.findingDate ? formatDate(row.findingDate) : "Not recorded"}
-                    </p>
+                    </div>
                   </div>
                 );
               },
@@ -777,7 +783,7 @@ export default function TendersListPage() {
               key: "foundBy",
               header: "Found By",
               className:
-                "w-[13%] overflow-hidden px-2 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
+                "w-[12%] overflow-hidden px-2 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
               render: (row) => {
                 const foundBy = row.foundBy?.name ?? row.foundByName;
                 return (
