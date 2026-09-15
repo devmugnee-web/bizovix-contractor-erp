@@ -15,8 +15,11 @@ export interface ReminderRecord {
   sourceModule: string;
   sourceType?: string | null;
   sourceId?: string | null;
+  relatedEntityType?: string | null;
+  relatedEntityId?: string | null;
   relatedEntityName?: string | null;
   referenceNo?: string | null;
+  organizationMasterId?: string | null;
   organizationName?: string | null;
   notificationBefore: number;
   repeatType: string;
@@ -53,6 +56,14 @@ export interface ReminderStats {
   upcoming7Days: number;
   critical: number;
 }
+export interface ReminderRelatedRecordOption {
+  id: string;
+  label: string;
+  sourceType: string;
+  referenceNo?: string | null;
+  organizationMasterId?: string | null;
+  organizationName?: string | null;
+}
 export interface SaveReminderInput {
   title: string;
   type: string;
@@ -65,8 +76,11 @@ export interface SaveReminderInput {
   sourceModule?: string;
   sourceType?: string;
   sourceId?: string;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
   relatedEntityName?: string;
   referenceNo?: string;
+  organizationMasterId?: string;
   organizationName?: string;
   notificationBefore?: number;
   repeatType?: string;

@@ -1,5 +1,6 @@
 import type { ReminderPriority, ReminderStatus } from "@bizovix/types";
 export const REMINDER_TYPES = [
+  "General / Follow-up",
   "Tender Security",
   "PG/BG",
   "SD",
@@ -16,7 +17,6 @@ export const SOURCE_MODULES = [
   "RECEIVABLE",
   "PAYABLE",
   "CHEQUE",
-  "LOAN",
   "DOCUMENT",
   "CONTRACT",
   "PROJECT_BILL",
@@ -42,7 +42,6 @@ const SOURCE_MODULE_LABELS: Record<string, string> = {
   RECEIVABLE: "Receivable",
   PAYABLE: "Payable",
   CHEQUE: "Cheque",
-  LOAN: "Loan",
   DOCUMENT: "Document",
   CONTRACT: "Contract",
   PROJECT_BILL: "Running Bill",

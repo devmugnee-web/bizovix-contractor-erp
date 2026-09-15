@@ -1,13 +1,11 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import type { QueryNotificationDto } from "./dto/notification.dto";
-
-const PRIORITY_WINDOW_DAYS: Record<string, number> = {
-  CRITICAL: 7,
-  HIGH: 7,
-  MEDIUM: 3,
-  LOW: 3,
-};
+import {
+  calendarDaysUntil,
+  DEFAULT_REMINDER_TIME_ZONE,
+  reminderDueAt,
+} from "../reminders/reminder-timing";
 
 interface ReminderForNotification {
   id: string;
@@ -16,6 +14,7 @@ interface ReminderForNotification {
   priority: string;
   status: string;
   dueDate: Date;
+  dueTime: string | null;
   notificationBefore: number;
   assignedToUserId: string | null;
   relatedEntityName: string | null;
@@ -48,15 +47,22 @@ export class NotificationsService {
       this.prisma.notification.count({ where }),
     ]);
 
-    return { items, meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } };
+    return {
+      items,
+      meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    };
   }
 
   unreadCount(org: string, userId: string) {
-    return this.prisma.notification.count({ where: { organizationId: org, userId, isRead: false } });
+    return this.prisma.notification.count({
+      where: { organizationId: org, userId, isRead: false },
+    });
   }
 
   async markRead(org: string, userId: string, id: string) {
-    const row = await this.prisma.notification.findFirst({ where: { id, organizationId: org, userId } });
+    const row = await this.prisma.notification.findFirst({
+      where: { id, organizationId: org, userId },
+    });
     if (!row) throw new NotFoundException("Notification not found");
     if (row.isRead) return row;
     return this.prisma.notification.update({
@@ -87,7 +93,7 @@ export class NotificationsService {
     });
   }
 
-  async generateForOrg(org: string): Promise<void> {
+  async generateForOrg(org: string, organizationTimeZone?: string): Promise<void> {
     const reminders = await this.prisma.reminder.findMany({
       where: { organizationId: org, status: { in: ["UPCOMING", "DUE_TODAY", "OVERDUE"] } },
     });
@@ -101,11 +107,25 @@ export class NotificationsService {
       select: { userId: true },
     });
     const fallbackUserIds = fallbackRecipients.map((r) => r.userId);
+    const timeZone =
+      organizationTimeZone ??
+      (
+        await this.prisma.generalSetting.findUnique({
+          where: { organizationId: org },
+          select: { timezone: true },
+        })
+      )?.timezone ??
+      DEFAULT_REMINDER_TIME_ZONE;
     const now = new Date();
 
     for (const reminder of reminders as ReminderForNotification[]) {
-      const daysUntilDue = Math.floor((reminder.dueDate.getTime() - now.getTime()) / 86_400_000);
-      const stage = this.resolveStage(reminder, daysUntilDue);
+      const daysUntilDue = calendarDaysUntil(
+        reminder.dueDate,
+        now,
+        timeZone,
+        reminder.sourceModule === "MANUAL",
+      );
+      const stage = this.resolveStage(reminder, daysUntilDue, now, timeZone);
       if (!stage) continue;
 
       const recipients = reminder.assignedToUserId ? [reminder.assignedToUserId] : fallbackUserIds;
@@ -141,17 +161,27 @@ export class NotificationsService {
     }
   }
 
-  private resolveStage(reminder: ReminderForNotification, daysUntilDue: number): string | null {
+  private resolveStage(
+    reminder: ReminderForNotification,
+    daysUntilDue: number,
+    now = new Date(),
+    timeZone = DEFAULT_REMINDER_TIME_ZONE,
+  ): string | null {
+    if (daysUntilDue === 0 && reminder.dueTime) {
+      return now.getTime() >= reminderDueAt(reminder.dueDate, reminder.dueTime, timeZone).getTime()
+        ? "DUE_NOW"
+        : null;
+    }
     if (reminder.status === "OVERDUE") return "OVERDUE";
     if (reminder.status === "DUE_TODAY") return "DUE_TODAY";
-    if (reminder.sourceModule === "TENDER_SECURITY") {
+    if (reminder.sourceModule === "TENDER_SECURITY" && reminder.sourceType === "Tender Security") {
       if (daysUntilDue <= 7) return "TENDER_SECURITY_7_DAYS";
       if (daysUntilDue <= 15) return "TENDER_SECURITY_15_DAYS";
       return null;
     }
+    if (reminder.notificationBefore <= 0) return null;
     if (daysUntilDue <= 1) return "URGENT";
-    const window = reminder.notificationBefore > 0 ? reminder.notificationBefore : (PRIORITY_WINDOW_DAYS[reminder.priority] ?? 3);
-    return daysUntilDue <= window ? "UPCOMING" : null;
+    return daysUntilDue <= reminder.notificationBefore ? "UPCOMING" : null;
   }
 
   private buildMessage(reminder: ReminderForNotification, stage: string, daysUntilDue: number) {
@@ -160,25 +190,29 @@ export class NotificationsService {
     const stageText =
       stage === "OVERDUE"
         ? `is overdue by ${Math.abs(daysUntilDue)} day${Math.abs(daysUntilDue) === 1 ? "" : "s"}`
-        : stage === "DUE_TODAY"
-          ? "is due today"
-          : stage === "TENDER_SECURITY_7_DAYS" || stage === "TENDER_SECURITY_15_DAYS"
-            ? `expires in ${daysUntilDue} days`
-          : stage === "URGENT"
-            ? "is due tomorrow"
-            : `is due in ${daysUntilDue} days`;
+        : stage === "DUE_NOW"
+          ? "is due now"
+          : stage === "DUE_TODAY"
+            ? "is due today"
+            : stage === "TENDER_SECURITY_7_DAYS" || stage === "TENDER_SECURITY_15_DAYS"
+              ? `expires in ${daysUntilDue} days`
+              : stage === "URGENT"
+                ? "is due tomorrow"
+                : `is due in ${daysUntilDue} days`;
     const stageTitle =
       stage === "OVERDUE"
         ? "overdue"
-        : stage === "DUE_TODAY"
-          ? "expires today"
-          : stage === "TENDER_SECURITY_7_DAYS"
-            ? "expires within 7 days"
-            : stage === "TENDER_SECURITY_15_DAYS"
-              ? "expires within 15 days"
-              : stage === "URGENT"
-                ? "due tomorrow"
-                : "upcoming";
+        : stage === "DUE_NOW"
+          ? "due now"
+          : stage === "DUE_TODAY"
+            ? "expires today"
+            : stage === "TENDER_SECURITY_7_DAYS"
+              ? "expires within 7 days"
+              : stage === "TENDER_SECURITY_15_DAYS"
+                ? "expires within 15 days"
+                : stage === "URGENT"
+                  ? "due tomorrow"
+                  : "upcoming";
 
     return {
       title: `${reminder.type} ${stageTitle}`,

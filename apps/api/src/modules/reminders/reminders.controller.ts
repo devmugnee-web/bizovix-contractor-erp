@@ -5,6 +5,7 @@ import { RequirePermissions } from "../../common/decorators/require-permissions.
 import { ResponseMessage } from "../../common/decorators/response-message.decorator";
 import {
   QueryReminderDto,
+  QueryReminderRelatedRecordsDto,
   SaveReminderDto,
   SnoozeReminderDto,
   UpdateReminderDto,
@@ -27,6 +28,12 @@ export class RemindersController {
   }
   @Get("users") @RequirePermissions("reminders.read") users(@CurrentUser() u: AuthUser) {
     return this.service.users(u.organizationId);
+  }
+  @Get("related-records") @RequirePermissions("reminders.read") relatedRecords(
+    @Query() query: QueryReminderRelatedRecordsDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.relatedRecords(user.organizationId, query.relatedEntityType);
   }
   @Get(":id") @RequirePermissions("reminders.read") one(
     @Param("id") id: string,

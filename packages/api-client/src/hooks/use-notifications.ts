@@ -9,9 +9,15 @@ export const useNotifications = (q: NotificationQuery) =>
     queryKey: [...root, "list", q],
     queryFn: () =>
       apiRequestPaginated<NotificationRecord>("/notifications", {
-        params: { page: q.page, limit: q.limit, isRead: q.isRead === undefined ? undefined : String(q.isRead) },
+        params: {
+          page: q.page,
+          limit: q.limit,
+          isRead: q.isRead === undefined ? undefined : String(q.isRead),
+        },
       }),
     placeholderData: (p) => p,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
 
 export const useUnreadNotificationCount = () =>
@@ -24,7 +30,8 @@ export const useUnreadNotificationCount = () =>
 export const useMarkNotificationRead = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiRequest<NotificationRecord>(`/notifications/${id}/read`, { method: "PATCH" }),
+    mutationFn: (id: string) =>
+      apiRequest<NotificationRecord>(`/notifications/${id}/read`, { method: "PATCH" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: root }),
   });
 };

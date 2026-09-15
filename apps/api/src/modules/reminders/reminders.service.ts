@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import type { ReminderRelatedRecordOption } from "@bizovix/types";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -10,6 +11,12 @@ import type {
   SnoozeReminderDto,
   UpdateReminderDto,
 } from "./dto/reminder.dto";
+import {
+  DEFAULT_REMINDER_TIME_ZONE,
+  isSupportedRepeatType,
+  localDayRange,
+  nextRecurringDate,
+} from "./reminder-timing";
 
 const AUTO_SOURCE_MODULES = [
   "TENDER_SECURITY",
@@ -35,11 +42,16 @@ export class RemindersService {
     private readonly reminderRules: ReminderRuleService,
     private readonly projectClosing: ProjectClosingService,
   ) {}
-  private day(date = new Date()) {
-    const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())),
-      end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + 1);
-    return { start, end };
+  private async timeZone(org: string): Promise<string> {
+    const setting = await this.prisma.generalSetting.findUnique({
+      where: { organizationId: org },
+      select: { timezone: true },
+    });
+    return setting?.timezone || DEFAULT_REMINDER_TIME_ZONE;
+  }
+
+  private async day(org: string, date = new Date()) {
+    return localDayRange(date, await this.timeZone(org));
   }
 
   /** Full per-organization pass: sync from business tables, resolve stale ones,
@@ -50,13 +62,18 @@ export class RemindersService {
     await this.resolveLegacyAliases(org);
     await this.syncCloseoutReadiness(org);
     await this.autoResolveStaleReminders(org);
-    await this.refreshStatuses(org);
-    await this.notifications.generateForOrg(org);
+    const timeZone = await this.timeZone(org);
+    await this.refreshStatuses(org, timeZone);
+    await this.notifications.generateForOrg(org, timeZone);
   }
 
   private async resolveLegacyAliases(org: string) {
     const aliases = [
-      { sourceModule: "TENDER_SECURITY", oldType: "Tender Security Expiry", newType: "Tender Security" },
+      {
+        sourceModule: "TENDER_SECURITY",
+        oldType: "Tender Security Expiry",
+        newType: "Tender Security",
+      },
       { sourceModule: "PG_BG", oldType: "PG/BG Expiry", newType: "PG/BG" },
       { sourceModule: "PAYABLE", oldType: "Payable Due", newType: "Bill Maturity" },
       { sourceModule: "RECEIVABLE", oldType: "Receivable Due", newType: "Bill Maturity" },
@@ -156,8 +173,8 @@ export class RemindersService {
     }
   }
 
-  private async refreshStatuses(org: string) {
-    const { start, end } = this.day();
+  private async refreshStatuses(org: string, timeZone?: string) {
+    const { start, end } = localDayRange(new Date(), timeZone ?? (await this.timeZone(org)));
     const unsnoozing = await this.prisma.reminder.findMany({
       where: { organizationId: org, status: "SNOOZED", snoozedUntil: { lte: new Date() } },
       select: { id: true },
@@ -796,7 +813,7 @@ export class RemindersService {
   }
   async stats(org: string) {
     await this.syncOrganization(org);
-    const { end } = this.day(),
+    const { end } = await this.day(org),
       week = new Date(end);
     week.setUTCDate(week.getUTCDate() + 6);
     const [dueToday, upcoming, overdue, completed, upcoming7Days, critical] = await Promise.all(
@@ -819,7 +836,7 @@ export class RemindersService {
   }
   async quick(org: string) {
     await this.syncOrganization(org);
-    const { end } = this.day(),
+    const { end } = await this.day(org),
       week = new Date(end);
     week.setUTCDate(week.getUTCDate() + 6);
     const select = {
@@ -833,6 +850,8 @@ export class RemindersService {
       relatedEntityName: true,
       organizationName: true,
       assignedToName: true,
+      sourceModule: true,
+      relatedEntityType: true,
     };
     const [dueToday, upcoming, overdue] = await Promise.all([
       this.prisma.reminder.findMany({
@@ -869,16 +888,315 @@ export class RemindersService {
     });
     return rows.map((x) => x.user);
   }
+  async relatedRecords(
+    org: string,
+    relatedEntityType: string,
+  ): Promise<ReminderRelatedRecordOption[]> {
+    switch (relatedEntityType) {
+      case "TENDER": {
+        const rows = await this.prisma.tender.findMany({
+          where: { organizationId: org },
+          select: {
+            id: true,
+            workName: true,
+            egpTenderId: true,
+            organizationMaster: { select: { id: true, shortName: true } },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: row.workName,
+          sourceType: "Tender",
+          referenceNo: row.egpTenderId,
+          organizationMasterId: row.organizationMaster?.id,
+          organizationName: row.organizationMaster?.shortName,
+        }));
+      }
+      case "DOCUMENT_PURCHASE": {
+        const rows = await this.prisma.documentPurchase.findMany({
+          where: { organizationId: org },
+          select: {
+            id: true,
+            tenderWorkName: true,
+            egpTenderId: true,
+            organizationMaster: { select: { id: true, shortName: true } },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: row.tenderWorkName,
+          sourceType: "DocumentPurchase",
+          referenceNo: row.egpTenderId,
+          organizationMasterId: row.organizationMaster.id,
+          organizationName: row.organizationMaster.shortName,
+        }));
+      }
+      case "TENDER_SECURITY": {
+        const rows = await this.prisma.tenderSecurity.findMany({
+          where: { organizationId: org },
+          select: {
+            id: true,
+            instrumentNo: true,
+            tender: { select: { workName: true } },
+            organizationMaster: { select: { id: true, shortName: true } },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: row.tender?.workName ?? row.instrumentNo ?? "Tender Security",
+          sourceType: "TenderSecurity",
+          referenceNo: row.instrumentNo,
+          organizationMasterId: row.organizationMaster?.id,
+          organizationName: row.organizationMaster?.shortName,
+        }));
+      }
+      case "CREDIT_COMMITMENT": {
+        const rows = await this.prisma.creditCommitment.findMany({
+          where: { organizationId: org },
+          select: {
+            id: true,
+            tender: { select: { workName: true, egpTenderId: true } },
+            organizationMaster: { select: { id: true, shortName: true } },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: row.tender?.workName ?? `Credit Commitment ${row.id.slice(-6)}`,
+          sourceType: "CreditCommitment",
+          referenceNo: row.tender?.egpTenderId,
+          organizationMasterId: row.organizationMaster?.id,
+          organizationName: row.organizationMaster?.shortName,
+        }));
+      }
+      case "PG_BG": {
+        const rows = await this.prisma.performanceGuarantee.findMany({
+          where: { organizationId: org },
+          select: {
+            id: true,
+            type: true,
+            instrumentNo: true,
+            tender: { select: { workName: true } },
+            organizationMaster: { select: { id: true, shortName: true } },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: row.tender?.workName ?? `${row.type} ${row.instrumentNo ?? row.id.slice(-6)}`,
+          sourceType: "PerformanceGuarantee",
+          referenceNo: row.instrumentNo,
+          organizationMasterId: row.organizationMaster?.id,
+          organizationName: row.organizationMaster?.shortName,
+        }));
+      }
+      case "PROJECT": {
+        const rows = await this.prisma.cmsWork.findMany({
+          where: { organizationId: org },
+          select: {
+            id: true,
+            workName: true,
+            organizationMaster: { select: { id: true, shortName: true } },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: row.workName,
+          sourceType: "CmsWork",
+          organizationMasterId: row.organizationMaster.id,
+          organizationName: row.organizationMaster.shortName,
+        }));
+      }
+      case "RECEIVABLE": {
+        const rows = await this.prisma.receivable.findMany({
+          where: { organizationId: org },
+          select: {
+            id: true,
+            billNo: true,
+            partyName: true,
+            project: {
+              select: {
+                workName: true,
+                organizationMaster: { select: { id: true, shortName: true } },
+              },
+            },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: `${row.billNo} - ${row.project.workName}`,
+          sourceType: "Receivable",
+          referenceNo: row.billNo,
+          organizationMasterId: row.project.organizationMaster.id,
+          organizationName: row.project.organizationMaster.shortName || row.partyName,
+        }));
+      }
+      case "PAYABLE": {
+        const rows = await this.prisma.payable.findMany({
+          where: { organizationId: org },
+          select: {
+            id: true,
+            billNo: true,
+            partyName: true,
+            project: {
+              select: {
+                workName: true,
+                organizationMaster: { select: { id: true, shortName: true } },
+              },
+            },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: `${row.billNo} - ${row.project?.workName ?? row.partyName}`,
+          sourceType: "Payable",
+          referenceNo: row.billNo,
+          organizationMasterId: row.project?.organizationMaster.id,
+          organizationName: row.project?.organizationMaster.shortName ?? row.partyName,
+        }));
+      }
+      case "CHEQUE": {
+        const rows = await this.prisma.cheque.findMany({
+          where: { organizationId: org },
+          select: { id: true, chequeNo: true, party: true },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: `${row.chequeNo} - ${row.party}`,
+          sourceType: "Cheque",
+          referenceNo: row.chequeNo,
+          organizationName: row.party,
+        }));
+      }
+      case "DOCUMENT": {
+        const rows = await this.prisma.document.findMany({
+          where: { organizationId: org },
+          select: {
+            id: true,
+            name: true,
+            referenceNumber: true,
+            organizationMaster: { select: { id: true, shortName: true } },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: row.name,
+          sourceType: "Document",
+          referenceNo: row.referenceNumber,
+          organizationMasterId: row.organizationMaster?.id,
+          organizationName: row.organizationMaster?.shortName,
+        }));
+      }
+      case "CONTRACT": {
+        const rows = await this.prisma.projectContract.findMany({
+          where: { organizationId: org },
+          select: {
+            id: true,
+            contractNo: true,
+            cmsWork: { select: { workName: true } },
+            organizationMaster: { select: { id: true, shortName: true } },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: `${row.contractNo} - ${row.cmsWork.workName}`,
+          sourceType: "ProjectContract",
+          referenceNo: row.contractNo,
+          organizationMasterId: row.organizationMaster.id,
+          organizationName: row.organizationMaster.shortName,
+        }));
+      }
+      case "PROJECT_BILL": {
+        const rows = await this.prisma.projectBill.findMany({
+          where: { organizationId: org },
+          select: { id: true, billNo: true, cmsWork: { select: { workName: true } } },
+          orderBy: { updatedAt: "desc" },
+          take: 100,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          label: `${row.billNo} - ${row.cmsWork.workName}`,
+          sourceType: "ProjectBill",
+          referenceNo: row.billNo,
+        }));
+      }
+      default:
+        return [];
+    }
+  }
+  private async validatedManualInput(
+    org: string,
+    dto: SaveReminderDto,
+    validateRelatedRecord = true,
+  ) {
+    if (!dto.assignedToUserId) throw new BadRequestException("Assigned user is required");
+    const assignee = await this.prisma.organizationUser.findFirst({
+      where: { organizationId: org, userId: dto.assignedToUserId, user: { isActive: true } },
+      select: { user: { select: { name: true } } },
+    });
+    if (!assignee)
+      throw new BadRequestException("Assigned user does not belong to this organization");
+
+    const relatedEntityType = dto.relatedEntityType?.trim() || "MANUAL";
+    let linked: ReminderRelatedRecordOption | undefined;
+    if (validateRelatedRecord && relatedEntityType !== "MANUAL") {
+      if (!dto.relatedEntityId) throw new BadRequestException("Select a related record");
+      linked = (await this.relatedRecords(org, relatedEntityType)).find(
+        (record) => record.id === dto.relatedEntityId,
+      );
+      if (!linked)
+        throw new BadRequestException("Related record was not found in this organization");
+    }
+
+    return {
+      ...dto,
+      dueTime: dto.dueTime?.trim() || undefined,
+      assignedToUserId: dto.assignedToUserId,
+      assignedToName: assignee.user.name,
+      relatedEntityType,
+      relatedEntityId: linked?.id,
+      relatedEntityName: linked?.label ?? (dto.relatedEntityName?.trim() || undefined),
+      referenceNo: linked?.referenceNo ?? (dto.referenceNo?.trim() || undefined),
+      organizationMasterId:
+        linked?.organizationMasterId ?? (dto.organizationMasterId?.trim() || undefined),
+      organizationName: linked?.organizationName ?? (dto.organizationName?.trim() || undefined),
+      notificationBefore: dto.notificationBefore ?? 0,
+      repeatType: dto.repeatType ?? "NONE",
+    };
+  }
   async create(org: string, user: { id: string; name: string }, dto: SaveReminderDto) {
+    const input = await this.validatedManualInput(org, dto);
     const row = await this.prisma.reminder.create({
       data: {
         organizationId: org,
-        ...dto,
-        sourceModule: dto.sourceModule ?? "MANUAL",
+        ...input,
+        sourceModule: "MANUAL",
+        sourceType: "MANUAL",
+        sourceId: null,
         status: "UPCOMING",
         createdById: user.id,
         createdByName: user.name,
-        dueDate: new Date(dto.dueDate),
+        dueDate: new Date(input.dueDate),
       },
     });
     await this.log(org, user.id, "REMINDER_CREATED", row, undefined);
@@ -887,28 +1205,99 @@ export class RemindersService {
   }
   async update(org: string, userId: string, id: string, dto: UpdateReminderDto) {
     const old = await this.one(org, id),
+      input = await this.validatedManualInput(org, dto, old.sourceModule === "MANUAL"),
       row = await this.prisma.reminder.update({
         where: { id, organizationId: org },
-        data: { ...dto, dueDate: new Date(dto.dueDate) },
+        data: {
+          ...input,
+          sourceModule: old.sourceModule,
+          sourceType: old.sourceType,
+          sourceId: old.sourceId,
+          relatedEntityType:
+            old.sourceModule === "MANUAL" ? input.relatedEntityType : old.relatedEntityType,
+          relatedEntityId:
+            old.sourceModule === "MANUAL" ? input.relatedEntityId : old.relatedEntityId,
+          relatedEntityName:
+            old.sourceModule === "MANUAL" ? input.relatedEntityName : old.relatedEntityName,
+          referenceNo: old.sourceModule === "MANUAL" ? input.referenceNo : old.referenceNo,
+          organizationMasterId:
+            old.sourceModule === "MANUAL" ? input.organizationMasterId : old.organizationMasterId,
+          organizationName:
+            old.sourceModule === "MANUAL" ? input.organizationName : old.organizationName,
+          repeatType: old.sourceModule === "MANUAL" ? input.repeatType : "NONE",
+          dueDate: new Date(input.dueDate),
+        },
       });
+    await this.notifications.resetForReminders(org, [id]);
     await this.log(org, userId, "REMINDER_UPDATED", row, old);
     await this.refreshStatuses(org);
     return this.one(org, id);
   }
   async complete(org: string, user: { id: string; name: string }, id: string) {
-    const old = await this.one(org, id),
-      row = await this.prisma.reminder.update({
+    const old = await this.one(org, id);
+    if (old.status === "COMPLETED" || old.status === "CANCELLED") return old;
+
+    const now = new Date();
+    const timeZone = await this.timeZone(org);
+    const nextDueDate =
+      old.sourceModule === "MANUAL" && isSupportedRepeatType(old.repeatType)
+        ? nextRecurringDate(old.dueDate, old.dueTime, old.repeatType, now, timeZone)
+        : null;
+    const previousConfig =
+      old.repeatConfig && typeof old.repeatConfig === "object" && !Array.isArray(old.repeatConfig)
+        ? (old.repeatConfig as Record<string, unknown>)
+        : {};
+    const seriesId = typeof previousConfig.seriesId === "string" ? previousConfig.seriesId : old.id;
+    const occurrence =
+      typeof previousConfig.occurrence === "number" ? previousConfig.occurrence + 1 : 2;
+
+    const { row, next } = await this.prisma.$transaction(async (tx) => {
+      const completed = await tx.reminder.update({
         where: { id, organizationId: org },
         data: {
           status: "COMPLETED",
           isResolved: true,
-          completedAt: new Date(),
+          completedAt: now,
           completedById: user.id,
           completedByName: user.name,
         },
       });
+      const repeated = nextDueDate
+        ? await tx.reminder.create({
+            data: {
+              organizationId: org,
+              type: old.type,
+              title: old.title,
+              description: old.description,
+              subtitle: old.subtitle,
+              priority: old.priority,
+              status: "UPCOMING",
+              dueDate: nextDueDate,
+              dueTime: old.dueTime,
+              assignedToUserId: old.assignedToUserId,
+              assignedToName: old.assignedToName,
+              sourceModule: "MANUAL",
+              sourceType: "MANUAL",
+              relatedEntityType: old.relatedEntityType,
+              relatedEntityId: old.relatedEntityId,
+              relatedEntityName: old.relatedEntityName,
+              referenceNo: old.referenceNo,
+              organizationMasterId: old.organizationMasterId,
+              organizationName: old.organizationName,
+              notificationBefore: old.notificationBefore,
+              repeatType: old.repeatType,
+              repeatConfig: { seriesId, occurrence },
+              remarks: old.remarks,
+              createdById: user.id,
+              createdByName: user.name,
+            },
+          })
+        : null;
+      return { row: completed, next: repeated };
+    });
     await this.notifications.resolveForReminder(org, id);
     await this.log(org, user.id, "REMINDER_COMPLETED", row, old);
+    if (next) await this.log(org, user.id, "REMINDER_REPEATED", next, undefined);
     return row;
   }
   async snooze(org: string, userId: string, id: string, dto: SnoozeReminderDto) {

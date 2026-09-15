@@ -1,4 +1,4 @@
-export type NotificationStage = "UPCOMING" | "URGENT" | "DUE_TODAY" | "OVERDUE";
+export type NotificationStage = "UPCOMING" | "URGENT" | "DUE_TODAY" | "DUE_NOW" | "OVERDUE";
 export interface NotificationRecord {
   id: string;
   type: NotificationStage | string;

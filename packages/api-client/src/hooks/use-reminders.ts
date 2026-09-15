@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ReminderQuery,
   ReminderRecord,
+  ReminderRelatedRecordOption,
   ReminderStats,
   SaveReminderInput,
 } from "@bizovix/types";
@@ -44,13 +45,26 @@ export const useReminderUsers = () =>
     queryKey: [...root, "users"],
     queryFn: () => apiRequest<Array<{ id: string; name: string }>>("/reminders/users"),
   });
+export const useReminderRelatedRecords = (relatedEntityType?: string) =>
+  useQuery({
+    queryKey: [...root, "related-records", relatedEntityType],
+    queryFn: () =>
+      apiRequest<ReminderRelatedRecordOption[]>("/reminders/related-records", {
+        params: { relatedEntityType },
+      }),
+    enabled: Boolean(relatedEntityType && relatedEntityType !== "MANUAL"),
+  });
 function mutation(method: "POST" | "PATCH", path: (v: { id?: string }) => string) {
   return () => {
     const qc = useQueryClient();
     return useMutation({
       mutationFn: (v: { id?: string; body?: unknown }) =>
         apiRequest<ReminderRecord>(path(v), { method, body: v.body }),
-      onSuccess: () => qc.invalidateQueries({ queryKey: root }),
+      onSuccess: () =>
+        Promise.all([
+          qc.invalidateQueries({ queryKey: root }),
+          qc.invalidateQueries({ queryKey: ["notifications"] }),
+        ]),
     });
   };
 }
@@ -59,7 +73,11 @@ export const useCreateReminder = () => {
   return useMutation({
     mutationFn: (body: SaveReminderInput) =>
       apiRequest<ReminderRecord>("/reminders", { method: "POST", body }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: root }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: root }),
+        qc.invalidateQueries({ queryKey: ["notifications"] }),
+      ]),
   });
 };
 export const useUpdateReminder = mutation("PATCH", (v) => `/reminders/${v.id}`);
