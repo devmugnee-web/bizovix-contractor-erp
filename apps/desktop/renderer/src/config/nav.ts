@@ -97,7 +97,7 @@ export function isNavRouteActive(pathname: string, href: string) {
 // intentionally NOT listed here — see nav-hidden.ts for the full list of
 // routes kept but hidden from the primary sidebar per the simplification
 // phase. Nothing was deleted; only sidebar exposure changed.
-export const NAV_ITEMS: NavItem[] = [
+const PRIMARY_NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   {
     label: "Tender Management",
@@ -368,7 +368,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export const NAV_ITEMS_LOWER: NavItem[] = [
+const UTILITY_NAV_ITEMS: NavItem[] = [
   { label: "Reminders", href: "/reminders", icon: Bell, badgeKey: "reminders" },
   {
     label: "Documents",
@@ -409,3 +409,31 @@ export const NAV_ITEMS_LOWER: NavItem[] = [
   // (11 settings areas + Plan & Billing) are not also duplicated as a sidebar
   // submenu — keeps the sidebar uncluttered.
 ];
+
+const ALL_NAV_ITEMS = [...PRIMARY_NAV_ITEMS, ...UTILITY_NAV_ITEMS];
+
+function navItem(label: string): NavItem {
+  const item = ALL_NAV_ITEMS.find((candidate) => candidate.label === label);
+  if (!item) throw new Error(`Missing sidebar item: ${label}`);
+  return item;
+}
+
+export const NAV_ITEMS: NavItem[] = [
+  navItem("Dashboard"),
+  navItem("Reminders"),
+  navItem("Tender Management"),
+  navItem("Bank Instruments"),
+  navItem("Quotation / Sales"),
+  navItem("Projects"),
+  navItem("Purchases & Expenses"),
+  navItem("LC Management"),
+  navItem("Receipts"),
+  navItem("Bank & Accounts"),
+  navItem("Assets Management"),
+  navItem("HR & Payroll"),
+  navItem("Documents"),
+  navItem("Reports"),
+  navItem("Masters"),
+];
+
+export const NAV_ITEMS_LOWER: NavItem[] = [navItem("Settings")];

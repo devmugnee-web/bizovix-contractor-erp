@@ -24,8 +24,8 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           index={1}
           title="Ongoing Works"
           icon={Briefcase}
-          iconClassName="bg-biz-blue-soft text-biz-blue"
-          solidClassName="border-transparent bg-[#169f98] hover:border-white/30"
+          iconClassName="bg-teal-50 text-teal-700"
+          accentClassName="border-t-[3px] border-t-teal-500"
           value={String(kpis.ongoingWorks.count)}
         >
           Value: {formatAmount(kpis.ongoingWorks.contractValue)}
@@ -40,8 +40,8 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           index={2}
           title="Tender Security"
           icon={ShieldCheck}
-          iconClassName="bg-biz-purple-soft text-biz-purple"
-          solidClassName="border-transparent bg-[#df4660] hover:border-white/30"
+          iconClassName="bg-rose-50 text-rose-700"
+          accentClassName="border-t-[3px] border-t-rose-500"
           value={formatBDTLakh(kpis.tenderSecurity.amount)}
         >
           {kpis.tenderSecurity.instruments} instruments
@@ -56,8 +56,8 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           index={3}
           title="PG / BG"
           icon={Building2}
-          iconClassName="bg-biz-orange-soft text-biz-orange"
-          solidClassName="border-transparent bg-[#168aa3] hover:border-white/30"
+          iconClassName="bg-cyan-50 text-cyan-700"
+          accentClassName="border-t-[3px] border-t-cyan-600"
           value={formatBDTLakh(kpis.pgBg.amount)}
         >
           {kpis.pgBg.instruments} instruments
@@ -72,8 +72,8 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           index={4}
           title="Security Deposit"
           icon={Lock}
-          iconClassName="bg-biz-teal-soft text-biz-teal"
-          solidClassName="border-transparent bg-[#159e72] hover:border-white/30"
+          iconClassName="bg-emerald-50 text-emerald-700"
+          accentClassName="border-t-[3px] border-t-emerald-500"
           value={
             kpis.securityDeposit.available
               ? formatBDTLakh(kpis.securityDeposit.amount)
@@ -94,8 +94,8 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           index={5}
           title="Receivables"
           icon={Wallet}
-          iconClassName="bg-biz-success-soft text-biz-success"
-          solidClassName="border-transparent bg-[#3569d4] hover:border-white/30"
+          iconClassName="bg-blue-50 text-blue-700"
+          accentClassName="border-t-[3px] border-t-blue-600"
           value={formatBDTLakh(kpis.receivables.amount)}
         >
           {kpis.receivables.bills > 0 ? (
@@ -122,8 +122,8 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           index={6}
           title="Payables"
           icon={CreditCard}
-          iconClassName="bg-biz-danger-soft text-biz-danger"
-          solidClassName="border-transparent bg-[#c96a08] hover:border-white/30"
+          iconClassName="bg-amber-50 text-amber-700"
+          accentClassName="border-t-[3px] border-t-amber-500"
           value={formatBDTLakh(kpis.payables.amount)}
         >
           <span className="whitespace-nowrap">
@@ -140,8 +140,8 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           index={7}
           title="Bank & Cash"
           icon={Landmark}
-          iconClassName="bg-biz-blue-soft text-biz-blue"
-          solidClassName="border-transparent bg-[#805ad5] hover:border-white/30"
+          iconClassName="bg-violet-50 text-violet-700"
+          accentClassName="border-t-[3px] border-t-violet-500"
           value={formatBDTLakh(kpis.bankAndCash.amount)}
         >
           Available balance
@@ -152,8 +152,8 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         index={8}
         title="Loans & EMI"
         icon={CircleDollarSign}
-        iconClassName="bg-biz-purple-soft text-biz-purple"
-        solidClassName="border-transparent bg-[#dc4048] hover:border-white/30"
+        iconClassName="bg-red-50 text-red-700"
+        accentClassName="border-t-[3px] border-t-red-500"
         value={
           kpis.loansAndEmi.configured ? formatBDTLakh(kpis.loansAndEmi.amount) : "Not Configured"
         }

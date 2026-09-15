@@ -10,6 +10,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  SlidersHorizontal,
   X,
   Zap,
 } from "lucide-react";
@@ -373,43 +374,109 @@ function Details({
     </Overlay>
   );
 }
-function QuickCard({
-  title,
-  items,
-  toneClass,
+type QuickTab = "today" | "upcoming" | "overdue";
+
+function PriorityQueue({
+  activeTab,
+  onTabChange,
+  data,
+  loading,
   onView,
 }: {
-  title: string;
-  items: ReminderRecord[];
-  toneClass: string;
+  activeTab: QuickTab;
+  onTabChange: (tab: QuickTab) => void;
+  data?: {
+    dueToday: ReminderRecord[];
+    upcoming: ReminderRecord[];
+    overdue: ReminderRecord[];
+  };
+  loading: boolean;
   onView: (r: ReminderRecord) => void;
 }) {
+  const tabs: Array<{ key: QuickTab; label: string; items: ReminderRecord[] }> = [
+    { key: "today", label: "Due Today", items: data?.dueToday ?? [] },
+    { key: "upcoming", label: "Next 7 Days", items: data?.upcoming ?? [] },
+    { key: "overdue", label: "Overdue", items: data?.overdue ?? [] },
+  ];
+  const active = tabs.find((tab) => tab.key === activeTab) ?? tabs[0]!;
+  const toneClass =
+    activeTab === "overdue"
+      ? "text-red-600"
+      : activeTab === "today"
+        ? "text-orange-600"
+        : "text-biz-blue";
+
   return (
-    <section className="rounded-lg border border-biz-border bg-white shadow-card">
-      <h2 className="border-b px-4 py-3 text-[13px] font-bold">{title}</h2>
-      <div className="divide-y">
-        {items.length ? (
-          items.map((r) => (
+    <section className="flex h-[270px] min-h-0 flex-col overflow-hidden rounded-lg border border-biz-border bg-white shadow-card xl:h-full">
+      <div className="shrink-0 border-b border-biz-border px-3 py-2.5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-[13px] font-bold text-biz-text">Priority Queue</h2>
+            <p className="text-[9px] text-biz-muted">
+              Open the next reminder that needs attention.
+            </p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-600">
+            {active.items.length}
+          </span>
+        </div>
+        <div className="mt-2 grid grid-cols-3 rounded-md bg-slate-100 p-0.5">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => onTabChange(tab.key)}
+              className={cn(
+                "rounded px-1.5 py-1.5 text-[9px] font-semibold transition-colors",
+                activeTab === tab.key
+                  ? "bg-white text-biz-blue shadow-sm"
+                  : "text-slate-600 hover:text-biz-text",
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="scrollbar-hidden min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto p-1.5">
+        {loading ? (
+          <div className="space-y-1.5">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="h-14 animate-pulse rounded-md bg-slate-100" />
+            ))}
+          </div>
+        ) : active.items.length ? (
+          active.items.map((r) => (
             <button
               key={r.id}
               onClick={() => onView(r)}
-              className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-slate-50"
+              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-slate-50"
             >
               <div className="min-w-0">
-                <p className="truncate text-[11px] text-biz-muted">{r.type}</p>
-                <p className="truncate text-[12px] font-bold">{r.title}</p>
-                <p className="truncate text-[10px] text-biz-muted">
-                  {r.referenceNo ?? r.relatedEntityName ?? "No reference"}
+                <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-biz-muted">
+                  {r.type}
+                </p>
+                <p title={r.title} className="mt-0.5 truncate text-[11px] font-bold text-biz-text">
+                  {r.title}
+                </p>
+                <p className="mt-0.5 truncate text-[9px] text-biz-muted">
+                  {r.referenceNo ?? r.relatedEntityName ?? sourceModuleLabel(r.sourceModule)}
                 </p>
               </div>
-              <div className="text-right">
-                <p className={cn("text-[11px] font-bold", toneClass)}>{dateLabel(r.dueDate)}</p>
+              <div className="shrink-0 text-right">
+                <p className={cn("whitespace-nowrap text-[10px] font-bold", toneClass)}>
+                  {dateLabel(r.dueDate)}
+                </p>
                 <StatusBadge label={label(r.priority)} tone={priorityTone(r.priority)} />
               </div>
             </button>
           ))
         ) : (
-          <p className="p-8 text-center text-xs text-biz-muted">No reminders in this section.</p>
+          <div className="flex h-full min-h-32 flex-col items-center justify-center px-3 text-center">
+            <Check className="h-7 w-7 text-emerald-500" />
+            <p className="mt-2 text-[11px] font-semibold text-biz-text">Nothing needs attention</p>
+            <p className="mt-0.5 text-[9px] text-biz-muted">No reminders in this queue.</p>
+          </div>
         )}
       </div>
     </section>
@@ -423,6 +490,8 @@ export function RemindersWorkspace() {
     [page, setPage] = React.useState(1),
     [draft, setDraft] = React.useState<ReminderQuery>({}),
     [filters, setFilters] = React.useState<ReminderQuery>({}),
+    [quickTab, setQuickTab] = React.useState<QuickTab>("overdue"),
+    [filtersOpen, setFiltersOpen] = React.useState(false),
     [form, setForm] = React.useState<ReminderRecord | "new" | null>(null),
     [selected, setSelected] = React.useState<ReminderRecord | null>(null),
     list = useReminders({ ...filters, page, limit: 10 }),
@@ -438,278 +507,364 @@ export function RemindersWorkspace() {
   React.useEffect(() => {
     if (deepLinked.data) router.replace("/reminders");
   }, [deepLinked.data, router]);
+  React.useEffect(() => {
+    const nextSearch = draft.search ?? "";
+    if ((filters.search ?? "") === nextSearch) return;
+
+    const timer = window.setTimeout(() => {
+      setFilters((current) => ({ ...current, search: nextSearch || undefined }));
+      setPage(1);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [draft.search, filters.search]);
+
+  function updateFilter<K extends keyof ReminderQuery>(key: K, value: ReminderQuery[K]) {
+    const next = { ...draft, [key]: value };
+    setDraft(next);
+    setFilters(next);
+    setPage(1);
+  }
+
   const cards = [
-    ["Due Today", stats.data?.dueToday ?? 0, "text-biz-blue", CalendarClock],
-    ["Upcoming", stats.data?.upcoming ?? 0, "text-green-700", Bell],
-    ["Overdue", stats.data?.overdue ?? 0, "text-red-600", Zap],
-    ["Completed", stats.data?.completed ?? 0, "text-green-700", Check],
+    [
+      "Due Today",
+      stats.data?.dueToday ?? 0,
+      "DUE_TODAY",
+      "text-orange-700",
+      "bg-orange-50",
+      CalendarClock,
+    ],
+    ["Upcoming", stats.data?.upcoming ?? 0, "UPCOMING", "text-biz-blue", "bg-blue-50", Bell],
+    ["Overdue", stats.data?.overdue ?? 0, "OVERDUE", "text-red-700", "bg-red-50", Zap],
+    [
+      "Completed",
+      stats.data?.completed ?? 0,
+      "COMPLETED",
+      "text-emerald-700",
+      "bg-emerald-50",
+      Check,
+    ],
   ] as const;
   return (
-    <div className="flex flex-col gap-4">
-      <header className="flex flex-col justify-between gap-3 sm:flex-row">
+    <div className="scrollbar-hidden flex h-full min-h-0 flex-col gap-2 overflow-y-auto xl:overflow-hidden">
+      <header className="flex shrink-0 flex-col justify-between gap-2 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-page-title text-biz-text">Reminders</h1>
-          <p className="mt-1 text-[13px] text-biz-muted">
+          <p className="mt-0.5 text-[11px] text-biz-muted 2xl:text-[13px]">
             Track upcoming deadlines, expiries, dues and important business follow-ups.
           </p>
         </div>
-        <PrimaryButton onClick={() => setForm("new")}>
+        <PrimaryButton size="sm" onClick={() => setForm("new")}>
           <Plus className="h-4 w-4" />
           Add Reminder
         </PrimaryButton>
       </header>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map(([title, value, toneClass, Icon]) => (
-          <div
+      <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
+        {cards.map(([title, value, status, toneClass, iconClass, Icon]) => (
+          <button
             key={title}
-            className="flex items-center gap-3 rounded-lg border border-biz-border bg-white p-4 shadow-card"
+            type="button"
+            onClick={() => {
+              const next = { status };
+              setDraft(next);
+              setFilters(next);
+              setPage(1);
+              if (status === "DUE_TODAY") setQuickTab("today");
+              if (status === "UPCOMING") setQuickTab("upcoming");
+              if (status === "OVERDUE") setQuickTab("overdue");
+            }}
+            className={cn(
+              "flex min-w-0 items-center gap-2 rounded-lg border bg-white px-2.5 py-2 text-left shadow-card transition-colors hover:border-biz-blue/30 hover:bg-slate-50 2xl:px-3 2xl:py-2.5",
+              filters.status === status
+                ? "border-biz-blue ring-1 ring-biz-blue/15"
+                : "border-biz-border",
+            )}
           >
             <span
               className={cn(
-                "flex h-10 w-10 items-center justify-center rounded bg-slate-50",
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-md 2xl:h-9 2xl:w-9",
+                iconClass,
                 toneClass,
               )}
             >
-              <Icon className="h-5 w-5" />
+              <Icon className="h-4 w-4 2xl:h-[18px] 2xl:w-[18px]" />
             </span>
-            <div>
-              <p className="text-[11px] font-semibold text-biz-muted">{title}</p>
-              <p className={cn("text-xl font-bold", toneClass)}>{stats.isLoading ? "—" : value}</p>
+            <div className="min-w-0">
+              <p className="truncate text-[9px] font-semibold text-biz-muted 2xl:text-[10px]">
+                {title}
+              </p>
+              <p
+                className={cn(
+                  "mt-0.5 text-[16px] font-bold leading-none 2xl:text-[18px]",
+                  toneClass,
+                )}
+              >
+                {stats.isLoading ? "-" : value}
+              </p>
             </div>
-          </div>
+          </button>
         ))}
       </div>
-      <div className="grid gap-3 xl:grid-cols-3">
-        {quick.isLoading
-          ? Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-52 animate-pulse rounded-lg bg-slate-100" />
-            ))
-          : [
-              <QuickCard
-                key="today"
-                title="Due Today"
-                items={quick.data?.dueToday ?? []}
-                toneClass="text-orange-600"
-                onView={setSelected}
-              />,
-              <QuickCard
-                key="upcoming"
-                title="Upcoming 7 Days"
-                items={quick.data?.upcoming ?? []}
-                toneClass="text-biz-blue"
-                onView={setSelected}
-              />,
-              <QuickCard
-                key="overdue"
-                title="Overdue"
-                items={quick.data?.overdue ?? []}
-                toneClass="text-red-600"
-                onView={setSelected}
-              />,
-            ]}
-      </div>
-      <section className="overflow-hidden rounded-lg border border-biz-border bg-white shadow-card">
-        <div className="border-b p-4">
-          <h2 className="text-[14px] font-bold">All Reminders</h2>
-          <p className="text-[11px] text-biz-muted">
-            View and manage all reminders and scheduled follow-ups.
-          </p>
-          <div className="mt-4 grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-7">
-            <div className="grid grid-cols-2 gap-1">
-              <TextInput
-                type="date"
-                value={draft.dateFrom ?? ""}
-                onChange={(e) => setDraft({ ...draft, dateFrom: e.target.value })}
-              />
-              <TextInput
-                type="date"
-                value={draft.dateTo ?? ""}
-                onChange={(e) => setDraft({ ...draft, dateTo: e.target.value })}
-              />
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 xl:grid-cols-[minmax(250px,0.32fr)_minmax(0,1fr)]">
+        <PriorityQueue
+          activeTab={quickTab}
+          onTabChange={setQuickTab}
+          data={quick.data}
+          loading={quick.isLoading}
+          onView={setSelected}
+        />
+        <section className="flex h-[560px] min-h-0 flex-col overflow-hidden rounded-lg border border-biz-border bg-white shadow-card xl:h-full">
+          <div className="shrink-0 border-b border-biz-border px-3 py-2.5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[13px] font-bold text-biz-text">All Reminders</h2>
+                  {list.data && (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-600">
+                      {list.data.meta.total}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[9px] text-biz-muted">
+                  Search, filter and manage every reminder.
+                </p>
+              </div>
+              <div className="flex min-w-0 items-center gap-1.5 sm:w-[min(100%,430px)]">
+                <div className="min-w-0 flex-1">
+                  <TextInput
+                    icon={Search}
+                    className="h-9 text-[11px]"
+                    placeholder="Search title, reference, project..."
+                    title="Searches title, description, reference number, organization and related project or entity"
+                    value={draft.search ?? ""}
+                    onChange={(e) => setDraft({ ...draft, search: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        setFilters(draft);
+                        setPage(1);
+                      }
+                    }}
+                  />
+                </div>
+                <SecondaryButton
+                  size="sm"
+                  className={cn("h-9 px-2.5", filtersOpen && "border-biz-blue text-biz-blue")}
+                  onClick={() => setFiltersOpen((open) => !open)}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  Filters
+                </SecondaryButton>
+                <SecondaryButton
+                  size="sm"
+                  className="h-9 w-9 px-0"
+                  title="Clear filters"
+                  aria-label="Clear filters"
+                  onClick={() => {
+                    setDraft({});
+                    setFilters({});
+                    setPage(1);
+                  }}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </SecondaryButton>
+              </div>
             </div>
-            <SelectInput
-              placeholder="Reminder Type"
-              value={draft.type ?? ""}
-              onChange={(e) => setDraft({ ...draft, type: e.target.value })}
-              options={REMINDER_TYPES.map((x) => ({ value: x, label: x }))}
-            />
-            <SelectInput
-              placeholder="Status"
-              value={draft.status ?? ""}
-              onChange={(e) => setDraft({ ...draft, status: e.target.value })}
-              options={STATUSES.map((x) => ({ value: x, label: label(x) }))}
-            />
-            <SelectInput
-              placeholder="Priority"
-              value={draft.priority ?? ""}
-              onChange={(e) => setDraft({ ...draft, priority: e.target.value })}
-              options={PRIORITIES.map((x) => ({ value: x, label: label(x) }))}
-            />
-            <SelectInput
-              placeholder="Assigned To"
-              value={draft.assignedToUserId ?? ""}
-              onChange={(e) => setDraft({ ...draft, assignedToUserId: e.target.value })}
-              options={(users.data ?? []).map((x) => ({ value: x.id, label: x.name }))}
-            />
-            <TextInput
-              icon={Search}
-              placeholder="Search reminder, reference, organization..."
-              value={draft.search ?? ""}
-              onChange={(e) => setDraft({ ...draft, search: e.target.value })}
-            />
-            <div className="flex gap-2">
-              <SecondaryButton
-                onClick={() => {
-                  setDraft({});
-                  setFilters({});
-                  setPage(1);
-                }}
-              >
-                <RotateCcw className="h-4 w-4" />
-              </SecondaryButton>
-              <PrimaryButton
-                className="flex-1"
-                onClick={() => {
-                  setFilters(draft);
-                  setPage(1);
-                }}
-              >
-                Filter
-              </PrimaryButton>
+            {filtersOpen && (
+              <div className="mt-2 grid items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50/70 p-2 sm:grid-cols-2 lg:grid-cols-[minmax(190px,1.35fr)_repeat(4,minmax(105px,1fr))]">
+                <div className="grid grid-cols-2 gap-1">
+                  <TextInput
+                    type="date"
+                    className="h-9 text-[11px]"
+                    aria-label="From date"
+                    value={draft.dateFrom ?? ""}
+                    onChange={(e) => updateFilter("dateFrom", e.target.value || undefined)}
+                  />
+                  <TextInput
+                    type="date"
+                    className="h-9 text-[11px]"
+                    aria-label="To date"
+                    value={draft.dateTo ?? ""}
+                    onChange={(e) => updateFilter("dateTo", e.target.value || undefined)}
+                  />
+                </div>
+                <SelectInput
+                  className="h-9 text-[11px]"
+                  placeholder="Reminder Type"
+                  value={draft.type ?? ""}
+                  onChange={(e) => updateFilter("type", e.target.value || undefined)}
+                  options={REMINDER_TYPES.map((x) => ({ value: x, label: x }))}
+                />
+                <SelectInput
+                  className="h-9 text-[11px]"
+                  placeholder="Status"
+                  value={draft.status ?? ""}
+                  onChange={(e) => updateFilter("status", e.target.value || undefined)}
+                  options={STATUSES.map((x) => ({ value: x, label: label(x) }))}
+                />
+                <SelectInput
+                  className="h-9 text-[11px]"
+                  placeholder="Priority"
+                  value={draft.priority ?? ""}
+                  onChange={(e) => updateFilter("priority", e.target.value || undefined)}
+                  options={PRIORITIES.map((x) => ({ value: x, label: label(x) }))}
+                />
+                <SelectInput
+                  className="h-9 text-[11px]"
+                  placeholder="Assigned To"
+                  value={draft.assignedToUserId ?? ""}
+                  onChange={(e) => updateFilter("assignedToUserId", e.target.value || undefined)}
+                  options={(users.data ?? []).map((x) => ({ value: x.id, label: x.name }))}
+                />
+              </div>
+            )}
+          </div>
+          {list.isLoading ? (
+            <div className="min-h-0 flex-1 space-y-2 overflow-hidden p-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="h-11 animate-pulse rounded bg-slate-100" />
+              ))}
             </div>
-          </div>
-        </div>
-        {list.isLoading ? (
-          <div className="space-y-3 p-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-9 animate-pulse bg-slate-100" />
-            ))}
-          </div>
-        ) : list.isError ? (
-          <div className="p-12 text-center text-red-600">
-            Unable to load reminders.{" "}
-            <button className="font-semibold underline" onClick={() => list.refetch()}>
-              Retry
-            </button>
-          </div>
-        ) : !list.data?.items.length ? (
-          <div className="p-14 text-center text-biz-muted">
-            No reminders found for the selected filters.
-            <div className="mt-3 flex justify-center gap-2">
-              <SecondaryButton
-                onClick={() => {
-                  setDraft({});
-                  setFilters({});
-                }}
-              >
-                Clear Filters
-              </SecondaryButton>
-              <PrimaryButton onClick={() => setForm("new")}>Add Reminder</PrimaryButton>
+          ) : list.isError ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-center text-red-600">
+              Unable to load reminders.{" "}
+              <button className="font-semibold underline" onClick={() => list.refetch()}>
+                Retry
+              </button>
             </div>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1080px] text-left text-[11px]">
-                <thead className="bg-[#f4f7fb]">
-                  <tr>
-                    {[
-                      ["SL", "w-9"],
-                      ["Reminder Date", "w-24"],
-                      ["Reminder Type", "w-32"],
-                      ["Title / Description", "min-w-[200px]"],
-                      ["Related To", "w-36"],
-                      ["Reference", "w-20"],
-                      ["Organization", "w-20"],
-                      ["Priority", "w-16"],
-                      ["Status", "w-20"],
-                      ["Days Left / Overdue", "w-28 whitespace-nowrap"],
-                      ["Assigned To", "w-24"],
-                      ["Action", "w-12"],
-                    ].map(([x, w]) => (
-                      <th key={x} className={cn("px-3 py-3", w)}>
-                        {x}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.data.items.map((r, i) => (
-                    <tr key={r.id} className="border-t border-biz-border">
-                      <td className="w-9 px-3 py-3">
-                        {(list.data!.meta.page - 1) * list.data!.meta.limit + i + 1}
-                      </td>
-                      <td className="w-24 whitespace-nowrap px-3 font-semibold">{dateLabel(r.dueDate)}</td>
-                      <td className="w-32 truncate px-3" title={r.type}>
-                        {r.type}
-                      </td>
-                      <td className="min-w-[200px] max-w-64 px-3">
-                        <button
-                          onClick={() => setSelected(r)}
-                          className="text-left font-semibold hover:text-biz-blue"
-                        >
-                          {r.title}
-                        </button>
-                        <p className="truncate text-biz-muted" title={r.description ?? undefined}>
-                          {r.description ?? "—"}
-                        </p>
-                      </td>
-                      <td className="w-36 truncate px-3" title={r.relatedEntityName || sourceModuleLabel(r.sourceModule)}>
-                        {r.relatedEntityName || sourceModuleLabel(r.sourceModule)}
-                      </td>
-                      <td className="w-20 truncate px-3" title={r.referenceNo ?? undefined}>
-                        {r.referenceNo ?? "—"}
-                      </td>
-                      <td className="w-20 truncate px-3" title={r.organizationName ?? undefined}>
-                        {r.organizationName ?? "—"}
-                      </td>
-                      <td className="w-16 px-3">
-                        <StatusBadge label={label(r.priority)} tone={priorityTone(r.priority)} />
-                      </td>
-                      <td className="w-20 px-3">
-                        <StatusBadge label={label(r.status)} tone={statusTone(r.status)} />
-                      </td>
-                      <td
-                        className={cn(
-                          "w-28 whitespace-nowrap px-3 font-semibold",
-                          r.status === "OVERDUE"
-                            ? "text-red-600"
-                            : r.status === "DUE_TODAY"
-                              ? "text-orange-600"
-                              : "",
-                        )}
-                      >
-                        {["COMPLETED", "CANCELLED"].includes(r.status)
-                          ? label(r.status)
-                          : daysLabel(r.dueDate)}
-                      </td>
-                      <td className="w-24 truncate px-3" title={r.assignedToName ?? "Unassigned"}>
-                        {r.assignedToName ?? "Unassigned"}
-                      </td>
-                      <td className="w-12 px-3">
-                        <button
-                          title="View and manage"
-                          onClick={() => setSelected(r)}
-                          className="rounded border p-1.5 hover:text-biz-blue"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                      </td>
+          ) : !list.data?.items.length ? (
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-8 text-center text-biz-muted">
+              No reminders found for the selected filters.
+              <div className="mt-3 flex justify-center gap-2">
+                <SecondaryButton
+                  onClick={() => {
+                    setDraft({});
+                    setFilters({});
+                  }}
+                >
+                  Clear Filters
+                </SecondaryButton>
+                <PrimaryButton onClick={() => setForm("new")}>Add Reminder</PrimaryButton>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="scrollbar-hidden min-h-0 flex-1 overflow-auto">
+                <table className="w-full min-w-[680px] table-fixed text-left text-[10px] 2xl:text-[11px]">
+                  <colgroup>
+                    <col className="w-[82px]" />
+                    <col />
+                    <col className="w-[72px]" />
+                    <col className="w-[86px]" />
+                    <col className="w-[104px]" />
+                    <col className="w-[92px]" />
+                    <col className="w-[48px]" />
+                  </colgroup>
+                  <thead className="sticky top-0 z-10 bg-[#f4f7fb] shadow-[0_1px_0_#e5eaf2]">
+                    <tr>
+                      <th className="px-2.5 py-2.5">Date</th>
+                      <th className="px-2.5 py-2.5">Reminder</th>
+                      <th className="px-2 py-2.5">Priority</th>
+                      <th className="px-2 py-2.5">Status</th>
+                      <th className="px-2 py-2.5">Due</th>
+                      <th className="px-2 py-2.5">Assigned</th>
+                      <th className="px-2 py-2.5 text-center">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination
-              page={list.data.meta.page}
-              limit={list.data.meta.limit}
-              total={list.data.meta.total}
-              totalPages={list.data.meta.totalPages}
-              onPageChange={setPage}
-            />
-          </>
-        )}
-      </section>
+                  </thead>
+                  <tbody>
+                    {list.data.items.map((r) => (
+                      <tr
+                        key={r.id}
+                        className="h-12 border-t border-biz-border transition-colors hover:bg-slate-50/70 2xl:h-14"
+                      >
+                        <td className="whitespace-nowrap px-2.5 font-semibold text-biz-text">
+                          {dateLabel(r.dueDate)}
+                          {r.dueTime && (
+                            <span className="block text-[9px] font-normal text-biz-muted">
+                              {r.dueTime}
+                            </span>
+                          )}
+                        </td>
+                        <td className="min-w-0 px-2.5">
+                          <button
+                            title={r.title}
+                            onClick={() => setSelected(r)}
+                            className="block w-full truncate text-left font-semibold text-biz-text hover:text-biz-blue"
+                          >
+                            {r.title}
+                          </button>
+                          <p
+                            className="mt-0.5 truncate text-[9px] text-biz-muted"
+                            title={[
+                              r.type,
+                              r.relatedEntityName || sourceModuleLabel(r.sourceModule),
+                              r.referenceNo,
+                              r.organizationName,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          >
+                            {[
+                              r.type,
+                              r.relatedEntityName || sourceModuleLabel(r.sourceModule),
+                              r.referenceNo,
+                              r.organizationName,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </td>
+                        <td className="px-2">
+                          <StatusBadge label={label(r.priority)} tone={priorityTone(r.priority)} />
+                        </td>
+                        <td className="px-2">
+                          <StatusBadge label={label(r.status)} tone={statusTone(r.status)} />
+                        </td>
+                        <td
+                          className={cn(
+                            "whitespace-nowrap px-2 font-semibold",
+                            r.status === "OVERDUE"
+                              ? "text-red-600"
+                              : r.status === "DUE_TODAY"
+                                ? "text-orange-600"
+                                : "",
+                          )}
+                        >
+                          {["COMPLETED", "CANCELLED"].includes(r.status)
+                            ? label(r.status)
+                            : daysLabel(r.dueDate)}
+                        </td>
+                        <td className="truncate px-2" title={r.assignedToName ?? "Unassigned"}>
+                          {r.assignedToName ?? "Unassigned"}
+                        </td>
+                        <td className="px-2 text-center">
+                          <button
+                            title="View and manage"
+                            aria-label={`View ${r.title}`}
+                            onClick={() => setSelected(r)}
+                            className="rounded border border-biz-border p-1.5 text-biz-muted transition-colors hover:border-biz-blue/30 hover:bg-blue-50 hover:text-biz-blue"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="shrink-0 border-t border-biz-border bg-slate-50/50">
+                <Pagination
+                  page={list.data.meta.page}
+                  limit={list.data.meta.limit}
+                  total={list.data.meta.total}
+                  totalPages={list.data.meta.totalPages}
+                  onPageChange={setPage}
+                />
+              </div>
+            </>
+          )}
+        </section>
+      </div>
       {form && (
         <ReminderForm record={form === "new" ? undefined : form} onClose={() => setForm(null)} />
       )}{" "}
