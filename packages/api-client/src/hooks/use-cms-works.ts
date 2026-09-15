@@ -1,5 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CmsWork, CmsWorkExport, CmsWorkOverview, CmsWorkQuery, CmsWorkStats, CmsWorkStatus, CreateCmsWorkInput } from "@bizovix/types";
+import type {
+  CmsWork,
+  CmsWorkExport,
+  CmsWorkOverview,
+  CmsWorkQuery,
+  CmsWorkStats,
+  CmsWorkStatus,
+  CreateCmsWorkInput,
+} from "@bizovix/types";
 import { apiRequest, apiRequestPaginated } from "../http-client";
 import { queryKeys } from "./query-keys";
 
@@ -37,9 +45,15 @@ export function useCmsWorkOverview(id: string | undefined) {
 export function useAddCmsWorkContact(workId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; designation: string; mobile: string; email?: string; address?: string }) =>
-      apiRequest(`/cms/works/${workId}/contacts`, { method: "POST", body }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [...queryKeys.cmsWork(workId), "overview"] }),
+    mutationFn: (body: {
+      name: string;
+      designation: string;
+      mobile: string;
+      email?: string;
+      address?: string;
+    }) => apiRequest(`/cms/works/${workId}/contacts`, { method: "POST", body }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.cmsWork(workId), "overview"] }),
   });
 }
 
@@ -51,18 +65,27 @@ export function useCmsWorkStats(status: CmsWorkStatus = "ONGOING") {
 }
 
 export function useCmsWorkCategories() {
-  return useQuery({ queryKey: queryKeys.cmsWorkCategories, queryFn: () => apiRequest<string[]>("/cms/works/categories") });
+  return useQuery({
+    queryKey: queryKeys.cmsWorkCategories,
+    queryFn: () => apiRequest<string[]>("/cms/works/categories"),
+  });
 }
 
 function useInvalidateCmsWorks() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ["cms-works"] });
+  return async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["cms-works"] }),
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+    ]);
+  };
 }
 
 export function useCreateCmsWork() {
   const invalidate = useInvalidateCmsWorks();
   return useMutation({
-    mutationFn: (payload: CreateCmsWorkInput) => apiRequest<CmsWork>("/cms/works", { method: "POST", body: payload }),
+    mutationFn: (payload: CreateCmsWorkInput) =>
+      apiRequest<CmsWork>("/cms/works", { method: "POST", body: payload }),
     onSuccess: invalidate,
   });
 }
@@ -70,7 +93,8 @@ export function useCreateCmsWork() {
 export function useArchiveCmsWork() {
   const invalidate = useInvalidateCmsWorks();
   return useMutation({
-    mutationFn: (id: string) => apiRequest<CmsWork>(`/cms/works/${id}/archive`, { method: "PATCH" }),
+    mutationFn: (id: string) =>
+      apiRequest<CmsWork>(`/cms/works/${id}/archive`, { method: "PATCH" }),
     onSuccess: invalidate,
   });
 }
@@ -78,13 +102,15 @@ export function useArchiveCmsWork() {
 export function useRestoreCmsWork() {
   const invalidate = useInvalidateCmsWorks();
   return useMutation({
-    mutationFn: (id: string) => apiRequest<CmsWork>(`/cms/works/${id}/restore`, { method: "PATCH" }),
+    mutationFn: (id: string) =>
+      apiRequest<CmsWork>(`/cms/works/${id}/restore`, { method: "PATCH" }),
     onSuccess: invalidate,
   });
 }
 
 export function useExportCmsWorks() {
   return useMutation({
-    mutationFn: (query: CmsWorkQuery) => apiRequest<CmsWorkExport>("/cms/works/export", { params: cmsWorkParams(query) }),
+    mutationFn: (query: CmsWorkQuery) =>
+      apiRequest<CmsWorkExport>("/cms/works/export", { params: cmsWorkParams(query) }),
   });
 }

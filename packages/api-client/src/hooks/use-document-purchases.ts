@@ -54,7 +54,8 @@ export function useDocumentPurchaseRequests(query: DocumentPurchaseRequestQuery)
 export function useDocumentPurchaseRequestStats() {
   return useQuery({
     queryKey: queryKeys.documentPurchaseRequestStats,
-    queryFn: () => apiRequest<DocumentPurchaseRequestStats>("/document-purchases/workflow-requests/stats"),
+    queryFn: () =>
+      apiRequest<DocumentPurchaseRequestStats>("/document-purchases/workflow-requests/stats"),
   });
 }
 
@@ -64,6 +65,8 @@ function useInvalidateDocumentPurchases() {
     queryClient.invalidateQueries({ queryKey: ["document-purchases"] });
     queryClient.invalidateQueries({ queryKey: ["document-purchase-requests"] });
     queryClient.invalidateQueries({ queryKey: ["tender-securities"] });
+    queryClient.invalidateQueries({ queryKey: ["tenders"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
   };
 }
 

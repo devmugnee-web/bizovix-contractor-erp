@@ -92,7 +92,7 @@ function setup() {
       findFirst: jest.fn(),
       updateMany: jest.fn(),
     },
-    tender: { create: jest.fn() },
+    tender: { create: jest.fn(), update: jest.fn() },
   };
   const prisma = {
     organizationMaster: { findFirst: jest.fn().mockResolvedValue({ id: "master-1" }) },
@@ -141,7 +141,9 @@ describe("DocumentPurchasesService Tender business ID compatibility", () => {
       );
     tx.documentPurchaseRequest.updateMany.mockResolvedValue({ count: 1 });
 
-    await expect(service.approveRequest("org-1", "approver-1", "request-1", { version: 1 })).resolves.toMatchObject({
+    await expect(
+      service.approveRequest("org-1", "approver-1", "request-1", { version: 1 }),
+    ).resolves.toMatchObject({
       id: "request-1",
       status: "APPROVED",
       version: 2,
@@ -154,7 +156,10 @@ describe("DocumentPurchasesService Tender business ID compatibility", () => {
       }),
     );
     expect(audit.record).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "DOCUMENT_PURCHASE_REQUEST_APPROVED", entityId: "request-1" }),
+      expect.objectContaining({
+        action: "DOCUMENT_PURCHASE_REQUEST_APPROVED",
+        entityId: "request-1",
+      }),
       tx,
     );
   });
@@ -179,12 +184,21 @@ describe("DocumentPurchasesService Tender business ID compatibility", () => {
         version: 1,
         reason: "  Budget needs review  ",
       }),
-    ).resolves.toMatchObject({ status: "REJECTED", rejectionReason: "Budget needs review", version: 2 });
+    ).resolves.toMatchObject({
+      status: "REJECTED",
+      rejectionReason: "Budget needs review",
+      version: 2,
+    });
     expect(tx.documentPurchaseRequest.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ rejectionReason: "Budget needs review" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ rejectionReason: "Budget needs review" }),
+      }),
     );
     expect(audit.record).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "DOCUMENT_PURCHASE_REQUEST_REJECTED", entityId: "request-1" }),
+      expect.objectContaining({
+        action: "DOCUMENT_PURCHASE_REQUEST_REJECTED",
+        entityId: "request-1",
+      }),
       tx,
     );
   });
@@ -204,7 +218,9 @@ describe("DocumentPurchasesService Tender business ID compatibility", () => {
       linkedTenderId: "tender-1",
     });
     expect(prisma.tender.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { organizationId: "org-1", tenderIdNormalized: "EGP 2026 1" } }),
+      expect.objectContaining({
+        where: { organizationId: "org-1", tenderIdNormalized: "EGP 2026 1" },
+      }),
     );
     expect(tx.tender.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -264,9 +280,15 @@ describe("DocumentPurchasesService Tender business ID compatibility", () => {
 
     await service.create("org-1", "user-1", input({ linkedTenderId: "existing-tender" }) as never);
     expect(tx.tender.create).not.toHaveBeenCalled();
+    expect(tx.tender.update).toHaveBeenCalledWith({
+      where: { id: "existing-tender", organizationId: "org-1" },
+      data: { category: "Supply", contractValue: 1000 },
+    });
     expect(tx.documentPurchase.update).not.toHaveBeenCalled();
     expect(tx.documentPurchase.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ linkedTenderId: "existing-tender" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ linkedTenderId: "existing-tender" }),
+      }),
     );
   });
 
@@ -312,7 +334,10 @@ describe("DocumentPurchasesService Tender business ID compatibility", () => {
       },
     });
     tx.documentPurchase.create.mockResolvedValue(
-      purchaseFixture({ linkedTenderId: "existing-tender", tenderWorkName: "Authoritative work name" }),
+      purchaseFixture({
+        linkedTenderId: "existing-tender",
+        tenderWorkName: "Authoritative work name",
+      }),
     );
     tx.documentPurchaseRequest.updateMany.mockResolvedValue({ count: 1 });
 
@@ -337,6 +362,56 @@ describe("DocumentPurchasesService Tender business ID compatibility", () => {
         data: expect.objectContaining({ status: "PURCHASED", documentPurchaseId: "dp-1" }),
       }),
     );
+    expect(tx.tender.update).toHaveBeenCalledWith({
+      where: { id: "existing-tender", organizationId: "org-1" },
+      data: { category: "Supply", contractValue: new Prisma.Decimal("2500") },
+    });
+  });
+
+  it("uses entered business details when an approved request still has empty tender values", async () => {
+    const { service, prisma, tx } = setup();
+    prisma.tender.findFirst.mockResolvedValue({ id: "existing-tender" });
+    tx.documentPurchaseRequest.findFirst.mockResolvedValue({
+      id: "request-1",
+      organizationId: "org-1",
+      tenderId: "existing-tender",
+      status: "APPROVED",
+      version: 2,
+      tender: {
+        egpTenderId: "EGP-2026-1",
+        organizationMasterId: "master-1",
+        workName: "Authoritative work name",
+        contractValue: new Prisma.Decimal("0"),
+        category: null,
+        submissionDeadline: null,
+        openingDate: null,
+      },
+    });
+    tx.documentPurchase.create.mockResolvedValue(
+      purchaseFixture({ linkedTenderId: "existing-tender", category: "Electrical" }),
+    );
+    tx.documentPurchaseRequest.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.create(
+      "org-1",
+      "user-1",
+      input({
+        linkedTenderId: "existing-tender",
+        requestId: "request-1",
+        category: "Electrical",
+        estimatedTenderAmount: 4000,
+      }) as never,
+    );
+
+    expect(tx.documentPurchase.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ category: "Electrical", estimatedTenderAmount: 4000 }),
+      }),
+    );
+    expect(tx.tender.update).toHaveBeenCalledWith({
+      where: { id: "existing-tender", organizationId: "org-1" },
+      data: { category: "Electrical", contractValue: 4000 },
+    });
   });
 
   it("rejects an unlinked duplicate e-GP Tender ID before writing a purchase", async () => {
@@ -349,21 +424,21 @@ describe("DocumentPurchasesService Tender business ID compatibility", () => {
       createdBy: { name: "Existing User" },
     });
 
-    await expect(service.create("org-1", "user-1", input() as never)).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.create("org-1", "user-1", input() as never)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("rolls back and returns a friendly conflict for a concurrent duplicate", async () => {
     const { service, prisma } = setup();
-    prisma.tender.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        id: "existing-tender",
-        egpTenderId: "EGP 2026 1",
-        workName: "Existing work",
-        createdAt: new Date("2026-08-30T10:00:00.000Z"),
-        createdBy: { name: "Existing User" },
-      });
+    prisma.tender.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: "existing-tender",
+      egpTenderId: "EGP 2026 1",
+      workName: "Existing work",
+      createdAt: new Date("2026-08-30T10:00:00.000Z"),
+      createdBy: { name: "Existing User" },
+    });
     prisma.$transaction.mockRejectedValueOnce(
       new Prisma.PrismaClientKnownRequestError("Unique constraint", {
         code: "P2002",
@@ -372,9 +447,13 @@ describe("DocumentPurchasesService Tender business ID compatibility", () => {
       }),
     );
 
-    await expect(service.create("org-1", "user-1", input() as never)).rejects.toMatchObject({ status: 409 });
+    await expect(service.create("org-1", "user-1", input() as never)).rejects.toMatchObject({
+      status: 409,
+    });
     expect(prisma.tender.findFirst).toHaveBeenLastCalledWith(
-      expect.objectContaining({ where: { organizationId: "org-1", tenderIdNormalized: "EGP 2026 1" } }),
+      expect.objectContaining({
+        where: { organizationId: "org-1", tenderIdNormalized: "EGP 2026 1" },
+      }),
     );
   });
 });

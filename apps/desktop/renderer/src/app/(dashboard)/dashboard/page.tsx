@@ -308,7 +308,7 @@ function SetTargetModal({
 
 export default function DashboardPage() {
   const me = useMe();
-  const [targetPeriod, setTargetPeriod] = useState<PeriodState>(() => initialPeriod("THIS_MONTH"));
+  const [targetPeriod, setTargetPeriod] = useState<PeriodState>(() => initialPeriod("THIS_YEAR"));
   const [tenderPeriod, setTenderPeriod] = useState<PeriodState>(() => initialPeriod("THIS_YEAR"));
   const [businessPeriod, setBusinessPeriod] = useState<PeriodState>(() =>
     initialPeriod("THIS_YEAR"),

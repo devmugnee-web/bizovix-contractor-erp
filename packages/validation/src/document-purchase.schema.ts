@@ -14,7 +14,9 @@ export const createDocumentPurchaseSchema = z
       .positive("Document price must be greater than 0"),
     paymentFromAccountId: z.string().min(1, "Payment account is required"),
     category: z.string().trim().min(1, "Work category is required"),
-    estimatedTenderAmount: z.coerce.number().optional(),
+    estimatedTenderAmount: z.coerce
+      .number({ invalid_type_error: "Enter a valid amount" })
+      .positive("Estimated tender amount must be greater than 0"),
     submissionDate: z.string().optional().or(z.literal("")),
     openingDate: z.string().optional().or(z.literal("")),
     remarks: z.string().optional().or(z.literal("")),

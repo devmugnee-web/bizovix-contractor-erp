@@ -1,6 +1,15 @@
 import { PurchaseType } from "@bizovix/database";
 import { Type } from "class-transformer";
-import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, ValidateIf } from "class-validator";
+import {
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  ValidateIf,
+} from "class-validator";
 
 export class CreateDocumentPurchaseDto {
   @IsEnum(PurchaseType)
@@ -49,6 +58,7 @@ export class CreateDocumentPurchaseDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @IsPositive({ message: "Estimated tender amount must be greater than 0" })
   estimatedTenderAmount?: number;
 
   @IsOptional()

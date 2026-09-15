@@ -12,8 +12,8 @@ function Tile({
   colorClassName: string;
 }) {
   return (
-    <div className="rounded-md bg-slate-50 px-2 py-1.5 ring-1 ring-inset ring-slate-100 xl:px-3 xl:py-2 2xl:min-h-[64px] 2xl:px-4 2xl:py-2.5">
-      <p className="whitespace-nowrap text-[8px] font-semibold uppercase tracking-[0.04em] text-biz-muted lg:text-[9px] xl:text-[10px] 2xl:text-[11px]">
+    <div className="min-w-0 rounded-md bg-slate-50 px-2 py-1.5 ring-1 ring-inset ring-slate-100 xl:px-3 xl:py-2 2xl:min-h-[64px] 2xl:px-4 2xl:py-2.5">
+      <p className="break-words text-[8px] font-semibold uppercase leading-tight tracking-[0.04em] text-biz-muted lg:text-[9px] xl:text-[10px] 2xl:text-[11px]">
         {label}
       </p>
       <p

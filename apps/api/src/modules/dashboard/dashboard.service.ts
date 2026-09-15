@@ -14,11 +14,26 @@ import type { SetMonthlyTargetDto } from "./dto/set-monthly-target.dto";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "LED Display": "#0B5CFF",
+  "Led Display": "#0B5CFF",
   "Electrical Works": "#16A34A",
+  Electrical: "#16A34A",
   "IT Solutions": "#7C3AED",
+  IT: "#7C3AED",
   "Sound System": "#F97316",
+  CVL: "#F97316",
+  FOOD: "#EF4444",
   Others: "#EF4444",
 };
+
+const CATEGORY_PALETTE = ["#0B5CFF", "#16A34A", "#7C3AED", "#F97316", "#EF4444"];
+
+function categoryColor(category: string): string {
+  const fallbackIndex = [...category].reduce(
+    (hash, character) => hash + character.charCodeAt(0),
+    0,
+  );
+  return CATEGORY_COLORS[category] ?? CATEGORY_PALETTE[fallbackIndex % CATEGORY_PALETTE.length]!;
+}
 
 const WON_STATUSES = ["NOA", "AWARDED", "ONGOING", "COMPLETED"] as unknown as TenderStatus[];
 
@@ -156,7 +171,7 @@ export class DashboardService {
       tenderSecurityAgg,
       pgBgAgg,
       receivables,
-      completedProjects,
+      receivableProjects,
       outstandingPayables,
       bankAccounts,
       heldRetentionBills,
@@ -185,7 +200,12 @@ export class DashboardService {
         select: { amount: true, receivedAmount: true, dueDate: true },
       }),
       this.prisma.cmsWork.findMany({
-        where: { organizationId, status: "COMPLETED" },
+        where: {
+          organizationId,
+          status: {
+            in: ["ONGOING", "COMPLETION_PENDING", "DLP", "CLOSEOUT_PENDING", "COMPLETED"],
+          },
+        },
         select: {
           id: true,
           contractValue: true,
@@ -235,14 +255,10 @@ export class DashboardService {
     const outstandingReceivables = receivables.filter(
       (row) => Number(row.amount) - Number(row.receivedAmount) > 0,
     );
-    const receivableTotal = outstandingReceivables.reduce(
-      (sum, row) => sum + Number(row.amount) - Number(row.receivedAmount),
-      0,
-    );
     const overdueReceivableTotal = outstandingReceivables
       .filter((row) => row.dueDate && row.dueDate < now)
       .reduce((sum, row) => sum + Number(row.amount) - Number(row.receivedAmount), 0);
-    const completedProjectReceivables = completedProjects.map((project) => ({
+    const projectReceivables = receivableProjects.map((project) => ({
       projectId: project.id,
       ...calculateCompletedProjectReceivable({
         contractValue: project.contractValue,
@@ -250,11 +266,11 @@ export class DashboardService {
         securityDepositReleasedAmount: project.contracts[0]?.securityDepositReleasedAmount,
       }),
     }));
-    const completedProjectTotal = completedProjectReceivables.reduce(
+    const projectReceivableTotal = projectReceivables.reduce(
       (sum, row) => sum.add(row.outstanding),
       new Prisma.Decimal(0),
     );
-    const completedProjectSd = completedProjectReceivables.reduce(
+    const projectReceivableSd = projectReceivables.reduce(
       (sum, row) => sum.add(row.sdReceivable),
       new Prisma.Decimal(0),
     );
@@ -297,12 +313,10 @@ export class DashboardService {
         available: true,
       },
       receivables: {
-        amount: new Prisma.Decimal(receivableTotal).add(completedProjectTotal).toFixed(2),
+        amount: projectReceivableTotal.toFixed(2),
         overdue: overdueReceivableTotal.toFixed(2),
-        bills:
-          outstandingReceivables.length +
-          completedProjectReceivables.filter((row) => row.outstanding.gt(0)).length,
-        securityDeposit: completedProjectSd.toFixed(2),
+        bills: projectReceivables.filter((row) => row.outstanding.gt(0)).length,
+        securityDeposit: projectReceivableSd.toFixed(2),
       },
       payables: {
         amount: outstandingPayableTotal.toFixed(2),
@@ -363,12 +377,24 @@ export class DashboardService {
   private async getTenderPerformance(organizationId: string, range?: DateRange) {
     const yearStart = startOfYear();
     const submittedAt = dateFilter(range, yearStart);
+    const awardedAt = dateFilter(range, yearStart);
     const [submitted, won, underProcess] = await Promise.all([
-      this.prisma.tender.count({ where: { organizationId, submittedAt } }),
       this.prisma.tender.count({
-        where: { organizationId, submittedAt, status: { in: WON_STATUSES } },
+        where: {
+          organizationId,
+          OR: [{ submittedAt }, { submittedAt: null, awardedAt, status: { in: WON_STATUSES } }],
+        },
       }),
-      this.prisma.tender.count({ where: { organizationId, submittedAt, status: "UNDER_PROCESS" } }),
+      this.prisma.tender.count({
+        where: { organizationId, awardedAt, status: { in: WON_STATUSES } },
+      }),
+      this.prisma.tender.count({
+        where: {
+          organizationId,
+          status: "UNDER_PROCESS",
+          OR: [{ submittedAt }, { submittedAt: null, updatedAt: submittedAt }],
+        },
+      }),
     ]);
 
     return {
@@ -380,12 +406,13 @@ export class DashboardService {
   }
 
   private async getBusinessByCategory(organizationId: string, range?: DateRange) {
-    const grouped = await this.prisma.tender.groupBy({
-      by: ["category"],
+    const businessDate = dateFilter(range, startOfYear());
+    const grouped = await this.prisma.cmsWork.groupBy({
+      by: ["workCategory"],
       where: {
         organizationId,
-        submittedAt: dateFilter(range, startOfYear()),
-        status: { in: WON_STATUSES },
+        status: { not: "CANCELLED" },
+        OR: [{ startDate: businessDate }, { startDate: null, createdAt: businessDate }],
       },
       _sum: { contractValue: true },
     });
@@ -395,12 +422,12 @@ export class DashboardService {
     const items = grouped
       .map((g) => {
         const amount = Number(g._sum?.contractValue ?? 0);
-        const category = g.category ?? "Uncategorised";
+        const category = g.workCategory;
         return {
           category,
           amount: amount.toString(),
           percentage: totalBusiness > 0 ? Number(((amount / totalBusiness) * 100).toFixed(2)) : 0,
-          color: CATEGORY_COLORS[category] ?? "#667085",
+          color: categoryColor(category),
         };
       })
       .sort((a, b) => Number(b.amount) - Number(a.amount));

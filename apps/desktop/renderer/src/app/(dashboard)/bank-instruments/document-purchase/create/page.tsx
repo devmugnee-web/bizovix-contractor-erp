@@ -4,7 +4,7 @@ import * as React from "react";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { Building2, FileText, Info, Landmark, Monitor, Plus, Save } from "lucide-react";
 import {
   useBankAccounts,
@@ -65,7 +65,6 @@ function AddDocumentPurchaseForm() {
     control,
     register,
     handleSubmit,
-    watch,
     setValue,
     formState: { errors },
   } = useForm<CreateDocumentPurchaseFormValues>({
@@ -87,11 +86,13 @@ function AddDocumentPurchaseForm() {
     },
   });
 
-  const purchaseType = watch("purchaseType");
-  const organizationMasterId = watch("organizationMasterId");
+  const purchaseType = useWatch({ control, name: "purchaseType" });
+  const organizationMasterId = useWatch({ control, name: "organizationMasterId" });
 
   const [orgQuery, setOrgQuery] = React.useState("");
-  const [selectedOrg, setSelectedOrg] = React.useState<{ value: string; label: string } | null>(null);
+  const [selectedOrg, setSelectedOrg] = React.useState<{ value: string; label: string } | null>(
+    null,
+  );
   const organizations = useOrganizations(orgQuery);
 
   const [addOrgOpen, setAddOrgOpen] = React.useState(false);
@@ -101,27 +102,41 @@ function AddDocumentPurchaseForm() {
   React.useEffect(() => {
     if (!linkedTender.data || prefilledFromTender.current) return;
     prefilledFromTender.current = true;
-    if (linkedTender.data.organizationMasterId && linkedTender.data.organizationMaster) {
-      setValue("organizationMasterId", linkedTender.data.organizationMasterId);
-      setSelectedOrg({
-        value: linkedTender.data.organizationMasterId,
-        label: linkedTender.data.organizationMaster.shortName,
+    const tender = linkedTender.data;
+    const timer = window.setTimeout(() => {
+      if (tender.organizationMasterId && tender.organizationMaster) {
+        setValue("organizationMasterId", tender.organizationMasterId);
+        setSelectedOrg({
+          value: tender.organizationMasterId,
+          label: tender.organizationMaster.shortName,
+        });
+      }
+      setValue("tenderWorkName", tender.workName);
+      if (tender.documentFee != null)
+        setValue("documentPrice", Number(tender.documentFee), { shouldDirty: false });
+      setValue("estimatedTenderAmount", Number(tender.contractValue), {
+        shouldDirty: false,
       });
-    }
-    setValue("tenderWorkName", linkedTender.data.workName);
-    if (linkedTender.data.documentFee != null) setValue("documentPrice", Number(linkedTender.data.documentFee), { shouldDirty: false });
-    setValue("estimatedTenderAmount", Number(linkedTender.data.contractValue), { shouldDirty: false });
-    if (linkedTender.data.category) setValue("category", linkedTender.data.category, { shouldDirty: false });
-    if (linkedTender.data.submissionDeadline) setValue("submissionDate", linkedTender.data.submissionDeadline.slice(0, 10), { shouldDirty: false });
-    if (linkedTender.data.openingDate) setValue("openingDate", linkedTender.data.openingDate.slice(0, 10), { shouldDirty: false });
-    if (linkedTender.data.egpTenderId) setValue("tenderId", linkedTender.data.egpTenderId);
+      if (tender.category) setValue("category", tender.category, { shouldDirty: false });
+      if (tender.submissionDeadline)
+        setValue("submissionDate", tender.submissionDeadline.slice(0, 10), {
+          shouldDirty: false,
+        });
+      if (tender.openingDate)
+        setValue("openingDate", tender.openingDate.slice(0, 10), {
+          shouldDirty: false,
+        });
+      if (tender.egpTenderId) setValue("tenderId", tender.egpTenderId);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [linkedTender.data, setValue]);
 
   function onSubmit(values: CreateDocumentPurchaseFormValues) {
     createMutation.mutate(
       {
         purchaseType: values.purchaseType,
-        tenderId: values.purchaseType === PurchaseType.EGP ? values.tenderId || undefined : undefined,
+        tenderId:
+          values.purchaseType === PurchaseType.EGP ? values.tenderId || undefined : undefined,
         linkedTenderId: tenderId,
         requestId,
         organizationMasterId: values.organizationMasterId,
@@ -130,7 +145,8 @@ function AddDocumentPurchaseForm() {
         documentPrice: Number(values.documentPrice),
         paymentFromAccountId: values.paymentFromAccountId,
         category: values.category,
-        estimatedTenderAmount: values.estimatedTenderAmount == null ? undefined : Number(values.estimatedTenderAmount),
+        estimatedTenderAmount:
+          values.estimatedTenderAmount == null ? undefined : Number(values.estimatedTenderAmount),
         submissionDate: values.submissionDate || undefined,
         openingDate: values.openingDate || undefined,
         remarks: values.remarks || undefined,
@@ -155,7 +171,10 @@ function AddDocumentPurchaseForm() {
         subtitle="Add new tender document purchase information (e-GP & Manual)"
       />
 
-      <form onSubmit={handleSubmit(onSubmit)} className="rounded-lg border border-biz-border bg-biz-surface p-6">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="rounded-lg border border-biz-border bg-biz-surface p-6"
+      >
         <div className="flex flex-col gap-6">
           <FormField label="1. Purchase Type" required>
             <Controller
@@ -167,8 +186,18 @@ function AddDocumentPurchaseForm() {
                   value={field.value}
                   onChange={field.onChange}
                   options={[
-                    { value: PurchaseType.EGP, label: "e-GP", icon: Monitor, iconClassName: "text-biz-blue" },
-                    { value: PurchaseType.MANUAL, label: "Manual", icon: FileText, iconClassName: "text-biz-orange" },
+                    {
+                      value: PurchaseType.EGP,
+                      label: "e-GP",
+                      icon: Monitor,
+                      iconClassName: "text-biz-blue",
+                    },
+                    {
+                      value: PurchaseType.MANUAL,
+                      label: "Manual",
+                      icon: FileText,
+                      iconClassName: "text-biz-orange",
+                    },
                   ]}
                 />
               )}
@@ -259,7 +288,10 @@ function AddDocumentPurchaseForm() {
             <SelectInput
               icon={Landmark}
               placeholder="Select bank or cash account"
-              options={(bankAccounts.data ?? []).map((acc) => ({ label: acc.accountName, value: acc.id }))}
+              options={(bankAccounts.data ?? []).map((acc) => ({
+                label: acc.accountName,
+                value: acc.id,
+              }))}
               {...register("paymentFromAccountId")}
             />
           </FormField>
@@ -272,7 +304,9 @@ function AddDocumentPurchaseForm() {
                 render={({ field }) => (
                   <SelectInput
                     className="flex-1"
-                    placeholder={categories.isLoading ? "Loading categories..." : "Select work category"}
+                    placeholder={
+                      categories.isLoading ? "Loading categories..." : "Select work category"
+                    }
                     options={(categories.data ?? [])
                       .filter((category) => category.isActive)
                       .map((category) => ({ label: category.name, value: category.name }))}
@@ -287,23 +321,44 @@ function AddDocumentPurchaseForm() {
             </div>
           </FormField>
 
-          <FormField label="9. Submission Date" error={errors.submissionDate?.message}>
-            <Controller control={control} name="submissionDate" render={({ field }) => <DateInput {...field} />} />
+          <FormField
+            label="9. Estimated Tender Amount (BDT)"
+            required
+            helper="This estimate is used until the final NOA amount is recorded."
+            error={errors.estimatedTenderAmount?.message}
+          >
+            <CurrencyInput
+              placeholder="Enter estimated tender amount"
+              {...register("estimatedTenderAmount")}
+            />
+          </FormField>
+
+          <FormField label="10. Submission Date" error={errors.submissionDate?.message}>
+            <Controller
+              control={control}
+              name="submissionDate"
+              render={({ field }) => <DateInput {...field} />}
+            />
           </FormField>
 
           <div className="md:col-span-2">
-            <FormField label="10. Remarks" error={errors.remarks?.message}>
+            <FormField label="11. Remarks" error={errors.remarks?.message}>
               <TextInput placeholder="Optional remarks" {...register("remarks")} />
             </FormField>
           </div>
         </div>
 
         {createMutation.isError && (
-          <p className="mt-4 text-[13px] text-biz-danger">Failed to save document purchase. Please try again.</p>
+          <p className="mt-4 text-[13px] text-biz-danger">
+            Failed to save document purchase. Please try again.
+          </p>
         )}
 
         <div className="mt-8 flex items-center justify-end gap-3 border-t border-biz-border pt-5">
-          <SecondaryButton type="button" onClick={() => router.push("/bank-instruments/document-purchase")}>
+          <SecondaryButton
+            type="button"
+            onClick={() => router.push("/bank-instruments/document-purchase")}
+          >
             Cancel
           </SecondaryButton>
           <PrimaryButton type="submit" disabled={createMutation.isPending}>
@@ -413,7 +468,9 @@ function AddOrganizationModal({
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<CreateOrganizationMasterFormValues>({ resolver: zodResolver(createOrganizationMasterSchema) });
+  } = useForm<CreateOrganizationMasterFormValues>({
+    resolver: zodResolver(createOrganizationMasterSchema),
+  });
 
   function onSubmit(values: CreateOrganizationMasterFormValues) {
     createOrg.mutate(values, {
@@ -431,7 +488,10 @@ function AddOrganizationModal({
           <TextInput placeholder="e.g. DPHE" {...register("shortName")} />
         </FormField>
         <FormField label="Full Name" required error={errors.fullName?.message}>
-          <TextInput placeholder="e.g. Department of Public Health Engineering" {...register("fullName")} />
+          <TextInput
+            placeholder="e.g. Department of Public Health Engineering"
+            {...register("fullName")}
+          />
         </FormField>
         <div className="mt-2 flex justify-end gap-3">
           <SecondaryButton type="button" onClick={onClose}>

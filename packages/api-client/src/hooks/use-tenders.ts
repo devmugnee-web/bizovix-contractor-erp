@@ -35,11 +35,17 @@ export function useTender(id: string | undefined) {
 }
 
 export function useTenderStats() {
-  return useQuery({ queryKey: queryKeys.tenderStats, queryFn: () => apiRequest<TenderStats>("/tenders/stats") });
+  return useQuery({
+    queryKey: queryKeys.tenderStats,
+    queryFn: () => apiRequest<TenderStats>("/tenders/stats"),
+  });
 }
 
 export function useTenderCategories() {
-  return useQuery({ queryKey: queryKeys.tenderCategories, queryFn: () => apiRequest<string[]>("/tenders/categories") });
+  return useQuery({
+    queryKey: queryKeys.tenderCategories,
+    queryFn: () => apiRequest<string[]>("/tenders/categories"),
+  });
 }
 
 export function useTenderOptions() {
@@ -72,17 +78,24 @@ export async function extractTenderPdf(file: File) {
 function useInvalidateTenders() {
   const queryClient = useQueryClient();
   return async () => {
-    await Promise.all([
-      ["tenders"], ["organizations"], ["tender-securities", "pending"],
-      ["pg-bg", "eligible"], ["cms-works"],
-    ].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+    await Promise.all(
+      [
+        ["tenders"],
+        ["organizations"],
+        ["tender-securities", "pending"],
+        ["pg-bg", "eligible"],
+        ["cms-works"],
+        ["dashboard"],
+      ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+    );
   };
 }
 
 export function useCreateTender() {
   const invalidate = useInvalidateTenders();
   return useMutation({
-    mutationFn: (payload: CreateTenderInput) => apiRequest<TenderRecord>("/tenders", { method: "POST", body: payload }),
+    mutationFn: (payload: CreateTenderInput) =>
+      apiRequest<TenderRecord>("/tenders", { method: "POST", body: payload }),
     onSuccess: invalidate,
   });
 }
@@ -99,8 +112,7 @@ export function useUpdateTender() {
 export function useDeleteTender() {
   const invalidate = useInvalidateTenders();
   return useMutation({
-    mutationFn: (id: string) =>
-      apiRequest<{ id: string }>(`/tenders/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => apiRequest<{ id: string }>(`/tenders/${id}`, { method: "DELETE" }),
     onSuccess: invalidate,
   });
 }
@@ -127,7 +139,10 @@ export function useSubmitTenderForCostingApproval() {
   const invalidate = useInvalidateTenders();
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: SubmitTenderForCostingInput }) =>
-      apiRequest<TenderRecord>(`/tenders/${id}/submit-for-costing-approval`, { method: "POST", body: payload }),
+      apiRequest<TenderRecord>(`/tenders/${id}/submit-for-costing-approval`, {
+        method: "POST",
+        body: payload,
+      }),
     onSuccess: invalidate,
   });
 }
@@ -151,7 +166,10 @@ export function useRejectTenderForCosting() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: RejectTenderForCostingInput }) =>
-      apiRequest<TenderRecord>(`/tenders/${id}/reject-for-costing`, { method: "POST", body: payload }),
+      apiRequest<TenderRecord>(`/tenders/${id}/reject-for-costing`, {
+        method: "POST",
+        body: payload,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tenders"] });
       queryClient.invalidateQueries({ queryKey: ["tender-costings"] });

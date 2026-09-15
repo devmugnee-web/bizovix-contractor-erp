@@ -122,10 +122,14 @@ export class PgBgService {
       purchase.tenderSecurityStatus !== "CREATED" &&
       purchase.tenderSecurityStatus !== "NOT_REQUIRED"
     ) {
-      throw new BadRequestException("Complete the Tender Security decision before continuing PG/BG");
+      throw new BadRequestException(
+        "Complete the Tender Security decision before continuing PG/BG",
+      );
     }
     if (purchase.creditCommitmentItems.length === 0) {
-      throw new BadRequestException("Complete the Credit Commitment charge before continuing PG/BG");
+      throw new BadRequestException(
+        "Complete the Credit Commitment charge before continuing PG/BG",
+      );
     }
     if (purchase.cmsWork) {
       throw new BadRequestException("This tender has already been moved to Ongoing Works");
@@ -134,11 +138,10 @@ export class PgBgService {
       where: { documentPurchaseId: purchase.id, organizationId },
       select: { status: true, contact: true, contactSnapshot: true },
     });
-    if (
-      existingWorkflow?.status === "FINALIZED" ||
-      existingWorkflow?.status === "NOA_REJECTED"
-    ) {
-      throw new BadRequestException("This PG/BG workflow is already completed and cannot be edited");
+    if (existingWorkflow?.status === "FINALIZED" || existingWorkflow?.status === "NOA_REJECTED") {
+      throw new BadRequestException(
+        "This PG/BG workflow is already completed and cannot be edited",
+      );
     }
     const workCategory = purchase.category?.trim();
     if (!workCategory) {
@@ -147,21 +150,23 @@ export class PgBgService {
       );
     }
     const record = await this.prisma.$transaction(async (tx) => {
-      const baseContact = readPaSnapshot(existingWorkflow?.contactSnapshot)
-        ?? existingWorkflow?.contact ?? tenderPaContact(purchase.linkedTender);
+      const baseContact =
+        readPaSnapshot(existingWorkflow?.contactSnapshot) ??
+        existingWorkflow?.contact ??
+        tenderPaContact(purchase.linkedTender);
       const pa = dto.contact ? { ...baseContact, ...dto.contact } : baseContact;
-      const snapshot = pa ? {
-        id: baseContact?.id ?? purchase.id,
-        name: pa.name ?? "", designation: pa.designation ?? "", mobile: pa.mobile ?? "",
-        address: pa.address ?? "", email: pa.email || null,
-      } : undefined;
+      const snapshot = pa
+        ? {
+            id: baseContact?.id ?? purchase.id,
+            name: pa.name ?? "",
+            designation: pa.designation ?? "",
+            mobile: pa.mobile ?? "",
+            address: pa.address ?? "",
+            email: pa.email || null,
+          }
+        : undefined;
       let contactId: string | undefined;
-      if (
-        snapshot?.mobile &&
-        snapshot.name &&
-        snapshot.designation &&
-        snapshot.address
-      ) {
+      if (snapshot?.mobile && snapshot.name && snapshot.designation && snapshot.address) {
         const contact = await tx.organizationContact.upsert({
           where: {
             organizationId_organizationMasterId_mobile: {
@@ -239,6 +244,8 @@ export class PgBgService {
     if (!existing.noaDate || !existing.noaAmount || !existing.workCategory || !existing.contactId) {
       throw new BadRequestException("Complete NOA and PE contact information before proceeding");
     }
+    const noaAmount = existing.noaAmount;
+    const workCategory = existing.workCategory;
     if (existing.status === "FINALIZED") {
       throw new BadRequestException("This PG/BG workflow has already been finalized");
     }
@@ -277,23 +284,23 @@ export class PgBgService {
           where: { id: purchase.linkedTenderId, organizationId },
           data: {
             status: dto.acceptNoa ? (dto.pgBgRequired ? "NOA" : "ONGOING") : "REJECTED",
-            ...(dto.acceptNoa ? { awardedAt: new Date() } : {}),
+            ...(dto.acceptNoa
+              ? {
+                  awardedAt: new Date(),
+                  category: workCategory,
+                  contractValue: noaAmount,
+                }
+              : {}),
           },
         });
       }
-      if (
-        dto.acceptNoa &&
-        !dto.pgBgRequired &&
-        purchase &&
-        existing.noaAmount &&
-        existing.workCategory
-      ) {
+      if (dto.acceptNoa && !dto.pgBgRequired && purchase && noaAmount && workCategory) {
         const work = await tx.cmsWork.upsert({
           where: { documentPurchaseId: purchase.id },
           update: {
             status: "ONGOING",
-            contractValue: existing.noaAmount,
-            workCategory: existing.workCategory,
+            contractValue: noaAmount,
+            workCategory,
           },
           create: {
             organizationId,
@@ -302,8 +309,8 @@ export class PgBgService {
             pgBgWorkflowId: id,
             organizationMasterId: existing.organizationMasterId,
             workName: purchase.tenderWorkName,
-            workCategory: existing.workCategory,
-            contractValue: existing.noaAmount,
+            workCategory,
+            contractValue: noaAmount,
             status: "ONGOING",
             startDate: new Date(),
             createdById: userId,
@@ -362,6 +369,11 @@ export class PgBgService {
         "An accepted NOA requiring PG/BG is needed before finalization",
       );
     }
+    if (!workflow.noaAmount || !workflow.workCategory) {
+      throw new BadRequestException("NOA amount and work category are required");
+    }
+    const noaAmount = workflow.noaAmount;
+    const workCategory = workflow.workCategory;
     const bank = await this.prisma.bankAccount.findFirst({
       where: {
         id: dto.bankAccountId,
@@ -409,17 +421,20 @@ export class PgBgService {
       if (workflow.documentPurchase.linkedTenderId) {
         await tx.tender.update({
           where: { id: workflow.documentPurchase.linkedTenderId, organizationId },
-          data: { status: "ONGOING", awardedAt: new Date() },
+          data: {
+            status: "ONGOING",
+            awardedAt: new Date(),
+            category: workCategory,
+            contractValue: noaAmount,
+          },
         });
       }
-      if (!workflow.noaAmount || !workflow.workCategory)
-        throw new BadRequestException("NOA amount and work category are required");
       const work = await tx.cmsWork.upsert({
         where: { pgBgWorkflowId: id },
         update: {
           status: "ONGOING",
-          contractValue: workflow.noaAmount,
-          workCategory: workflow.workCategory,
+          contractValue: noaAmount,
+          workCategory,
         },
         create: {
           organizationId,
@@ -428,8 +443,8 @@ export class PgBgService {
           pgBgWorkflowId: id,
           organizationMasterId: workflow.organizationMasterId,
           workName: workflow.documentPurchase.tenderWorkName,
-          workCategory: workflow.workCategory,
-          contractValue: workflow.noaAmount,
+          workCategory,
+          contractValue: noaAmount,
           status: "ONGOING",
           startDate: new Date(),
           createdById: userId,

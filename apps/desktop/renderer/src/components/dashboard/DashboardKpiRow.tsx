@@ -97,7 +97,7 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         >
           {kpis.receivables.bills > 0 ? (
             <>
-              Outstanding Bills: {kpis.receivables.bills}
+              Outstanding Projects: {kpis.receivables.bills}
               <br />
               SD: {formatBDTLakh(kpis.receivables.securityDeposit)} · Overdue:{" "}
               <span className="font-medium text-biz-danger">
@@ -105,7 +105,7 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
               </span>
             </>
           ) : (
-            "No outstanding certified bills"
+            "No outstanding project receivables"
           )}
         </DashboardKpiCard>
       </Link>

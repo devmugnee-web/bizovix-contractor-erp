@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { DocumentPurchaseRequestStatus, Prisma } from "@bizovix/database";
 import { normalizeTenderBusinessId, type PaginationMeta } from "@bizovix/types";
 import { buildPaginationMeta } from "@bizovix/utils";
@@ -18,8 +23,12 @@ const includeRelations = {
   paymentFromAccount: { select: { id: true, accountName: true } },
 } satisfies Prisma.DocumentPurchaseInclude;
 
-type DocumentPurchaseWithRelations = Prisma.DocumentPurchaseGetPayload<{ include: typeof includeRelations }>;
-type DocumentPurchaseDto = Omit<DocumentPurchaseWithRelations, "egpTenderId"> & { tenderId: string | null };
+type DocumentPurchaseWithRelations = Prisma.DocumentPurchaseGetPayload<{
+  include: typeof includeRelations;
+}>;
+type DocumentPurchaseDto = Omit<DocumentPurchaseWithRelations, "egpTenderId"> & {
+  tenderId: string | null;
+};
 type DocumentPurchaseStats = {
   totalPurchases: number;
   egpPurchases: number;
@@ -162,7 +171,12 @@ export class DocumentPurchasesService {
           id,
           organizationId,
           version: dto.version,
-          status: { in: [DocumentPurchaseRequestStatus.PENDING_APPROVAL, DocumentPurchaseRequestStatus.REJECTED] },
+          status: {
+            in: [
+              DocumentPurchaseRequestStatus.PENDING_APPROVAL,
+              DocumentPurchaseRequestStatus.REJECTED,
+            ],
+          },
         },
         data: {
           status: DocumentPurchaseRequestStatus.APPROVED,
@@ -175,7 +189,9 @@ export class DocumentPurchasesService {
         },
       });
       if (changed.count !== 1) {
-        throw new ConflictException("Document purchase request changed; reload it before approving");
+        throw new ConflictException(
+          "Document purchase request changed; reload it before approving",
+        );
       }
 
       const record = await tx.documentPurchaseRequest.findFirst({
@@ -233,7 +249,9 @@ export class DocumentPurchasesService {
         },
       });
       if (changed.count !== 1) {
-        throw new ConflictException("Document purchase request changed; reload it before rejecting");
+        throw new ConflictException(
+          "Document purchase request changed; reload it before rejecting",
+        );
       }
 
       const record = await tx.documentPurchaseRequest.findFirst({
@@ -337,9 +355,15 @@ export class DocumentPurchasesService {
     };
   }
 
-  private async assertBelongsToOrg(organizationId: string, organizationMasterId: string, paymentFromAccountId: string) {
+  private async assertBelongsToOrg(
+    organizationId: string,
+    organizationMasterId: string,
+    paymentFromAccountId: string,
+  ) {
     const [master, account] = await Promise.all([
-      this.prisma.organizationMaster.findFirst({ where: { id: organizationMasterId, organizationId } }),
+      this.prisma.organizationMaster.findFirst({
+        where: { id: organizationMasterId, organizationId },
+      }),
       this.prisma.bankAccount.findFirst({ where: { id: paymentFromAccountId, organizationId } }),
     ]);
     if (!master) throw new NotFoundException("Organization not found");
@@ -348,7 +372,9 @@ export class DocumentPurchasesService {
 
   private async assertTenderBelongsToOrg(organizationId: string, linkedTenderId?: string | null) {
     if (!linkedTenderId) return;
-    const tender = await this.prisma.tender.findFirst({ where: { id: linkedTenderId, organizationId } });
+    const tender = await this.prisma.tender.findFirst({
+      where: { id: linkedTenderId, organizationId },
+    });
     if (!tender) throw new NotFoundException("Tender not found");
   }
 
@@ -386,7 +412,8 @@ export class DocumentPurchasesService {
   }
 
   private isTenderBusinessIdConflict(error: unknown): boolean {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false;
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002")
+      return false;
     const target = error.meta?.target;
     return Array.isArray(target)
       ? target.includes("tenderIdNormalized")
@@ -398,21 +425,30 @@ export class DocumentPurchasesService {
     userId: string,
     dto: CreateDocumentPurchaseDto,
   ): Promise<DocumentPurchaseDto> {
-    await this.assertBelongsToOrg(organizationId, dto.organizationMasterId, dto.paymentFromAccountId);
+    await this.assertBelongsToOrg(
+      organizationId,
+      dto.organizationMasterId,
+      dto.paymentFromAccountId,
+    );
     await this.assertTenderBelongsToOrg(organizationId, dto.linkedTenderId);
     if (dto.requestId && !dto.linkedTenderId) {
       throw new BadRequestException("A document purchase request must reference its linked tender");
     }
 
     const shouldCreateTender = !dto.linkedTenderId;
-    const suppliedTenderId = dto.purchaseType === "EGP" ? dto.tenderId?.trim() ?? "" : "";
-    const suppliedTenderIdNormalized = suppliedTenderId ? normalizeTenderBusinessId(suppliedTenderId) : "";
+    const suppliedTenderId = dto.purchaseType === "EGP" ? (dto.tenderId?.trim() ?? "") : "";
+    const suppliedTenderIdNormalized = suppliedTenderId
+      ? normalizeTenderBusinessId(suppliedTenderId)
+      : "";
     if (shouldCreateTender && dto.purchaseType === "EGP" && !suppliedTenderIdNormalized) {
       throw new BadRequestException("Tender ID is required for e-GP purchases");
     }
 
     if (shouldCreateTender && suppliedTenderIdNormalized) {
-      const duplicate = await this.findTenderByBusinessId(organizationId, suppliedTenderIdNormalized);
+      const duplicate = await this.findTenderByBusinessId(
+        organizationId,
+        suppliedTenderIdNormalized,
+      );
       if (duplicate) this.duplicateTenderConflict(duplicate, suppliedTenderIdNormalized);
     }
 
@@ -436,28 +472,54 @@ export class DocumentPurchasesService {
             throw new ConflictException("This approved request has already been purchased");
           }
           if (request && request.status !== DocumentPurchaseRequestStatus.APPROVED) {
-            throw new BadRequestException("Approve the document purchase request before purchasing");
+            throw new BadRequestException(
+              "Approve the document purchase request before purchasing",
+            );
           }
+
+          const requestTenderAmount = request?.tender.contractValue;
+          const estimatedTenderAmount =
+            requestTenderAmount && Number(requestTenderAmount) > 0
+              ? requestTenderAmount
+              : (dto.estimatedTenderAmount ?? 0);
+          const category = request?.tender.category?.trim() || dto.category;
 
           const purchase = await tx.documentPurchase.create({
             data: {
               organizationId,
               purchaseType: dto.purchaseType,
-              egpTenderId: dto.purchaseType === "EGP" ? request?.tender.egpTenderId ?? suppliedTenderId : null,
+              egpTenderId:
+                dto.purchaseType === "EGP"
+                  ? (request?.tender.egpTenderId ?? suppliedTenderId)
+                  : null,
               linkedTenderId: dto.linkedTenderId,
-              organizationMasterId: request?.tender.organizationMasterId ?? dto.organizationMasterId,
+              organizationMasterId:
+                request?.tender.organizationMasterId ?? dto.organizationMasterId,
               tenderWorkName: request?.tender.workName ?? dto.tenderWorkName,
               purchaseDate: new Date(dto.purchaseDate),
               documentPrice: dto.documentPrice,
-              estimatedTenderAmount: request?.tender.contractValue ?? dto.estimatedTenderAmount ?? 0,
-              category: request?.tender.category ?? dto.category,
-              submissionDate: request?.tender.submissionDeadline ?? (dto.submissionDate ? new Date(dto.submissionDate) : null),
-              openingDate: request?.tender.openingDate ?? (dto.openingDate ? new Date(dto.openingDate) : null),
+              estimatedTenderAmount,
+              category,
+              submissionDate:
+                request?.tender.submissionDeadline ??
+                (dto.submissionDate ? new Date(dto.submissionDate) : null),
+              openingDate:
+                request?.tender.openingDate ?? (dto.openingDate ? new Date(dto.openingDate) : null),
               remarks: dto.remarks,
               paymentFromAccountId: dto.paymentFromAccountId,
               createdById: userId,
             },
             include: includeRelations,
+          });
+
+          await tx.tender.update({
+            where: { id: dto.linkedTenderId, organizationId },
+            data: {
+              category,
+              ...(Number(estimatedTenderAmount) > 0
+                ? { contractValue: estimatedTenderAmount }
+                : {}),
+            },
           });
 
           if (request) {
@@ -476,7 +538,9 @@ export class DocumentPurchasesService {
               },
             });
             if (completed.count !== 1) {
-              throw new ConflictException("Document purchase request changed; reload before purchasing");
+              throw new ConflictException(
+                "Document purchase request changed; reload before purchasing",
+              );
             }
           }
           return purchase;
@@ -506,9 +570,8 @@ export class DocumentPurchasesService {
           include: includeRelations,
         });
 
-        const tenderBusinessId = dto.purchaseType === "EGP"
-          ? suppliedTenderId
-          : `MANUAL-DP-${purchase.id}`;
+        const tenderBusinessId =
+          dto.purchaseType === "EGP" ? suppliedTenderId : `MANUAL-DP-${purchase.id}`;
         const tender = await tx.tender.create({
           data: {
             organizationId,
@@ -533,8 +596,15 @@ export class DocumentPurchasesService {
         });
       });
     } catch (error) {
-      if (shouldCreateTender && suppliedTenderIdNormalized && this.isTenderBusinessIdConflict(error)) {
-        const existing = await this.findTenderByBusinessId(organizationId, suppliedTenderIdNormalized);
+      if (
+        shouldCreateTender &&
+        suppliedTenderIdNormalized &&
+        this.isTenderBusinessIdConflict(error)
+      ) {
+        const existing = await this.findTenderByBusinessId(
+          organizationId,
+          suppliedTenderIdNormalized,
+        );
         this.duplicateTenderConflict(existing, suppliedTenderIdNormalized);
       }
       throw error;
@@ -573,26 +643,53 @@ export class DocumentPurchasesService {
     }
 
     const purchaseType = dto.purchaseType ?? existing.purchaseType;
-    const record = await this.prisma.documentPurchase.update({
-      where: { id, organizationId },
-      data: {
-        ...(dto.purchaseType ? { purchaseType: dto.purchaseType } : {}),
-        egpTenderId: purchaseType === "EGP" ? dto.tenderId ?? existing.tenderId : null,
-        ...(dto.linkedTenderId !== undefined ? { linkedTenderId: dto.linkedTenderId || null } : {}),
-        ...(dto.organizationMasterId ? { organizationMasterId: dto.organizationMasterId } : {}),
-        ...(dto.tenderWorkName ? { tenderWorkName: dto.tenderWorkName } : {}),
-        ...(dto.purchaseDate ? { purchaseDate: new Date(dto.purchaseDate) } : {}),
-        ...(dto.documentPrice !== undefined ? { documentPrice: dto.documentPrice } : {}),
-        ...(dto.paymentFromAccountId ? { paymentFromAccountId: dto.paymentFromAccountId } : {}),
-        ...(dto.estimatedTenderAmount !== undefined ? { estimatedTenderAmount: dto.estimatedTenderAmount } : {}),
-        ...(dto.category !== undefined ? { category: dto.category } : {}),
-        ...(dto.submissionDate !== undefined
-          ? { submissionDate: dto.submissionDate ? new Date(dto.submissionDate) : null }
-          : {}),
-        ...(dto.openingDate !== undefined ? { openingDate: dto.openingDate ? new Date(dto.openingDate) : null } : {}),
-        ...(dto.remarks !== undefined ? { remarks: dto.remarks } : {}),
-      },
-      include: includeRelations,
+    const record = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.documentPurchase.update({
+        where: { id, organizationId },
+        data: {
+          ...(dto.purchaseType ? { purchaseType: dto.purchaseType } : {}),
+          egpTenderId: purchaseType === "EGP" ? (dto.tenderId ?? existing.tenderId) : null,
+          ...(dto.linkedTenderId !== undefined
+            ? { linkedTenderId: dto.linkedTenderId || null }
+            : {}),
+          ...(dto.organizationMasterId ? { organizationMasterId: dto.organizationMasterId } : {}),
+          ...(dto.tenderWorkName ? { tenderWorkName: dto.tenderWorkName } : {}),
+          ...(dto.purchaseDate ? { purchaseDate: new Date(dto.purchaseDate) } : {}),
+          ...(dto.documentPrice !== undefined ? { documentPrice: dto.documentPrice } : {}),
+          ...(dto.paymentFromAccountId ? { paymentFromAccountId: dto.paymentFromAccountId } : {}),
+          ...(dto.estimatedTenderAmount !== undefined
+            ? { estimatedTenderAmount: dto.estimatedTenderAmount }
+            : {}),
+          ...(dto.category !== undefined ? { category: dto.category } : {}),
+          ...(dto.submissionDate !== undefined
+            ? { submissionDate: dto.submissionDate ? new Date(dto.submissionDate) : null }
+            : {}),
+          ...(dto.openingDate !== undefined
+            ? { openingDate: dto.openingDate ? new Date(dto.openingDate) : null }
+            : {}),
+          ...(dto.remarks !== undefined ? { remarks: dto.remarks } : {}),
+        },
+        include: includeRelations,
+      });
+
+      const linkedTenderId =
+        dto.linkedTenderId !== undefined ? dto.linkedTenderId || null : existing.linkedTenderId;
+      if (
+        linkedTenderId &&
+        (dto.category !== undefined || dto.estimatedTenderAmount !== undefined)
+      ) {
+        await tx.tender.update({
+          where: { id: linkedTenderId, organizationId },
+          data: {
+            ...(dto.category !== undefined ? { category: dto.category } : {}),
+            ...(dto.estimatedTenderAmount !== undefined
+              ? { contractValue: dto.estimatedTenderAmount }
+              : {}),
+          },
+        });
+      }
+
+      return updated;
     });
 
     await this.auditLogService.record({
