@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight,
   Award,
@@ -11,15 +12,18 @@ import {
   Download,
   Eye,
   FileEdit,
+  LoaderCircle,
   MoreVertical,
   Search,
   ShieldCheck,
   SquareStack,
   Trash2,
+  X,
   XCircle,
 } from "lucide-react";
 import {
   ApiError,
+  apiRequestPaginated,
   useApproveTenderForCosting,
   useDeleteTender,
   useTenderStats,
@@ -28,13 +32,13 @@ import {
 import {
   DataTable,
   IconButton,
-  ModuleStatCard,
   Pagination,
   PrimaryButton,
   SecondaryButton,
   SelectInput,
   StatusBadge,
   TextInput,
+  cn,
 } from "@bizovix/ui";
 import { formatDate } from "@bizovix/utils";
 import {
@@ -68,16 +72,128 @@ const EMPTY_DRAFT: FilterDraft = {
   toDate: "",
 };
 
-const TENDER_TYPE_OPTIONS = ["Works", "Goods", "Services", "Physical Service"].map(
-  (value) => ({ value, label: value }),
-);
+const TENDER_TYPE_OPTIONS = ["Works", "Goods", "Services", "Physical Service"].map((value) => ({
+  value,
+  label: value,
+}));
 
 const COSTING_APPROVAL_META = {
-  DRAFT: { label: "Draft", tone: "neutral" as const },
-  PENDING_APPROVAL: { label: "Pending Approval", tone: "warning" as const },
-  APPROVED: { label: "Approved for Costing", tone: "success" as const },
-  REJECTED: { label: "Costing Rejected", tone: "danger" as const },
+  DRAFT: { label: "Not Submitted", tone: "neutral" as const },
+  PENDING_APPROVAL: { label: "Pending", tone: "warning" as const },
+  APPROVED: { label: "Approved", tone: "success" as const },
+  REJECTED: { label: "Rejected", tone: "danger" as const },
 };
+
+interface TenderSummaryCardProps {
+  icon: LucideIcon;
+  iconClassName: string;
+  label: string;
+  value: string;
+  helper: string;
+}
+
+function TenderSummaryCard({
+  icon: Icon,
+  iconClassName,
+  label,
+  value,
+  helper,
+}: TenderSummaryCardProps) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 rounded-lg border border-biz-border bg-white px-3 py-2.5 shadow-card transition-shadow hover:shadow-card-hover 2xl:min-h-[76px] 2xl:gap-3 2xl:px-4 2xl:py-3">
+      <span
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg 2xl:h-10 2xl:w-10",
+          iconClassName,
+        )}
+      >
+        <Icon className="h-4 w-4 2xl:h-[18px] 2xl:w-[18px]" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p
+          title={label}
+          className="truncate text-[11px] font-semibold leading-tight text-slate-600 xl:text-[12px] 2xl:text-[13px]"
+        >
+          {label}
+        </p>
+        <p className="mt-0.5 truncate text-[17px] font-bold leading-none text-biz-text xl:text-[18px] 2xl:text-[22px]">
+          {value}
+        </p>
+        <p
+          title={helper}
+          className="mt-1 hidden truncate text-[9.5px] font-medium leading-tight text-slate-500 xl:block 2xl:text-[11px]"
+        >
+          {helper}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+const SHORT_VIEWPORT_QUERY = "(max-height: 700px)";
+const TALL_VIEWPORT_QUERY = "(min-height: 900px)";
+const NARROW_VIEWPORT_QUERY = "(max-width: 1279px)";
+const TRACKED_DEADLINE_STATUSES = new Set<TenderStatus>([
+  "DRAFT",
+  "PUBLISHED",
+  "DOCUMENT_PURCHASED",
+  "PREPARING",
+]);
+
+function subscribeToShortViewport(onStoreChange: () => void) {
+  const mediaQuery = window.matchMedia(SHORT_VIEWPORT_QUERY);
+  mediaQuery.addEventListener("change", onStoreChange);
+  return () => mediaQuery.removeEventListener("change", onStoreChange);
+}
+
+function getShortViewportSnapshot() {
+  return window.matchMedia(SHORT_VIEWPORT_QUERY).matches;
+}
+
+function subscribeToTallViewport(onStoreChange: () => void) {
+  const mediaQuery = window.matchMedia(TALL_VIEWPORT_QUERY);
+  mediaQuery.addEventListener("change", onStoreChange);
+  return () => mediaQuery.removeEventListener("change", onStoreChange);
+}
+
+function getTallViewportSnapshot() {
+  return window.matchMedia(TALL_VIEWPORT_QUERY).matches;
+}
+
+function subscribeToNarrowViewport(onStoreChange: () => void) {
+  const mediaQuery = window.matchMedia(NARROW_VIEWPORT_QUERY);
+  mediaQuery.addEventListener("change", onStoreChange);
+  return () => mediaQuery.removeEventListener("change", onStoreChange);
+}
+
+function getNarrowViewportSnapshot() {
+  return window.matchMedia(NARROW_VIEWPORT_QUERY).matches;
+}
+
+function getResponsiveLimit(isNarrow: boolean, isShort: boolean, isTall: boolean) {
+  if (isNarrow) {
+    if (isShort) return 4;
+    return isTall ? 8 : 6;
+  }
+  if (isShort) return 6;
+  return isTall ? 10 : 8;
+}
+
+function getDeadlineMeta(value: string | null, status: TenderStatus) {
+  if (!value || !TRACKED_DEADLINE_STATUSES.has(status)) return null;
+  const due = new Date(value);
+  const today = new Date();
+  due.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+
+  if (days < 0) {
+    return { label: `${Math.abs(days)}d overdue`, className: "text-biz-danger" };
+  }
+  if (days === 0) return { label: "Due today", className: "text-biz-danger" };
+  if (days <= 7) return { label: `Due in ${days}d`, className: "text-biz-orange" };
+  return null;
+}
 
 function toCsv(rows: string[][]): string {
   return rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -102,9 +218,25 @@ export default function TendersListPage() {
   ]);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isShortViewport = React.useSyncExternalStore(
+    subscribeToShortViewport,
+    getShortViewportSnapshot,
+    () => false,
+  );
+  const isTallViewport = React.useSyncExternalStore(
+    subscribeToTallViewport,
+    getTallViewportSnapshot,
+    () => false,
+  );
+  const isNarrowViewport = React.useSyncExternalStore(
+    subscribeToNarrowViewport,
+    getNarrowViewportSnapshot,
+    () => false,
+  );
+  const responsiveLimit = getResponsiveLimit(isNarrowViewport, isShortViewport, isTallViewport);
 
   const [draft, setDraft] = React.useState<FilterDraft>(EMPTY_DRAFT);
-  const [query, setQuery] = React.useState<TenderQuery>({ page: 1, limit: 5 });
+  const [query, setQuery] = React.useState<TenderQuery>({ page: 1 });
   const [dateRangeOpen, setDateRangeOpen] = React.useState(false);
   const [menuAnchor, setMenuAnchor] = React.useState<{
     tender: TenderRecord;
@@ -118,9 +250,16 @@ export default function TendersListPage() {
   const [createTenderOpen, setCreateTenderOpen] = React.useState(false);
   const [deleteTender, setDeleteTender] = React.useState<TenderRecord | null>(null);
   const [deleteError, setDeleteError] = React.useState("");
+  const [isExporting, setIsExporting] = React.useState(false);
+  const [exportError, setExportError] = React.useState("");
+  const searchTimerRef = React.useRef<number | null>(null);
 
   const stats = useTenderStats();
-  const tenders = useTenders(query);
+  const effectiveQuery = React.useMemo(
+    () => ({ ...query, limit: responsiveLimit }),
+    [query, responsiveLimit],
+  );
+  const tenders = useTenders(effectiveQuery);
   const approveForCosting = useApproveTenderForCosting();
   const deleteTenderMutation = useDeleteTender();
 
@@ -143,6 +282,13 @@ export default function TendersListPage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [searchParams]);
+
+  React.useEffect(
+    () => () => {
+      if (searchTimerRef.current !== null) window.clearTimeout(searchTimerRef.current);
+    },
+    [],
+  );
 
   function closeSuccess() {
     setSuccessMessage("");
@@ -184,16 +330,13 @@ export default function TendersListPage() {
             : current.page,
       }));
     } catch (error) {
-      setDeleteError(
-        error instanceof ApiError ? error.message : "Could not delete this tender.",
-      );
+      setDeleteError(error instanceof ApiError ? error.message : "Could not delete this tender.");
     }
   }
 
   function applyFilters(next: FilterDraft = draft) {
     setQuery({
       page: 1,
-      limit: query.limit ?? 5,
       search: next.search || undefined,
       tenderType: next.tenderType || undefined,
       procurementMethod: (next.procurementMethod as TenderProcurementMethod) || undefined,
@@ -201,12 +344,32 @@ export default function TendersListPage() {
       fromDate: next.fromDate || undefined,
       toDate: next.toDate || undefined,
     });
-    setDateRangeOpen(false);
   }
 
   function clearFilters() {
+    if (searchTimerRef.current !== null) window.clearTimeout(searchTimerRef.current);
     setDraft(EMPTY_DRAFT);
-    setQuery({ page: 1, limit: 5 });
+    setQuery({ page: 1 });
+    setExportError("");
+  }
+
+  function updateSearch(value: string) {
+    const next = { ...draft, search: value };
+    setDraft(next);
+    if (searchTimerRef.current !== null) window.clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = window.setTimeout(() => {
+      applyFilters(next);
+      searchTimerRef.current = null;
+    }, 300);
+  }
+
+  function updateFilter(
+    key: "tenderType" | "procurementMethod" | "status" | "fromDate" | "toDate",
+    value: string,
+  ) {
+    const next = { ...draft, [key]: value };
+    setDraft(next);
+    applyFilters(next);
   }
 
   function toggleMenu(tender: TenderRecord, e: React.MouseEvent<HTMLButtonElement>) {
@@ -215,14 +378,42 @@ export default function TendersListPage() {
       return;
     }
     const rect = e.currentTarget.getBoundingClientRect();
-    setMenuAnchor({ tender, top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    const menuHeight = tender.costingApprovalStatus === "APPROVED" ? 82 : 118;
+    const belowTop = rect.bottom + 4;
+    const top = belowTop + menuHeight <= window.innerHeight ? belowTop : rect.top - menuHeight - 4;
+    setMenuAnchor({ tender, top: Math.max(8, top), right: window.innerWidth - rect.right });
   }
 
-  const meta = tenders.data?.meta ?? { page: 1, limit: 5, total: 0, totalPages: 1 };
+  const meta = tenders.data?.meta ?? {
+    page: 1,
+    limit: responsiveLimit,
+    total: 0,
+    totalPages: 1,
+  };
 
   const visibleItems = tenders.data?.items ?? [];
 
-  function exportCsv() {
+  const activeFilterCount = Object.values(draft).filter(Boolean).length;
+
+  async function exportCsv() {
+    setIsExporting(true);
+    setExportError("");
+    let exportItems: TenderRecord[] = [];
+    try {
+      const result = await apiRequestPaginated<TenderRecord>("/tenders", {
+        params: {
+          ...effectiveQuery,
+          page: 1,
+          limit: Math.max(meta.total, 1),
+        },
+      });
+      exportItems = result.items;
+    } catch (error) {
+      setExportError(error instanceof ApiError ? error.message : "Could not export tender data.");
+      setIsExporting(false);
+      return;
+    }
+
     const header = [
       "Tender ID",
       "Product / Work Name",
@@ -234,7 +425,7 @@ export default function TendersListPage() {
       "Status",
       "Costing Approval",
     ];
-    const rows = visibleItems.map((row) => [
+    const rows = exportItems.map((row) => [
       row.egpTenderId ?? "N/A",
       row.workName,
       row.tenderType ?? "Not set",
@@ -246,25 +437,51 @@ export default function TendersListPage() {
       COSTING_APPROVAL_META[row.costingApprovalStatus].label,
     ]);
     downloadCsv("tender-list.csv", [header, ...rows]);
+    setIsExporting(false);
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="scrollbar-hidden flex min-h-full flex-col gap-2 overflow-y-auto subpixel-antialiased lg:h-full lg:min-h-0 lg:overflow-hidden 2xl:gap-3">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-biz-border bg-biz-surface px-4 py-3 shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
-        <div>
-          <h1 className="text-page-title text-biz-text">Tender List</h1>
-          <p className="mt-0.5 text-[12.5px] text-biz-muted">
-            Manage tender opportunities, submission status and award lifecycle.
-          </p>
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-biz-border bg-white px-3 py-2 shadow-card 2xl:px-4 2xl:py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue 2xl:h-9 2xl:w-9">
+            <ClipboardList className="h-4 w-4 2xl:h-[18px] 2xl:w-[18px]" />
+          </span>
+          <div className="flex min-w-0 items-baseline gap-2.5">
+            <h1 className="shrink-0 text-page-title text-biz-text [@media(max-height:700px)]:text-[20px] 2xl:text-[28px]">
+              Tender List
+            </h1>
+            <p className="hidden truncate border-l border-biz-border pl-2.5 text-[11px] font-medium text-slate-500 md:block xl:text-[12px] 2xl:text-[14px]">
+              Opportunities, submissions and award lifecycle
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 2xl:gap-2">
+          {exportError && (
+            <span
+              role="alert"
+              className="max-w-[220px] truncate text-[11px] font-medium text-biz-danger 2xl:text-[12px]"
+            >
+              {exportError}
+            </span>
+          )}
           <div className="relative">
-            <SecondaryButton onClick={() => setDateRangeOpen((v) => !v)} className="h-9">
+            <SecondaryButton
+              size="sm"
+              onClick={() => setDateRangeOpen((v) => !v)}
+              className="h-8 whitespace-nowrap px-2.5 text-[11px] font-semibold xl:h-9 xl:text-[12px] 2xl:h-10 2xl:px-3.5 2xl:text-[14px]"
+            >
               <Calendar className="h-4 w-4" />
-              {draft.fromDate ? formatDate(draft.fromDate) : "From"} –{" "}
-              {draft.toDate ? formatDate(draft.toDate) : "To"}
+              {draft.fromDate || draft.toDate ? (
+                <>
+                  {draft.fromDate ? formatDate(draft.fromDate) : "Any"} –{" "}
+                  {draft.toDate ? formatDate(draft.toDate) : "Any"}
+                </>
+              ) : (
+                "Closing Date"
+              )}
             </SecondaryButton>
             {dateRangeOpen && (
               <>
@@ -274,14 +491,33 @@ export default function TendersListPage() {
                   onClick={() => setDateRangeOpen(false)}
                   aria-label="Close"
                 />
-                <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[260px] rounded-lg border border-biz-border bg-biz-surface p-3 shadow-card-hover">
+                <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-[280px] rounded-lg border border-biz-border bg-biz-surface p-3 shadow-card-hover">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[12px] font-semibold text-biz-text">Closing Date</p>
+                      <p className="text-[9px] text-biz-muted">Changes apply automatically</p>
+                    </div>
+                    {(draft.fromDate || draft.toDate) && (
+                      <button
+                        type="button"
+                        className="shrink-0 text-[10px] font-semibold text-biz-blue hover:underline"
+                        onClick={() => {
+                          const next = { ...draft, fromDate: "", toDate: "" };
+                          setDraft(next);
+                          applyFilters(next);
+                        }}
+                      >
+                        Clear dates
+                      </button>
+                    )}
+                  </div>
                   <div className="flex flex-col gap-2">
                     <label className="text-[11px] font-medium text-biz-muted">
-                      Submission Deadline From
+                      From
                       <input
                         type="date"
                         value={draft.fromDate}
-                        onChange={(e) => setDraft((d) => ({ ...d, fromDate: e.target.value }))}
+                        onChange={(e) => updateFilter("fromDate", e.target.value)}
                         className="mt-1 h-9 w-full rounded-sm border border-biz-border bg-biz-surface px-2 text-[13px] text-biz-text focus:outline-none focus:ring-2 focus:ring-biz-blue/30"
                       />
                     </label>
@@ -290,13 +526,10 @@ export default function TendersListPage() {
                       <input
                         type="date"
                         value={draft.toDate}
-                        onChange={(e) => setDraft((d) => ({ ...d, toDate: e.target.value }))}
+                        onChange={(e) => updateFilter("toDate", e.target.value)}
                         className="mt-1 h-9 w-full rounded-sm border border-biz-border bg-biz-surface px-2 text-[13px] text-biz-text focus:outline-none focus:ring-2 focus:ring-biz-blue/30"
                       />
                     </label>
-                    <PrimaryButton className="mt-1 h-9" onClick={() => applyFilters()}>
-                      Apply
-                    </PrimaryButton>
                   </div>
                 </div>
               </>
@@ -305,69 +538,59 @@ export default function TendersListPage() {
 
           <button
             type="button"
-            onClick={exportCsv}
-            title="Export as CSV"
-            className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-sm bg-biz-success px-4 text-[13px] font-medium text-white transition-colors hover:brightness-95"
+            onClick={() => void exportCsv()}
+            disabled={isExporting || tenders.isFetching || meta.total === 0}
+            title="Export all filtered tenders as CSV"
+            className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md bg-biz-success px-3 text-[11px] font-semibold text-white transition-colors hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-55 xl:h-9 xl:text-[12px] 2xl:h-10 2xl:px-4 2xl:text-[14px]"
           >
-            <Download className="h-4 w-4" />
-            Export
+            {isExporting ? (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            {isExporting ? "Exporting..." : "Export"}
           </button>
-
-          <PrimaryButton
-            type="button"
-            className="h-9"
-            onClick={() => setCreateTenderOpen(true)}
-          >
-            <FileEdit className="h-4 w-4" />
-            Add New Tender
-          </PrimaryButton>
         </div>
-      </div>
+      </header>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-6 gap-1 sm:gap-1.5 lg:gap-2 xl:gap-3">
-        <ModuleStatCard
-          compact
+      <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6 2xl:gap-3">
+        <TenderSummaryCard
           icon={SquareStack}
           iconClassName="bg-biz-blue-soft text-biz-blue"
           label="Total Tenders"
           value={String(stats.data?.total ?? "—")}
           helper="All Time"
         />
-        <ModuleStatCard
-          compact
+        <TenderSummaryCard
           icon={ClipboardList}
           iconClassName="bg-biz-orange-soft text-biz-orange"
           label="Preparing"
           value={String(stats.data?.preparing ?? "—")}
-          helper="Draft / Published / Preparing"
+          helper="Before submission"
         />
-        <ModuleStatCard
-          compact
+        <TenderSummaryCard
           icon={ArrowRight}
           iconClassName="bg-biz-purple-soft text-biz-purple"
           label="Submitted"
           value={String(stats.data?.submitted ?? "—")}
           helper="Awaiting Opening"
         />
-        <ModuleStatCard
-          compact
+        <TenderSummaryCard
           icon={Search}
           iconClassName="bg-biz-warning-soft text-biz-warning"
           label="Under Evaluation"
           value={String(stats.data?.underEvaluation ?? "—")}
-          helper="Opened / NOA Pending"
+          helper="NOA pending"
         />
-        <ModuleStatCard
-          compact
+        <TenderSummaryCard
           icon={Award}
           iconClassName="bg-biz-success-soft text-biz-success"
           label="Awarded"
           value={String(stats.data?.awarded ?? "—")}
           helper="Awarded / Ongoing"
         />
-        <ModuleStatCard
-          compact
+        <TenderSummaryCard
           icon={XCircle}
           iconClassName="bg-biz-danger-soft text-biz-danger"
           label="Unsuccessful"
@@ -376,194 +599,268 @@ export default function TendersListPage() {
         />
       </div>
 
-      {/* Filter Panel */}
-      <div className="rounded-lg border border-biz-border bg-biz-surface p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-1 min-w-[180px] flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-biz-muted">
-              Search Tender ID / Work Name
+      {/* Table workspace */}
+      <section className="flex min-h-[440px] flex-1 flex-col overflow-hidden rounded-lg border border-biz-border bg-white shadow-card lg:min-h-0">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-biz-border bg-slate-50/55 px-3 py-2.5 2xl:px-4 2xl:py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="whitespace-nowrap text-[14px] font-bold text-biz-text xl:text-[15px] 2xl:text-[18px]">
+              All Tenders
+            </h2>
+            <span className="rounded-full bg-biz-blue-soft px-2 py-0.5 text-[10px] font-semibold text-biz-blue xl:text-[11px] 2xl:px-2.5 2xl:text-[12px]">
+              {meta.total} results
+            </span>
+            {tenders.isFetching && (
+              <LoaderCircle
+                className="h-3.5 w-3.5 animate-spin text-biz-blue"
+                aria-label="Updating"
+              />
+            )}
+          </div>
+
+          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5">
+            <label className="min-w-[190px] flex-1 sm:max-w-[300px] 2xl:max-w-[380px]">
+              <span className="sr-only">Search tender ID, work name or organization</span>
+              <TextInput
+                icon={Search}
+                placeholder="Search ID, work or org..."
+                value={draft.search}
+                onChange={(event) => updateSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  if (searchTimerRef.current !== null) window.clearTimeout(searchTimerRef.current);
+                  searchTimerRef.current = null;
+                  applyFilters();
+                }}
+                className="h-8 text-[11px] xl:h-9 xl:text-[12px] 2xl:h-10 2xl:text-[14px]"
+              />
             </label>
-            <TextInput
-              icon={Search}
-              placeholder="Search..."
-              value={draft.search}
-              onChange={(e) => setDraft((d) => ({ ...d, search: e.target.value }))}
-              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-            />
+
+            <label>
+              <span className="sr-only">Tender type</span>
+              <SelectInput
+                className="h-8 w-[120px] text-[11px] xl:h-9 xl:w-[130px] xl:text-[12px] 2xl:h-10 2xl:w-[145px] 2xl:text-[14px]"
+                placeholder="All types"
+                value={draft.tenderType}
+                onChange={(event) => updateFilter("tenderType", event.target.value)}
+                options={TENDER_TYPE_OPTIONS}
+              />
+            </label>
+
+            <label>
+              <span className="sr-only">Procurement method</span>
+              <SelectInput
+                className="h-8 w-[120px] text-[11px] xl:h-9 xl:w-[130px] xl:text-[12px] 2xl:h-10 2xl:w-[145px] 2xl:text-[14px]"
+                placeholder="All methods"
+                value={draft.procurementMethod}
+                onChange={(event) => updateFilter("procurementMethod", event.target.value)}
+                options={TENDER_PROCUREMENT_METHODS.map((method) => ({
+                  value: method,
+                  label: method,
+                }))}
+              />
+            </label>
+
+            <label>
+              <span className="sr-only">Tender status</span>
+              <SelectInput
+                className="h-8 w-[120px] text-[11px] xl:h-9 xl:w-[130px] xl:text-[12px] 2xl:h-10 2xl:w-[145px] 2xl:text-[14px]"
+                placeholder="All statuses"
+                value={draft.status}
+                onChange={(event) => updateFilter("status", event.target.value)}
+                options={TENDER_STATUS_OPTIONS}
+              />
+            </label>
+
+            {activeFilterCount > 0 && (
+              <SecondaryButton
+                size="sm"
+                onClick={clearFilters}
+                className="h-8 gap-1 px-2 text-[11px] font-semibold xl:h-9 xl:text-[12px] 2xl:h-10 2xl:text-[14px]"
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear
+                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[8px] leading-none text-slate-600">
+                  {activeFilterCount}
+                </span>
+              </SecondaryButton>
+            )}
           </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-biz-muted">Tender Type</label>
-            <SelectInput
-              className="w-[160px]"
-              placeholder="All"
-              value={draft.tenderType}
-              onChange={(e) => setDraft((d) => ({ ...d, tenderType: e.target.value }))}
-              options={TENDER_TYPE_OPTIONS}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-biz-muted">Procurement Method</label>
-            <SelectInput
-              className="w-[150px]"
-              placeholder="All"
-              value={draft.procurementMethod}
-              onChange={(e) => setDraft((d) => ({ ...d, procurementMethod: e.target.value }))}
-              options={TENDER_PROCUREMENT_METHODS.map((method) => ({
-                value: method,
-                label: method,
-              }))}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-biz-muted">Status</label>
-            <SelectInput
-              className="w-[160px]"
-              placeholder="All"
-              value={draft.status}
-              onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
-              options={TENDER_STATUS_OPTIONS}
-            />
-          </div>
-
-          <PrimaryButton onClick={() => applyFilters()}>
-            <Search className="h-4 w-4" />
-            Search
-          </PrimaryButton>
-          <SecondaryButton onClick={clearFilters}>Reset</SecondaryButton>
-        </div>
-
-      </div>
-
-      {/* Table */}
-      <div className="rounded-lg border border-biz-border bg-biz-surface shadow-card">
-        <div className="flex items-center justify-between border-b border-biz-border px-4 py-3">
-          <h3 className="text-[15px] font-semibold text-biz-text">
-            All Tenders ({meta.total})
-          </h3>
         </div>
 
         <DataTable<TenderRecord>
-          containerClassName="overflow-x-hidden"
-          tableClassName="min-w-0 table-fixed text-[11px] xl:text-[12px]"
+          containerClassName="scrollbar-hidden min-h-0 flex-1 overflow-auto"
+          tableClassName="table-fixed min-w-[720px] text-[11px] [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-biz-bg [&_thead_th]:font-semibold [&_thead_th]:tracking-[0.01em] [&_thead_th]:text-slate-600 [&_tbody_tr:nth-child(even)]:bg-slate-50/35 xl:min-w-0 xl:text-[12px] 2xl:text-[14px]"
           isLoading={tenders.isLoading}
+          emptyMessage="No tenders match the selected filters."
           data={visibleItems}
           rowKey={(row) => row.id}
+          onRowClick={(row) => router.push(`/tenders/${row.id}`)}
           columns={[
             {
-              key: "tenderId",
-              header: "Tender ID",
-              className: "w-[10%] overflow-hidden px-2 xl:px-3",
+              key: "tender",
+              header: "Tender",
+              className:
+                "w-[30%] overflow-hidden px-2.5 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
               render: (row) => (
-                <span title={row.egpTenderId ?? "N/A"} className="block truncate">
-                  {row.egpTenderId ?? "N/A"}
-                </span>
+                <div className="min-w-0">
+                  <Link
+                    href={`/tenders/${row.id}`}
+                    title={row.workName}
+                    className="block truncate font-semibold text-biz-text hover:text-biz-blue hover:underline"
+                  >
+                    {row.workName}
+                  </Link>
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+                    <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
+                      {row.egpTenderId ?? "No ID"}
+                    </span>
+                    {row.organizationMaster && (
+                      <span className="truncate" title={row.organizationMaster.fullName}>
+                        {row.organizationMaster.shortName}
+                      </span>
+                    )}
+                  </div>
+                </div>
               ),
             },
             {
-              key: "work",
-              header: "Product / Work Name",
-              className: "w-[21%] overflow-hidden px-2 xl:px-3",
+              key: "typeMethod",
+              header: "Type / Method",
+              className:
+                "w-[12%] overflow-hidden px-2 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
               render: (row) => (
-                <Link
-                  href={`/tenders/${row.id}`}
-                  title={row.workName}
-                  className="line-clamp-2 w-full break-words font-medium leading-4 text-biz-blue hover:underline"
-                >
-                  {row.workName}
-                </Link>
+                <div className="min-w-0 leading-tight">
+                  <p className="truncate font-medium" title={row.tenderType ?? "Not recorded"}>
+                    {row.tenderType ?? "Not recorded"}
+                  </p>
+                  <p className="mt-1 truncate text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+                    {row.procurementMethod}
+                  </p>
+                </div>
               ),
             },
             {
-              key: "tenderType",
-              header: "Tender Type",
-              className: "hidden w-[8%] overflow-hidden whitespace-normal px-2 leading-tight lg:table-cell xl:px-3",
-              render: (row) => (
-                <span title={row.tenderType ?? "Not set"} className="block truncate">
-                  {row.tenderType ?? "Not set"}
-                </span>
-              ),
-            },
-            {
-              key: "procurementMethod",
-              header: "Procurement Method",
-              className: "w-[9%] overflow-hidden whitespace-normal px-2 leading-tight xl:px-3",
-              render: (row) => (
-                <span title={row.procurementMethod} className="block truncate">
-                  {row.procurementMethod}
-                </span>
-              ),
-            },
-            {
-              key: "closingDate",
-              header: "Closing Date",
-              className: "w-[10%] whitespace-normal px-2 leading-tight xl:px-3",
-              render: (row) =>
-                row.submissionDeadline ? formatDate(row.submissionDeadline) : "—",
+              key: "dates",
+              header: "Dates",
+              className:
+                "w-[18%] overflow-hidden px-2 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
+              render: (row) => {
+                const deadline = getDeadlineMeta(row.submissionDeadline, row.status);
+                return (
+                  <div className="min-w-0 leading-tight">
+                    <p className="truncate">
+                      <span className="text-biz-muted">Closing </span>
+                      <span className={cn("font-medium", deadline?.className)}>
+                        {row.submissionDeadline
+                          ? formatDate(row.submissionDeadline)
+                          : "Not recorded"}
+                      </span>
+                      {deadline && (
+                        <span
+                          className={cn(
+                            "ml-1 text-[10px] font-semibold xl:text-[11px] 2xl:text-[12px]",
+                            deadline.className,
+                          )}
+                        >
+                          · {deadline.label}
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-1 truncate text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+                      Found {row.findingDate ? formatDate(row.findingDate) : "Not recorded"}
+                    </p>
+                  </div>
+                );
+              },
             },
             {
               key: "foundBy",
               header: "Found By",
-              className: "hidden w-[9%] overflow-hidden px-2 lg:table-cell xl:px-3",
-              render: (row) => row.foundBy?.name ?? row.foundByName ?? "—",
-            },
-            {
-              key: "findingDate",
-              header: "Finding Date",
-              className: "hidden w-[9%] whitespace-normal px-2 leading-tight lg:table-cell xl:px-3",
-              render: (row) => (row.findingDate ? formatDate(row.findingDate) : "—"),
+              className:
+                "w-[13%] overflow-hidden px-2 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
+              render: (row) => {
+                const foundBy = row.foundBy?.name ?? row.foundByName;
+                return (
+                  <span
+                    className={cn("block truncate", !foundBy && "font-medium text-slate-500")}
+                    title={foundBy ?? "Not assigned"}
+                  >
+                    {foundBy ?? "Not assigned"}
+                  </span>
+                );
+              },
             },
             {
               key: "status",
               header: "Status",
-              className: "w-[9%] overflow-hidden px-2 xl:px-3",
+              className:
+                "w-[10%] overflow-hidden px-2 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
               render: (row) => (
                 <StatusBadge
                   label={TENDER_STATUS_META[row.status].label}
                   tone={TENDER_STATUS_META[row.status].tone}
+                  className="whitespace-nowrap px-2.5 py-1 text-[10px] font-semibold xl:text-[11px] 2xl:px-3 2xl:text-[12px]"
                 />
               ),
             },
             {
               key: "costingApproval",
-              header: "Costing Approval",
-              className: "w-[11%] overflow-hidden whitespace-normal px-2 leading-tight xl:px-3",
+              header: "Costing",
+              className:
+                "w-[12%] overflow-hidden px-2 py-2 [@media(max-height:700px)]:py-2 xl:px-3 xl:py-2.5 2xl:px-4 2xl:py-3",
               render: (row) => {
                 if (row.costingApprovalStatus === "PENDING_APPROVAL") {
                   return (
                     <div>
                       <PrimaryButton
-                        className="h-7 max-w-full gap-1 px-1.5 text-[10px] xl:px-2"
+                        className="h-7 max-w-full gap-1 px-1.5 text-[10px] font-semibold xl:h-8 xl:px-2 xl:text-[11px] 2xl:text-[12px]"
                         disabled={approveForCosting.isPending}
                         onClick={() => void approveSelectedTender(row)}
                       >
                         <ShieldCheck className="h-3.5 w-3.5" />
-                        {approveForCosting.isPending && approvalTender?.id === row.id ? "Approving..." : "Approve"}
+                        {approveForCosting.isPending && approvalTender?.id === row.id
+                          ? "Approving..."
+                          : "Approve"}
                       </PrimaryButton>
                       {approvalTender?.id === row.id && approvalError && (
-                        <p className="mt-1 max-w-40 text-[10px] leading-4 text-biz-danger">{approvalError}</p>
+                        <p className="mt-1 max-w-40 text-[10px] leading-4 text-biz-danger">
+                          {approvalError}
+                        </p>
                       )}
                     </div>
                   );
                 }
-                const meta = COSTING_APPROVAL_META[row.costingApprovalStatus];
-                return <StatusBadge label={meta.label} tone={meta.tone} />;
+                const approvalMeta = COSTING_APPROVAL_META[row.costingApprovalStatus];
+                return (
+                  <span
+                    title={
+                      row.costingApprovalStatus === "APPROVED"
+                        ? "Approved for costing"
+                        : approvalMeta.label
+                    }
+                  >
+                    <StatusBadge
+                      label={approvalMeta.label}
+                      tone={approvalMeta.tone}
+                      className="whitespace-nowrap px-2.5 py-1 text-[10px] font-semibold xl:text-[11px] 2xl:px-3 2xl:text-[12px]"
+                    />
+                  </span>
+                );
               },
             },
             {
               key: "action",
-              header: "Action",
-              className: "w-[5%] overflow-hidden bg-biz-surface px-1 text-center",
+              header: "",
+              className:
+                "w-[5%] overflow-hidden bg-white px-1 py-2 text-center [@media(max-height:700px)]:py-2 xl:py-2.5 2xl:py-3",
               render: (row) => (
                 <div className="flex items-center justify-center">
                   <IconButton
-                    aria-label="More actions"
+                    aria-label={`More actions for ${row.workName}`}
                     title="More actions"
-                    onClick={(e) => toggleMenu(row, e)}
+                    onClick={(event) => toggleMenu(row, event)}
                   >
-                    <MoreVertical className="h-4 w-4" />
+                    <MoreVertical className="h-4 w-4 2xl:h-[18px] 2xl:w-[18px]" />
                   </IconButton>
                 </div>
               ),
@@ -571,19 +868,16 @@ export default function TendersListPage() {
           ]}
         />
 
-        {meta.total > 5 && (
+        <div className="shrink-0 border-t border-biz-border bg-slate-50/60 [&>div>span]:font-medium [&>div>span]:text-slate-600 2xl:[&>div>span]:text-[13px]">
           <Pagination
             page={meta.page}
             limit={meta.limit}
             total={meta.total}
             totalPages={meta.totalPages}
-            pageSizeOptions={[5, 10, 20, 50]}
-            onLimitChange={(limit) => setQuery((current) => ({ ...current, page: 1, limit }))}
             onPageChange={(page) => setQuery((current) => ({ ...current, page }))}
-            showJumpButtons
           />
-        )}
-      </div>
+        </div>
+      </section>
 
       {menuAnchor && (
         <>

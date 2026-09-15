@@ -5,7 +5,21 @@ import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
-import { Building2, Check, FileCheck2, LoaderCircle, Save, UploadCloud } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Building2,
+  CalendarClock,
+  Check,
+  CircleDollarSign,
+  ClipboardList,
+  ContactRound,
+  FileCheck2,
+  LoaderCircle,
+  MessageSquareText,
+  PencilLine,
+  Save,
+  UploadCloud,
+} from "lucide-react";
 import {
   ApiError,
   extractTenderPdf,
@@ -19,11 +33,11 @@ import { createTenderSchema, type CreateTenderFormValues } from "@bizovix/valida
 import {
   DateInput,
   FormField,
-  PageHeader,
   PrimaryButton,
   SecondaryButton,
   SelectInput,
   TextInput,
+  cn,
 } from "@bizovix/ui";
 import {
   TENDER_PROCUREMENT_METHODS,
@@ -59,6 +73,40 @@ interface DuplicateTenderState {
   message: string;
 }
 
+interface FormSectionProps {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  className?: string;
+}
+
+function FormSection({ icon: Icon, title, description, children, className }: FormSectionProps) {
+  return (
+    <section
+      className={cn(
+        "min-w-0 overflow-hidden rounded-lg border border-biz-border bg-white shadow-[0_1px_2px_rgba(15,23,42,0.025)]",
+        className,
+      )}
+    >
+      <div className="flex items-center gap-2.5 border-b border-biz-border bg-slate-50/60 px-3 py-2 2xl:px-4 2xl:py-2.5">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue 2xl:h-8 2xl:w-8">
+          <Icon className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="truncate text-[12px] font-bold text-biz-text xl:text-[13px] 2xl:text-[15px]">
+            {title}
+          </h2>
+          <p className="hidden truncate text-[10px] font-medium text-slate-500 sm:block xl:text-[11px] 2xl:text-[12px]">
+            {description}
+          </p>
+        </div>
+      </div>
+      <div className="p-3 2xl:p-4">{children}</div>
+    </section>
+  );
+}
+
 function localDate(): string {
   const now = new Date();
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
@@ -68,9 +116,7 @@ function firstError(errors: Record<string, string[]> | undefined, key: string): 
   return errors?.[key]?.[0];
 }
 
-function unwrapPdfExtractionResult(
-  response: TenderPdfExtractionResult,
-): TenderPdfExtractionResult {
+function unwrapPdfExtractionResult(response: TenderPdfExtractionResult): TenderPdfExtractionResult {
   if (typeof response.extractedFieldCount === "number") return response;
 
   const nested = (response as unknown as { data?: TenderPdfExtractionResult }).data;
@@ -107,8 +153,7 @@ function duplicateFromError(error: unknown, fallbackTenderId: string): Duplicate
     organization:
       firstError(error.errors, "existingOrganizationShortName") ??
       firstError(error.errors, "organization"),
-    foundBy:
-      firstError(error.errors, "foundByName") ?? firstError(error.errors, "createdByName"),
+    foundBy: firstError(error.errors, "foundByName") ?? firstError(error.errors, "createdByName"),
     createdAt: firstError(error.errors, "createdAt"),
     message: error.message,
   };
@@ -149,8 +194,15 @@ export function TenderForm({
     defaultValues: {
       egpTenderId: tender?.egpTenderId ?? "",
       documentFee: tender?.documentFee == null ? null : Number(tender.documentFee),
-      estimatedTenderSecurityAmount: tender?.estimatedTenderSecurityAmount == null ? null : Number(tender.estimatedTenderSecurityAmount),
-      preBidEndDate: tender?.preBidEndDate ? new Date(new Date(tender.preBidEndDate).getTime() + 6 * 60 * 60 * 1000).toISOString().slice(0, 16) : "",
+      estimatedTenderSecurityAmount:
+        tender?.estimatedTenderSecurityAmount == null
+          ? null
+          : Number(tender.estimatedTenderSecurityAmount),
+      preBidEndDate: tender?.preBidEndDate
+        ? new Date(new Date(tender.preBidEndDate).getTime() + 6 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 16)
+        : "",
       paName: tender?.paName ?? "",
       paDesignation: tender?.paDesignation ?? "",
       paPhone: tender?.paPhone ?? "",
@@ -216,8 +268,7 @@ export function TenderForm({
           tenderType: data.tenderType ?? current.tenderType,
           procurementMethod: data.procurementMethod ?? current.procurementMethod,
           submissionDeadline: data.submissionDeadline ?? current.submissionDeadline,
-          tenderSecurityValidUpTo:
-            data.tenderSecurityValidUpTo ?? current.tenderSecurityValidUpTo,
+          tenderSecurityValidUpTo: data.tenderSecurityValidUpTo ?? current.tenderSecurityValidUpTo,
           remarks: data.remarks ?? current.remarks,
         },
         { keepDefaultValues: true },
@@ -229,9 +280,7 @@ export function TenderForm({
         `${result.extractedFieldCount} field${result.extractedFieldCount === 1 ? "" : "s"} filled from ${result.totalPages} PDF page${result.totalPages === 1 ? "" : "s"}. The PDF was not saved.${warningText}`,
       );
     } catch (error) {
-      setPdfImportError(
-        error instanceof Error ? error.message : "Could not read this tender PDF.",
-      );
+      setPdfImportError(error instanceof Error ? error.message : "Could not read this tender PDF.");
     } finally {
       setIsReadingPdf(false);
       if (pdfInputRef.current) pdfInputRef.current.value = "";
@@ -251,8 +300,7 @@ export function TenderForm({
     const foundByText = values.foundByName?.trim() ?? "";
     const selectedUser =
       users.find(
-        (user) =>
-          user.name.localeCompare(foundByText, undefined, { sensitivity: "base" }) === 0,
+        (user) => user.name.localeCompare(foundByText, undefined, { sensitivity: "base" }) === 0,
       ) ??
       (tender?.foundBy?.name.localeCompare(foundByText, undefined, { sensitivity: "base" }) === 0
         ? tender.foundBy
@@ -325,259 +373,427 @@ export function TenderForm({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div
+      className={cn(
+        "flex flex-col",
+        embedded ? "gap-4" : "h-full min-h-0 gap-2 overflow-hidden subpixel-antialiased 2xl:gap-3",
+      )}
+    >
       {!embedded && (
-        <PageHeader
-          title={mode === "create" ? "Add Tender" : "Edit Tender"}
-          subtitle="Enter the tender information, then save a draft or send it for costing approval."
-        />
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-biz-border bg-white px-3 py-2.5 shadow-card xl:px-4 2xl:px-5 2xl:py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-biz-blue-soft text-biz-blue 2xl:h-10 2xl:w-10">
+              <PencilLine className="h-[18px] w-[18px] 2xl:h-5 2xl:w-5" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="text-[20px] font-bold leading-tight text-biz-text xl:text-[22px] 2xl:text-[26px]">
+                {mode === "create" ? "Add Tender" : "Edit Tender"}
+              </h1>
+              <p className="mt-0.5 truncate text-[11px] font-medium text-slate-500 xl:text-[12px] 2xl:text-[14px]">
+                {mode === "create"
+                  ? "Record a new tender and prepare it for costing approval."
+                  : "Update tender information and continue the approval workflow."}
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full border border-biz-border bg-slate-50 px-3 py-1 text-[10px] font-semibold text-slate-600 xl:text-[11px] 2xl:text-[13px]">
+            {mode === "edit" ? `Tender ${tender?.egpTenderId ?? "—"}` : "New tender"}
+          </span>
+        </header>
       )}
 
       {embedded && (
-        <p className="text-[12px] text-biz-muted">
+        <p className="text-[12px] font-medium text-slate-500 2xl:text-[13px]">
           Enter the tender information, then save a draft or send it for costing approval.
         </p>
       )}
 
       <form
-        className={
+        className={cn(
           embedded
             ? "bg-biz-surface pt-1"
-            : "rounded-lg border border-biz-border bg-biz-surface p-6"
-        }
-      >
-        {mode === "create" && (
-          <div className="mb-6 rounded-md border border-dashed border-blue-300 bg-blue-50/50 p-3">
-            <input
-              ref={pdfInputRef}
-              type="file"
-              accept=".pdf,application/pdf"
-              className="hidden"
-              onChange={(event) => void readTenderPdf(event.target.files?.[0])}
-            />
-            <button
-              type="button"
-              disabled={isReadingPdf}
-              onClick={() => pdfInputRef.current?.click()}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                void readTenderPdf(event.dataTransfer.files?.[0]);
-              }}
-              className="flex w-full items-center justify-center gap-3 rounded-sm px-3 py-3 text-left transition-colors hover:bg-blue-100/60 disabled:cursor-wait disabled:opacity-70"
-            >
-              {isReadingPdf ? (
-                <LoaderCircle className="h-6 w-6 shrink-0 animate-spin text-biz-blue" />
-              ) : (
-                <UploadCloud className="h-6 w-6 shrink-0 text-biz-blue" />
-              )}
-              <span>
-                <span className="block text-[13px] font-semibold text-biz-text">
-                  {isReadingPdf ? "Reading tender PDF..." : "Import Tender PDF"}
-                </span>
-                <span className="block text-[11px] text-biz-muted">
-                  Drop a PDF here or click to browse. It fills this form temporarily and is never
-                  saved. Max 10 MB.
-                </span>
-              </span>
-            </button>
-            {pdfImportNotice && (
-              <p
-                aria-live="polite"
-                className="mt-2 flex items-start gap-2 rounded-sm bg-emerald-50 px-3 py-2 text-[11px] font-medium text-emerald-700"
-              >
-                <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{pdfImportNotice} Please review the filled information before saving.</span>
-              </p>
-            )}
-            {pdfImportError && (
-              <p aria-live="polite" className="mt-2 text-[12px] font-medium text-biz-danger">
-                {pdfImportError}
-              </p>
-            )}
-          </div>
+            : "flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-biz-border bg-slate-50/70 shadow-card",
         )}
-
-        <div className="grid grid-cols-1 gap-x-5 gap-y-6 lg:grid-cols-12">
-          <div className="lg:col-span-4">
-            <FormField
-              label="Tender ID"
-              required
-              helper="Tender ID must be unique"
-              error={errors.egpTenderId?.message}
-            >
-              <TextInput autoFocus placeholder="Enter Tender ID" {...register("egpTenderId")} />
-            </FormField>
-          </div>
-
-          <div className="lg:col-span-8">
-            <FormField label="Product / Work Name" required error={errors.workName?.message}>
-              <TextInput
-                icon={Building2}
-                placeholder="Enter product / work name"
-                {...register("workName")}
+      >
+        <div
+          className={cn(
+            "space-y-3 [&_input]:h-10 [&_input]:text-[12px] [&_label]:text-[12px] [&_select]:h-10 [&_select]:text-[12px] [&_textarea]:text-[12px] xl:[&_input]:text-[13px] xl:[&_label]:text-[13px] xl:[&_select]:text-[13px] xl:[&_textarea]:text-[13px] 2xl:space-y-4 2xl:[&_input]:h-11 2xl:[&_input]:text-[14px] 2xl:[&_label]:text-[14px] 2xl:[&_select]:h-11 2xl:[&_select]:text-[14px] 2xl:[&_textarea]:text-[14px]",
+            embedded ? "" : "scrollbar-hidden min-h-0 flex-1 overflow-y-auto p-3 xl:p-4 2xl:p-5",
+          )}
+        >
+          {mode === "create" && (
+            <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50/60 p-2.5 2xl:p-3">
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={(event) => void readTenderPdf(event.target.files?.[0])}
               />
-            </FormField>
-          </div>
-
-          <div className="lg:col-span-4">
-            <FormField label="Procurement Nature" error={errors.tenderType?.message}>
-              <Controller
-                control={control}
-                name="tenderType"
-                render={({ field }) => (
-                  <SelectInput
-                    {...field}
-                    placeholder="Select procurement nature"
-                    options={TENDER_TYPE_OPTIONS}
-                  />
+              <button
+                type="button"
+                disabled={isReadingPdf}
+                onClick={() => pdfInputRef.current?.click()}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  void readTenderPdf(event.dataTransfer.files?.[0]);
+                }}
+                className="flex w-full items-center justify-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-blue-100/60 disabled:cursor-wait disabled:opacity-70 2xl:py-3"
+              >
+                {isReadingPdf ? (
+                  <LoaderCircle className="h-6 w-6 shrink-0 animate-spin text-biz-blue" />
+                ) : (
+                  <UploadCloud className="h-6 w-6 shrink-0 text-biz-blue" />
                 )}
-              />
-            </FormField>
-          </div>
+                <span>
+                  <span className="block text-[13px] font-semibold text-biz-text 2xl:text-[15px]">
+                    {isReadingPdf ? "Reading tender PDF..." : "Import Tender PDF"}
+                  </span>
+                  <span className="block text-[11px] font-medium text-slate-500 2xl:text-[12px]">
+                    Drop a PDF here or click to browse. It fills the form temporarily and is never
+                    saved. Max 10 MB.
+                  </span>
+                </span>
+              </button>
+              {pdfImportNotice && (
+                <p
+                  aria-live="polite"
+                  className="mt-2 flex items-start gap-2 rounded-sm bg-emerald-50 px-3 py-2 text-[11px] font-medium text-emerald-700"
+                >
+                  <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{pdfImportNotice} Please review the filled information before saving.</span>
+                </p>
+              )}
+              {pdfImportError && (
+                <p aria-live="polite" className="mt-2 text-[12px] font-medium text-biz-danger">
+                  {pdfImportError}
+                </p>
+              )}
+            </div>
+          )}
 
-          <div className="lg:col-span-4">
-            <FormField
-              label="Procurement Method"
-              required
-              error={errors.procurementMethod?.message}
-            >
-              <Controller
-                control={control}
-                name="procurementMethod"
-                render={({ field }) => (
-                  <SelectInput
-                    {...field}
-                    options={TENDER_PROCUREMENT_METHODS.map((method) => ({
-                      value: method,
-                      label: method,
-                    }))}
-                  />
-                )}
-              />
-            </FormField>
-          </div>
-
-          <div className="lg:col-span-4">
-            <FormField
-              label="Closing / Submission Date"
-              required
-              error={errors.submissionDeadline?.message}
-            >
-              <Controller
-                control={control}
-                name="submissionDeadline"
-                render={({ field }) => <DateInput {...field} />}
-              />
-            </FormField>
-          </div>
-
-          <div className="lg:col-span-4">
-            <FormField
-              label="Tender/Proposal Security Valid Up to"
-              helper="Automatically filled from the uploaded Tender Notice when available"
-              error={errors.tenderSecurityValidUpTo?.message}
-            >
-              <Controller
-                control={control}
-                name="tenderSecurityValidUpTo"
-                render={({ field }) => <DateInput {...field} />}
-              />
-            </FormField>
-          </div>
-
-          <div className="lg:col-span-8">
-            <FormField
-              label="Search By / Found By"
-              helper="Select a suggested user or type a custom name"
-              error={errors.foundByName?.message}
-            >
-              <TextInput
-                list="tender-found-by-users"
-                placeholder="Select or type a name"
-                {...register("foundByName")}
-              />
-              <datalist id="tender-found-by-users">
-                {users.map((user) => (
-                  <option key={user.id} value={user.name} />
-                ))}
-              </datalist>
-            </FormField>
-          </div>
-
-          <div className="lg:col-span-4">
-            <FormField label="Finding Date" error={errors.findingDate?.message}>
-              <Controller
-                control={control}
-                name="findingDate"
-                render={({ field }) => <DateInput {...field} />}
-              />
-            </FormField>
-          </div>
-
-          <div className="lg:col-span-12">
-            <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {([{ key: "estimatedTenderSecurityAmount", label: "Tender Security (BDT)" }, { key: "documentFee", label: "Document Fee (BDT)" }] as const).map(({ key, label }) => (
-                <FormField key={key} label={label} htmlFor={key} error={errors[key]?.message}>
-                  <Controller control={control} name={key} render={({ field }) => (
-                    <TextInput id={key} name={field.name} type="number" min="0" step="0.01" value={field.value ?? ""} onBlur={field.onBlur} ref={field.ref}
-                      onChange={(event) => field.onChange(event.target.value === "" ? null : Number(event.target.value))} />
-                  )} />
+          <FormSection
+            icon={ClipboardList}
+            title="Tender Information"
+            description="Core identity, procurement type and organization"
+          >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-12 2xl:gap-4">
+              <div className="md:col-span-4">
+                <FormField
+                  label="Tender ID"
+                  required
+                  helper="Tender ID must be unique"
+                  error={errors.egpTenderId?.message}
+                >
+                  <TextInput autoFocus placeholder="Enter Tender ID" {...register("egpTenderId")} />
                 </FormField>
-              ))}
-              <FormField label="Meeting End Date & Time (BD)" htmlFor="preBidEndDate" error={errors.preBidEndDate?.message}>
-                <TextInput id="preBidEndDate" type="datetime-local" {...register("preBidEndDate")} />
-                {meetingEnd && !Number.isNaN(Date.parse(meetingEnd)) && <span className="text-xs text-biz-muted">{new Date(meetingEnd).toLocaleDateString("en-GB", { weekday: "long" })}</span>}
-              </FormField>
-              <FormField label="Organization" htmlFor="noticeOrganization" error={errors.noticeOrganization?.message}>
-                <TextInput id="noticeOrganization" list="tender-notice-organizations" {...register("noticeOrganization")} />
-                <datalist id="tender-notice-organizations">
-                  {(organizations.data ?? []).map((org) => <option key={org.id} value={org.fullName}>{org.shortName}</option>)}
-                </datalist>
-              </FormField>
-              <FormField label="PA Name" htmlFor="paName" error={errors.paName?.message}><TextInput id="paName" {...register("paName")} /></FormField>
-              <FormField label="PA Designation" htmlFor="paDesignation" error={errors.paDesignation?.message}><TextInput id="paDesignation" {...register("paDesignation")} /></FormField>
-              <FormField label="PA Phone Number" htmlFor="paPhone" error={errors.paPhone?.message}><TextInput id="paPhone" type="tel" {...register("paPhone")} /></FormField>
-              <div className="sm:col-span-2">
-                <FormField label="PE Address" htmlFor="paAddress" error={errors.paAddress?.message}><TextInput id="paAddress" {...register("paAddress")} /></FormField>
+              </div>
+
+              <div className="md:col-span-8">
+                <FormField label="Product / Work Name" required error={errors.workName?.message}>
+                  <TextInput
+                    icon={Building2}
+                    placeholder="Enter product / work name"
+                    {...register("workName")}
+                  />
+                </FormField>
+              </div>
+
+              <div className="md:col-span-4">
+                <FormField label="Procurement Nature" error={errors.tenderType?.message}>
+                  <Controller
+                    control={control}
+                    name="tenderType"
+                    render={({ field }) => (
+                      <SelectInput
+                        {...field}
+                        placeholder="Select procurement nature"
+                        options={TENDER_TYPE_OPTIONS}
+                      />
+                    )}
+                  />
+                </FormField>
+              </div>
+
+              <div className="md:col-span-4">
+                <FormField
+                  label="Procurement Method"
+                  required
+                  error={errors.procurementMethod?.message}
+                >
+                  <Controller
+                    control={control}
+                    name="procurementMethod"
+                    render={({ field }) => (
+                      <SelectInput
+                        {...field}
+                        options={TENDER_PROCUREMENT_METHODS.map((method) => ({
+                          value: method,
+                          label: method,
+                        }))}
+                      />
+                    )}
+                  />
+                </FormField>
+              </div>
+
+              <div className="md:col-span-4">
+                <FormField
+                  label="Organization"
+                  htmlFor="noticeOrganization"
+                  error={errors.noticeOrganization?.message}
+                >
+                  <TextInput
+                    id="noticeOrganization"
+                    list="tender-notice-organizations"
+                    {...register("noticeOrganization")}
+                  />
+                  <datalist id="tender-notice-organizations">
+                    {(organizations.data ?? []).map((org) => (
+                      <option key={org.id} value={org.fullName}>
+                        {org.shortName}
+                      </option>
+                    ))}
+                  </datalist>
+                </FormField>
               </div>
             </div>
+          </FormSection>
+
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-12 2xl:gap-4">
+            <FormSection
+              icon={CalendarClock}
+              title="Schedule & Tracking"
+              description="Deadlines, discovery and responsible person"
+              className="xl:col-span-7"
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-12 2xl:gap-4">
+                <div className="md:col-span-6">
+                  <FormField
+                    label="Closing / Submission Date"
+                    required
+                    error={errors.submissionDeadline?.message}
+                  >
+                    <Controller
+                      control={control}
+                      name="submissionDeadline"
+                      render={({ field }) => <DateInput {...field} />}
+                    />
+                  </FormField>
+                </div>
+
+                <div className="md:col-span-6">
+                  <FormField
+                    label="Security Valid Up to"
+                    helper="From Tender Notice, when available"
+                    error={errors.tenderSecurityValidUpTo?.message}
+                  >
+                    <Controller
+                      control={control}
+                      name="tenderSecurityValidUpTo"
+                      render={({ field }) => <DateInput {...field} />}
+                    />
+                  </FormField>
+                </div>
+
+                <div className="md:col-span-8">
+                  <FormField
+                    label="Search By / Found By"
+                    helper="Select a user or type a custom name"
+                    error={errors.foundByName?.message}
+                  >
+                    <TextInput
+                      list="tender-found-by-users"
+                      placeholder="Select or type a name"
+                      {...register("foundByName")}
+                    />
+                    <datalist id="tender-found-by-users">
+                      {users.map((user) => (
+                        <option key={user.id} value={user.name} />
+                      ))}
+                    </datalist>
+                  </FormField>
+                </div>
+
+                <div className="md:col-span-4">
+                  <FormField label="Finding Date" error={errors.findingDate?.message}>
+                    <Controller
+                      control={control}
+                      name="findingDate"
+                      render={({ field }) => <DateInput {...field} />}
+                    />
+                  </FormField>
+                </div>
+              </div>
+            </FormSection>
+
+            <FormSection
+              icon={CircleDollarSign}
+              title="Financial & Meeting"
+              description="Security, document fee and meeting time"
+              className="xl:col-span-5"
+            >
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 2xl:gap-4">
+                {(
+                  [
+                    {
+                      key: "estimatedTenderSecurityAmount",
+                      label: "Tender Security (BDT)",
+                    },
+                    { key: "documentFee", label: "Document Fee (BDT)" },
+                  ] as const
+                ).map(({ key, label }) => (
+                  <div key={key} className="sm:col-span-6">
+                    <FormField label={label} htmlFor={key} error={errors[key]?.message}>
+                      <Controller
+                        control={control}
+                        name={key}
+                        render={({ field }) => (
+                          <TextInput
+                            id={key}
+                            name={field.name}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={field.value ?? ""}
+                            onBlur={field.onBlur}
+                            ref={field.ref}
+                            onChange={(event) =>
+                              field.onChange(
+                                event.target.value === "" ? null : Number(event.target.value),
+                              )
+                            }
+                          />
+                        )}
+                      />
+                    </FormField>
+                  </div>
+                ))}
+                <div className="sm:col-span-12">
+                  <FormField
+                    label="Meeting End Date & Time (BD)"
+                    htmlFor="preBidEndDate"
+                    error={errors.preBidEndDate?.message}
+                  >
+                    <TextInput
+                      id="preBidEndDate"
+                      type="datetime-local"
+                      {...register("preBidEndDate")}
+                    />
+                    {meetingEnd && !Number.isNaN(Date.parse(meetingEnd)) && (
+                      <span className="text-[11px] font-medium text-slate-500 2xl:text-[12px]">
+                        {new Date(meetingEnd).toLocaleDateString("en-GB", {
+                          weekday: "long",
+                        })}
+                      </span>
+                    )}
+                  </FormField>
+                </div>
+              </div>
+            </FormSection>
+          </div>
+
+          <FormSection
+            icon={ContactRound}
+            title="Procuring Entity Contact"
+            description="Contact person information from the tender notice"
+          >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-12 2xl:gap-4">
+              <div className="md:col-span-4">
+                <FormField label="PA Name" htmlFor="paName" error={errors.paName?.message}>
+                  <TextInput id="paName" {...register("paName")} />
+                </FormField>
+              </div>
+              <div className="md:col-span-4">
+                <FormField
+                  label="PA Designation"
+                  htmlFor="paDesignation"
+                  error={errors.paDesignation?.message}
+                >
+                  <TextInput id="paDesignation" {...register("paDesignation")} />
+                </FormField>
+              </div>
+              <div className="md:col-span-4">
+                <FormField
+                  label="PA Phone Number"
+                  htmlFor="paPhone"
+                  error={errors.paPhone?.message}
+                >
+                  <TextInput id="paPhone" type="tel" {...register("paPhone")} />
+                </FormField>
+              </div>
+              <div className="md:col-span-12">
+                <FormField label="PE Address" htmlFor="paAddress" error={errors.paAddress?.message}>
+                  <TextInput id="paAddress" {...register("paAddress")} />
+                </FormField>
+              </div>
+            </div>
+          </FormSection>
+
+          <FormSection
+            icon={MessageSquareText}
+            title="Notes"
+            description="Optional internal remarks about this tender"
+          >
             <FormField label="Remarks" error={errors.remarks?.message}>
               <textarea
                 rows={3}
                 placeholder="Additional notes about this tender..."
-                className="w-full rounded-sm border border-biz-border bg-biz-surface px-3 py-2 text-[13px] text-biz-text placeholder:text-biz-muted focus:outline-none focus:ring-2 focus:ring-biz-blue/30"
+                className="min-h-[76px] w-full resize-y rounded-sm border border-biz-border bg-white px-3 py-2 text-biz-text placeholder:text-biz-muted focus:outline-none focus:ring-2 focus:ring-biz-blue/30 2xl:min-h-[96px]"
                 {...register("remarks")}
               />
             </FormField>
-          </div>
+          </FormSection>
+
+          {saveError && (
+            <p className="rounded-md border border-biz-danger/20 bg-biz-danger/5 px-3 py-2 text-[12px] font-medium text-biz-danger 2xl:text-[13px]">
+              {saveError}
+            </p>
+          )}
         </div>
 
-        {saveError && <p className="mt-4 text-[13px] text-biz-danger">{saveError}</p>}
-
-        <div className="mt-8 flex flex-wrap items-center justify-end gap-3 border-t border-biz-border pt-5">
-          <SecondaryButton
-            type="button"
-            onClick={() => (onCancel ? onCancel() : router.push("/tenders"))}
-          >
-            Cancel
-          </SecondaryButton>
-          <SecondaryButton
-            type="button"
-            disabled={isPending}
-            onClick={handleSubmit((values) => save(values, "DRAFT"))}
-          >
-            <Save className="h-4 w-4" />
-            {isPending ? "Saving..." : "Save Draft"}
-          </SecondaryButton>
-          <PrimaryButton
-            type="button"
-            disabled={isPending}
-            onClick={handleSubmit((values) => save(values, "SUBMIT"))}
-          >
-            <Check className="h-4 w-4" />
-            {isPending ? "Submitting..." : "Submit for Costing Approval"}
-          </PrimaryButton>
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-2",
+            embedded
+              ? "mt-6 justify-end border-t border-biz-border pt-4"
+              : "shrink-0 justify-between border-t border-biz-border bg-white px-3 py-2.5 xl:px-4 2xl:px-5 2xl:py-3",
+          )}
+        >
+          {!embedded && (
+            <p className="text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+              <span className="font-bold text-biz-danger">*</span> Required information must be
+              completed before submission.
+            </p>
+          )}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <SecondaryButton
+              type="button"
+              className="h-9 text-[12px] 2xl:h-10 2xl:px-4 2xl:text-[14px]"
+              onClick={() => (onCancel ? onCancel() : router.push("/tenders"))}
+            >
+              Cancel
+            </SecondaryButton>
+            <SecondaryButton
+              type="button"
+              className="h-9 text-[12px] 2xl:h-10 2xl:px-4 2xl:text-[14px]"
+              disabled={isPending}
+              onClick={handleSubmit((values) => save(values, "DRAFT"))}
+            >
+              <Save className="h-4 w-4" />
+              {isPending ? "Saving..." : "Save Draft"}
+            </SecondaryButton>
+            <PrimaryButton
+              type="button"
+              className="h-9 text-[12px] 2xl:h-10 2xl:px-4 2xl:text-[14px]"
+              disabled={isPending}
+              onClick={handleSubmit((values) => save(values, "SUBMIT"))}
+            >
+              <Check className="h-4 w-4" />
+              {isPending ? "Submitting..." : "Submit for Costing Approval"}
+            </PrimaryButton>
+          </div>
         </div>
       </form>
 
@@ -619,7 +835,6 @@ export function TenderForm({
           </div>
         )}
       </Modal>
-
     </div>
   );
 }
