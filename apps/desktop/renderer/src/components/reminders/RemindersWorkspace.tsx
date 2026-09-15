@@ -7,7 +7,6 @@ import {
   Check,
   Clock3,
   Link2,
-  MoreHorizontal,
   Plus,
   RotateCcw,
   Search,
@@ -1040,15 +1039,14 @@ export function RemindersWorkspace() {
           ) : (
             <>
               <div className="scrollbar-hidden min-h-0 flex-1 overflow-auto">
-                <table className="w-full min-w-[680px] table-fixed text-left text-[10px] xl:text-[12px] 2xl:text-[14px]">
+                <table className="w-full min-w-[680px] table-fixed text-left text-[10px] lg:text-[11px] xl:min-w-[700px] xl:text-[12px] 2xl:min-w-[840px] 2xl:text-[14px]">
                   <colgroup>
-                    <col className="w-[82px]" />
+                    <col className="w-[82px] xl:w-[86px] 2xl:w-[102px]" />
                     <col />
-                    <col className="w-[72px]" />
-                    <col className="w-[86px]" />
-                    <col className="w-[104px]" />
-                    <col className="w-[92px]" />
-                    <col className="w-[48px]" />
+                    <col className="w-[72px] xl:w-[78px] 2xl:w-[92px]" />
+                    <col className="w-[86px] xl:w-[92px] 2xl:w-[112px]" />
+                    <col className="w-[112px] xl:w-[124px] 2xl:w-[156px]" />
+                    <col className="w-[92px] xl:w-[100px] 2xl:w-[132px]" />
                   </colgroup>
                   <thead className="sticky top-0 z-10 bg-[#f4f7fb] text-[9px] font-bold uppercase tracking-wide text-biz-muted shadow-[0_1px_0_#e5eaf2] xl:text-[11px] 2xl:text-[12px]">
                     <tr>
@@ -1058,7 +1056,6 @@ export function RemindersWorkspace() {
                       <th className="px-2 py-2.5">Status</th>
                       <th className="px-2 py-2.5">Due</th>
                       <th className="px-2 py-2.5">Assigned</th>
-                      <th className="px-2 py-2.5 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1067,7 +1064,17 @@ export function RemindersWorkspace() {
                       return (
                         <tr
                           key={r.id}
-                          className="h-12 border-t border-biz-border transition-colors hover:bg-slate-50/70 2xl:h-14"
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`View reminder details: ${r.title}`}
+                          onClick={() => setSelected(r)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setSelected(r);
+                            }
+                          }}
+                          className="group h-12 cursor-pointer border-t border-biz-border transition-colors hover:bg-slate-50/70 focus-visible:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-biz-blue/40 2xl:h-14"
                         >
                           <td className="whitespace-nowrap px-2.5 font-semibold text-biz-text">
                             {dateLabel(r.dueDate)}
@@ -1078,13 +1085,12 @@ export function RemindersWorkspace() {
                             )}
                           </td>
                           <td className="min-w-0 px-2.5">
-                            <button
+                            <p
                               title={r.title}
-                              onClick={() => setSelected(r)}
-                              className="block w-full truncate text-left font-semibold text-biz-text hover:text-biz-blue"
+                              className="block w-full truncate text-left font-semibold text-biz-text transition-colors group-hover:text-biz-blue group-focus-visible:text-biz-blue"
                             >
                               {r.title}
-                            </button>
+                            </p>
                             {supportingText && (
                               <p
                                 className="mt-0.5 truncate text-[9px] text-biz-muted xl:text-[11px] 2xl:text-[13px]"
@@ -1110,7 +1116,7 @@ export function RemindersWorkspace() {
                           </td>
                           <td
                             className={cn(
-                              "whitespace-nowrap px-2 font-semibold",
+                              "overflow-hidden px-2 font-semibold",
                               r.status === "OVERDUE"
                                 ? "text-red-600"
                                 : r.status === "DUE_TODAY"
@@ -1118,22 +1124,19 @@ export function RemindersWorkspace() {
                                   : "",
                             )}
                           >
-                            {["COMPLETED", "CANCELLED"].includes(r.status)
-                              ? "—"
-                              : daysLabel(r.dueDate)}
+                            <span className="block max-w-full whitespace-normal break-words leading-tight">
+                              {["COMPLETED", "CANCELLED"].includes(r.status)
+                                ? "—"
+                                : daysLabel(r.dueDate)}
+                            </span>
                           </td>
-                          <td className="truncate px-2" title={r.assignedToName ?? "Unassigned"}>
-                            {r.assignedToName ?? "Unassigned"}
-                          </td>
-                          <td className="px-2 text-center">
-                            <button
-                              title="View and manage"
-                              aria-label={`View ${r.title}`}
-                              onClick={() => setSelected(r)}
-                              className="rounded border border-biz-border p-1.5 text-biz-muted transition-colors hover:border-biz-blue/30 hover:bg-blue-50 hover:text-biz-blue"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </button>
+                          <td
+                            className="overflow-hidden px-2"
+                            title={r.assignedToName ?? "Unassigned"}
+                          >
+                            <span className="block max-w-full truncate">
+                              {r.assignedToName ?? "Unassigned"}
+                            </span>
                           </td>
                         </tr>
                       );
