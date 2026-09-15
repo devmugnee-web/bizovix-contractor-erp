@@ -4,11 +4,12 @@ import * as React from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileText, Printer, Search } from "lucide-react";
 import { downloadTenderBillCostingPdf, downloadTenderBillCostingWord, useCostedTendersForBills, useTenderBillCostingReport } from "@bizovix/api-client";
 import type { CostedTenderBillSummary } from "@bizovix/types";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { createPdfPrintJob, type PdfPrintJob } from "@/lib/print-pdf";
 
 const PAGE_SIZE = 12;
-const money = (value: string, digits = 2) => Number(value).toLocaleString("en-US", { minimumFractionDigits: digits === 2 ? 2 : 0, maximumFractionDigits: digits });
+const money = (value: string, _digits = 2) => formatAmount(value);
 
 function ProjectCosting({ project, onBack }: { project: CostedTenderBillSummary; onBack: () => void }) {
   const report = useTenderBillCostingReport(project.id);

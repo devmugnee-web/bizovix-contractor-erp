@@ -1,8 +1,9 @@
 import type { ProjectBillRecord } from "@bizovix/types";
+import { formatAmount } from "@bizovix/utils";
 import { BILL_STATUS_META } from "./project-bills";
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
-const amount = (value: string) => Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const amount = (value: string) => formatAmount(value);
 
 /** Client-facing allowlist. Do not spread costing data or internal remarks into this document. */
 export function billPrintHtml(bill: ProjectBillRecord) {

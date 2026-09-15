@@ -32,6 +32,7 @@ import {
   StatusBadge,
   TextInput,
 } from "@bizovix/ui";
+import { formatBDT } from "@bizovix/utils";
 import type {
   SaveTenderCostingInput,
   TenderCostingItemStatus,
@@ -590,7 +591,7 @@ function normalizedSourcingType(
 }
 
 function formatMoney(value: number): string {
-  return `BDT ${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatBDT(value);
 }
 
 function formatCompactMoney(value: number): string {

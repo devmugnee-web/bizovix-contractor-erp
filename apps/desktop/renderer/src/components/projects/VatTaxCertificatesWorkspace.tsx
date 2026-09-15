@@ -47,6 +47,7 @@ import type {
   VatTaxCertificateType,
 } from "@bizovix/types";
 import { cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 type CertificateType = VatTaxCertificateType;
@@ -149,10 +150,7 @@ const CONTROL_CLASS =
   "h-[35px] w-full rounded-[5px] border border-[#dbe3ef] bg-white px-3 text-[10px] font-medium text-[#10244c] outline-none transition focus:border-[#1769e8] focus:ring-2 focus:ring-[#1769e8]/10";
 
 function formatMoney(value: number) {
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatAmount(value);
 }
 
 function formatDate(value: string | null) {

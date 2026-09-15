@@ -17,6 +17,7 @@ import type {
   SalesQuotationRecord,
 } from "@bizovix/types";
 import { cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 
 const FIELD =
   "h-9 w-full rounded-[5px] border border-[#dbe3ef] bg-white px-3 text-[11px] text-[#10244c] outline-none focus:border-[#1769e8] focus:ring-2 focus:ring-[#1769e8]/10 disabled:bg-[#f5f7fa]";
@@ -43,10 +44,7 @@ function formatDate(value: string | null | undefined) {
 }
 
 function formatMoney(value: string | number | null | undefined) {
-  const amount = Number(value ?? 0);
-  return Number.isFinite(amount)
-    ? amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : "0.00";
+  return formatAmount(value ?? 0);
 }
 
 function errorMessage(error: unknown, fallback: string) {

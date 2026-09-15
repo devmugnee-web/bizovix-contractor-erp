@@ -22,6 +22,7 @@ import {
   Upload,
 } from "lucide-react";
 import { cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import {
   useSalesQuotationCosting,
@@ -49,10 +50,7 @@ const FIELD =
   "h-[26px] rounded-[3px] border border-[#dbe3ef] bg-white px-1.5 text-right text-[7.5px] font-medium text-[#172f59] outline-none focus:border-[#1769e8] focus:ring-1 focus:ring-[#1769e8]/10";
 
 function formatMoney(value: number) {
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatAmount(value);
 }
 
 function formatQuantity(value: number) {

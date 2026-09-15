@@ -40,6 +40,7 @@ import type {
   SalesQuotationStatus,
 } from "@bizovix/types";
 import { cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { QuotationDetailDialog, QuotationFormDialog } from "../_components/quotation-dialogs";
 
@@ -71,7 +72,7 @@ const EMPTY: Filters = {
 const PAGE_SIZE = 10;
 const label = (s: SalesQuotationStatus) => s[0] + s.slice(1).toLowerCase();
 const money = (v: string | number | undefined | null) =>
-  Number(v ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  formatAmount(v ?? 0);
 const date = (v: string) =>
   v
     ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(

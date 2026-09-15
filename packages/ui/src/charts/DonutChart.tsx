@@ -26,7 +26,7 @@ export function DonutChart({
   return (
     <div
       className={
-        responsive ? "h-[76px] w-[76px] xl:h-[108px] xl:w-[108px] 2xl:h-[126px] 2xl:w-[126px]" : ""
+        responsive ? "h-[76px] w-[76px] overflow-hidden rounded-full xl:h-[108px] xl:w-[108px] 2xl:h-[126px] 2xl:w-[126px]" : "overflow-hidden rounded-full"
       }
       style={responsive ? undefined : { width: size, height: size }}
     >
@@ -52,18 +52,18 @@ export function DonutChart({
           </Pie>
         </PieChart>
         {(centerLabel || centerValue) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
+          <div className="absolute inset-[16%] flex min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden text-center">
             {centerLabel && (
-              <span className="text-[9px] font-medium leading-tight text-slate-600 2xl:text-[10px]">
+              <span className="max-w-full break-words text-[8px] font-medium leading-[1.05] text-slate-600 [overflow-wrap:anywhere] sm:text-[8.5px] 2xl:text-[10px]">
                 {centerLabel}
               </span>
             )}
             {centerValue && (
-              <span className="mt-0.5 flex max-w-[72px] flex-col items-center text-[11px] font-bold leading-tight text-biz-text 2xl:text-[13px]">
+              <span className="mt-0.5 flex max-w-full flex-col items-center overflow-hidden text-[10px] font-bold leading-[1.05] text-biz-text sm:text-[11px] 2xl:text-[13px]">
                 {valueParts ? (
                   <>
-                    <span className="whitespace-nowrap">{valueParts[1]}</span>
-                    <span>{valueParts[2]}</span>
+                    <span className="max-w-full whitespace-nowrap">{valueParts[1]}</span>
+                    <span className="max-w-full whitespace-nowrap">{valueParts[2]}</span>
                   </>
                 ) : (
                   centerValue

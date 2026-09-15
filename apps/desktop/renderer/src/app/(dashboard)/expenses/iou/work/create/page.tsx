@@ -28,6 +28,7 @@ import {
 } from "@bizovix/api-client";
 import type { CreateWorkIouInput, WorkIouPaymentMethod, WorkIouRecord } from "@bizovix/types";
 import { cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 type ExpenseFor = "TENDER" | "PROJECT";
@@ -76,7 +77,7 @@ function blankItem(date = localToday()): WorkIouItem {
 }
 
 function money(value: number) {
-  return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatAmount(value);
 }
 
 function displayDate(value: string, fallback = "dd MMM yyyy") {

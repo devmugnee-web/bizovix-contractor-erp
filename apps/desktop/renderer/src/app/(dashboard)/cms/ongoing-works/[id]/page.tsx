@@ -23,12 +23,11 @@ import {
 } from "@bizovix/api-client";
 import type { CmsWorkOverviewTransaction } from "@bizovix/types";
 import { cn } from "@bizovix/ui";
+import { formatBDT } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 const money = (value: string | number | null | undefined) =>
-  value == null
-    ? "Not Configured"
-    : `BDT ${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  value == null ? "Not Configured" : formatBDT(value);
 const dateText = (value: string | null | undefined) =>
   value
     ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(

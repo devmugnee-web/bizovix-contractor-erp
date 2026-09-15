@@ -3,10 +3,10 @@ import Link from "next/link";
 import { ArrowRight, FileChartColumn, ReceiptText, WalletCards, HandCoins } from "lucide-react";
 import { useReportSummary } from "@bizovix/api-client";
 import { cn } from "@bizovix/ui";
+import { formatBDT } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { REPORT_CATEGORIES } from "@/config/reports";
-const money = (v: unknown) =>
-  `BDT ${Number(v ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (v: unknown) => formatBDT(Number(v ?? 0));
 export function ReportCenter({ category }: { category?: string }) {
   useSetBreadcrumb([
     { label: "Reports", href: "/reports" },

@@ -10,12 +10,12 @@ import {
   Wallet,
 } from "lucide-react";
 import { DashboardKpiCard } from "@bizovix/ui";
-import { formatBDTLakh, formatDate } from "@bizovix/utils";
+import { formatAmount, formatBDTLakh, formatDate } from "@bizovix/utils";
 import type { DashboardKpis } from "@bizovix/types";
 
 export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
   return (
-    <div className="grid grid-cols-8 gap-1.5 sm:gap-2 2xl:gap-3">
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2 xl:grid-cols-8 2xl:gap-3">
       <Link
         href="/cms/ongoing-works"
         className="min-w-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-biz-blue"
@@ -25,11 +25,10 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           title="Ongoing Works"
           icon={Briefcase}
           iconClassName="bg-biz-blue-soft text-biz-blue"
+          solidClassName="border-transparent bg-[#169f98] hover:border-white/30"
           value={String(kpis.ongoingWorks.count)}
         >
-          Contract Value
-          <br />
-          {formatBDTLakh(kpis.ongoingWorks.contractValue)}
+          Value: {formatAmount(kpis.ongoingWorks.contractValue)}
         </DashboardKpiCard>
       </Link>
 
@@ -42,9 +41,10 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           title="Tender Security"
           icon={ShieldCheck}
           iconClassName="bg-biz-purple-soft text-biz-purple"
+          solidClassName="border-transparent bg-[#df4660] hover:border-white/30"
           value={formatBDTLakh(kpis.tenderSecurity.amount)}
         >
-          Instruments: {kpis.tenderSecurity.instruments}
+          {kpis.tenderSecurity.instruments} instruments
         </DashboardKpiCard>
       </Link>
 
@@ -57,9 +57,10 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           title="PG / BG"
           icon={Building2}
           iconClassName="bg-biz-orange-soft text-biz-orange"
+          solidClassName="border-transparent bg-[#168aa3] hover:border-white/30"
           value={formatBDTLakh(kpis.pgBg.amount)}
         >
-          Instruments: {kpis.pgBg.instruments}
+          {kpis.pgBg.instruments} instruments
         </DashboardKpiCard>
       </Link>
 
@@ -69,9 +70,10 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
       >
         <DashboardKpiCard
           index={4}
-          title="Security Deposit (SD)"
+          title="Security Deposit"
           icon={Lock}
           iconClassName="bg-biz-teal-soft text-biz-teal"
+          solidClassName="border-transparent bg-[#159e72] hover:border-white/30"
           value={
             kpis.securityDeposit.available
               ? formatBDTLakh(kpis.securityDeposit.amount)
@@ -79,7 +81,7 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           }
         >
           {kpis.securityDeposit.available
-            ? `Projects: ${kpis.securityDeposit.projects}`
+            ? `${kpis.securityDeposit.projects} projects`
             : "No authoritative source yet"}
         </DashboardKpiCard>
       </Link>
@@ -93,17 +95,19 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           title="Receivables"
           icon={Wallet}
           iconClassName="bg-biz-success-soft text-biz-success"
+          solidClassName="border-transparent bg-[#3569d4] hover:border-white/30"
           value={formatBDTLakh(kpis.receivables.amount)}
         >
           {kpis.receivables.bills > 0 ? (
-            <>
-              Outstanding Projects: {kpis.receivables.bills}
-              <br />
-              SD: {formatBDTLakh(kpis.receivables.securityDeposit)} · Overdue:{" "}
-              <span className="font-medium text-biz-danger">
-                {formatBDTLakh(kpis.receivables.overdue)}
+            <span className="min-w-0 leading-[1.25]">
+              <span className="block whitespace-nowrap">{kpis.receivables.bills} projects</span>
+              <span className="block whitespace-nowrap">
+                SD: {formatAmount(kpis.receivables.securityDeposit)}
+                {Number(kpis.receivables.overdue) > 0
+                  ? ` · Overdue: ${formatAmount(kpis.receivables.overdue)}`
+                  : null}
               </span>
-            </>
+            </span>
           ) : (
             "No outstanding project receivables"
           )}
@@ -119,11 +123,11 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           title="Payables"
           icon={CreditCard}
           iconClassName="bg-biz-danger-soft text-biz-danger"
+          solidClassName="border-transparent bg-[#c96a08] hover:border-white/30"
           value={formatBDTLakh(kpis.payables.amount)}
         >
-          Due Soon:{" "}
-          <span className="font-medium text-biz-orange">
-            {formatBDTLakh(kpis.payables.dueSoon)}
+          <span className="whitespace-nowrap">
+            Due Soon: {formatAmount(kpis.payables.dueSoon)}
           </span>
         </DashboardKpiCard>
       </Link>
@@ -137,9 +141,10 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
           title="Bank & Cash"
           icon={Landmark}
           iconClassName="bg-biz-blue-soft text-biz-blue"
+          solidClassName="border-transparent bg-[#805ad5] hover:border-white/30"
           value={formatBDTLakh(kpis.bankAndCash.amount)}
         >
-          Total Balance
+          Available balance
         </DashboardKpiCard>
       </Link>
 
@@ -148,6 +153,7 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
         title="Loans & EMI"
         icon={CircleDollarSign}
         iconClassName="bg-biz-purple-soft text-biz-purple"
+        solidClassName="border-transparent bg-[#dc4048] hover:border-white/30"
         value={
           kpis.loansAndEmi.configured ? formatBDTLakh(kpis.loansAndEmi.amount) : "Not Configured"
         }
@@ -161,11 +167,11 @@ export function DashboardKpiRow({ kpis }: { kpis: DashboardKpis }) {
                 {formatDate(kpis.loansAndEmi.nextEmiDate)}
               </span>
             ) : (
-              "—"
+              "-"
             )}
           </>
         ) : (
-          "No Loan/EMI module yet"
+          "Company loan not configured"
         )}
       </DashboardKpiCard>
     </div>

@@ -334,10 +334,10 @@ export default function DashboardPage() {
   return (
     <div
       className={cn(
-        "dashboard-workspace mx-auto grid h-full min-h-0 w-full max-w-[1680px] gap-2 overflow-hidden 2xl:max-w-[1760px] 2xl:gap-3",
+        "dashboard-workspace scrollbar-hidden mx-auto grid h-full min-h-0 w-full max-w-[1680px] gap-2 overflow-y-auto xl:overflow-hidden 2xl:max-w-[1760px] 2xl:gap-3",
         hasCustomPeriod
-          ? "grid-rows-[auto_minmax(0,1.08fr)_minmax(0,0.92fr)]"
-          : "grid-rows-[auto_minmax(0,0.9fr)_minmax(0,1.1fr)]",
+          ? "xl:grid-rows-[auto_minmax(0,1.08fr)_minmax(0,0.92fr)]"
+          : "xl:grid-rows-[auto_minmax(0,0.9fr)_minmax(0,1.1fr)]",
       )}
     >
       {dashboard.isLoading && <p className="text-[13px] text-biz-muted">Loading dashboard...</p>}
@@ -349,7 +349,7 @@ export default function DashboardPage() {
         <>
           <DashboardKpiRow kpis={dashboard.data.kpis} />
 
-          <div className="grid min-h-0 grid-cols-3 gap-2 xl:grid-cols-[0.92fr_0.92fr_1.35fr] 2xl:gap-3">
+          <div className="grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-3 xl:grid-cols-[0.92fr_0.92fr_1.35fr] 2xl:gap-3">
             <TargetVsAchievementCard
               data={dashboard.data.targetVsAchievement}
               periodControl={
@@ -398,7 +398,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="grid min-h-0 grid-cols-3 gap-2 2xl:gap-3">
+          <div className="grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-3 2xl:gap-3">
             <UpcomingRemindersCard items={dashboard.data.upcomingReminders} />
             <RecentTransactionsCard items={dashboard.data.recentTransactions} />
             <TopProjectsCard items={dashboard.data.topProjects} />

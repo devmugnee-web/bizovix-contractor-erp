@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, ClipboardList, Pencil, Plus, RotateCcw, Sear
 import { useMe, useWorkIous } from "@bizovix/api-client";
 import type { WorkIouStatus } from "@bizovix/types";
 import { PageHeader, buttonVariants, cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 const statusStyle: Record<WorkIouStatus, string> = {
@@ -25,7 +26,7 @@ function dateLabel(value: string) {
 }
 
 function money(value: string) {
-  return Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatAmount(value);
 }
 
 export default function WorkIouPage() {

@@ -9,6 +9,7 @@ import { useBankAccounts, useChartOfAccounts, useCreateGeneralExpense, useDelete
 import type { GeneralExpense, GeneralExpenseQuery, SaveGeneralExpenseInput } from "@bizovix/types";
 import { generalExpenseSchema, type GeneralExpenseFormValues } from "@bizovix/validation";
 import { FormField, PrimaryButton, SecondaryButton, SelectInput, TextInput, cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 const PAGE_SIZE = 5;
@@ -16,7 +17,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
 
 function money(value: string | number) {
-  return Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatAmount(value);
 }
 
 function shortDate(value: string) {

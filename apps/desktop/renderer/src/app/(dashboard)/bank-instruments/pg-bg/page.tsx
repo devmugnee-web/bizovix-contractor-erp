@@ -31,6 +31,7 @@ import type {
 } from "@bizovix/types";
 import { pgBgWorkflowSchema, type PgBgWorkflowFormValues } from "@bizovix/validation";
 import { cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { SuccessPopup } from "@/components/layout/SuccessPopup";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
@@ -59,10 +60,7 @@ const STEPS = [
 ] as const;
 
 function money(value: number | string | undefined) {
-  return Number(value || 0).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatAmount(value || 0);
 }
 
 function displayDate(value?: string) {

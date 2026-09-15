@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileText, Paperclip, Pencil, Plus, Search, XCircle } from "lucide-react";
 import { downloadDocument, downloadTenderTax, useMe, useTenderTaxDetail, useTenderTaxList, useTenderTaxMutations } from "@bizovix/api-client";
 import type { SaveTenderTaxInput, TenderTaxEntry, TenderTaxEntryKind, TenderTaxQuery, TenderTaxTotals, TenderTaxType } from "@bizovix/types";
+import { formatAmount } from "@bizovix/utils";
 import { Modal } from "@/components/layout/Modal";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { VatTaxCertificatesWorkspace } from "./VatTaxCertificatesWorkspace";
@@ -24,7 +25,7 @@ function saveRequestId() {
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
-function money(value: string) { const [whole = "0", fraction = "00"] = value.split("."); return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction.padEnd(2, "0")}`; }
+function money(value: string) { return formatAmount(value); }
 function today() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
 const method = (kind: TenderTaxEntryKind) => kind === "SELF_DEPOSIT" ? "Self Deposit" : "Bill Deduction";
 const errorText = (e: unknown) => e instanceof Error ? e.message : "Could not complete this action. Please try again.";

@@ -5,11 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Save, Trash2 } from "lucide-react";
 import { apiRequest, useCalculatePayroll, useHrCommand, useHrEmployees, useHrPayrollRuns } from "@bizovix/api-client";
 import { FormField, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 type PayrollSettings = { cycleType: string; cycleStartDay: number; paymentDay: number; salaryComponents: Array<{ name: string; percent: number }>; updatedAt?: string };
 type Entry = { presentDays: string; iouDeduction: string; loanDeduction: string; fineDeduction: string; lunchBillDeduction: string };
-const money = (value: string | number | undefined) => Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value: string | number | undefined) => formatAmount(value ?? 0);
 
 export function HrPayrollWorkspace() {
   useSetBreadcrumb([{ label: "HR & Payroll", href: "/hr-payroll" }, { label: "Payroll" }]);

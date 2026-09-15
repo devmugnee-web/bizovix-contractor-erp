@@ -7,6 +7,7 @@ import { ArrowLeft, BriefcaseBusiness, Check, ChevronDown, Save, Search, X } fro
 import { useBankAccounts, useCmsWorkOverview, useCmsWorks, useCreateReceipt } from "@bizovix/api-client";
 import type { SaveReceiptInput } from "@bizovix/types";
 import { cn } from "@bizovix/ui";
+import { formatBDT } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 const today = () => {
@@ -14,7 +15,7 @@ const today = () => {
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 10);
 };
-const money = (value?: string | number | null) => `BDT ${Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (value?: string | number | null) => formatBDT(value ?? 0);
 const numberValue = (value: string) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;

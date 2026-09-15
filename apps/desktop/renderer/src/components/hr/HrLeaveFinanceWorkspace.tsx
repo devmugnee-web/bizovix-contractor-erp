@@ -4,10 +4,11 @@ import * as React from "react";
 import { Check, Plus, X } from "lucide-react";
 import { useCreateEmployeeLoan, useCreateExpenseClaim, useCreateLeaveRequest, useHrCommand, useHrEmployees, useHrExpenseClaims, useHrLeaveRequests, useHrLeaveTypes, useHrLoans } from "@bizovix/api-client";
 import { FormField, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 const today = () => new Date().toISOString().slice(0, 10);
-const money = (value: string | number) => Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value: string | number) => formatAmount(value);
 const label = (value: string) => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 export function HrLeaveFinanceWorkspace() {

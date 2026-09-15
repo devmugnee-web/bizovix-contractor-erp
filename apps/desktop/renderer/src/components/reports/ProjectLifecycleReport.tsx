@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { formatBDT } from "@bizovix/utils";
 import {
   ArrowLeft,
   Banknote,
@@ -33,7 +34,7 @@ const numberFormatter = new Intl.NumberFormat("en-BD", {
 function money(value: unknown, empty = "--") {
   if (value === null || value === undefined || value === "") return empty;
   const amount = Number(value);
-  return Number.isFinite(amount) ? `BDT ${numberFormatter.format(amount)}` : empty;
+    return Number.isFinite(amount) ? formatBDT(amount) : empty;
 }
 
 function formatDate(value: string | null | undefined) {

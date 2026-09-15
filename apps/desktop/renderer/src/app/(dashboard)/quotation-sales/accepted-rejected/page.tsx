@@ -19,6 +19,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import {
   useExportSalesQuotationResults,
@@ -82,7 +83,7 @@ function adapt(row: SalesQuotationResultRow) {
 }
 
 function formatMoney(value: number) {
-  return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatAmount(value);
 }
 
 function formatFilterDate(value: string) {

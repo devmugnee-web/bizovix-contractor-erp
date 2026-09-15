@@ -124,7 +124,7 @@ export function CmsWorkDetailView({ workId, listHref }: { workId: string; listHr
           <DetailRow label="Work Category" value={record.workCategory} />
           <DetailRow
             label="Contract Value"
-            value={`BDT ${Number(record.contractValue).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+            value={formatBDT(record.contractValue)}
           />
           <DetailRow label="Start Date" value={record.startDate ? formatDate(record.startDate) : "Not set"} />
           <DetailRow

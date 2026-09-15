@@ -23,6 +23,7 @@ export function BusinessByCategoryCard({
       title="Business by Category"
       index={3}
       headerRight={periodControl}
+      className="min-h-[220px] xl:min-h-0"
       bodyClassName="p-1.5 sm:p-2 2xl:p-3"
     >
       <div className="flex h-full min-h-0 flex-col gap-1 2xl:gap-2">

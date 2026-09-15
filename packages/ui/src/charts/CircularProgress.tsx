@@ -24,7 +24,7 @@ export function CircularProgress({
   return (
     <div
       className={
-        responsive ? "h-[72px] w-[72px] xl:h-[104px] xl:w-[104px] 2xl:h-[120px] 2xl:w-[120px]" : ""
+        responsive ? "h-[72px] w-[72px] overflow-hidden rounded-full xl:h-[104px] xl:w-[104px] 2xl:h-[120px] 2xl:w-[120px]" : "overflow-hidden rounded-full"
       }
       style={responsive ? undefined : { width: size, height: size }}
     >
@@ -52,12 +52,12 @@ export function CircularProgress({
             background={{ fill: trackColor }}
           />
         </RadialBarChart>
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
-          <span className="text-[11px] font-bold leading-tight text-biz-text sm:text-[12px] 2xl:text-[14px]">
+        <div className="absolute inset-[16%] flex min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden text-center">
+          <span className="max-w-full whitespace-nowrap text-[10px] font-bold leading-none text-biz-text sm:text-[11px] xl:text-[12px] 2xl:text-[14px]">
             {label}
           </span>
           {sublabel && (
-            <span className="mt-0.5 text-[7px] font-medium leading-tight text-slate-600 sm:text-[8px] 2xl:text-[9px]">
+            <span className="mt-0.5 max-w-full break-words text-[6.5px] font-medium leading-[1.05] text-slate-600 [overflow-wrap:anywhere] sm:text-[7px] xl:text-[8px] 2xl:text-[9px]">
               {sublabel}
             </span>
           )}

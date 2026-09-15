@@ -22,10 +22,11 @@ import {
 } from "@bizovix/api-client";
 import type { HrJobOpening, HrLookup } from "@bizovix/types";
 import { FormField, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 const today = () => new Date().toISOString().slice(0, 10);
-const money = (value: string | number | undefined) => Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value: string | number | undefined) => formatAmount(value ?? 0);
 const titleCase = (value: string) => value.replace(/([A-Z])/g, "_$1").replaceAll("_", " ").trim().replace(/\b\w/g, (letter) => letter.toUpperCase());
 const useHrResource = <T,>(path: string, enabled = true) => useQuery({ queryKey: ["hr", path], queryFn: () => apiRequest<T>(`/hr/${path}`), enabled });
 

@@ -27,6 +27,7 @@ import {
 } from "@bizovix/api-client";
 import type { FundingType, PendingTenderSecurity, SecurityType, TenderSecurityPendingQuery, TenderStatus } from "@bizovix/types";
 import { Button, DateInput, IconButton, SelectInput, TextInput, cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 type SelectedTender = PendingTenderSecurity & {
@@ -56,7 +57,7 @@ const SECURITY_STATUS_META = {
 } as const;
 
 function money(value: number | string) {
-  return Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatAmount(value || 0);
 }
 
 function isoDateInput(value: Date) {

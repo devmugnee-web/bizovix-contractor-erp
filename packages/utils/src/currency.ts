@@ -1,31 +1,36 @@
-const inrGrouping = new Intl.NumberFormat("en-IN", {
-  maximumFractionDigits: 0,
-});
-
-const croreValue = new Intl.NumberFormat("en-IN", {
+const exactValue = new Intl.NumberFormat("en-IN", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-const lakhValue = new Intl.NumberFormat("en-IN", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+function numericAmount(amount: number | string): number {
+  const value = typeof amount === "string" ? Number(amount) : amount;
+  return Number.isFinite(value) ? value : 0;
+}
 
-/** "BDT 75,00,000" - South Asian lakh/crore digit grouping used across the ERP. */
+/**
+ * Responsive-safe ERP money display:
+ * BDT 95,000.00 -> BDT 1.25 Lakh -> BDT 2.50 Crore.
+ * Only the presentation is compacted; stored/calculated values are never changed.
+ */
 export function formatBDT(amount: number | string): string {
-  const n = typeof amount === "string" ? Number(amount) : amount;
-  return `BDT ${inrGrouping.format(Math.round(n))}`;
+  return `BDT ${formatAmount(amount)}`;
 }
 
-/** "BDT 98.45 Cr" - used for large dashboard KPI values. */
+/** Adaptive amount without a currency prefix, for screens that render BDT/Tk separately. */
+export function formatAmount(amount: number | string): string {
+  const value = numericAmount(amount);
+  const absolute = Math.abs(value);
+  if (absolute >= 1e7) return `${exactValue.format(value / 1e7)} Crore`;
+  if (absolute >= 1e5) return `${exactValue.format(value / 1e5)} Lakh`;
+  return exactValue.format(value);
+}
+
+/** Backward-compatible aliases; all money now follows the same adaptive rule. */
 export function formatBDTCompact(amount: number | string): string {
-  const n = typeof amount === "string" ? Number(amount) : amount;
-  return `BDT ${croreValue.format(n / 1e7)} Cr`;
+  return formatBDT(amount);
 }
 
-/** "BDT 984.50 Lakh" - fixed lakh unit for dashboard KPI comparisons. */
 export function formatBDTLakh(amount: number | string): string {
-  const n = typeof amount === "string" ? Number(amount) : amount;
-  return `BDT ${lakhValue.format(n / 1e5)} Lakh`;
+  return formatBDT(amount);
 }

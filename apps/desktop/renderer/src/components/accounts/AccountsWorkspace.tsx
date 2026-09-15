@@ -21,6 +21,7 @@ import {
 } from "@bizovix/api-client";
 import type { AccountingQuery, JournalRecord, LedgerAccountRecord } from "@bizovix/types";
 import { PrimaryButton, SecondaryButton, SelectInput, TextInput, cn } from "@bizovix/ui";
+import { formatBDT } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 export type AccountsView =
   | "overview"
@@ -46,8 +47,7 @@ const titles: Record<AccountsView, [string, string]> = {
   party: ["Party Ledger", "Review customer, vendor and organization account history."],
   openings: ["Opening Balances", "Post balanced initial accounting balances."],
 };
-const money = (v: unknown) =>
-  `BDT ${Number(v ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (v: unknown) => formatBDT(Number(v ?? 0));
 const date = (v: unknown) => (v ? new Date(String(v)).toLocaleDateString("en-GB") : "-");
 const today = () => new Date().toISOString().slice(0, 10);
 const normalBalanceForType = (accountType: string | undefined) =>

@@ -30,6 +30,7 @@ import {
   type CreateCreditCommitmentFormValues,
 } from "@bizovix/validation";
 import { cn } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 type ChargeRow = PendingCreditCommitmentTender & {
@@ -41,7 +42,7 @@ type ChargeRow = PendingCreditCommitmentTender & {
 const DEFAULT_QUERY: CreditCommitmentPendingQuery = { page: 1, limit: 5 };
 
 function money(value: number | string) {
-  return Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatAmount(value || 0);
 }
 
 function displayDate(value: string) {

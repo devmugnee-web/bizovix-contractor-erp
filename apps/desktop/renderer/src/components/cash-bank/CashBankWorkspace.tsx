@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { formatBDT } from "@bizovix/utils";
 import {
   ArrowRightLeft,
   Banknote,
@@ -62,8 +63,7 @@ const titles: Record<CashBankView, [string, string]> = {
   reconciliation: ["Bank Reconciliation", "Match ERP balances with real bank statement balances."],
   cheques: ["Cheque Management", "Track issued and received cheque lifecycles."],
 };
-const money = (v: unknown) =>
-  `BDT ${Number(v ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (v: unknown) => formatBDT(Number(v ?? 0));
 const date = (v: string) => new Date(v).toLocaleDateString("en-GB");
 const today = () => new Date().toISOString().slice(0, 10);
 const field =

@@ -66,10 +66,10 @@ export function UpcomingRemindersCard({ items }: { items: UpcomingReminder[] }) 
         ) : null
       }
       footer={{ label: "View all", href: "/reminders" }}
-      className="h-full min-h-0"
+      className="h-[240px] min-h-0 xl:h-full"
       bodyClassName="scrollbar-hidden overflow-y-auto bg-slate-50/40 p-1 sm:p-1.5 2xl:p-2"
     >
-      <ul className="flex min-h-0 flex-col gap-1 2xl:gap-1.5">
+      <ul className="flex h-full min-h-0 flex-col gap-1 2xl:gap-1.5">
         {items.map((item) => {
           const { icon: Icon, className } = REMINDER_ICONS[item.type] ?? DEFAULT_ICON;
           const subject = reminderSubject(item.title);
@@ -77,7 +77,7 @@ export function UpcomingRemindersCard({ items }: { items: UpcomingReminder[] }) 
           return (
             <li
               key={item.id}
-              className="group grid min-h-9 shrink-0 grid-cols-[1.5rem_minmax(0,1fr)_3.5rem] items-center gap-1.5 overflow-hidden rounded-md border border-slate-200/80 bg-white px-1.5 py-1 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors hover:border-blue-200 hover:bg-blue-50/30 2xl:min-h-12 2xl:grid-cols-[2rem_minmax(0,1fr)_4.25rem] 2xl:gap-2 2xl:px-2 2xl:py-1.5"
+              className="group grid h-8 shrink-0 grid-cols-[1.5rem_minmax(0,1fr)_3.5rem] items-center gap-1.5 overflow-hidden rounded-md border border-slate-200/80 bg-white px-1.5 py-1 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors hover:border-blue-200 hover:bg-blue-50/30 2xl:h-11 2xl:grid-cols-[2rem_minmax(0,1fr)_4.25rem] 2xl:gap-2 2xl:px-2 2xl:py-1.5"
             >
               <span
                 className={cn(

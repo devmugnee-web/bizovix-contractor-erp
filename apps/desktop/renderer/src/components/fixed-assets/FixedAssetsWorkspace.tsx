@@ -5,10 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { Calculator, PackageCheck, Plus, Save } from "lucide-react";
 import { useAssetCategories, useAssetDashboard, useBankAccounts, useCreateAssetCategory, useCreateFixedAsset, useFixedAssets, useParties, usePostAssetDepreciation } from "@bizovix/api-client";
 import { FormField, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 const today = () => new Date().toISOString().slice(0, 10);
-const money = (value: string | number | undefined) => Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value: string | number | undefined) => formatAmount(value ?? 0);
 
 export function FixedAssetsWorkspace() {
   useSetBreadcrumb([{ label: "Assets Management" }, { label: "Asset Register" }]);

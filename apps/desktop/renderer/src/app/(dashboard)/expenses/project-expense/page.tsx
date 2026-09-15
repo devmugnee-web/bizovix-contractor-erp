@@ -35,6 +35,7 @@ import {
 import type { CmsWork, ProjectExpense, ProjectExpenseQuery, SaveProjectExpenseInput } from "@bizovix/types";
 import { projectExpenseSchema, type ProjectExpenseFormValues } from "@bizovix/validation";
 import { PrimaryButton, SecondaryButton, SelectInput, TextInput } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { SuccessPopup } from "@/components/layout/SuccessPopup";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
@@ -87,7 +88,7 @@ interface ExpenseCompletion {
 }
 
 function money(value: string) {
-  return Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatAmount(value);
 }
 
 function shortDate(value: string) {

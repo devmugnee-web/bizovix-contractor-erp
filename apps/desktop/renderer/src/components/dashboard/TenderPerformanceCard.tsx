@@ -12,13 +12,16 @@ function Tile({
   colorClassName: string;
 }) {
   return (
-    <div className="min-w-0 rounded-md bg-slate-50 px-2 py-1.5 ring-1 ring-inset ring-slate-100 xl:px-3 xl:py-2 2xl:min-h-[64px] 2xl:px-4 2xl:py-2.5">
-      <p className="break-words text-[8px] font-semibold uppercase leading-tight tracking-[0.04em] text-biz-muted lg:text-[9px] xl:text-[10px] 2xl:text-[11px]">
+    <div className="flex min-h-[54px] min-w-0 flex-col items-center justify-center rounded-md bg-slate-50 px-1 py-1.5 text-center ring-1 ring-inset ring-slate-100 xl:min-h-[58px] xl:px-2 xl:py-2 2xl:min-h-[64px] 2xl:px-3 2xl:py-2.5">
+      <p
+        title={label}
+        className="w-full whitespace-nowrap text-center text-[7.5px] font-semibold uppercase leading-none tracking-[-0.025em] text-biz-muted sm:text-[8px] lg:text-[8.5px] xl:text-[9px] 2xl:text-[10.5px]"
+      >
         {label}
       </p>
       <p
         className={cn(
-          "mt-0.5 whitespace-nowrap text-[10px] font-bold leading-tight lg:text-[12px] xl:text-[14px] 2xl:text-[16px]",
+          "mt-1 w-full truncate whitespace-nowrap text-center text-[10px] font-bold leading-none sm:text-[11px] lg:text-[12px] xl:text-[14px] 2xl:text-[16px]",
           colorClassName,
         )}
       >
@@ -42,6 +45,7 @@ export function TenderPerformanceCard({
       title="Tender Performance"
       index={2}
       headerRight={periodControl}
+      className="min-h-[220px] xl:min-h-0"
       bodyClassName="p-1.5 sm:p-2 2xl:p-3"
     >
       <div className="flex h-full min-h-0 flex-col gap-1 2xl:gap-2">

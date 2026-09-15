@@ -12,10 +12,10 @@ import { useRouter } from "next/navigation";
 import { useExportReport, useReport, useReportOptions } from "@bizovix/api-client";
 import type { ReportQuery } from "@bizovix/types";
 import { PrimaryButton, SecondaryButton, SelectInput, TextInput, cn } from "@bizovix/ui";
+import { formatBDT } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { findReport, REPORT_CATEGORIES } from "@/config/reports";
-const money = (v: unknown) =>
-  `BDT ${Number(v ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (v: unknown) => formatBDT(Number(v ?? 0));
 const date = (v: unknown) => (v ? new Date(String(v)).toLocaleDateString("en-GB") : "-");
 function download(name: string, content: string) {
   const a = document.createElement("a");

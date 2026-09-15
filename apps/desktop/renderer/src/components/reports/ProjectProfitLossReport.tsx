@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@bizovix/api-client";
+import { formatAmount, formatBDT } from "@bizovix/utils";
 import {
   ArrowLeft,
   BriefcaseBusiness,
@@ -59,19 +60,12 @@ type ProfitLossReport = {
   };
 };
 
-const currencyFormatter = new Intl.NumberFormat("en-BD", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 function money(value: string | number | null | undefined) {
-  const amount = Number(value ?? 0);
-  return `BDT ${currencyFormatter.format(Number.isFinite(amount) ? amount : 0)}`;
+  return formatBDT(value ?? 0);
 }
 
 function compactMoney(value: string | number | null | undefined) {
-  const amount = Number(value ?? 0);
-  return currencyFormatter.format(Number.isFinite(amount) ? amount : 0);
+  return formatAmount(value ?? 0);
 }
 
 function formatDate(value: string | null) {

@@ -55,7 +55,8 @@ export function RecentTransactionsCard({ items }: { items: RecentTransaction[] }
     <SectionCard
       title="Recent Transactions"
       index={5}
-      className="h-full min-h-0"
+      footer={{ label: "View all", href: "/accounts/general-ledger" }}
+      className="h-[240px] min-h-0 xl:h-full"
       bodyClassName="scrollbar-hidden overflow-y-auto p-1 sm:p-1.5 2xl:p-2"
     >
       <ul className="flex h-full min-h-0 flex-col gap-1 2xl:gap-1.5">
@@ -63,7 +64,7 @@ export function RecentTransactionsCard({ items }: { items: RecentTransaction[] }
           const { icon: Icon, className } = TRANSACTION_ICONS[item.type] ?? DEFAULT_ICON;
           const href = TRANSACTION_ROUTES[item.type] ?? "/accounts/general-ledger";
           return (
-            <li key={`${item.type}-${item.id}`} className="min-h-0 flex-1">
+            <li key={`${item.type}-${item.id}`} className="h-8 shrink-0 2xl:h-11">
               <Link
                 href={href}
                 aria-label={`Open ${item.title} ${item.reference}`}
@@ -91,7 +92,7 @@ export function RecentTransactionsCard({ items }: { items: RecentTransaction[] }
                     {item.reference}
                   </p>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-0.5">
+                <div className="flex min-w-[4.75rem] shrink-0 flex-col items-end gap-1 2xl:min-w-[6rem]">
                   <span className="whitespace-nowrap text-[8px] font-bold leading-tight text-biz-text 2xl:text-[10px]">
                     {formatBDT(item.amount)}
                   </span>

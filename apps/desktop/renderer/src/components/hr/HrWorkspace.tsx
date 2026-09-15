@@ -4,11 +4,12 @@ import * as React from "react";
 import { CalendarClock, Check, Plus, Save, Upload, Users } from "lucide-react";
 import { useCalculatePayroll, useCreateEmployee, useCreateEmployeeLoan, useCreateExpenseClaim, useCreateHrLookup, useCreateJobOpening, useCreateLeaveRequest, useHrAttendance, useHrCommand, useHrDepartments, useHrDesignations, useHrEmployees, useHrExpenseClaims, useHrHolidays, useHrJobOpenings, useHrLeaveRequests, useHrLeaveTypes, useHrLoans, useHrPayrollRuns, useHrShifts, useImportAttendance } from "@bizovix/api-client";
 import { FormField, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "@bizovix/ui";
+import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 export type HrView = "employees" | "attendance" | "payroll" | "leave" | "recruitment" | "shifts";
 const today = () => new Date().toISOString().slice(0, 10);
-const money = (value: string | number) => Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value: string | number) => formatAmount(value);
 
 function Shell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   useSetBreadcrumb([{ label: "HR & Payroll" }, { label: title }]);
