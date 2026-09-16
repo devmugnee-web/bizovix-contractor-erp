@@ -9,12 +9,10 @@ import {
   FileCheck2,
   LoaderCircle,
   LockKeyhole,
-  MoreVertical,
   Plus,
   Save,
   Trash2,
   UploadCloud,
-  X,
 } from "lucide-react";
 import {
   ApiError,
@@ -815,6 +813,9 @@ function foreignCostingValidationError(item: CostingItemForm): string | null {
 type ForeignCostingInputColumn =
   "unit-fx" | "currency" | "fx-rate" | "shipping-method" | "cost-2" | "cost-3";
 
+type LocalCostingInputColumn =
+  "costing-date" | "prepared-by" | "product" | "unit" | "quantity" | "unit-price";
+
 interface ForeignCostingInputIssue {
   column: ForeignCostingInputColumn;
   message: string;
@@ -893,6 +894,9 @@ export default function TenderCostingEditorPage() {
   const [intakeValidationAttemptedIds, setIntakeValidationAttemptedIds] = React.useState<
     Set<string>
   >(new Set());
+  const [commonIntakeValidationColumns, setCommonIntakeValidationColumns] = React.useState<
+    Set<LocalCostingInputColumn>
+  >(new Set());
   const [lastPreparedByUserId, setLastPreparedByUserId] = React.useState("");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [saveError, setSaveError] = React.useState("");
@@ -933,6 +937,7 @@ export default function TenderCostingEditorPage() {
     itemId: string;
     value: string;
   } | null>(null);
+  const [inlineProductEditIds, setInlineProductEditIds] = React.useState<Set<string>>(new Set());
   const [success, setSuccess] = React.useState<{ title: string; message: string } | null>(null);
   const hydratedId = React.useRef<string | undefined>(undefined);
   const costingPdfInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -1147,6 +1152,7 @@ export default function TenderCostingEditorPage() {
     setSelectedItemIds(new Set());
     setForeignEditReturnIds(new Set());
     setIntakeValidationAttemptedIds(new Set());
+    setCommonIntakeValidationColumns(new Set());
     setCostingPdfNotice("");
     setCostingPdfError("");
     setIsDirty(false);
@@ -1174,12 +1180,6 @@ export default function TenderCostingEditorPage() {
       document.removeEventListener("click", warnBeforeLinkNavigation, true);
     };
   }, [isDirty]);
-
-  React.useEffect(() => {
-    if (!foreignCostingNotice) return;
-    const timer = window.setTimeout(() => setForeignCostingNotice(""), 3500);
-    return () => window.clearTimeout(timer);
-  }, [foreignCostingNotice]);
 
   function itemsForLcAction(action: PendingLcAction): CostingItemForm[] {
     if (action?.kind === "ITEM") {
@@ -1799,7 +1799,7 @@ export default function TenderCostingEditorPage() {
     setIsDirty(true);
   }
 
-  async function saveAllActiveForeignCosting() {
+  function saveAllActiveForeignCosting() {
     if (!bulkForeign.country || Number(bulkForeign.exchangeRate) <= 0) {
       setSaveError("Select Country and enter a valid Foreign exchange rate first.");
       return;
@@ -1835,10 +1835,7 @@ export default function TenderCostingEditorPage() {
       setSaveError(validationError ?? "No Foreign item is open for costing.");
       return;
     }
-    const saved = await save("IN_PROGRESS", updatedItems, {
-      showSuccess: false,
-    });
-    if (!saved) return;
+    setSourceFilter("ALL");
     setItems(updatedItems);
     setActiveCostingIds((current) => {
       const next = new Set(current);
@@ -1855,11 +1852,17 @@ export default function TenderCostingEditorPage() {
       targetItems.forEach((item) => next.delete(item.id));
       return next;
     });
+    setErrors((current) => {
+      if (!current.items) return current;
+      const next = { ...current };
+      delete next.items;
+      return next;
+    });
     setSaveError("");
     setForeignCostingNotice(
-      "Foreign costing prepared. Review every amount in BDT, then click Save All Costing.",
+      "Foreign costing is ready in BDT. Review all items below, complete any Local field, then click Save All Costing.",
     );
-    setIsDirty(false);
+    setIsDirty(true);
     window.setTimeout(
       () => intakeSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
       0,
@@ -1881,25 +1884,66 @@ export default function TenderCostingEditorPage() {
 
     const firstIncompleteLocalItem = localItemsToSave
       .map((item) => {
-        const missingFields: string[] = [];
-        if (!item.costingDate) missingFields.push("Costing Date");
-        if (!preparedByForItem(item)) missingFields.push("Prepared By");
-        if (!item.description.trim()) missingFields.push("Product Name");
-        if (!item.unit.trim()) missingFields.push("Unit");
+        const missingFields: Array<{
+          column: LocalCostingInputColumn;
+          label: string;
+        }> = [];
+        if (!item.costingDate) {
+          missingFields.push({ column: "costing-date", label: "Costing Date" });
+        }
+        if (!preparedByForItem(item)) {
+          missingFields.push({ column: "prepared-by", label: "Prepared By" });
+        }
+        if (!item.description.trim()) {
+          missingFields.push({ column: "product", label: "Product Name" });
+        }
+        if (!item.unit.trim()) {
+          missingFields.push({ column: "unit", label: "Unit" });
+        }
         if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
-          missingFields.push("Quantity");
+          missingFields.push({ column: "quantity", label: "Quantity" });
         }
         if (!Number.isFinite(Number(item.localUnitPrice)) || Number(item.localUnitPrice) <= 0) {
-          missingFields.push("Unit Price");
+          missingFields.push({ column: "unit-price", label: "Unit Price" });
         }
         return { item, missingFields };
       })
       .find(({ missingFields }) => missingFields.length > 0);
     if (firstIncompleteLocalItem) {
-      const rowNumber = items.findIndex((item) => item.id === firstIncompleteLocalItem.item.id) + 1;
-      setSaveError(
-        `Local row ${rowNumber}: enter ${firstIncompleteLocalItem.missingFields.join(", ")} before saving.`,
+      const firstMissingField = firstIncompleteLocalItem.missingFields[0];
+      setSourceFilter("ALL");
+      setIntakeValidationAttemptedIds((current) =>
+        new Set(current).add(firstIncompleteLocalItem.item.id),
       );
+      setCommonIntakeValidationColumns(
+        new Set(
+          firstIncompleteLocalItem.missingFields
+            .map(({ column }) => column)
+            .filter((column) => column === "costing-date" || column === "prepared-by"),
+        ),
+      );
+      setSaveError("");
+      setErrors((current) => {
+        if (!current.items) return current;
+        const next = { ...current };
+        delete next.items;
+        return next;
+      });
+      window.setTimeout(() => {
+        const intakeSection = intakeSectionRef.current;
+        const row = Array.from(
+          intakeSection?.querySelectorAll<HTMLElement>("[data-costing-row]") ?? [],
+        ).find((candidate) => candidate.dataset.costingRowId === firstIncompleteLocalItem.item.id);
+        const target = (
+          firstMissingField?.column === "costing-date" ||
+          firstMissingField?.column === "prepared-by"
+            ? intakeSection
+            : row
+        )?.querySelector<HTMLElement>(`[data-costing-column="${firstMissingField?.column}"]`);
+        (row ?? intakeSection)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (target instanceof HTMLButtonElement) target.click();
+        else target?.focus();
+      }, 0);
       return;
     }
 
@@ -2323,10 +2367,20 @@ export default function TenderCostingEditorPage() {
       item.costingStatus === "DRAFT" &&
       !activeCostingIds.has(item.id),
   );
+  const pendingForeignItems = items.filter(
+    (item) => item.sourcingType === "FOREIGN" && item.costingStatus !== "COSTED",
+  );
   const pendingLocalItems = items.filter(
     (item) => item.sourcingType === "LOCAL" && item.costingStatus !== "COSTED",
   );
   const readyToSaveCount = pendingLocalItems.length + pricingReadyItems.length;
+  const reviewItems = items.filter(
+    (item) => item.costingStatus !== "COSTED" && !activeCostingIds.has(item.id),
+  );
+  const isReviewMode =
+    activeCostingIds.size === 0 &&
+    pendingForeignItems.length > 0 &&
+    pendingForeignItems.every((item) => item.costingStatus === "DRAFT");
   const hasCalculatedCost = costedItemCount > 0;
   const isPartialCosting = hasCalculatedCost && costedItemCount < items.length;
   const foreignEditCandidates = filteredItems.filter(
@@ -2340,9 +2394,7 @@ export default function TenderCostingEditorPage() {
         : filteredItems.filter(
             (item) => item.sourcingType === "FOREIGN" && item.costingStatus !== "DRAFT",
           );
-  const shouldShowStartCosting =
-    costingCandidateItems.length > 0 &&
-    (pricingReadyItems.length === 0 || foreignEditCandidates.length > 0);
+  const shouldShowStartCosting = costingCandidateItems.length > 0;
   const canStartCosting =
     costingCandidateItems.length > 0 &&
     costingCandidateItems.every(
@@ -2458,11 +2510,21 @@ export default function TenderCostingEditorPage() {
           label="Tender ID"
           value={record.tender.egpTenderId ?? record.tender.id}
         />
-        <CostingKpi className="" label="Product / Work Name" value={record.tender.workName} />
+        <CostingKpi
+          className=""
+          label="Work Name"
+          value={record.tender.workName}
+          tooltip={record.tender.workName}
+        />
         <CostingKpi
           className=""
           label="Organization"
           value={record.tender.organizationMaster?.shortName ?? "Not set"}
+          tooltip={
+            record.tender.organizationMaster?.fullName ??
+            record.tender.organizationMaster?.shortName ??
+            "Not set"
+          }
           tone={record.tender.organizationMaster ? "default" : "warning"}
         />
         <CostingKpi
@@ -2576,7 +2638,16 @@ export default function TenderCostingEditorPage() {
                       Costing Date <RequiredMark />
                     </span>
                     <TextInput
-                      className="h-9 w-full border-slate-200 bg-white px-2 text-[11px] focus:bg-white 2xl:h-10 2xl:text-[13px]"
+                      data-costing-field
+                      data-costing-column="costing-date"
+                      aria-invalid={
+                        commonIntakeValidationColumns.has("costing-date") && !header.costingDate
+                      }
+                      className={`h-9 w-full border-slate-200 bg-white px-2 text-[11px] focus:bg-white 2xl:h-10 2xl:text-[13px] ${
+                        commonIntakeValidationColumns.has("costing-date") && !header.costingDate
+                          ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
+                          : ""
+                      }`}
                       type="date"
                       value={header.costingDate}
                       onChange={(event) => updateCommonCostingDate(event.target.value)}
@@ -2587,7 +2658,18 @@ export default function TenderCostingEditorPage() {
                       Prepared By <RequiredMark />
                     </span>
                     <SelectInput
-                      className="h-9 w-full border-slate-200 bg-white text-[11px] focus:bg-white 2xl:h-10 2xl:text-[13px]"
+                      data-costing-field
+                      data-costing-column="prepared-by"
+                      aria-invalid={
+                        commonIntakeValidationColumns.has("prepared-by") &&
+                        !effectivePreparedByUserId
+                      }
+                      className={`h-9 w-full border-slate-200 bg-white text-[11px] focus:bg-white 2xl:h-10 2xl:text-[13px] ${
+                        commonIntakeValidationColumns.has("prepared-by") &&
+                        !effectivePreparedByUserId
+                          ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
+                          : ""
+                      }`}
                       placeholder="Select user"
                       value={effectivePreparedByUserId}
                       options={(options.data?.users ?? []).map((user) => ({
@@ -2627,420 +2709,514 @@ export default function TenderCostingEditorPage() {
                   {costingPdfError}
                 </p>
               )}
-              <div className="overflow-x-hidden">
-                <table className="costing-responsive-table costing-intake-table text-left text-[10px] xl:text-[11px] 2xl:text-[11px]">
-                  <thead className="border-b border-blue-100 bg-gradient-to-r from-blue-50/80 to-slate-50 text-biz-muted">
-                    <tr>
-                      <th className="w-[2%] px-0.5 py-2 text-center">
-                        <input
-                          type="checkbox"
-                          aria-label="Select all visible items"
-                          checked={
-                            filteredItems.some((item) => item.sourcingType === "FOREIGN") &&
-                            filteredItems
-                              .filter((item) => item.sourcingType === "FOREIGN")
-                              .every((item) => selectedItemIds.has(item.id))
-                          }
-                          onChange={(event) =>
-                            setSelectedItemIds((current) => {
-                              const next = new Set(current);
+              {foreignCostingNotice && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="flex items-center gap-2 border-b border-blue-200 bg-blue-50 px-3 py-2 text-[10px] font-semibold text-blue-700 xl:text-[11px]"
+                >
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-biz-success" />
+                  <span>{foreignCostingNotice}</span>
+                </div>
+              )}
+              {isReviewMode ? (
+                <CostedItemsList
+                  mode="review"
+                  items={reviewItems}
+                  saving={saveCosting.isPending}
+                  validationAttemptedIds={intakeValidationAttemptedIds}
+                  onChange={(itemId, patch) => {
+                    const item = items.find((candidate) => candidate.id === itemId);
+                    updateItem(itemId, {
+                      ...patch,
+                      costingStatus: item?.sourcingType === "FOREIGN" ? "DRAFT" : "NOT_COSTED",
+                    });
+                  }}
+                  onSave={() => undefined}
+                  onDelete={() => undefined}
+                  onMoveToIntake={() => undefined}
+                  onEditForeign={openItemCosting}
+                />
+              ) : (
+                <div className="overflow-x-hidden">
+                  <table className="costing-responsive-table costing-intake-table text-left text-[10px] xl:text-[11px] 2xl:text-[11px]">
+                    <thead className="border-b border-blue-100 bg-gradient-to-r from-blue-50/80 to-slate-50 text-biz-muted">
+                      <tr>
+                        <th className="w-[2%] px-0.5 py-2 text-center">
+                          <input
+                            type="checkbox"
+                            aria-label="Select all visible items"
+                            checked={
+                              filteredItems.some((item) => item.sourcingType === "FOREIGN") &&
                               filteredItems
                                 .filter((item) => item.sourcingType === "FOREIGN")
-                                .forEach((item) =>
-                                  event.target.checked ? next.add(item.id) : next.delete(item.id),
-                                );
-                              return next;
-                            })
-                          }
-                        />
-                      </th>
-                      <th className="w-[2%] px-0.5 py-2">SL</th>
-                      <th className="w-[18%] px-2 py-2">
-                        Product Name <RequiredMark />
-                      </th>
-                      <th className="w-[7%] px-0.5 py-2">Source of Product</th>
-                      <th className="w-[6%] px-0.5 py-2">
-                        Unit <RequiredMark />
-                      </th>
-                      <th className="w-[5%] px-0.5 py-2">
-                        Qty <RequiredMark />
-                      </th>
-                      <th className="w-[7%] px-0.5 py-2 text-right">
-                        Unit Price <RequiredMark />
-                      </th>
-                      <th className="w-[8%] px-0.5 py-2 text-right">Total Price</th>
-                      <th className="w-[6%] px-0.5 py-2 text-right">Profit</th>
-                      <th className="w-[8%] px-0.5 py-2 text-right">Sub Total</th>
-                      <th className="w-[4%] px-0.5 py-2 text-right">VAT</th>
-                      <th className="w-[4%] px-0.5 py-2 text-right">Tax</th>
-                      <th className="w-[8%] px-0.5 py-2 text-right">Grand Total</th>
-                      <th className="w-[8%] px-0.5 py-2 text-right">Unit Sales</th>
-                      <th className="w-[7%] px-0.5 py-2 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredItems.map((item, visibleIndex) => {
-                      const originalIndex = items.findIndex((row) => row.id === item.id);
-                      const preview = calculateItemPreview(item);
-                      const showRequiredErrors = intakeValidationAttemptedIds.has(item.id);
-                      const productRequiredError = showRequiredErrors && !item.description.trim();
-                      const unitRequiredError = showRequiredErrors && !item.unit.trim();
-                      const quantityRequiredError =
-                        showRequiredErrors && Number(item.quantity) <= 0;
-                      return (
-                        <tr
-                          key={`${item.id}-${visibleIndex}`}
-                          data-costing-row
-                          data-costing-row-id={item.id}
-                          className="costing-record-row border-t border-biz-border"
-                        >
-                          <td data-label="Select" className="px-1 py-2 text-center">
-                            {item.sourcingType !== "FOREIGN" ? (
-                              <span className="text-biz-muted">-</span>
-                            ) : (
-                              <input
-                                type="checkbox"
-                                aria-label={`Select ${item.description || `item ${originalIndex + 1}`}`}
-                                checked={selectedItemIds.has(item.id)}
-                                onChange={() => toggleItemSelection(item.id)}
-                              />
-                            )}
-                          </td>
-                          <td data-label="SL" className="px-1 py-2">
-                            {item.sourceItemNo || visibleIndex + 1}
-                          </td>
-                          <td data-label="Product Name" className="costing-wide-cell px-2 py-2">
-                            <RequiredRowField>
-                              <input
-                                type="text"
-                                data-costing-field
-                                data-costing-column="product"
-                                aria-invalid={productRequiredError}
-                                aria-label={`View and edit product name: ${item.description || "empty"}`}
-                                aria-haspopup="dialog"
-                                title={item.description}
-                                readOnly
-                                className={`h-9 w-full cursor-pointer truncate rounded-md border bg-white px-2 text-[10px] font-medium text-biz-text outline-none transition-colors hover:border-biz-blue/50 focus:border-biz-blue focus:ring-2 focus:ring-biz-blue/15 ${
-                                  productRequiredError
-                                    ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
-                                    : "border-biz-border"
-                                }`}
-                                value={item.description}
-                                placeholder="Enter product"
-                                onClick={() =>
-                                  setProductEditor({ itemId: item.id, value: item.description })
-                                }
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter" || event.key === " ") {
-                                    event.preventDefault();
-                                    setProductEditor({ itemId: item.id, value: item.description });
-                                    return;
-                                  }
-                                  moveAcrossCostingRow(event);
-                                }}
-                              />
-                            </RequiredRowField>
-                          </td>
-                          <td data-label="Source" className="px-0.5 py-2">
-                            <SelectInput
-                              data-costing-field
-                              data-costing-column="source"
-                              className="h-9 min-w-0 px-1 pr-4 text-[9px]"
-                              value={item.sourcingType}
-                              options={SOURCING_OPTIONS}
-                              onChange={(event) => {
-                                const sourcingType = event.target
-                                  .value as TenderCostingSourcingType;
-                                if (sourcingType !== "FOREIGN") {
-                                  setSelectedItemIds((current) => {
-                                    const next = new Set(current);
-                                    next.delete(item.id);
-                                    return next;
-                                  });
-                                  setActiveCostingIds((current) => {
-                                    const next = new Set(current);
-                                    next.delete(item.id);
-                                    return next;
-                                  });
-                                  setForeignEditReturnIds((current) => {
-                                    const next = new Set(current);
-                                    next.delete(item.id);
-                                    return next;
-                                  });
-                                }
-                                updateItem(item.id, {
-                                  sourcingType,
-                                  selectedSource:
-                                    sourcingType === "LOCAL"
-                                      ? "LOCAL"
-                                      : sourcingType === "FOREIGN"
-                                        ? "FOREIGN"
-                                        : "",
-                                  costingStatus: "NOT_COSTED",
-                                  marginPercent:
-                                    sourcingType === "FOREIGN"
-                                      ? foreignTargetMargin
-                                      : localTargetMargin,
-                                  ...(sourcingType === "FOREIGN" ? currentForeignDefaults() : {}),
-                                });
-                              }}
-                              onKeyDown={moveAcrossCostingRow}
-                            />
-                          </td>
-                          <td data-label="Unit" className="min-w-0 px-0.5 py-2">
-                            <RequiredRowField>
-                              <SelectInput
-                                data-costing-field
-                                data-costing-column="unit"
-                                aria-invalid={unitRequiredError}
-                                title={item.unit}
-                                className={`h-9 w-full min-w-0 px-1 pr-4 text-[8.5px] xl:text-[9px] ${
-                                  unitRequiredError
-                                    ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
-                                    : ""
-                                }`}
-                                value={item.unit}
-                                options={
-                                  UNIT_OPTIONS.some((option) => option.value === item.unit)
-                                    ? UNIT_OPTIONS
-                                    : [{ value: item.unit, label: item.unit }, ...UNIT_OPTIONS]
-                                }
-                                onChange={(event) =>
-                                  updateItem(item.id, { unit: event.target.value })
-                                }
-                                onKeyDown={moveAcrossCostingRow}
-                              />
-                            </RequiredRowField>
-                          </td>
-                          <td data-label="Quantity" className="px-1 py-2">
-                            <RequiredRowField>
-                              <TextInput
-                                data-costing-field
-                                data-costing-column="quantity"
-                                aria-invalid={quantityRequiredError}
-                                hasError={quantityRequiredError}
-                                className={`h-9 min-w-0 px-1 text-[10px] ${NUMBER_INPUT_CLASS} ${
-                                  quantityRequiredError
-                                    ? "bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
-                                    : ""
-                                }`}
-                                type="number"
-                                min="0.001"
-                                step="any"
-                                value={item.quantity}
-                                onChange={(event) =>
-                                  updateItem(item.id, {
-                                    quantity: event.target.value,
-                                    costingStatus: "NOT_COSTED",
-                                  })
-                                }
-                                onKeyDown={moveAcrossCostingRow}
-                              />
-                            </RequiredRowField>
-                          </td>
-                          <td data-label="Unit Price" className="px-0.5 py-2">
-                            {item.sourcingType === "LOCAL" ? (
+                                .every((item) => selectedItemIds.has(item.id))
+                            }
+                            onChange={(event) =>
+                              setSelectedItemIds((current) => {
+                                const next = new Set(current);
+                                filteredItems
+                                  .filter((item) => item.sourcingType === "FOREIGN")
+                                  .forEach((item) =>
+                                    event.target.checked ? next.add(item.id) : next.delete(item.id),
+                                  );
+                                return next;
+                              })
+                            }
+                          />
+                        </th>
+                        <th className="w-[2%] px-0.5 py-2">SL</th>
+                        <th className="w-[18%] px-2 py-2">
+                          Product Name <RequiredMark />
+                        </th>
+                        <th className="w-[7%] px-0.5 py-2">Source of Product</th>
+                        <th className="w-[6%] px-0.5 py-2">
+                          Unit <RequiredMark />
+                        </th>
+                        <th className="w-[5%] px-0.5 py-2">
+                          Qty <RequiredMark />
+                        </th>
+                        <th className="w-[7%] px-0.5 py-2 text-right">
+                          Unit Price <RequiredMark />
+                        </th>
+                        <th className="w-[8%] px-0.5 py-2 text-right">Total Price</th>
+                        <th className="w-[6%] px-0.5 py-2 text-right">Profit</th>
+                        <th className="w-[8%] px-0.5 py-2 text-right">Sub Total</th>
+                        <th className="w-[4%] px-0.5 py-2 text-right">VAT</th>
+                        <th className="w-[4%] px-0.5 py-2 text-right">Tax</th>
+                        <th className="w-[8%] px-0.5 py-2 text-right">Grand Total</th>
+                        <th className="w-[8%] px-0.5 py-2 text-right">Unit Sales</th>
+                        <th className="w-[7%] px-0.5 py-2 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredItems.map((item, visibleIndex) => {
+                        const originalIndex = items.findIndex((row) => row.id === item.id);
+                        const preview = calculateItemPreview(item);
+                        const showRequiredErrors = intakeValidationAttemptedIds.has(item.id);
+                        const productRequiredError = showRequiredErrors && !item.description.trim();
+                        const unitRequiredError = showRequiredErrors && !item.unit.trim();
+                        const quantityRequiredError =
+                          showRequiredErrors && Number(item.quantity) <= 0;
+                        const localUnitPriceRequiredError =
+                          showRequiredErrors &&
+                          item.sourcingType === "LOCAL" &&
+                          Number(item.localUnitPrice) <= 0;
+                        const hasProductName = Boolean(item.description.trim());
+                        const isInlineProductEntry =
+                          !hasProductName || inlineProductEditIds.has(item.id);
+                        return (
+                          <tr
+                            key={`${item.id}-${visibleIndex}`}
+                            data-costing-row
+                            data-costing-row-id={item.id}
+                            className="costing-record-row border-t border-biz-border"
+                          >
+                            <td data-label="Select" className="px-1 py-2 text-center">
+                              {item.sourcingType !== "FOREIGN" ? (
+                                <span className="text-biz-muted">-</span>
+                              ) : (
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Select ${item.description || `item ${originalIndex + 1}`}`}
+                                  checked={selectedItemIds.has(item.id)}
+                                  onChange={() => toggleItemSelection(item.id)}
+                                />
+                              )}
+                            </td>
+                            <td data-label="SL" className="px-1 py-2">
+                              {item.sourceItemNo || visibleIndex + 1}
+                            </td>
+                            <td
+                              data-label="Product Name"
+                              className="costing-wide-cell px-1 py-1 transition-colors focus-within:bg-blue-50/40"
+                            >
                               <RequiredRowField>
-                                <TextInput
+                                <input
+                                  type="text"
                                   data-costing-field
-                                  data-costing-column="unit-price"
-                                  aria-invalid={Number(item.localUnitPrice) <= 0}
-                                  className={`h-8 min-w-0 px-1 text-right text-[9px] ${NUMBER_INPUT_CLASS} ${
-                                    Number(item.localUnitPrice) <= 0
-                                      ? "border-biz-danger focus:border-biz-danger focus:ring-biz-danger/20"
+                                  data-costing-column="product"
+                                  aria-invalid={productRequiredError}
+                                  aria-label={
+                                    isInlineProductEntry
+                                      ? "Enter product name"
+                                      : `View and edit full product name: ${item.description}`
+                                  }
+                                  aria-haspopup={isInlineProductEntry ? undefined : "dialog"}
+                                  title={
+                                    isInlineProductEntry
+                                      ? "Type the product name"
+                                      : `${item.description} — click to edit the full name`
+                                  }
+                                  readOnly={!isInlineProductEntry}
+                                  className={`h-9 w-full truncate border-0 bg-transparent px-1 text-[10px] font-medium text-biz-text outline-none ${
+                                    isInlineProductEntry
+                                      ? "cursor-text"
+                                      : "cursor-pointer hover:text-biz-blue"
+                                  } ${
+                                    productRequiredError
+                                      ? "bg-biz-danger/[0.03] text-biz-danger placeholder:text-biz-danger/60"
                                       : ""
                                   }`}
-                                  type="number"
-                                  min="0.000001"
-                                  step="any"
-                                  required
-                                  value={item.localUnitPrice}
-                                  onFocus={(event) => {
-                                    if (Number(item.localUnitPrice) === 0) {
-                                      updateItem(item.id, {
-                                        localUnitPrice: "",
-                                        costingStatus: "NOT_COSTED",
+                                  value={item.description}
+                                  placeholder="Enter product"
+                                  onFocus={() => {
+                                    if (hasProductName) return;
+                                    setInlineProductEditIds((current) =>
+                                      new Set(current).add(item.id),
+                                    );
+                                  }}
+                                  onClick={() => {
+                                    if (isInlineProductEntry) return;
+                                    setProductEditor({ itemId: item.id, value: item.description });
+                                  }}
+                                  onChange={(event) => {
+                                    setInlineProductEditIds((current) =>
+                                      new Set(current).add(item.id),
+                                    );
+                                    updateItem(item.id, {
+                                      description: event.target.value,
+                                      costingStatus: "NOT_COSTED",
+                                    });
+                                  }}
+                                  onBlur={() =>
+                                    setInlineProductEditIds((current) => {
+                                      const next = new Set(current);
+                                      next.delete(item.id);
+                                      return next;
+                                    })
+                                  }
+                                  onKeyDown={(event) => {
+                                    if (isInlineProductEntry) {
+                                      if (event.key === "Enter" || event.key === "Escape") {
+                                        event.preventDefault();
+                                        event.currentTarget.blur();
+                                        return;
+                                      }
+                                      moveAcrossCostingRow(event);
+                                      return;
+                                    }
+                                    if (event.key === "Enter" || event.key === " ") {
+                                      event.preventDefault();
+                                      setProductEditor({
+                                        itemId: item.id,
+                                        value: item.description,
                                       });
                                       return;
                                     }
-                                    event.currentTarget.select();
+                                    moveAcrossCostingRow(event);
                                   }}
+                                />
+                              </RequiredRowField>
+                            </td>
+                            <td data-label="Source" className="px-0.5 py-2">
+                              <SelectInput
+                                data-costing-field
+                                data-costing-column="source"
+                                className="h-9 min-w-0 px-1 pr-4 text-[9px]"
+                                value={item.sourcingType}
+                                options={SOURCING_OPTIONS}
+                                onChange={(event) => {
+                                  const sourcingType = event.target
+                                    .value as TenderCostingSourcingType;
+                                  if (sourcingType !== "FOREIGN") {
+                                    setSelectedItemIds((current) => {
+                                      const next = new Set(current);
+                                      next.delete(item.id);
+                                      return next;
+                                    });
+                                    setActiveCostingIds((current) => {
+                                      const next = new Set(current);
+                                      next.delete(item.id);
+                                      return next;
+                                    });
+                                    setForeignEditReturnIds((current) => {
+                                      const next = new Set(current);
+                                      next.delete(item.id);
+                                      return next;
+                                    });
+                                  }
+                                  updateItem(item.id, {
+                                    sourcingType,
+                                    selectedSource:
+                                      sourcingType === "LOCAL"
+                                        ? "LOCAL"
+                                        : sourcingType === "FOREIGN"
+                                          ? "FOREIGN"
+                                          : "",
+                                    costingStatus: "NOT_COSTED",
+                                    marginPercent:
+                                      sourcingType === "FOREIGN"
+                                        ? foreignTargetMargin
+                                        : localTargetMargin,
+                                    ...(sourcingType === "FOREIGN" ? currentForeignDefaults() : {}),
+                                  });
+                                }}
+                                onKeyDown={moveAcrossCostingRow}
+                              />
+                            </td>
+                            <td data-label="Unit" className="min-w-0 px-0.5 py-2">
+                              <RequiredRowField>
+                                <SelectInput
+                                  data-costing-field
+                                  data-costing-column="unit"
+                                  aria-invalid={unitRequiredError}
+                                  title={item.unit}
+                                  className={`h-9 w-full min-w-0 px-1 pr-4 text-[8.5px] xl:text-[9px] ${
+                                    unitRequiredError
+                                      ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
+                                      : ""
+                                  }`}
+                                  value={item.unit}
+                                  options={
+                                    UNIT_OPTIONS.some((option) => option.value === item.unit)
+                                      ? UNIT_OPTIONS
+                                      : [{ value: item.unit, label: item.unit }, ...UNIT_OPTIONS]
+                                  }
+                                  onChange={(event) =>
+                                    updateItem(item.id, { unit: event.target.value })
+                                  }
+                                  onKeyDown={moveAcrossCostingRow}
+                                />
+                              </RequiredRowField>
+                            </td>
+                            <td data-label="Quantity" className="px-1 py-2">
+                              <RequiredRowField>
+                                <TextInput
+                                  data-costing-field
+                                  data-costing-column="quantity"
+                                  aria-invalid={quantityRequiredError}
+                                  hasError={quantityRequiredError}
+                                  className={`h-9 min-w-0 px-1 text-[10px] ${NUMBER_INPUT_CLASS} ${
+                                    quantityRequiredError
+                                      ? "bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
+                                      : ""
+                                  }`}
+                                  type="number"
+                                  min="0.001"
+                                  step="any"
+                                  value={item.quantity}
                                   onChange={(event) =>
                                     updateItem(item.id, {
-                                      localUnitPrice: event.target.value,
+                                      quantity: event.target.value,
                                       costingStatus: "NOT_COSTED",
                                     })
                                   }
                                   onKeyDown={moveAcrossCostingRow}
                                 />
                               </RequiredRowField>
-                            ) : (
-                              <span className="block text-right font-medium text-biz-text">
-                                {preview.selectedUnitCost > 0
-                                  ? formatCompactMoney(preview.selectedUnitCost)
+                            </td>
+                            <td data-label="Unit Price" className="px-0.5 py-2">
+                              {item.sourcingType === "LOCAL" ? (
+                                <RequiredRowField>
+                                  <TextInput
+                                    data-costing-field
+                                    data-costing-column="unit-price"
+                                    aria-invalid={localUnitPriceRequiredError}
+                                    className={`h-8 min-w-0 px-1 text-right text-[9px] ${NUMBER_INPUT_CLASS} ${
+                                      localUnitPriceRequiredError
+                                        ? "border-biz-danger focus:border-biz-danger focus:ring-biz-danger/20"
+                                        : ""
+                                    }`}
+                                    type="number"
+                                    min="0.000001"
+                                    step="any"
+                                    required
+                                    value={item.localUnitPrice}
+                                    onFocus={(event) => {
+                                      if (Number(item.localUnitPrice) === 0) {
+                                        updateItem(item.id, {
+                                          localUnitPrice: "",
+                                          costingStatus: "NOT_COSTED",
+                                        });
+                                        return;
+                                      }
+                                      event.currentTarget.select();
+                                    }}
+                                    onChange={(event) =>
+                                      updateItem(item.id, {
+                                        localUnitPrice: event.target.value,
+                                        costingStatus: "NOT_COSTED",
+                                      })
+                                    }
+                                    onKeyDown={moveAcrossCostingRow}
+                                  />
+                                </RequiredRowField>
+                              ) : (
+                                <span className="block text-right font-medium text-biz-text">
+                                  {preview.selectedUnitCost > 0
+                                    ? formatCompactMoney(preview.selectedUnitCost)
+                                    : "—"}
+                                </span>
+                              )}
+                            </td>
+                            <td
+                              data-label="Total Price"
+                              className="px-0.5 py-2 text-right font-medium text-biz-text"
+                            >
+                              {preview.selectedCostBeforeProfit > 0
+                                ? formatCompactMoney(preview.selectedCostBeforeProfit)
+                                : "—"}
+                            </td>
+                            <td data-label="Profit %" className="relative px-0.5 py-2">
+                              <TextInput
+                                data-costing-field
+                                data-costing-column="profit"
+                                aria-label={`Profit percentage for ${item.description || `item ${originalIndex + 1}`}`}
+                                title={`Calculated profit: ${formatCompactMoney(preview.totalProfit)}`}
+                                className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                                type="number"
+                                min="0"
+                                max="99.99"
+                                step="any"
+                                value={item.marginPercent}
+                                onFocus={(event) => event.currentTarget.select()}
+                                onChange={(event) =>
+                                  updateItem(item.id, {
+                                    marginPercent: event.target.value,
+                                  })
+                                }
+                                onKeyDown={moveAcrossCostingRow}
+                              />
+                              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
+                                %
+                              </span>
+                            </td>
+                            <td
+                              data-label="Sub Total"
+                              className="px-0.5 py-2 text-right font-semibold text-biz-text"
+                            >
+                              {formatCompactMoney(preview.subtotalBeforeTax)}
+                            </td>
+                            <td data-label="VAT %" className="relative px-0.5 py-2">
+                              <TextInput
+                                data-costing-field
+                                data-costing-column="vat"
+                                aria-label={`VAT percentage for ${item.description || `item ${originalIndex + 1}`}`}
+                                title={`VAT amount: ${formatCompactMoney(preview.vatAmount)}`}
+                                className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="any"
+                                value={
+                                  item.sourcingType === "FOREIGN" ||
+                                  item.selectedSource === "FOREIGN"
+                                    ? item.foreignVatPercent
+                                    : item.localVatPercent
+                                }
+                                onFocus={(event) => event.currentTarget.select()}
+                                onChange={(event) =>
+                                  updateItemRate(item, "VAT", event.target.value)
+                                }
+                                onKeyDown={moveAcrossCostingRow}
+                              />
+                              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
+                                %
+                              </span>
+                            </td>
+                            <td data-label="Tax %" className="relative px-0.5 py-2">
+                              <TextInput
+                                data-costing-field
+                                data-costing-column="tax"
+                                aria-label={`Tax percentage for ${item.description || `item ${originalIndex + 1}`}`}
+                                title={`Tax amount: ${formatCompactMoney(preview.taxAmount)}`}
+                                className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="any"
+                                value={
+                                  item.sourcingType === "FOREIGN" ||
+                                  item.selectedSource === "FOREIGN"
+                                    ? item.foreignTaxPercent
+                                    : item.localTaxPercent
+                                }
+                                onFocus={(event) => event.currentTarget.select()}
+                                onChange={(event) =>
+                                  updateItemRate(item, "TAX", event.target.value)
+                                }
+                                onKeyDown={moveAcrossCostingRow}
+                              />
+                              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
+                                %
+                              </span>
+                            </td>
+                            <td
+                              data-label="Grand Total"
+                              className="px-0.5 py-2 text-right font-semibold"
+                            >
+                              {formatCompactMoney(preview.selectedGrandTotal)}
+                            </td>
+                            <td data-label="Unit Sales" className="px-0.5 py-2">
+                              <span className="block text-right font-medium text-biz-blue">
+                                {preview.unitSalesPrice > 0
+                                  ? formatCompactMoney(preview.unitSalesPrice)
                                   : "—"}
                               </span>
-                            )}
-                          </td>
-                          <td
-                            data-label="Total Price"
-                            className="px-0.5 py-2 text-right font-medium text-biz-text"
-                          >
-                            {preview.selectedCostBeforeProfit > 0
-                              ? formatCompactMoney(preview.selectedCostBeforeProfit)
-                              : "—"}
-                          </td>
-                          <td data-label="Profit %" className="relative px-0.5 py-2">
-                            <TextInput
-                              data-costing-field
-                              data-costing-column="profit"
-                              aria-label={`Profit percentage for ${item.description || `item ${originalIndex + 1}`}`}
-                              title={`Calculated profit: ${formatCompactMoney(preview.totalProfit)}`}
-                              className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
-                              type="number"
-                              min="0"
-                              max="99.99"
-                              step="any"
-                              value={item.marginPercent}
-                              onFocus={(event) => event.currentTarget.select()}
-                              onChange={(event) =>
-                                updateItem(item.id, {
-                                  marginPercent: event.target.value,
-                                })
-                              }
-                              onKeyDown={moveAcrossCostingRow}
-                            />
-                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
-                              %
-                            </span>
-                          </td>
-                          <td
-                            data-label="Sub Total"
-                            className="px-0.5 py-2 text-right font-semibold text-biz-text"
-                          >
-                            {formatCompactMoney(preview.subtotalBeforeTax)}
-                          </td>
-                          <td data-label="VAT %" className="relative px-0.5 py-2">
-                            <TextInput
-                              data-costing-field
-                              data-costing-column="vat"
-                              aria-label={`VAT percentage for ${item.description || `item ${originalIndex + 1}`}`}
-                              title={`VAT amount: ${formatCompactMoney(preview.vatAmount)}`}
-                              className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="any"
-                              value={
-                                item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN"
-                                  ? item.foreignVatPercent
-                                  : item.localVatPercent
-                              }
-                              onFocus={(event) => event.currentTarget.select()}
-                              onChange={(event) => updateItemRate(item, "VAT", event.target.value)}
-                              onKeyDown={moveAcrossCostingRow}
-                            />
-                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
-                              %
-                            </span>
-                          </td>
-                          <td data-label="Tax %" className="relative px-0.5 py-2">
-                            <TextInput
-                              data-costing-field
-                              data-costing-column="tax"
-                              aria-label={`Tax percentage for ${item.description || `item ${originalIndex + 1}`}`}
-                              title={`Tax amount: ${formatCompactMoney(preview.taxAmount)}`}
-                              className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="any"
-                              value={
-                                item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN"
-                                  ? item.foreignTaxPercent
-                                  : item.localTaxPercent
-                              }
-                              onFocus={(event) => event.currentTarget.select()}
-                              onChange={(event) => updateItemRate(item, "TAX", event.target.value)}
-                              onKeyDown={moveAcrossCostingRow}
-                            />
-                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
-                              %
-                            </span>
-                          </td>
-                          <td
-                            data-label="Grand Total"
-                            className="px-0.5 py-2 text-right font-semibold"
-                          >
-                            {formatCompactMoney(preview.selectedGrandTotal)}
-                          </td>
-                          <td data-label="Unit Sales" className="px-0.5 py-2">
-                            <span className="block text-right font-medium text-biz-blue">
-                              {preview.unitSalesPrice > 0
-                                ? formatCompactMoney(preview.unitSalesPrice)
-                                : "—"}
-                            </span>
-                          </td>
-                          <td data-label="Action" className="px-0.5 py-2 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                type="button"
-                                className="h-8 rounded border border-biz-blue px-2 text-[9px] font-semibold text-biz-blue hover:bg-biz-blue hover:text-white"
-                                disabled={saveCosting.isPending}
-                                onClick={() => openItemCosting(item)}
-                              >
-                                {item.sourcingType === "LOCAL"
-                                  ? item.costingStatus === "COSTED"
-                                    ? "Update"
-                                    : "Add"
-                                  : item.sourcingType === "LOCAL_AND_FOREIGN"
+                            </td>
+                            <td data-label="Action" className="px-0.5 py-2 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  className="h-8 rounded border border-biz-blue px-2 text-[9px] font-semibold text-biz-blue hover:bg-biz-blue hover:text-white"
+                                  disabled={saveCosting.isPending}
+                                  onClick={() => openItemCosting(item)}
+                                >
+                                  {item.sourcingType === "LOCAL"
                                     ? item.costingStatus === "COSTED"
-                                      ? "Edit Compare"
-                                      : "Compare"
-                                    : item.costingStatus === "DRAFT"
-                                      ? "Edit"
-                                      : item.costingStatus === "COSTED"
-                                        ? "Edit Cost"
-                                        : "Cost"}
-                              </button>
-                              <IconButton
-                                aria-label="Remove item"
-                                disabled={saveCosting.isPending}
-                                onClick={() => void removeCostingItem(item.id)}
-                              >
-                                <Trash2 className="h-4 w-4 text-biz-danger" />
-                              </IconButton>
-                            </div>
+                                      ? "Update"
+                                      : "Add"
+                                    : item.sourcingType === "LOCAL_AND_FOREIGN"
+                                      ? item.costingStatus === "COSTED"
+                                        ? "Edit Compare"
+                                        : "Compare"
+                                      : item.costingStatus === "DRAFT"
+                                        ? "Edit"
+                                        : item.costingStatus === "COSTED"
+                                          ? "Edit Cost"
+                                          : "Cost"}
+                                </button>
+                                <IconButton
+                                  aria-label="Remove item"
+                                  disabled={saveCosting.isPending}
+                                  onClick={() => void removeCostingItem(item.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-biz-danger" />
+                                </IconButton>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredItems.length === 0 && (
+                        <tr className="costing-empty-row border-t border-biz-border">
+                          <td
+                            colSpan={15}
+                            className="px-4 py-8 text-center text-[11px] text-biz-muted"
+                          >
+                            {items.length === 0
+                              ? "No items added yet."
+                              : "No pending items. Add another row or edit an item from the Costed Items List."}
                           </td>
                         </tr>
-                      );
-                    })}
-                    {filteredItems.length === 0 && (
-                      <tr className="costing-empty-row border-t border-biz-border">
-                        <td
-                          colSpan={15}
-                          className="px-4 py-8 text-center text-[11px] text-biz-muted"
-                        >
-                          {items.length === 0
-                            ? "No items added yet."
-                            : "No pending items. Add another row or edit an item from the Costed Items List."}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-biz-border bg-slate-50/50 px-3 py-2">
                 <span className="text-[11px] text-biz-muted">
-                  {costedItemCount} of {items.length} items costed &middot; {selectedItemIds.size}{" "}
-                  selected
+                  {isReviewMode
+                    ? `${reviewItems.length} item${reviewItems.length === 1 ? "" : "s"} ready for review in BDT`
+                    : `${costedItemCount} of ${items.length} items costed · ${selectedItemIds.size} selected`}
                 </span>
                 <div className="flex flex-wrap items-center gap-2">
                   {readyToSaveCount > 0 &&
                     activeForeignItems.length === 0 &&
                     !shouldShowStartCosting && (
                       <PrimaryButton
-                        className="h-9 bg-biz-success hover:bg-biz-success/90"
+                        className="h-9 rounded-lg bg-biz-success px-4 hover:bg-biz-success/90"
                         disabled={saveCosting.isPending}
                         onClick={saveAllCosting}
                       >
@@ -3689,28 +3865,6 @@ export default function TenderCostingEditorPage() {
         secondaryLabel={success?.title === "Costing Completed" ? undefined : "Continue Editing"}
         onSecondary={() => setSuccess(null)}
       />
-
-      {foreignCostingNotice && (
-        <div
-          role="status"
-          aria-live="polite"
-          aria-label="Foreign costing saved successfully"
-          className="hidden"
-        >
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-biz-success-soft text-biz-success ring-4 ring-biz-success/5">
-            <CheckCircle2 className="h-8 w-8" />
-          </span>
-          <p className="mt-4 text-[16px] font-bold text-biz-navy">Foreign Costing Saved</p>
-          <button
-            type="button"
-            aria-label="Close foreign costing notification"
-            onClick={() => setForeignCostingNotice("")}
-            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-biz-muted transition-colors hover:bg-biz-bg hover:text-biz-text"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -3722,6 +3876,9 @@ function CostedItemsList({
   onSave,
   onDelete,
   onMoveToIntake,
+  mode = "costed",
+  validationAttemptedIds = new Set<string>(),
+  onEditForeign,
 }: {
   items: CostingItemForm[];
   saving: boolean;
@@ -3729,7 +3886,11 @@ function CostedItemsList({
   onSave: () => void;
   onDelete: (itemIds: string[]) => void;
   onMoveToIntake: (itemIds: string[]) => void;
+  mode?: "costed" | "review";
+  validationAttemptedIds?: Set<string>;
+  onEditForeign?: (item: CostingItemForm) => void;
 }) {
+  const isReview = mode === "review";
   const [activeCell, setActiveCell] = React.useState<string | null>(null);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const currentItemIds = new Set(items.map((item) => item.id));
@@ -3749,6 +3910,7 @@ function CostedItemsList({
   };
   const finishAndSave = () => {
     setActiveCell(null);
+    if (isReview) return;
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => onSaveRef.current(), 600);
   };
@@ -3814,6 +3976,7 @@ function CostedItemsList({
   const totals = items.reduce(
     (summary, item) => {
       const values = spreadsheetValues(item);
+      summary.quantity += values.quantity;
       summary.baseTotal += values.baseTotal;
       summary.totalWeight += values.totalWeight;
       summary.shipping += values.shipping;
@@ -3825,6 +3988,7 @@ function CostedItemsList({
       return summary;
     },
     {
+      quantity: 0,
       baseTotal: 0,
       totalWeight: 0,
       shipping: 0,
@@ -3837,118 +4001,168 @@ function CostedItemsList({
   );
 
   return (
-    <div className="overflow-hidden rounded-lg border border-biz-border bg-white shadow-[0_1px_2px_rgba(15,23,42,0.025)]">
-      <div className="flex flex-col gap-2 border-b border-biz-border bg-slate-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between 2xl:px-4 2xl:py-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-              <CheckCircle2 className="h-4 w-4" />
-            </span>
-            <h2 className="text-[13px] font-bold text-biz-text 2xl:text-[15px]">
-              Costed Items List
-            </h2>
+    <div
+      className={
+        isReview
+          ? "overflow-hidden bg-white"
+          : "overflow-hidden rounded-lg border border-biz-border bg-white shadow-[0_1px_2px_rgba(15,23,42,0.025)]"
+      }
+    >
+      {!isReview && (
+        <div className="flex flex-col gap-2 border-b border-biz-border bg-slate-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between 2xl:px-4 2xl:py-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" />
+              </span>
+              <h2 className="text-[13px] font-bold text-biz-text 2xl:text-[15px]">
+                Costed Items List
+              </h2>
+            </div>
           </div>
-          <p className="mt-0.5 pl-9 text-[10px] font-medium text-slate-500 2xl:text-[11px]">
-            Click a value to edit. Changes save automatically when you finish.
-          </p>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {saving && <span className="text-[10px] font-medium text-biz-blue">Saving...</span>}
+            {effectiveSelectedIds.size > 0 && (
+              <>
+                <button
+                  type="button"
+                  className="flex h-8 items-center gap-1.5 rounded-md bg-biz-blue px-3 text-[9px] font-semibold text-white transition-colors hover:bg-blue-700"
+                  disabled={saving}
+                  onClick={moveSelectedToIntake}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Move to Costing Intake ({effectiveSelectedIds.size})
+                </button>
+                <button
+                  type="button"
+                  className="flex h-8 items-center gap-1.5 rounded-md border border-red-200 bg-white px-2 text-[9px] font-semibold text-biz-danger transition-colors hover:bg-red-50"
+                  disabled={saving}
+                  onClick={deleteSelectedItems}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete ({effectiveSelectedIds.size})
+                </button>
+              </>
+            )}
+            <StatusBadge label={`${items.length} Costed`} tone="success" />
+          </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {saving && <span className="text-[10px] font-medium text-biz-blue">Saving...</span>}
-          {effectiveSelectedIds.size > 0 && (
-            <>
-              <button
-                type="button"
-                className="flex h-8 items-center gap-1.5 rounded-md bg-biz-blue px-3 text-[9px] font-semibold text-white transition-colors hover:bg-blue-700"
-                disabled={saving}
-                onClick={moveSelectedToIntake}
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Move to Costing Intake ({effectiveSelectedIds.size})
-              </button>
-              <button
-                type="button"
-                className="flex h-8 items-center gap-1.5 rounded-md border border-red-200 bg-white px-2 text-[9px] font-semibold text-biz-danger transition-colors hover:bg-red-50"
-                disabled={saving}
-                onClick={deleteSelectedItems}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete ({effectiveSelectedIds.size})
-              </button>
-            </>
-          )}
-          <StatusBadge label={`${items.length} Costed`} tone="success" />
-        </div>
-      </div>
+      )}
       <div className="overflow-x-hidden">
         <table className="costing-responsive-table costing-costed-table text-left text-[10px] xl:text-[11px] 2xl:text-[11px]">
-          <thead className="whitespace-nowrap bg-slate-50 text-[8px] font-semibold uppercase tracking-[0.02em] text-slate-500 xl:text-[9px] 2xl:text-[10px]">
-            <tr>
-              <th className="w-[3.5%] px-0.5 py-2">
-                <div className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    aria-label="Select all costed items"
-                    checked={items.length > 0 && effectiveSelectedIds.size === items.length}
-                    onChange={(event) =>
-                      setSelectedIds(
-                        event.target.checked ? new Set(items.map((item) => item.id)) : new Set(),
-                      )
-                    }
-                  />
-                  <span>SL</span>
+          <thead className="border-b border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100/80 text-slate-700">
+            <tr className="align-bottom">
+              <th className="w-[3.5%] px-1 py-2.5">
+                <div className="flex min-h-8 items-start gap-1">
+                  {!isReview && (
+                    <input
+                      type="checkbox"
+                      aria-label="Select all costed items"
+                      checked={items.length > 0 && effectiveSelectedIds.size === items.length}
+                      onChange={(event) =>
+                        setSelectedIds(
+                          event.target.checked ? new Set(items.map((item) => item.id)) : new Set(),
+                        )
+                      }
+                    />
+                  )}
+                  <span className="text-[9px] font-bold">SL</span>
                 </div>
               </th>
-              <th className="w-[15%] px-0.5 py-2">Item Description</th>
-              <th className="w-[3.5%] px-0.5 py-2">Unit</th>
-              <th className="w-[3.5%] px-0.5 py-2 text-right">Qty</th>
-              <th className="w-[5%] px-0.5 py-2 text-right">Unit USD</th>
-              <th className="w-[5.5%] px-0.5 py-2 text-right">Unit BDT</th>
-              <th className="w-[6%] px-0.5 py-2 text-right">Total BDT</th>
-              <th className="w-[4%] px-0.5 py-2 text-right">Weight</th>
-              <th className="w-[5%] px-0.5 py-2 text-right">Total Weight</th>
-              <th className="w-[6%] px-0.5 py-2 text-right">Shipping</th>
-              <th className="w-[6%] px-0.5 py-2 text-right">Landing</th>
-              <th className="w-[6%] px-0.5 py-2 text-right">Profit</th>
-              <th className="w-[7%] px-0.5 py-2 text-right">Total BDT</th>
-              <th className="w-[6%] px-0.5 py-2 text-right">VAT-TAX</th>
-              <th className="w-[7%] px-0.5 py-2 text-right">Grand Total</th>
-              <th className="w-[8%] px-0.5 py-2 text-right">Quoted Unit Price</th>
+              <th className="w-[13.5%] px-1 py-2.5">
+                <CostedColumnHeader label="Item Description" align="left" />
+              </th>
+              <th className="w-[3.5%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Unit" align="left" />
+              </th>
+              <th className="w-[3.5%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Quantity" />
+              </th>
+              <th className="w-[5%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Unit Price" unit="USD" />
+              </th>
+              <th className="w-[5.5%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Unit Price" unit="BDT" />
+              </th>
+              <th className="w-[6%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Item Cost" unit="BDT" />
+              </th>
+              <th className="w-[4%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Unit Weight" unit="kg" />
+              </th>
+              <th className="w-[5%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Total Weight" unit="kg" />
+              </th>
+              <th className="w-[6%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Shipping" unit="BDT" />
+              </th>
+              <th className="w-[6%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Landed Cost" unit="BDT" />
+              </th>
+              <th className="w-[6%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Profit" unit="BDT / Margin %" />
+              </th>
+              <th className="w-[7%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Cost + Profit" unit="BDT" />
+              </th>
+              <th className="w-[7%] px-0.5 py-2.5">
+                <CostedColumnHeader label="VAT + Tax" unit="BDT" />
+              </th>
+              <th className="w-[7%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Grand Total" unit="BDT" />
+              </th>
+              <th className="w-[8.5%] px-0.5 py-2.5">
+                <CostedColumnHeader label="Quoted Unit Price" unit="BDT" />
+              </th>
             </tr>
           </thead>
           <tbody>
             {items.map((item, index) => {
               const values = spreadsheetValues(item);
+              const showRequiredErrors = isReview && validationAttemptedIds.has(item.id);
+              const productRequiredError = showRequiredErrors && !item.description.trim();
+              const unitRequiredError = showRequiredErrors && !item.unit.trim();
+              const quantityRequiredError = showRequiredErrors && Number(item.quantity) <= 0;
+              const localUnitPriceRequiredError =
+                showRequiredErrors && !values.isForeign && Number(item.localUnitPrice) <= 0;
               return (
                 <tr
                   key={`${item.id}-${index}`}
+                  data-costing-row={isReview || undefined}
+                  data-costing-row-id={isReview ? item.id : undefined}
                   className="costing-record-row border-t border-biz-border transition-colors odd:bg-white even:bg-slate-50/35 hover:bg-blue-50/40"
                 >
                   <td data-label="Item" className="px-0.5 py-2.5">
                     <div className="flex items-center gap-1">
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${item.description}`}
-                        checked={effectiveSelectedIds.has(item.id)}
-                        onChange={(event) =>
-                          setSelectedIds((current) => {
-                            const next = new Set(current);
-                            if (event.target.checked) next.add(item.id);
-                            else next.delete(item.id);
-                            return next;
-                          })
-                        }
-                      />
+                      {!isReview && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${item.description}`}
+                          checked={effectiveSelectedIds.has(item.id)}
+                          onChange={(event) =>
+                            setSelectedIds((current) => {
+                              const next = new Set(current);
+                              if (event.target.checked) next.add(item.id);
+                              else next.delete(item.id);
+                              return next;
+                            })
+                          }
+                        />
+                      )}
                       <span>{item.sourceItemNo || index + 1}</span>
                     </div>
                   </td>
                   <td
                     data-label="Item Description"
-                    className="costing-wide-cell px-0.5 py-2 font-medium text-biz-text"
+                    className={`costing-wide-cell px-0.5 py-2 font-medium text-biz-text ${productRequiredError ? "costing-review-error" : ""}`}
                   >
                     <div className="flex min-w-0 items-center gap-1 whitespace-nowrap">
                       {activeCell === `${item.id}:description` ? (
                         <input
                           autoFocus
+                          data-costing-field={isReview || undefined}
+                          data-costing-column={isReview ? "product" : undefined}
+                          aria-invalid={productRequiredError}
                           className={`${inputClass} flex-1 font-medium`}
                           value={item.description}
                           onChange={(event) =>
@@ -3960,24 +4174,43 @@ function CostedItemsList({
                       ) : (
                         <button
                           type="button"
+                          data-costing-field={isReview || undefined}
+                          data-costing-column={isReview ? "product" : undefined}
                           className="min-w-0 flex-1 cursor-text truncate rounded px-1 text-left hover:bg-blue-50 hover:text-biz-blue"
                           title={`${item.description} — click to edit`}
                           onClick={() => beginCellEdit(`${item.id}:description`)}
                         >
-                          {item.description}
+                          {item.description || "Enter product"}
                         </button>
                       )}
-                      <span
-                        className={`shrink-0 rounded px-1 py-px text-[6px] font-semibold ${values.isForeign ? "bg-biz-purple/10 text-biz-purple" : "bg-biz-success/10 text-biz-success"}`}
-                      >
-                        {values.isForeign ? "Foreign" : "Local"}
-                      </span>
+                      {isReview && values.isForeign && onEditForeign ? (
+                        <button
+                          type="button"
+                          className="shrink-0 rounded bg-biz-purple/10 px-1 py-px text-[6px] font-semibold text-biz-purple hover:bg-biz-purple/20"
+                          title="Edit Foreign Product Costing"
+                          onClick={() => onEditForeign(item)}
+                        >
+                          Foreign · Edit
+                        </button>
+                      ) : (
+                        <span
+                          className={`shrink-0 rounded px-1 py-px text-[6px] font-semibold ${values.isForeign ? "bg-biz-purple/10 text-biz-purple" : "bg-biz-success/10 text-biz-success"}`}
+                        >
+                          {values.isForeign ? "Foreign" : "Local"}
+                        </span>
+                      )}
                     </div>
                   </td>
-                  <td data-label="Unit" className="px-0.5 py-1">
+                  <td
+                    data-label="Unit"
+                    className={`px-0.5 py-1 ${unitRequiredError ? "costing-review-error" : ""}`}
+                  >
                     {activeCell === `${item.id}:unit` ? (
                       <select
                         autoFocus
+                        data-costing-field={isReview || undefined}
+                        data-costing-column={isReview ? "unit" : undefined}
+                        aria-invalid={unitRequiredError}
                         className={inputClass}
                         value={item.unit}
                         onChange={(event) => onChange(item.id, { unit: event.target.value })}
@@ -3993,6 +4226,8 @@ function CostedItemsList({
                     ) : (
                       <button
                         type="button"
+                        data-costing-field={isReview || undefined}
+                        data-costing-column={isReview ? "unit" : undefined}
                         className="w-full cursor-text rounded px-1 text-left hover:bg-blue-50 hover:text-biz-blue"
                         onClick={() => beginCellEdit(`${item.id}:unit`)}
                       >
@@ -4000,10 +4235,16 @@ function CostedItemsList({
                       </button>
                     )}
                   </td>
-                  <td data-label="Quantity" className="px-0.5 py-1 text-right tabular-nums">
+                  <td
+                    data-label="Quantity"
+                    className={`px-0.5 py-1 text-right tabular-nums ${quantityRequiredError ? "costing-review-error" : ""}`}
+                  >
                     {activeCell === `${item.id}:quantity` ? (
                       <input
                         autoFocus
+                        data-costing-field={isReview || undefined}
+                        data-costing-column={isReview ? "quantity" : undefined}
+                        aria-invalid={quantityRequiredError}
                         className={`${inputClass} text-right`}
                         type="number"
                         min="0.001"
@@ -4017,6 +4258,8 @@ function CostedItemsList({
                     ) : (
                       <button
                         type="button"
+                        data-costing-field={isReview || undefined}
+                        data-costing-column={isReview ? "quantity" : undefined}
                         className="w-full cursor-text rounded px-1 text-right hover:bg-blue-50 hover:text-biz-blue"
                         onClick={() => beginCellEdit(`${item.id}:quantity`)}
                       >
@@ -4052,10 +4295,16 @@ function CostedItemsList({
                       "—"
                     )}
                   </td>
-                  <td data-label="Unit BDT" className="px-0.5 py-1 text-right tabular-nums">
+                  <td
+                    data-label="Unit BDT"
+                    className={`px-0.5 py-1 text-right tabular-nums ${localUnitPriceRequiredError ? "costing-review-error" : ""}`}
+                  >
                     {!values.isForeign && activeCell === `${item.id}:unitPrice` ? (
                       <input
                         autoFocus
+                        data-costing-field={isReview || undefined}
+                        data-costing-column={isReview ? "unit-price" : undefined}
+                        aria-invalid={localUnitPriceRequiredError}
                         className={`${inputClass} text-right`}
                         type="number"
                         min="0"
@@ -4071,6 +4320,8 @@ function CostedItemsList({
                     ) : !values.isForeign ? (
                       <button
                         type="button"
+                        data-costing-field={isReview || undefined}
+                        data-costing-column={isReview ? "unit-price" : undefined}
                         className="w-full cursor-text rounded px-1 text-right hover:bg-blue-50 hover:text-biz-blue"
                         onClick={() => beginCellEdit(`${item.id}:unitPrice`)}
                       >
@@ -4153,13 +4404,15 @@ function CostedItemsList({
                     ) : (
                       <button
                         type="button"
-                        className="w-full cursor-text rounded px-0.5 text-right hover:bg-blue-50"
+                        className="flex w-full cursor-text flex-col items-end rounded px-1 py-0.5 text-right hover:bg-blue-50"
                         title="Click to edit profit percentage"
                         onClick={() => beginCellEdit(`${item.id}:profit`)}
                       >
-                        {formatCompactMoney(values.profit)}{" "}
-                        <span className="text-[6px] font-medium text-biz-muted">
-                          ({formatCompactMoney(Number(item.marginPercent) || 0)}%)
+                        <span className="text-[10px] font-bold leading-tight text-biz-success xl:text-[11px]">
+                          {formatCompactMoney(values.profit)}
+                        </span>
+                        <span className="mt-0.5 inline-flex rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-bold leading-none text-emerald-700 xl:text-[9px]">
+                          {formatCompactMoney(Number(item.marginPercent) || 0)}%
                         </span>
                       </button>
                     )}
@@ -4218,14 +4471,16 @@ function CostedItemsList({
                     ) : (
                       <button
                         type="button"
-                        className="w-full cursor-text rounded px-0.5 text-right hover:bg-blue-50 hover:text-biz-blue"
-                        title="Click to edit VAT and Tax percentages"
+                        className="flex w-full cursor-text flex-col items-end rounded px-0.5 py-1 text-right hover:bg-blue-50 hover:text-biz-blue"
+                        title={`VAT ${values.preview.selectedVatPercent.toFixed(0)}% + Tax ${values.preview.selectedTaxPercent.toFixed(0)}% — click to edit`}
                         onClick={() => beginCellEdit(`${item.id}:vatTax`)}
                       >
-                        {formatCompactMoney(values.vatTax)}{" "}
-                        <span className="text-[6px] text-biz-muted">
-                          ({values.preview.selectedVatPercent.toFixed(0)}%+
-                          {values.preview.selectedTaxPercent.toFixed(0)}%)
+                        <span className="text-[10px] font-semibold leading-tight text-biz-text xl:text-[11px]">
+                          {formatCompactMoney(values.vatTax)}
+                        </span>
+                        <span className="mt-1 inline-flex whitespace-nowrap rounded-md bg-slate-100 px-1.5 py-1 text-[9px] font-bold leading-none text-slate-600 ring-1 ring-inset ring-slate-200">
+                          {values.preview.selectedVatPercent.toFixed(0)}% +{" "}
+                          {values.preview.selectedTaxPercent.toFixed(0)}%
                         </span>
                       </button>
                     )}
@@ -4248,7 +4503,16 @@ function CostedItemsList({
           </tbody>
           <tfoot className="sticky bottom-0">
             <tr className="costing-totals-row border-t-2 border-biz-border bg-biz-bg/70">
-              <td colSpan={6} />
+              <td colSpan={3} />
+              <td className="bg-biz-bg px-0.5 py-2 text-right font-bold tabular-nums text-biz-text">
+                <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
+                  <span>{formatCompactMoney(roundMoney(totals.quantity))}</span>
+                  <span className="whitespace-nowrap text-[7px] font-semibold uppercase tracking-wide text-biz-muted">
+                    Total Qty
+                  </span>
+                </div>
+              </td>
+              <td colSpan={2} />
               <td className="bg-biz-bg px-0.5 py-2 text-right font-bold tabular-nums text-biz-navy">
                 <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
                   <span>{formatCompactMoney(roundMoney(totals.baseTotal))}</span>
@@ -4542,287 +4806,295 @@ function ForeignBatchTable({
         </div>
       )}
 
-      <div className="overflow-x-hidden">
-        <div className="flex w-full min-w-0 gap-1 border-b border-[#25549B] bg-[#2F66BC] px-1 py-1.5">
-          <div className="min-w-0 basis-[20%]">
-            <div className="grid grid-cols-[0.3fr_1.35fr_0.7fr_0.55fr] gap-1">
-              {["SL", "Product / Work", "Quantity", "Unit"].map((label) => (
-                <CostingColumnHeader key={label} label={label} />
-              ))}
+      <div className="foreign-costing-sheet overflow-x-hidden">
+        <div className="w-full min-w-0">
+          <div className="foreign-costing-header flex w-full min-w-0 gap-0 border-b border-[#25549B] bg-[#2F66BC]">
+            <div className="foreign-costing-core min-w-0 basis-[20%] bg-[#2F66BC]">
+              <div className="foreign-costing-columns grid grid-cols-[0.3fr_1.35fr_0.7fr_0.55fr] gap-0">
+                {["SL", "Product / Work", "Quantity", "Unit"].map((label) => (
+                  <CostingColumnHeader key={label} label={label} />
+                ))}
+              </div>
+            </div>
+            <div className="min-w-0 basis-[40%]">
+              <div className="foreign-costing-columns grid grid-cols-[1.15fr_0.85fr_0.85fr_0.75fr_0.75fr_0.9fr_1.3fr_0.85fr] gap-0">
+                {[
+                  { label: "Supplier" },
+                  { label: `Unit Price (${foreignCurrencyLabel})`, required: true },
+                  { label: "Unit Price (BDT)" },
+                  { label: `Total (${foreignCurrencyLabel})` },
+                  { label: "Currency", required: true },
+                  { label: "Exchange Rate", required: true },
+                  { label: "Shipping Method", required: true },
+                  { label: "Product Cost (BDT)" },
+                ].map(({ label, required }) => (
+                  <CostingColumnHeader key={label} label={label} required={required} />
+                ))}
+              </div>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="foreign-costing-columns grid grid-cols-[1fr_0.8fr_0.85fr_0.85fr_0.95fr_1.1fr_0.8fr_0.9fr] gap-0">
+                {logisticsColumnHeaders.map(({ label, required }) => (
+                  <CostingColumnHeader key={label} label={label} required={required} />
+                ))}
+              </div>
             </div>
           </div>
-          <div className="min-w-0 basis-[40%]">
-            <div className="grid grid-cols-[1.15fr_0.85fr_0.85fr_0.75fr_0.75fr_0.9fr_1.3fr_0.85fr] gap-1">
-              {[
-                { label: "Supplier" },
-                { label: `Unit Price (${foreignCurrencyLabel})`, required: true },
-                { label: "Unit Price (BDT)" },
-                { label: `Total (${foreignCurrencyLabel})` },
-                { label: "Currency", required: true },
-                { label: "Exchange Rate", required: true },
-                { label: "Shipping Method", required: true },
-                { label: "Product Cost (BDT)" },
-              ].map(({ label, required }) => (
-                <CostingColumnHeader key={label} label={label} required={required} />
-              ))}
-            </div>
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="grid grid-cols-[1fr_0.8fr_0.85fr_0.85fr_0.95fr_1.1fr_0.8fr_0.9fr] gap-1">
-              {logisticsColumnHeaders.map(({ label, required }) => (
-                <CostingColumnHeader key={label} label={label} required={required} />
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="flex w-full min-w-0 flex-col divide-y divide-biz-border">
-          {items.map((item, index) => {
-            const preview = calculateItemPreview(item);
-            const currency = item.foreignCurrency || "USD";
-            const isLc = item.foreignShippingMethod.startsWith("LC_");
-            const invalidColumns = new Set(
-              validationAttempted
-                ? foreignCostingInputIssues(item).map((issue) => issue.column)
-                : [],
-            );
+          <div className="flex w-full min-w-0 flex-col divide-y divide-biz-border">
+            {items.map((item, index) => {
+              const preview = calculateItemPreview(item);
+              const currency = item.foreignCurrency || "USD";
+              const isLc = item.foreignShippingMethod.startsWith("LC_");
+              const invalidColumns = new Set(
+                validationAttempted
+                  ? foreignCostingInputIssues(item).map((issue) => issue.column)
+                  : [],
+              );
 
-            return (
-              <section
-                key={`${item.id}-${index}`}
-                data-costing-row
-                data-costing-row-id={item.id}
-                className={`bg-white px-1 py-2 ${invalidColumns.size > 0 ? "bg-biz-danger/[0.025]" : ""}`}
-              >
-                <div className="flex min-w-0 items-start gap-1 [&_label>span]:hidden">
-                  <div className="min-w-0 basis-[20%]">
-                    <div className="grid grid-cols-[0.3fr_1.35fr_0.7fr_0.55fr] gap-1">
-                      <div>
-                        <span className="sr-only">SL</span>
-                        <strong className="flex h-7 items-center text-[9px] text-biz-text">
-                          {item.sourceItemNo || index + 1}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="sr-only">Product Name</span>
-                        <strong
-                          className="line-clamp-2 h-7 text-[9px] font-semibold leading-[14px] text-biz-text"
-                          title={item.description}
-                        >
-                          {item.description}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="sr-only">Quantity</span>
-                        <strong className="flex h-7 items-center text-[9px] text-biz-text">
-                          {item.quantity}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="sr-only">Unit</span>
-                        <strong className="flex h-7 items-center text-[9px] text-biz-text">
-                          {item.unit}
-                        </strong>
+              return (
+                <section
+                  key={`${item.id}-${index}`}
+                  data-costing-row
+                  data-costing-row-id={item.id}
+                  className={`foreign-costing-row bg-white ${invalidColumns.size > 0 ? "bg-biz-danger/[0.025]" : ""}`}
+                >
+                  <div className="flex min-w-0 items-stretch gap-0 [&_label>span]:hidden">
+                    <div className="foreign-costing-core min-w-0 basis-[20%] bg-white">
+                      <div className="foreign-costing-columns grid h-full grid-cols-[0.3fr_1.35fr_0.7fr_0.55fr] gap-0">
+                        <div>
+                          <span className="sr-only">SL</span>
+                          <strong className="flex h-7 items-center text-[9px] text-biz-text">
+                            {item.sourceItemNo || index + 1}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="sr-only">Product Name</span>
+                          <strong
+                            className="line-clamp-2 h-7 text-[9px] font-semibold leading-[14px] text-biz-text"
+                            title={item.description}
+                          >
+                            {item.description}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="sr-only">Quantity</span>
+                          <strong className="flex h-7 items-center text-[9px] text-biz-text">
+                            {item.quantity}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="sr-only">Unit</span>
+                          <strong className="flex h-7 items-center text-[9px] text-biz-text">
+                            {item.unit}
+                          </strong>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="min-w-0 basis-[40%]">
-                    <div className="grid grid-cols-[1.15fr_0.85fr_0.85fr_0.75fr_0.75fr_0.9fr_1.3fr_0.85fr] gap-1">
-                      <MiniField label="Supplier">
-                        <TextInput
-                          data-costing-field
-                          data-costing-column="supplier"
-                          className="h-7 rounded-sm px-1 text-[8.5px]"
-                          placeholder="Optional"
-                          value={item.foreignSupplierName}
-                          onChange={(event) =>
-                            onChange(item.id, { foreignSupplierName: event.target.value })
-                          }
-                          onKeyDown={moveAcrossCostingRow}
-                        />
-                      </MiniField>
-                      <MiniField label={`Unit/FX (${currency})`} required>
-                        <BatchNumberInput
-                          column="unit-fx"
-                          hasError={invalidColumns.has("unit-fx")}
-                          value={item.foreignUnitPrice}
-                          onChange={(value) => onChange(item.id, { foreignUnitPrice: value })}
-                        />
-                      </MiniField>
-                      <MiniField label="Unit/BDT">
-                        <ReadOnlyCostValue
-                          value={formatCompactMoney(preview.foreignUnitValueBdt)}
-                        />
-                      </MiniField>
-                      <MiniField label={`Total/${currency}`}>
-                        <ReadOnlyCostValue
-                          value={formatCompactMoney(preview.foreignProductTotal)}
-                        />
-                      </MiniField>
-                      <MiniField label="Currency" required>
-                        <SelectInput
-                          data-costing-field
-                          data-costing-column="currency"
-                          aria-invalid={invalidColumns.has("currency")}
-                          className={`h-7 rounded-sm px-1 pr-4 text-[8px] ${invalidColumns.has("currency") ? "border-biz-danger ring-1 ring-biz-danger/20 focus:ring-biz-danger/30" : ""}`}
-                          value={item.foreignCurrency}
-                          options={CURRENCY_OPTIONS}
-                          onChange={(event) =>
-                            onChange(item.id, { foreignCurrency: event.target.value })
-                          }
-                          onKeyDown={moveAcrossCostingRow}
-                        />
-                      </MiniField>
-                      <MiniField label="FX Rate" required>
-                        <BatchNumberInput
-                          column="fx-rate"
-                          hasError={invalidColumns.has("fx-rate")}
-                          value={item.foreignExchangeRate}
-                          onChange={(value) => onChange(item.id, { foreignExchangeRate: value })}
-                        />
-                      </MiniField>
-                      <MiniField label="Shipping" required>
-                        <SelectInput
-                          data-costing-field
-                          data-costing-column="shipping-method"
-                          aria-invalid={invalidColumns.has("shipping-method")}
-                          className={`h-7 rounded-sm px-1 pr-4 text-[8px] ${invalidColumns.has("shipping-method") ? "border-biz-danger ring-1 ring-biz-danger/20 focus:ring-biz-danger/30" : ""}`}
-                          value={item.foreignShippingMethod}
-                          options={SHIPPING_METHOD_OPTIONS}
-                          onChange={(event) => {
-                            const shippingMethod = event.target
-                              .value as TenderCostingShippingMethod;
-                            onShippingMethodChange(item, shippingMethod);
-                          }}
-                          onKeyDown={moveAcrossCostingRow}
-                        />
-                      </MiniField>
-                      <MiniField label="Product BDT">
-                        <ReadOnlyCostValue
-                          value={formatCompactMoney(preview.foreignProductValue)}
-                        />
-                      </MiniField>
-                    </div>
-                  </div>
-
-                  {isLc ? (
-                    <div className="min-w-0 flex-1">
-                      <div className="grid grid-cols-[1fr_0.8fr_0.85fr_0.85fr_0.95fr_1.1fr_0.8fr_0.9fr] gap-1">
-                        <MiniField label="Bank LC">
-                          <BatchNumberInput
-                            column="cost-1"
-                            value={item.bankLcCharge}
-                            onChange={(value) => onChange(item.id, { bankLcCharge: value })}
-                          />
-                        </MiniField>
-                        <MiniField label="Agent Fee">
-                          <BatchNumberInput
-                            column="cost-2"
-                            value={item.portHandlingCharge}
-                            onChange={(value) => onChange(item.id, { portHandlingCharge: value })}
-                          />
-                        </MiniField>
-                        <MiniField label="Container">
-                          <ReadOnlyCostValue
-                            value={formatCompactMoney(Number(item.foreignFreightCost) || 0)}
-                            emphasized
-                          />
-                        </MiniField>
-                        <MiniField label="C&F">
-                          <BatchNumberInput
-                            column="cost-4"
-                            value={item.cnfCharge}
-                            onChange={(value) => onChange(item.id, { cnfCharge: value })}
-                          />
-                        </MiniField>
-                        <MiniField label="Local Transport">
-                          <ReadOnlyCostValue
-                            value={formatCompactMoney(Number(item.foreignLocalTransportCost) || 0)}
-                          />
-                        </MiniField>
-                        <MiniField label="Project Transport">
-                          <ReadOnlyCostValue
-                            value={formatCompactMoney(Number(item.domesticTransportCost) || 0)}
-                          />
-                        </MiniField>
-                        <MiniField label="Other Cost">
-                          <ReadOnlyCostValue
-                            value={formatCompactMoney(Number(item.foreignOtherCost) || 0)}
-                          />
-                        </MiniField>
-                        <MiniField label="Landed Total">
-                          <ReadOnlyCostValue
-                            value={formatCompactMoney(preview.foreignLanded)}
-                            emphasized
-                          />
-                        </MiniField>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="min-w-0 flex-1">
-                      <div className="grid grid-cols-[1fr_0.8fr_0.85fr_0.85fr_0.95fr_1.1fr_0.8fr_0.9fr] gap-1">
-                        <MiniField label={`Transport/${currency}`}>
-                          <ReadOnlyCostValue
-                            value={formatCompactMoney(Number(item.foreignTransportCharge) || 0)}
-                          />
-                        </MiniField>
-                        <MiniField label="Unit Weight KG" required>
-                          <BatchNumberInput
-                            column="cost-2"
-                            hasError={invalidColumns.has("cost-2")}
-                            value={item.shippingWeightKg}
-                            onChange={(value) =>
-                              onChange(item.id, {
-                                shippingWeightKg: value,
-                                shippingRateBasis: "PER_KG",
-                              })
+                    <div className="min-w-0 basis-[40%]">
+                      <div className="foreign-costing-columns grid h-full grid-cols-[1.15fr_0.85fr_0.85fr_0.75fr_0.75fr_0.9fr_1.3fr_0.85fr] gap-0">
+                        <MiniField label="Supplier">
+                          <TextInput
+                            data-costing-field
+                            data-costing-column="supplier"
+                            className="h-7 rounded-sm px-1 text-[8.5px]"
+                            placeholder="Optional"
+                            value={item.foreignSupplierName}
+                            onChange={(event) =>
+                              onChange(item.id, { foreignSupplierName: event.target.value })
                             }
+                            onKeyDown={moveAcrossCostingRow}
                           />
                         </MiniField>
-                        <MiniField label="Rate/KG" required>
+                        <MiniField label={`Unit/FX (${currency})`} required>
                           <BatchNumberInput
-                            column="cost-3"
-                            hasError={invalidColumns.has("cost-3")}
-                            value={item.shippingRate}
-                            onChange={(value) =>
-                              onChange(item.id, {
-                                shippingRate: value,
-                                shippingRateBasis: "PER_KG",
-                              })
+                            column="unit-fx"
+                            hasError={invalidColumns.has("unit-fx")}
+                            value={item.foreignUnitPrice}
+                            onChange={(value) => onChange(item.id, { foreignUnitPrice: value })}
+                          />
+                        </MiniField>
+                        <MiniField label="Unit/BDT">
+                          <ReadOnlyCostValue
+                            value={formatCompactMoney(preview.foreignUnitValueBdt)}
+                          />
+                        </MiniField>
+                        <MiniField label={`Total/${currency}`}>
+                          <ReadOnlyCostValue
+                            value={formatCompactMoney(preview.foreignProductTotal)}
+                          />
+                        </MiniField>
+                        <MiniField label="Currency" required>
+                          <SelectInput
+                            data-costing-field
+                            data-costing-column="currency"
+                            aria-invalid={invalidColumns.has("currency")}
+                            className={`h-7 rounded-sm px-1 pr-4 text-[8px] ${invalidColumns.has("currency") ? "border-biz-danger ring-1 ring-biz-danger/20 focus:ring-biz-danger/30" : ""}`}
+                            value={item.foreignCurrency}
+                            options={CURRENCY_OPTIONS}
+                            onChange={(event) =>
+                              onChange(item.id, { foreignCurrency: event.target.value })
                             }
+                            onKeyDown={moveAcrossCostingRow}
                           />
                         </MiniField>
-                        <MiniField label="Shipping BDT">
-                          <ReadOnlyCostValue value={formatCompactMoney(preview.shippingCostBdt)} />
-                        </MiniField>
-                        <MiniField label="Local Transport">
-                          <ReadOnlyCostValue
-                            value={formatCompactMoney(Number(item.foreignLocalTransportCost) || 0)}
+                        <MiniField label="FX Rate" required>
+                          <BatchNumberInput
+                            column="fx-rate"
+                            hasError={invalidColumns.has("fx-rate")}
+                            value={item.foreignExchangeRate}
+                            onChange={(value) => onChange(item.id, { foreignExchangeRate: value })}
                           />
                         </MiniField>
-                        <MiniField label="Project Transport">
-                          <ReadOnlyCostValue
-                            value={formatCompactMoney(Number(item.domesticTransportCost) || 0)}
+                        <MiniField label="Shipping" required>
+                          <SelectInput
+                            data-costing-field
+                            data-costing-column="shipping-method"
+                            aria-invalid={invalidColumns.has("shipping-method")}
+                            className={`h-7 rounded-sm px-1 pr-4 text-[8px] ${invalidColumns.has("shipping-method") ? "border-biz-danger ring-1 ring-biz-danger/20 focus:ring-biz-danger/30" : ""}`}
+                            value={item.foreignShippingMethod}
+                            options={SHIPPING_METHOD_OPTIONS}
+                            onChange={(event) => {
+                              const shippingMethod = event.target
+                                .value as TenderCostingShippingMethod;
+                              onShippingMethodChange(item, shippingMethod);
+                            }}
+                            onKeyDown={moveAcrossCostingRow}
                           />
                         </MiniField>
-                        <MiniField label="Other Cost">
+                        <MiniField label="Product BDT">
                           <ReadOnlyCostValue
-                            value={formatCompactMoney(Number(item.foreignOtherCost) || 0)}
-                          />
-                        </MiniField>
-                        <MiniField label="Landed Total">
-                          <ReadOnlyCostValue
-                            value={formatCompactMoney(preview.foreignLanded)}
-                            emphasized
+                            value={formatCompactMoney(preview.foreignProductValue)}
                           />
                         </MiniField>
                       </div>
                     </div>
-                  )}
-                </div>
-              </section>
-            );
-          })}
+
+                    {isLc ? (
+                      <div className="min-w-0 flex-1">
+                        <div className="foreign-costing-columns grid h-full grid-cols-[1fr_0.8fr_0.85fr_0.85fr_0.95fr_1.1fr_0.8fr_0.9fr] gap-0">
+                          <MiniField label="Bank LC">
+                            <BatchNumberInput
+                              column="cost-1"
+                              value={item.bankLcCharge}
+                              onChange={(value) => onChange(item.id, { bankLcCharge: value })}
+                            />
+                          </MiniField>
+                          <MiniField label="Agent Fee">
+                            <BatchNumberInput
+                              column="cost-2"
+                              value={item.portHandlingCharge}
+                              onChange={(value) => onChange(item.id, { portHandlingCharge: value })}
+                            />
+                          </MiniField>
+                          <MiniField label="Container">
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(Number(item.foreignFreightCost) || 0)}
+                              emphasized
+                            />
+                          </MiniField>
+                          <MiniField label="C&F">
+                            <BatchNumberInput
+                              column="cost-4"
+                              value={item.cnfCharge}
+                              onChange={(value) => onChange(item.id, { cnfCharge: value })}
+                            />
+                          </MiniField>
+                          <MiniField label="Local Transport">
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(
+                                Number(item.foreignLocalTransportCost) || 0,
+                              )}
+                            />
+                          </MiniField>
+                          <MiniField label="Project Transport">
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(Number(item.domesticTransportCost) || 0)}
+                            />
+                          </MiniField>
+                          <MiniField label="Other Cost">
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(Number(item.foreignOtherCost) || 0)}
+                            />
+                          </MiniField>
+                          <MiniField label="Landed Total">
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(preview.foreignLanded)}
+                              emphasized
+                            />
+                          </MiniField>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="min-w-0 flex-1">
+                        <div className="foreign-costing-columns grid h-full grid-cols-[1fr_0.8fr_0.85fr_0.85fr_0.95fr_1.1fr_0.8fr_0.9fr] gap-0">
+                          <MiniField label={`Transport/${currency}`}>
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(Number(item.foreignTransportCharge) || 0)}
+                            />
+                          </MiniField>
+                          <MiniField label="Unit Weight KG" required>
+                            <BatchNumberInput
+                              column="cost-2"
+                              hasError={invalidColumns.has("cost-2")}
+                              value={item.shippingWeightKg}
+                              onChange={(value) =>
+                                onChange(item.id, {
+                                  shippingWeightKg: value,
+                                  shippingRateBasis: "PER_KG",
+                                })
+                              }
+                            />
+                          </MiniField>
+                          <MiniField label="Rate/KG" required>
+                            <BatchNumberInput
+                              column="cost-3"
+                              hasError={invalidColumns.has("cost-3")}
+                              value={item.shippingRate}
+                              onChange={(value) =>
+                                onChange(item.id, {
+                                  shippingRate: value,
+                                  shippingRateBasis: "PER_KG",
+                                })
+                              }
+                            />
+                          </MiniField>
+                          <MiniField label="Shipping BDT">
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(preview.shippingCostBdt)}
+                            />
+                          </MiniField>
+                          <MiniField label="Local Transport">
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(
+                                Number(item.foreignLocalTransportCost) || 0,
+                              )}
+                            />
+                          </MiniField>
+                          <MiniField label="Project Transport">
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(Number(item.domesticTransportCost) || 0)}
+                            />
+                          </MiniField>
+                          <MiniField label="Other Cost">
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(Number(item.foreignOtherCost) || 0)}
+                            />
+                          </MiniField>
+                          <MiniField label="Landed Total">
+                            <ReadOnlyCostValue
+                              value={formatCompactMoney(preview.foreignLanded)}
+                              emphasized
+                            />
+                          </MiniField>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -5213,7 +5485,7 @@ function ReadOnlyCostValue({ value, emphasized = false }: { value: string; empha
   return (
     <div
       title={value}
-      className={`flex h-7 items-center justify-end overflow-hidden rounded-sm border border-biz-border bg-biz-bg px-1 text-[8.5px] ${
+      className={`foreign-readonly-value flex h-7 items-center justify-end overflow-hidden rounded-sm border border-biz-border bg-biz-bg px-1 text-[8.5px] ${
         emphasized ? "font-semibold text-biz-text" : "font-medium text-biz-text"
       }`}
     >
@@ -5296,12 +5568,14 @@ function Field({
 function CostingKpi({
   label,
   value,
+  tooltip,
   tone = "default",
   action,
   className = "",
 }: {
   label: string;
   value: string;
+  tooltip?: string;
   tone?: "default" | "blue" | "success" | "danger" | "warning";
   action?: React.ReactNode;
   className?: string;
@@ -5318,7 +5592,7 @@ function CostingKpi({
             : "text-biz-text";
   return (
     <div
-      className={`group relative min-w-0 overflow-hidden rounded-lg border px-3 py-2.5 shadow-card transition-shadow hover:shadow-card-hover ${
+      className={`group relative min-w-0 rounded-lg border px-3 py-2.5 shadow-card transition-shadow hover:z-30 hover:shadow-card-hover ${
         tone === "warning"
           ? "border-biz-warning/30 bg-gradient-to-br from-white to-biz-warning/5"
           : tone === "blue"
@@ -5333,7 +5607,7 @@ function CostingKpi({
       />
       <div className="flex min-w-0 items-start justify-between gap-2">
         <p
-          className="truncate text-[9px] font-bold uppercase tracking-[0.04em] text-slate-500 xl:text-[10px] 2xl:text-[11px]"
+          className="min-w-0 whitespace-normal text-[9px] font-bold uppercase leading-tight tracking-[0.04em] text-slate-500 xl:text-[10px] 2xl:text-[11px]"
           title={label}
         >
           {label}
@@ -5342,10 +5616,18 @@ function CostingKpi({
       </div>
       <p
         className={`mt-1.5 truncate text-[11px] font-bold tabular-nums xl:text-[12px] 2xl:text-[14px] ${valueTone}`}
-        title={value}
+        title={tooltip ?? value}
       >
         {value}
       </p>
+      {tooltip ? (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 top-[calc(100%+0.4rem)] z-50 hidden w-max max-w-[min(28rem,80vw)] -translate-x-1/2 whitespace-normal rounded-md bg-slate-900 px-2.5 py-1.5 text-center text-[10px] font-medium normal-case leading-4 text-white shadow-lg group-hover:block"
+        >
+          {tooltip}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -5355,10 +5637,37 @@ function ProfitAction({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       aria-label="Edit common profit, VAT and tax settings"
-      className="flex h-5 w-5 items-center justify-center rounded text-biz-muted hover:bg-biz-bg hover:text-biz-blue sm:h-6 sm:w-6"
+      title="Edit profit, VAT and tax settings"
+      className="flex h-6 shrink-0 items-center justify-center rounded-md border border-biz-blue/30 bg-white px-2 text-[8px] font-bold text-biz-blue shadow-sm transition-colors hover:border-biz-blue hover:bg-biz-blue-soft sm:h-7 sm:text-[9px]"
       onClick={onClick}
     >
-      <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+      Edit
     </button>
+  );
+}
+
+function CostedColumnHeader({
+  label,
+  unit,
+  align = "right",
+}: {
+  label: string;
+  unit?: string;
+  align?: "left" | "right";
+}) {
+  return (
+    <span
+      className={`flex min-h-8 min-w-0 flex-col justify-start gap-0.5 whitespace-normal leading-[1.05] ${align === "right" ? "items-end text-right" : "items-start text-left"}`}
+      title={unit ? `${label} (${unit})` : label}
+    >
+      <span className="whitespace-nowrap text-[8px] font-bold text-slate-700 2xl:text-[9px]">
+        {label}
+      </span>
+      {unit ? (
+        <span className="text-[7px] font-semibold tracking-wide text-slate-500 2xl:text-[8px]">
+          {unit}
+        </span>
+      ) : null}
+    </span>
   );
 }

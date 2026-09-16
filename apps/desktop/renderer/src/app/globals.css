@@ -175,6 +175,148 @@ input[type="number"]::-webkit-outer-spin-button {
   display: table-footer-group;
 }
 
+.costing-intake-table,
+.costing-costed-table {
+  border-collapse: collapse;
+}
+
+.costing-intake-table thead th,
+.costing-intake-table tbody td,
+.costing-intake-table tfoot td,
+.costing-costed-table thead th,
+.costing-costed-table tbody td,
+.costing-costed-table tfoot td {
+  border-right: 1px solid rgba(203, 213, 225, 0.82);
+  border-bottom: 1px solid rgba(203, 213, 225, 0.82);
+}
+
+.costing-intake-table tr > :last-child,
+.costing-costed-table tr > :last-child {
+  border-right: 0;
+}
+
+.costing-intake-table thead th,
+.costing-intake-table tbody td,
+.costing-intake-table tfoot td {
+  vertical-align: middle;
+}
+
+.costing-intake-table tbody td:has([data-costing-field]) {
+  padding-top: 0;
+  padding-bottom: 0;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.costing-intake-table tbody [data-costing-field] {
+  height: 3.25rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+.costing-intake-table tbody td:has([data-costing-field]):focus-within {
+  background-color: rgba(239, 246, 255, 0.8);
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.72);
+}
+
+.costing-intake-table tbody td:has([data-costing-field][aria-invalid="true"]) {
+  background-color: rgba(254, 242, 242, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.7);
+}
+
+.costing-intake-table tbody td:has([data-costing-field][aria-invalid="true"]):focus-within {
+  box-shadow: inset 0 0 0 2px rgba(220, 38, 38, 0.78);
+}
+
+.costing-costed-table td.costing-review-error {
+  background-color: rgba(254, 242, 242, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.72);
+}
+
+.costing-costed-table td.costing-review-error:focus-within {
+  background-color: rgba(254, 226, 226, 0.82);
+  box-shadow: inset 0 0 0 2px rgba(220, 38, 38, 0.8);
+}
+
+/* Keep every foreign-costing column in one row while presenting each value as
+   a spreadsheet cell rather than a separate box inside the cell. */
+.foreign-costing-sheet .foreign-costing-columns > * {
+  min-width: 0;
+  border-right: 1px solid rgba(203, 213, 225, 0.82);
+}
+
+.foreign-costing-sheet .foreign-costing-header .foreign-costing-columns > * {
+  border-right-color: rgba(255, 255, 255, 0.2);
+}
+
+.foreign-costing-sheet .foreign-costing-row .foreign-costing-columns > * {
+  min-height: 2.75rem;
+  padding: 0.25rem;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.foreign-costing-sheet
+  .foreign-costing-row
+  .foreign-costing-columns
+  > *:has(.foreign-readonly-value) {
+  background-color: rgba(248, 250, 252, 0.86);
+}
+
+.foreign-costing-sheet [data-costing-row] [data-costing-field],
+.foreign-costing-sheet [data-costing-row] .foreign-readonly-value {
+  height: 2.25rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+.foreign-costing-sheet
+  [data-costing-row]
+  .foreign-costing-columns
+  > *:has([data-costing-field]):focus-within {
+  background-color: rgba(239, 246, 255, 0.86);
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.72);
+}
+
+.foreign-costing-sheet
+  [data-costing-row]
+  .foreign-costing-columns
+  > *:has([data-costing-field][aria-invalid="true"]) {
+  background-color: rgba(254, 242, 242, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.72);
+}
+
+.foreign-costing-sheet
+  [data-costing-row]
+  .foreign-costing-columns
+  > *:has([data-costing-field][aria-invalid="true"]):focus-within {
+  box-shadow: inset 0 0 0 2px rgba(220, 38, 38, 0.8);
+}
+
+.costing-costed-table thead th {
+  vertical-align: top;
+}
+
+.costing-costed-table tbody td,
+.costing-costed-table tfoot td {
+  vertical-align: middle;
+}
+
+.costing-costed-table th:nth-child(12),
+.costing-costed-table td:nth-child(12),
+.costing-costed-table th:nth-child(14),
+.costing-costed-table td:nth-child(14) {
+  border-left: 2px solid rgba(148, 163, 184, 0.3);
+}
+
 .costing-intake-table th:nth-child(1) {
   width: 2%;
 }
@@ -225,7 +367,7 @@ input[type="number"]::-webkit-outer-spin-button {
   width: 4%;
 }
 .costing-costed-table th:nth-child(2) {
-  width: 14%;
+  width: 13.5%;
 }
 .costing-costed-table th:nth-child(3) {
   width: 3.5%;
@@ -261,13 +403,13 @@ input[type="number"]::-webkit-outer-spin-button {
   width: 7%;
 }
 .costing-costed-table th:nth-child(14) {
-  width: 6%;
+  width: 7%;
 }
 .costing-costed-table th:nth-child(15) {
   width: 9%;
 }
 .costing-costed-table th:nth-child(16) {
-  width: 9%;
+  width: 8.5%;
 }
 
 @media (max-width: 1279px) {
