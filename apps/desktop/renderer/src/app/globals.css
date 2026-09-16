@@ -136,3 +136,158 @@ input[type="number"]::-webkit-outer-spin-button {
 .sidebar-scroll::-webkit-scrollbar-thumb:hover {
   background-color: rgba(255, 255, 255, 0.32);
 }
+
+/* Costing sheets keep one physical row per item and preserve every column. */
+.costing-responsive-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+@media (max-width: 1535px) {
+  .costing-responsive-table {
+    font-size: 0.625rem;
+  }
+
+  .costing-responsive-table th,
+  .costing-responsive-table td {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .costing-responsive-table input,
+  .costing-responsive-table select,
+  .costing-responsive-table button {
+    max-width: 100%;
+  }
+}
+
+/* Final costing-table contract: every column remains visible and each footer
+   total stays directly below its source column at every supported width. */
+.costing-intake-table th,
+.costing-intake-table td,
+.costing-costed-table th,
+.costing-costed-table td {
+  display: table-cell;
+}
+
+.costing-costed-table tfoot {
+  display: table-footer-group;
+}
+
+.costing-intake-table th:nth-child(1) {
+  width: 2%;
+}
+.costing-intake-table th:nth-child(2) {
+  width: 2%;
+}
+.costing-intake-table th:nth-child(3) {
+  width: 14%;
+}
+.costing-intake-table th:nth-child(4) {
+  width: 7%;
+}
+.costing-intake-table th:nth-child(5) {
+  width: 6%;
+}
+.costing-intake-table th:nth-child(6) {
+  width: 5%;
+}
+.costing-intake-table th:nth-child(7) {
+  width: 8%;
+}
+.costing-intake-table th:nth-child(8) {
+  width: 8%;
+}
+.costing-intake-table th:nth-child(9) {
+  width: 6%;
+}
+.costing-intake-table th:nth-child(10) {
+  width: 8%;
+}
+.costing-intake-table th:nth-child(11) {
+  width: 4%;
+}
+.costing-intake-table th:nth-child(12) {
+  width: 4%;
+}
+.costing-intake-table th:nth-child(13) {
+  width: 10%;
+}
+.costing-intake-table th:nth-child(14) {
+  width: 9%;
+}
+.costing-intake-table th:nth-child(15) {
+  width: 7%;
+}
+
+.costing-costed-table th:nth-child(1) {
+  width: 4%;
+}
+.costing-costed-table th:nth-child(2) {
+  width: 14%;
+}
+.costing-costed-table th:nth-child(3) {
+  width: 3.5%;
+}
+.costing-costed-table th:nth-child(4) {
+  width: 3.5%;
+}
+.costing-costed-table th:nth-child(5) {
+  width: 5%;
+}
+.costing-costed-table th:nth-child(6) {
+  width: 5.5%;
+}
+.costing-costed-table th:nth-child(7) {
+  width: 6.5%;
+}
+.costing-costed-table th:nth-child(8) {
+  width: 4%;
+}
+.costing-costed-table th:nth-child(9) {
+  width: 5%;
+}
+.costing-costed-table th:nth-child(10) {
+  width: 6%;
+}
+.costing-costed-table th:nth-child(11) {
+  width: 6%;
+}
+.costing-costed-table th:nth-child(12) {
+  width: 6%;
+}
+.costing-costed-table th:nth-child(13) {
+  width: 7%;
+}
+.costing-costed-table th:nth-child(14) {
+  width: 6%;
+}
+.costing-costed-table th:nth-child(15) {
+  width: 9%;
+}
+.costing-costed-table th:nth-child(16) {
+  width: 9%;
+}
+
+@media (max-width: 1279px) {
+  .costing-responsive-table {
+    font-size: 0.5rem;
+  }
+
+  .costing-costed-table thead {
+    line-height: 1.05;
+    white-space: normal;
+  }
+
+  .costing-costed-table tfoot span {
+    text-align: center;
+    white-space: normal;
+  }
+
+  .costing-responsive-table th,
+  .costing-responsive-table td {
+    padding-right: 0.0625rem;
+    padding-left: 0.0625rem;
+  }
+}

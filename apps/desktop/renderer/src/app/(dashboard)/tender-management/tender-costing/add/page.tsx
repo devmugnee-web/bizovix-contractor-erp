@@ -2427,45 +2427,38 @@ export default function TenderCostingEditorPage() {
   const isBudgetValid = Number.isFinite(enteredBudget) && enteredBudget > 0;
 
   return (
-    <div className="flex flex-col gap-3 pb-6">
-      <div className="relative overflow-hidden rounded-xl border border-blue-200/80 bg-gradient-to-br from-white via-blue-50/80 to-cyan-50/70 px-4 py-3 shadow-[0_8px_22px_rgba(15,48,92,0.07)] sm:px-5">
-        <div className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
-        <div className="absolute -right-8 -top-16 h-36 w-36 rounded-full border-[22px] border-white/40 bg-biz-blue/5" />
-        <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="scrollbar-hidden flex min-h-full flex-col gap-2 overflow-y-auto subpixel-antialiased lg:h-full lg:min-h-0 lg:overflow-hidden 2xl:gap-3">
+      <header className="shrink-0 rounded-lg border border-biz-border bg-white px-3 py-2.5 shadow-card xl:px-4 2xl:px-5 2xl:py-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-white text-biz-blue shadow-[0_4px_12px_rgba(37,99,235,0.10)]">
-              <FileCheck2 className="h-5 w-5" />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-biz-blue-soft text-biz-blue 2xl:h-10 2xl:w-10">
+              <FileCheck2 className="h-[18px] w-[18px] 2xl:h-5 2xl:w-5" />
             </span>
             <div className="min-w-0">
-              <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-biz-blue">
-                Tender Costing Workspace
-              </p>
-              <h1 className="text-[20px] font-bold leading-6 text-biz-navy">Prepare Tender Costing</h1>
-              <p className="mt-0.5 text-[11px] text-biz-muted">
-                Use live tender data and save server-calculated costing values.
+              <h1 className="text-[20px] font-bold leading-tight text-biz-text xl:text-[22px] 2xl:text-[26px]">
+                Prepare Tender Costing
+              </h1>
+              <p className="mt-0.5 truncate text-[11px] font-medium text-slate-500 xl:text-[12px] 2xl:text-[14px]">
+                Live tender data with server-calculated costing values
               </p>
             </div>
           </div>
           <Link href="/tender-management/tender-costing" className="shrink-0">
-            <SecondaryButton className="h-9 w-full border-blue-200 bg-white px-3 text-[11px] shadow-sm sm:w-auto">
+            <SecondaryButton className="h-9 w-full px-3 text-[11px] sm:w-auto 2xl:h-10 2xl:text-[13px]">
               <ArrowLeft className="h-4 w-4" />
               Back to Costing List
             </SecondaryButton>
           </Link>
         </div>
-      </div>
+      </header>
 
-      <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-7">
+      <div className="grid shrink-0 min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7 2xl:gap-3">
         <CostingKpi
           className=""
           label="Tender ID"
           value={record.tender.egpTenderId ?? record.tender.id}
         />
-        <CostingKpi
-          className=""
-          label="Product / Work Name"
-          value={record.tender.workName}
-        />
+        <CostingKpi className="" label="Product / Work Name" value={record.tender.workName} />
         <CostingKpi
           className=""
           label="Organization"
@@ -2474,7 +2467,7 @@ export default function TenderCostingEditorPage() {
         />
         <CostingKpi
           className=""
-          label="Total Costing Budget"
+          label="Budget (BDT)"
           value={hasCostingBudget ? formatMoney(costingBudget) : "Not set"}
           tone="blue"
           action={
@@ -2492,12 +2485,12 @@ export default function TenderCostingEditorPage() {
         />
         <CostingKpi
           className=""
-          label={isPartialCosting ? "Current Estimated Cost" : "Estimated Cost"}
+          label={isPartialCosting ? "Current Cost (BDT)" : "Estimated Cost (BDT)"}
           value={hasCalculatedCost ? formatMoney(estimatedTotal) : "Not calculated"}
         />
         <CostingKpi
           className=""
-          label="Total Profit"
+          label="Profit (BDT)"
           value={formatMoney(totalProfit)}
           tone="success"
           action={
@@ -2505,7 +2498,7 @@ export default function TenderCostingEditorPage() {
           }
         />
         <CostingKpi
-          className="sm:col-span-2 lg:col-span-1"
+          className="col-span-2 sm:col-span-1"
           label="Profit Margin"
           value={`${overallProfitMargin.toFixed(2)}%`}
           tone="blue"
@@ -2516,796 +2509,818 @@ export default function TenderCostingEditorPage() {
       </div>
 
       {budgetNotice && (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-[11.5px] font-medium text-emerald-700 shadow-sm">
+        <p className="shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-medium text-emerald-700 xl:text-[12px]">
           {budgetNotice}
         </p>
       )}
 
-      <div className="relative">
-        <fieldset
-          disabled={isReadOnly || !hasCostingBudget}
-          className={`m-0 flex min-w-0 flex-col gap-3 border-0 p-0 ${!hasCostingBudget && !isReadOnly ? "opacity-55" : ""}`}
-        >
-          <div
-            ref={intakeSectionRef}
-            className="scroll-mt-20 overflow-hidden rounded-2xl border border-blue-200/90 bg-white shadow-[0_12px_30px_rgba(15,48,92,0.08)]"
+      <main className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto rounded-xl border border-biz-border bg-slate-50/70 shadow-card">
+        <div className="relative p-2.5 xl:p-3 2xl:p-4">
+          <fieldset
+            disabled={isReadOnly || !hasCostingBudget}
+            className={`m-0 flex min-w-0 flex-col gap-2.5 border-0 p-0 2xl:gap-3 ${!hasCostingBudget && !isReadOnly ? "opacity-55" : ""}`}
           >
-            <div className="flex flex-col gap-4 border-b border-blue-100 bg-gradient-to-r from-blue-50/70 via-white to-white px-4 py-4 xl:flex-row xl:items-center">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between xl:contents">
-                <div className="min-w-0 xl:order-1 xl:w-[190px] xl:shrink-0">
-                  <div className="flex items-center gap-2.5 py-1">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-biz-blue text-[10px] font-bold text-white">
-                      1
-                    </span>
-                    <h2 className="text-[13px] font-bold leading-4 text-biz-navy">
-                      Costing Items Intake
-                    </h2>
+            <div
+              ref={intakeSectionRef}
+              className="scroll-mt-20 overflow-hidden rounded-lg border border-biz-border bg-white shadow-[0_1px_2px_rgba(15,23,42,0.025)]"
+            >
+              <div className="flex flex-col gap-2.5 border-b border-biz-border bg-slate-50/60 px-3 py-2.5 xl:flex-row xl:items-center 2xl:px-4 2xl:py-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between xl:contents">
+                  <div className="min-w-0 xl:order-1 xl:w-[190px] xl:shrink-0">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-biz-blue-soft text-biz-blue 2xl:h-9 2xl:w-9">
+                        <FileCheck2 className="h-4 w-4 2xl:h-[18px] 2xl:w-[18px]" />
+                      </span>
+                      <h2 className="text-[13px] font-bold leading-4 text-biz-text 2xl:text-[15px]">
+                        Costing Items Intake
+                      </h2>
+                    </div>
+                  </div>
+                  <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto xl:order-3 xl:shrink-0">
+                    <input
+                      ref={costingPdfInputRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      multiple
+                      className="hidden"
+                      onChange={(event) =>
+                        void importCostingPdfFiles(Array.from(event.target.files ?? []))
+                      }
+                    />
+                    <SecondaryButton
+                      className="h-9 flex-1 border-biz-blue bg-biz-blue px-3 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700 hover:text-white sm:flex-none 2xl:h-10 2xl:text-[13px]"
+                      disabled={isReadingCostingPdfs}
+                      onClick={() => costingPdfInputRef.current?.click()}
+                      title="Import product rows from one or more BOQ PDFs"
+                    >
+                      {isReadingCostingPdfs ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <UploadCloud className="h-4 w-4" />
+                      )}
+                      {isReadingCostingPdfs ? "Reading PDF..." : "Upload BOQ PDF"}
+                    </SecondaryButton>
+                    <PrimaryButton
+                      className="h-9 flex-1 border border-blue-200 bg-white px-3 text-[11px] font-semibold text-biz-blue shadow-none hover:bg-blue-50 sm:flex-none 2xl:h-10 2xl:text-[13px]"
+                      onClick={addAnotherItem}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Another Item
+                    </PrimaryButton>
                   </div>
                 </div>
-                <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto xl:order-3 xl:shrink-0">
-                  <input
-                    ref={costingPdfInputRef}
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    multiple
-                    className="hidden"
-                    onChange={(event) =>
-                      void importCostingPdfFiles(Array.from(event.target.files ?? []))
-                    }
-                  />
-                  <SecondaryButton
-                    className="h-11 flex-1 border-biz-blue bg-biz-blue px-4 font-bold text-white shadow-[0_5px_12px_rgba(37,99,235,0.22)] hover:bg-blue-700 hover:text-white sm:flex-none"
-                    disabled={isReadingCostingPdfs}
-                    onClick={() => costingPdfInputRef.current?.click()}
-                    title="Import product rows from one or more BOQ PDFs"
-                  >
-                    {isReadingCostingPdfs ? (
-                      <LoaderCircle className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <UploadCloud className="h-4 w-4" />
-                    )}
-                    {isReadingCostingPdfs ? "Reading PDF..." : "Upload BOQ PDF"}
-                  </SecondaryButton>
-                  <PrimaryButton
-                    className="h-11 flex-1 border border-blue-200 bg-white px-4 text-biz-blue shadow-none hover:bg-blue-50 sm:flex-none"
-                    onClick={addAnotherItem}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Another Item
-                  </PrimaryButton>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 xl:order-2 xl:min-w-0 xl:flex-1 2xl:gap-3">
+                  <label className="flex min-w-0 flex-col gap-1">
+                    <span className="text-[10px] font-medium text-biz-muted">
+                      Costing Date <RequiredMark />
+                    </span>
+                    <TextInput
+                      className="h-9 w-full border-slate-200 bg-white px-2 text-[11px] focus:bg-white 2xl:h-10 2xl:text-[13px]"
+                      type="date"
+                      value={header.costingDate}
+                      onChange={(event) => updateCommonCostingDate(event.target.value)}
+                    />
+                  </label>
+                  <label className="flex min-w-0 flex-col gap-1">
+                    <span className="text-[10px] font-medium text-biz-muted">
+                      Prepared By <RequiredMark />
+                    </span>
+                    <SelectInput
+                      className="h-9 w-full border-slate-200 bg-white text-[11px] focus:bg-white 2xl:h-10 2xl:text-[13px]"
+                      placeholder="Select user"
+                      value={effectivePreparedByUserId}
+                      options={(options.data?.users ?? []).map((user) => ({
+                        value: user.id,
+                        label: user.name,
+                      }))}
+                      onChange={(event) => updateCommonPreparedBy(event.target.value)}
+                    />
+                  </label>
+                  <label className="flex min-w-0 flex-col gap-1">
+                    <span className="text-[10px] font-medium text-biz-muted">Item View</span>
+                    <SelectInput
+                      className="h-9 w-full border-slate-200 bg-white text-[11px] focus:bg-white 2xl:h-10 2xl:text-[13px]"
+                      value={sourceFilter}
+                      options={SOURCE_FILTER_OPTIONS}
+                      onChange={(event) => setSourceFilter(event.target.value)}
+                    />
+                  </label>
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 xl:order-2 xl:min-w-0 xl:flex-1">
-                <label className="flex min-w-0 flex-col gap-1">
-                  <span className="text-[10px] font-medium text-biz-muted">
-                    Costing Date <RequiredMark />
+              {costingPdfNotice && (
+                <p
+                  aria-live="polite"
+                  className="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-2.5 text-[11px] font-semibold text-emerald-700"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                    <FileCheck2 className="h-4 w-4" />
                   </span>
-                  <TextInput
-                    className="h-8 w-full border-slate-200 bg-slate-50/60 px-2 text-[11px] focus:bg-white"
-                    type="date"
-                    value={header.costingDate}
-                    onChange={(event) => updateCommonCostingDate(event.target.value)}
-                  />
-                </label>
-                <label className="flex min-w-0 flex-col gap-1">
-                  <span className="text-[10px] font-medium text-biz-muted">
-                    Prepared By <RequiredMark />
-                  </span>
-                  <SelectInput
-                    className="h-8 w-full border-slate-200 bg-slate-50/60 text-[11px] focus:bg-white"
-                    placeholder="Select user"
-                    value={effectivePreparedByUserId}
-                    options={(options.data?.users ?? []).map((user) => ({
-                      value: user.id,
-                      label: user.name,
-                    }))}
-                    onChange={(event) => updateCommonPreparedBy(event.target.value)}
-                  />
-                </label>
-                <label className="flex min-w-0 flex-col gap-1">
-                  <span className="text-[10px] font-medium text-biz-muted">Item View</span>
-                  <SelectInput
-                    className="h-8 w-full border-slate-200 bg-slate-50/60 text-[11px] focus:bg-white"
-                    value={sourceFilter}
-                    options={SOURCE_FILTER_OPTIONS}
-                    onChange={(event) => setSourceFilter(event.target.value)}
-                  />
-                </label>
-              </div>
-            </div>
-            {costingPdfNotice && (
-              <p
-                aria-live="polite"
-                className="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-2.5 text-[11px] font-semibold text-emerald-700"
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100">
-                  <FileCheck2 className="h-4 w-4" />
-                </span>
-                <span>{costingPdfNotice}</span>
-              </p>
-            )}
-            {costingPdfError && (
-              <p
-                role="alert"
-                className="border-b border-red-200 bg-red-50 px-4 py-2.5 text-[11px] font-semibold text-biz-danger"
-              >
-                {costingPdfError}
-              </p>
-            )}
-            <div className="overflow-x-auto">
-              <table className="w-full table-fixed text-left text-[9px] xl:text-[10px]">
-                <thead className="border-b border-blue-100 bg-gradient-to-r from-blue-50/80 to-slate-50 text-biz-muted">
-                  <tr>
-                    <th className="w-[2%] px-0.5 py-2 text-center">
-                      <input
-                        type="checkbox"
-                        aria-label="Select all visible items"
-                        checked={
-                          filteredItems.some((item) => item.sourcingType === "FOREIGN") &&
-                          filteredItems
-                            .filter((item) => item.sourcingType === "FOREIGN")
-                            .every((item) => selectedItemIds.has(item.id))
-                        }
-                        onChange={(event) =>
-                          setSelectedItemIds((current) => {
-                            const next = new Set(current);
+                  <span>{costingPdfNotice}</span>
+                </p>
+              )}
+              {costingPdfError && (
+                <p
+                  role="alert"
+                  className="border-b border-red-200 bg-red-50 px-4 py-2.5 text-[11px] font-semibold text-biz-danger"
+                >
+                  {costingPdfError}
+                </p>
+              )}
+              <div className="overflow-x-hidden">
+                <table className="costing-responsive-table costing-intake-table text-left text-[10px] xl:text-[11px] 2xl:text-[11px]">
+                  <thead className="border-b border-blue-100 bg-gradient-to-r from-blue-50/80 to-slate-50 text-biz-muted">
+                    <tr>
+                      <th className="w-[2%] px-0.5 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all visible items"
+                          checked={
+                            filteredItems.some((item) => item.sourcingType === "FOREIGN") &&
                             filteredItems
                               .filter((item) => item.sourcingType === "FOREIGN")
-                              .forEach((item) =>
-                                event.target.checked ? next.add(item.id) : next.delete(item.id),
-                              );
-                            return next;
-                          })
-                        }
-                      />
-                    </th>
-                    <th className="w-[2%] px-0.5 py-2">SL</th>
-                    <th className="w-[18%] px-2 py-2">
-                      Product Name <RequiredMark />
-                    </th>
-                    <th className="w-[7%] px-0.5 py-2">Source of Product</th>
-                    <th className="w-[6%] px-0.5 py-2">
-                      Unit <RequiredMark />
-                    </th>
-                    <th className="w-[5%] px-0.5 py-2">
-                      Qty <RequiredMark />
-                    </th>
-                    <th className="w-[7%] px-0.5 py-2 text-right">
-                      Unit Price <RequiredMark />
-                    </th>
-                    <th className="w-[8%] px-0.5 py-2 text-right">Total Price</th>
-                    <th className="w-[6%] px-0.5 py-2 text-right">Profit</th>
-                    <th className="w-[8%] px-0.5 py-2 text-right">Sub Total</th>
-                    <th className="w-[4%] px-0.5 py-2 text-right">VAT</th>
-                    <th className="w-[4%] px-0.5 py-2 text-right">Tax</th>
-                    <th className="w-[8%] px-0.5 py-2 text-right">Grand Total</th>
-                    <th className="w-[8%] px-0.5 py-2 text-right">Unit Sales</th>
-                    <th className="w-[7%] px-0.5 py-2 text-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredItems.map((item, visibleIndex) => {
-                    const originalIndex = items.findIndex((row) => row.id === item.id);
-                    const preview = calculateItemPreview(item);
-                    const showRequiredErrors = intakeValidationAttemptedIds.has(item.id);
-                    const productRequiredError = showRequiredErrors && !item.description.trim();
-                    const unitRequiredError = showRequiredErrors && !item.unit.trim();
-                    const quantityRequiredError = showRequiredErrors && Number(item.quantity) <= 0;
-                    return (
-                      <tr
-                        key={`${item.id}-${visibleIndex}`}
-                        data-costing-row
-                        data-costing-row-id={item.id}
-                        className="border-t border-biz-border"
-                      >
-                        <td className="px-1 py-2 text-center">
-                          {item.sourcingType !== "FOREIGN" ? (
-                            <span className="text-biz-muted">-</span>
-                          ) : (
-                            <input
-                              type="checkbox"
-                              aria-label={`Select ${item.description || `item ${originalIndex + 1}`}`}
-                              checked={selectedItemIds.has(item.id)}
-                              onChange={() => toggleItemSelection(item.id)}
-                            />
-                          )}
-                        </td>
-                        <td className="px-1 py-2">{item.sourceItemNo || visibleIndex + 1}</td>
-                        <td className="px-2 py-2">
-                          <RequiredRowField>
-                            <input
-                              type="text"
-                              data-costing-field
-                              data-costing-column="product"
-                              aria-invalid={productRequiredError}
-                              aria-label={`View and edit product name: ${item.description || "empty"}`}
-                              aria-haspopup="dialog"
-                              title={item.description}
-                              readOnly
-                              className={`h-9 w-full cursor-pointer truncate rounded-md border bg-white px-2 text-[10px] font-medium text-biz-text outline-none transition-colors hover:border-biz-blue/50 focus:border-biz-blue focus:ring-2 focus:ring-biz-blue/15 ${
-                                productRequiredError
-                                  ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
-                                  : "border-biz-border"
-                              }`}
-                              value={item.description}
-                              placeholder="Enter product"
-                              onClick={() =>
-                                setProductEditor({ itemId: item.id, value: item.description })
-                              }
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  setProductEditor({ itemId: item.id, value: item.description });
-                                  return;
+                              .every((item) => selectedItemIds.has(item.id))
+                          }
+                          onChange={(event) =>
+                            setSelectedItemIds((current) => {
+                              const next = new Set(current);
+                              filteredItems
+                                .filter((item) => item.sourcingType === "FOREIGN")
+                                .forEach((item) =>
+                                  event.target.checked ? next.add(item.id) : next.delete(item.id),
+                                );
+                              return next;
+                            })
+                          }
+                        />
+                      </th>
+                      <th className="w-[2%] px-0.5 py-2">SL</th>
+                      <th className="w-[18%] px-2 py-2">
+                        Product Name <RequiredMark />
+                      </th>
+                      <th className="w-[7%] px-0.5 py-2">Source of Product</th>
+                      <th className="w-[6%] px-0.5 py-2">
+                        Unit <RequiredMark />
+                      </th>
+                      <th className="w-[5%] px-0.5 py-2">
+                        Qty <RequiredMark />
+                      </th>
+                      <th className="w-[7%] px-0.5 py-2 text-right">
+                        Unit Price <RequiredMark />
+                      </th>
+                      <th className="w-[8%] px-0.5 py-2 text-right">Total Price</th>
+                      <th className="w-[6%] px-0.5 py-2 text-right">Profit</th>
+                      <th className="w-[8%] px-0.5 py-2 text-right">Sub Total</th>
+                      <th className="w-[4%] px-0.5 py-2 text-right">VAT</th>
+                      <th className="w-[4%] px-0.5 py-2 text-right">Tax</th>
+                      <th className="w-[8%] px-0.5 py-2 text-right">Grand Total</th>
+                      <th className="w-[8%] px-0.5 py-2 text-right">Unit Sales</th>
+                      <th className="w-[7%] px-0.5 py-2 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredItems.map((item, visibleIndex) => {
+                      const originalIndex = items.findIndex((row) => row.id === item.id);
+                      const preview = calculateItemPreview(item);
+                      const showRequiredErrors = intakeValidationAttemptedIds.has(item.id);
+                      const productRequiredError = showRequiredErrors && !item.description.trim();
+                      const unitRequiredError = showRequiredErrors && !item.unit.trim();
+                      const quantityRequiredError =
+                        showRequiredErrors && Number(item.quantity) <= 0;
+                      return (
+                        <tr
+                          key={`${item.id}-${visibleIndex}`}
+                          data-costing-row
+                          data-costing-row-id={item.id}
+                          className="costing-record-row border-t border-biz-border"
+                        >
+                          <td data-label="Select" className="px-1 py-2 text-center">
+                            {item.sourcingType !== "FOREIGN" ? (
+                              <span className="text-biz-muted">-</span>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                aria-label={`Select ${item.description || `item ${originalIndex + 1}`}`}
+                                checked={selectedItemIds.has(item.id)}
+                                onChange={() => toggleItemSelection(item.id)}
+                              />
+                            )}
+                          </td>
+                          <td data-label="SL" className="px-1 py-2">
+                            {item.sourceItemNo || visibleIndex + 1}
+                          </td>
+                          <td data-label="Product Name" className="costing-wide-cell px-2 py-2">
+                            <RequiredRowField>
+                              <input
+                                type="text"
+                                data-costing-field
+                                data-costing-column="product"
+                                aria-invalid={productRequiredError}
+                                aria-label={`View and edit product name: ${item.description || "empty"}`}
+                                aria-haspopup="dialog"
+                                title={item.description}
+                                readOnly
+                                className={`h-9 w-full cursor-pointer truncate rounded-md border bg-white px-2 text-[10px] font-medium text-biz-text outline-none transition-colors hover:border-biz-blue/50 focus:border-biz-blue focus:ring-2 focus:ring-biz-blue/15 ${
+                                  productRequiredError
+                                    ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
+                                    : "border-biz-border"
+                                }`}
+                                value={item.description}
+                                placeholder="Enter product"
+                                onClick={() =>
+                                  setProductEditor({ itemId: item.id, value: item.description })
                                 }
-                                moveAcrossCostingRow(event);
-                              }}
-                            />
-                          </RequiredRowField>
-                        </td>
-                        <td className="px-0.5 py-2">
-                          <SelectInput
-                            data-costing-field
-                            data-costing-column="source"
-                            className="h-9 min-w-0 px-1 pr-4 text-[9px]"
-                            value={item.sourcingType}
-                            options={SOURCING_OPTIONS}
-                            onChange={(event) => {
-                              const sourcingType = event.target.value as TenderCostingSourcingType;
-                              if (sourcingType !== "FOREIGN") {
-                                setSelectedItemIds((current) => {
-                                  const next = new Set(current);
-                                  next.delete(item.id);
-                                  return next;
-                                });
-                                setActiveCostingIds((current) => {
-                                  const next = new Set(current);
-                                  next.delete(item.id);
-                                  return next;
-                                });
-                                setForeignEditReturnIds((current) => {
-                                  const next = new Set(current);
-                                  next.delete(item.id);
-                                  return next;
-                                });
-                              }
-                              updateItem(item.id, {
-                                sourcingType,
-                                selectedSource:
-                                  sourcingType === "LOCAL"
-                                    ? "LOCAL"
-                                    : sourcingType === "FOREIGN"
-                                      ? "FOREIGN"
-                                      : "",
-                                costingStatus: "NOT_COSTED",
-                                marginPercent:
-                                  sourcingType === "FOREIGN"
-                                    ? foreignTargetMargin
-                                    : localTargetMargin,
-                                ...(sourcingType === "FOREIGN" ? currentForeignDefaults() : {}),
-                              });
-                            }}
-                            onKeyDown={moveAcrossCostingRow}
-                          />
-                        </td>
-                        <td className="min-w-0 px-0.5 py-2">
-                          <RequiredRowField>
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    setProductEditor({ itemId: item.id, value: item.description });
+                                    return;
+                                  }
+                                  moveAcrossCostingRow(event);
+                                }}
+                              />
+                            </RequiredRowField>
+                          </td>
+                          <td data-label="Source" className="px-0.5 py-2">
                             <SelectInput
                               data-costing-field
-                              data-costing-column="unit"
-                              aria-invalid={unitRequiredError}
-                              title={item.unit}
-                              className={`h-9 w-full min-w-0 px-1 pr-4 text-[8.5px] xl:text-[9px] ${
-                                unitRequiredError
-                                  ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
-                                  : ""
-                              }`}
-                              value={item.unit}
-                              options={
-                                UNIT_OPTIONS.some((option) => option.value === item.unit)
-                                  ? UNIT_OPTIONS
-                                  : [{ value: item.unit, label: item.unit }, ...UNIT_OPTIONS]
-                              }
-                              onChange={(event) =>
-                                updateItem(item.id, { unit: event.target.value })
-                              }
-                              onKeyDown={moveAcrossCostingRow}
-                            />
-                          </RequiredRowField>
-                        </td>
-                        <td className="px-1 py-2">
-                          <RequiredRowField>
-                            <TextInput
-                              data-costing-field
-                              data-costing-column="quantity"
-                              aria-invalid={quantityRequiredError}
-                              hasError={quantityRequiredError}
-                              className={`h-9 min-w-0 px-1 text-[10px] ${NUMBER_INPUT_CLASS} ${
-                                quantityRequiredError
-                                  ? "bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
-                                  : ""
-                              }`}
-                              type="number"
-                              min="0.001"
-                              step="any"
-                              value={item.quantity}
-                              onChange={(event) =>
+                              data-costing-column="source"
+                              className="h-9 min-w-0 px-1 pr-4 text-[9px]"
+                              value={item.sourcingType}
+                              options={SOURCING_OPTIONS}
+                              onChange={(event) => {
+                                const sourcingType = event.target
+                                  .value as TenderCostingSourcingType;
+                                if (sourcingType !== "FOREIGN") {
+                                  setSelectedItemIds((current) => {
+                                    const next = new Set(current);
+                                    next.delete(item.id);
+                                    return next;
+                                  });
+                                  setActiveCostingIds((current) => {
+                                    const next = new Set(current);
+                                    next.delete(item.id);
+                                    return next;
+                                  });
+                                  setForeignEditReturnIds((current) => {
+                                    const next = new Set(current);
+                                    next.delete(item.id);
+                                    return next;
+                                  });
+                                }
                                 updateItem(item.id, {
-                                  quantity: event.target.value,
+                                  sourcingType,
+                                  selectedSource:
+                                    sourcingType === "LOCAL"
+                                      ? "LOCAL"
+                                      : sourcingType === "FOREIGN"
+                                        ? "FOREIGN"
+                                        : "",
                                   costingStatus: "NOT_COSTED",
-                                })
-                              }
+                                  marginPercent:
+                                    sourcingType === "FOREIGN"
+                                      ? foreignTargetMargin
+                                      : localTargetMargin,
+                                  ...(sourcingType === "FOREIGN" ? currentForeignDefaults() : {}),
+                                });
+                              }}
                               onKeyDown={moveAcrossCostingRow}
                             />
-                          </RequiredRowField>
-                        </td>
-                        <td className="px-0.5 py-2">
-                          {item.sourcingType === "LOCAL" ? (
+                          </td>
+                          <td data-label="Unit" className="min-w-0 px-0.5 py-2">
+                            <RequiredRowField>
+                              <SelectInput
+                                data-costing-field
+                                data-costing-column="unit"
+                                aria-invalid={unitRequiredError}
+                                title={item.unit}
+                                className={`h-9 w-full min-w-0 px-1 pr-4 text-[8.5px] xl:text-[9px] ${
+                                  unitRequiredError
+                                    ? "border-biz-danger bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
+                                    : ""
+                                }`}
+                                value={item.unit}
+                                options={
+                                  UNIT_OPTIONS.some((option) => option.value === item.unit)
+                                    ? UNIT_OPTIONS
+                                    : [{ value: item.unit, label: item.unit }, ...UNIT_OPTIONS]
+                                }
+                                onChange={(event) =>
+                                  updateItem(item.id, { unit: event.target.value })
+                                }
+                                onKeyDown={moveAcrossCostingRow}
+                              />
+                            </RequiredRowField>
+                          </td>
+                          <td data-label="Quantity" className="px-1 py-2">
                             <RequiredRowField>
                               <TextInput
                                 data-costing-field
-                                data-costing-column="unit-price"
-                                aria-invalid={Number(item.localUnitPrice) <= 0}
-                                className={`h-8 min-w-0 px-1 text-right text-[9px] ${NUMBER_INPUT_CLASS} ${
-                                  Number(item.localUnitPrice) <= 0
-                                    ? "border-biz-danger focus:border-biz-danger focus:ring-biz-danger/20"
+                                data-costing-column="quantity"
+                                aria-invalid={quantityRequiredError}
+                                hasError={quantityRequiredError}
+                                className={`h-9 min-w-0 px-1 text-[10px] ${NUMBER_INPUT_CLASS} ${
+                                  quantityRequiredError
+                                    ? "bg-biz-danger/[0.03] ring-1 ring-biz-danger/20 focus:ring-biz-danger/30"
                                     : ""
                                 }`}
                                 type="number"
-                                min="0.000001"
+                                min="0.001"
                                 step="any"
-                                required
-                                value={item.localUnitPrice}
-                                onFocus={(event) => {
-                                  if (Number(item.localUnitPrice) === 0) {
-                                    updateItem(item.id, {
-                                      localUnitPrice: "",
-                                      costingStatus: "NOT_COSTED",
-                                    });
-                                    return;
-                                  }
-                                  event.currentTarget.select();
-                                }}
+                                value={item.quantity}
                                 onChange={(event) =>
                                   updateItem(item.id, {
-                                    localUnitPrice: event.target.value,
+                                    quantity: event.target.value,
                                     costingStatus: "NOT_COSTED",
                                   })
                                 }
                                 onKeyDown={moveAcrossCostingRow}
                               />
                             </RequiredRowField>
-                          ) : (
-                            <span className="block text-right font-medium text-biz-text">
-                              {preview.selectedUnitCost > 0
-                                ? formatCompactMoney(preview.selectedUnitCost)
+                          </td>
+                          <td data-label="Unit Price" className="px-0.5 py-2">
+                            {item.sourcingType === "LOCAL" ? (
+                              <RequiredRowField>
+                                <TextInput
+                                  data-costing-field
+                                  data-costing-column="unit-price"
+                                  aria-invalid={Number(item.localUnitPrice) <= 0}
+                                  className={`h-8 min-w-0 px-1 text-right text-[9px] ${NUMBER_INPUT_CLASS} ${
+                                    Number(item.localUnitPrice) <= 0
+                                      ? "border-biz-danger focus:border-biz-danger focus:ring-biz-danger/20"
+                                      : ""
+                                  }`}
+                                  type="number"
+                                  min="0.000001"
+                                  step="any"
+                                  required
+                                  value={item.localUnitPrice}
+                                  onFocus={(event) => {
+                                    if (Number(item.localUnitPrice) === 0) {
+                                      updateItem(item.id, {
+                                        localUnitPrice: "",
+                                        costingStatus: "NOT_COSTED",
+                                      });
+                                      return;
+                                    }
+                                    event.currentTarget.select();
+                                  }}
+                                  onChange={(event) =>
+                                    updateItem(item.id, {
+                                      localUnitPrice: event.target.value,
+                                      costingStatus: "NOT_COSTED",
+                                    })
+                                  }
+                                  onKeyDown={moveAcrossCostingRow}
+                                />
+                              </RequiredRowField>
+                            ) : (
+                              <span className="block text-right font-medium text-biz-text">
+                                {preview.selectedUnitCost > 0
+                                  ? formatCompactMoney(preview.selectedUnitCost)
+                                  : "—"}
+                              </span>
+                            )}
+                          </td>
+                          <td
+                            data-label="Total Price"
+                            className="px-0.5 py-2 text-right font-medium text-biz-text"
+                          >
+                            {preview.selectedCostBeforeProfit > 0
+                              ? formatCompactMoney(preview.selectedCostBeforeProfit)
+                              : "—"}
+                          </td>
+                          <td data-label="Profit %" className="relative px-0.5 py-2">
+                            <TextInput
+                              data-costing-field
+                              data-costing-column="profit"
+                              aria-label={`Profit percentage for ${item.description || `item ${originalIndex + 1}`}`}
+                              title={`Calculated profit: ${formatCompactMoney(preview.totalProfit)}`}
+                              className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                              type="number"
+                              min="0"
+                              max="99.99"
+                              step="any"
+                              value={item.marginPercent}
+                              onFocus={(event) => event.currentTarget.select()}
+                              onChange={(event) =>
+                                updateItem(item.id, {
+                                  marginPercent: event.target.value,
+                                })
+                              }
+                              onKeyDown={moveAcrossCostingRow}
+                            />
+                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
+                              %
+                            </span>
+                          </td>
+                          <td
+                            data-label="Sub Total"
+                            className="px-0.5 py-2 text-right font-semibold text-biz-text"
+                          >
+                            {formatCompactMoney(preview.subtotalBeforeTax)}
+                          </td>
+                          <td data-label="VAT %" className="relative px-0.5 py-2">
+                            <TextInput
+                              data-costing-field
+                              data-costing-column="vat"
+                              aria-label={`VAT percentage for ${item.description || `item ${originalIndex + 1}`}`}
+                              title={`VAT amount: ${formatCompactMoney(preview.vatAmount)}`}
+                              className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="any"
+                              value={
+                                item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN"
+                                  ? item.foreignVatPercent
+                                  : item.localVatPercent
+                              }
+                              onFocus={(event) => event.currentTarget.select()}
+                              onChange={(event) => updateItemRate(item, "VAT", event.target.value)}
+                              onKeyDown={moveAcrossCostingRow}
+                            />
+                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
+                              %
+                            </span>
+                          </td>
+                          <td data-label="Tax %" className="relative px-0.5 py-2">
+                            <TextInput
+                              data-costing-field
+                              data-costing-column="tax"
+                              aria-label={`Tax percentage for ${item.description || `item ${originalIndex + 1}`}`}
+                              title={`Tax amount: ${formatCompactMoney(preview.taxAmount)}`}
+                              className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="any"
+                              value={
+                                item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN"
+                                  ? item.foreignTaxPercent
+                                  : item.localTaxPercent
+                              }
+                              onFocus={(event) => event.currentTarget.select()}
+                              onChange={(event) => updateItemRate(item, "TAX", event.target.value)}
+                              onKeyDown={moveAcrossCostingRow}
+                            />
+                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
+                              %
+                            </span>
+                          </td>
+                          <td
+                            data-label="Grand Total"
+                            className="px-0.5 py-2 text-right font-semibold"
+                          >
+                            {formatCompactMoney(preview.selectedGrandTotal)}
+                          </td>
+                          <td data-label="Unit Sales" className="px-0.5 py-2">
+                            <span className="block text-right font-medium text-biz-blue">
+                              {preview.unitSalesPrice > 0
+                                ? formatCompactMoney(preview.unitSalesPrice)
                                 : "—"}
                             </span>
-                          )}
-                        </td>
-                        <td className="px-0.5 py-2 text-right font-medium text-biz-text">
-                          {preview.selectedCostBeforeProfit > 0
-                            ? formatCompactMoney(preview.selectedCostBeforeProfit)
-                            : "—"}
-                        </td>
-                        <td className="relative px-0.5 py-2">
-                          <TextInput
-                            data-costing-field
-                            data-costing-column="profit"
-                            aria-label={`Profit percentage for ${item.description || `item ${originalIndex + 1}`}`}
-                            title={`Calculated profit: ${formatCompactMoney(preview.totalProfit)}`}
-                            className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
-                            type="number"
-                            min="0"
-                            max="99.99"
-                            step="any"
-                            value={item.marginPercent}
-                            onFocus={(event) => event.currentTarget.select()}
-                            onChange={(event) =>
-                              updateItem(item.id, {
-                                marginPercent: event.target.value,
-                              })
-                            }
-                            onKeyDown={moveAcrossCostingRow}
-                          />
-                          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
-                            %
-                          </span>
-                        </td>
-                        <td className="px-0.5 py-2 text-right font-semibold text-biz-text">
-                          {formatCompactMoney(preview.subtotalBeforeTax)}
-                        </td>
-                        <td className="relative px-0.5 py-2">
-                          <TextInput
-                            data-costing-field
-                            data-costing-column="vat"
-                            aria-label={`VAT percentage for ${item.description || `item ${originalIndex + 1}`}`}
-                            title={`VAT amount: ${formatCompactMoney(preview.vatAmount)}`}
-                            className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="any"
-                            value={
-                              item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN"
-                                ? item.foreignVatPercent
-                                : item.localVatPercent
-                            }
-                            onFocus={(event) => event.currentTarget.select()}
-                            onChange={(event) => updateItemRate(item, "VAT", event.target.value)}
-                            onKeyDown={moveAcrossCostingRow}
-                          />
-                          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
-                            %
-                          </span>
-                        </td>
-                        <td className="relative px-0.5 py-2">
-                          <TextInput
-                            data-costing-field
-                            data-costing-column="tax"
-                            aria-label={`Tax percentage for ${item.description || `item ${originalIndex + 1}`}`}
-                            title={`Tax amount: ${formatCompactMoney(preview.taxAmount)}`}
-                            className={`h-8 min-w-0 pl-1 pr-3 text-right text-[9px] ${NUMBER_INPUT_CLASS}`}
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="any"
-                            value={
-                              item.sourcingType === "FOREIGN" || item.selectedSource === "FOREIGN"
-                                ? item.foreignTaxPercent
-                                : item.localTaxPercent
-                            }
-                            onFocus={(event) => event.currentTarget.select()}
-                            onChange={(event) => updateItemRate(item, "TAX", event.target.value)}
-                            onKeyDown={moveAcrossCostingRow}
-                          />
-                          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-biz-muted">
-                            %
-                          </span>
-                        </td>
-                        <td className="px-0.5 py-2 text-right font-semibold">
-                          {formatCompactMoney(preview.selectedGrandTotal)}
-                        </td>
-                        <td className="px-0.5 py-2">
-                          <span className="block text-right font-medium text-biz-blue">
-                            {preview.unitSalesPrice > 0
-                              ? formatCompactMoney(preview.unitSalesPrice)
-                              : "—"}
-                          </span>
-                        </td>
-                        <td className="px-0.5 py-2 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              className="h-8 rounded border border-biz-blue px-2 text-[9px] font-semibold text-biz-blue hover:bg-biz-blue hover:text-white"
-                              disabled={saveCosting.isPending}
-                              onClick={() => openItemCosting(item)}
-                            >
-                              {item.sourcingType === "LOCAL"
-                                ? item.costingStatus === "COSTED"
-                                  ? "Update"
-                                  : "Add"
-                                : item.sourcingType === "LOCAL_AND_FOREIGN"
+                          </td>
+                          <td data-label="Action" className="px-0.5 py-2 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                className="h-8 rounded border border-biz-blue px-2 text-[9px] font-semibold text-biz-blue hover:bg-biz-blue hover:text-white"
+                                disabled={saveCosting.isPending}
+                                onClick={() => openItemCosting(item)}
+                              >
+                                {item.sourcingType === "LOCAL"
                                   ? item.costingStatus === "COSTED"
-                                    ? "Edit Compare"
-                                    : "Compare"
-                                  : item.costingStatus === "DRAFT"
-                                    ? "Edit"
-                                    : item.costingStatus === "COSTED"
-                                      ? "Edit Cost"
-                                      : "Cost"}
-                            </button>
-                            <IconButton
-                              aria-label="Remove item"
-                              disabled={saveCosting.isPending}
-                              onClick={() => void removeCostingItem(item.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-biz-danger" />
-                            </IconButton>
-                          </div>
+                                    ? "Update"
+                                    : "Add"
+                                  : item.sourcingType === "LOCAL_AND_FOREIGN"
+                                    ? item.costingStatus === "COSTED"
+                                      ? "Edit Compare"
+                                      : "Compare"
+                                    : item.costingStatus === "DRAFT"
+                                      ? "Edit"
+                                      : item.costingStatus === "COSTED"
+                                        ? "Edit Cost"
+                                        : "Cost"}
+                              </button>
+                              <IconButton
+                                aria-label="Remove item"
+                                disabled={saveCosting.isPending}
+                                onClick={() => void removeCostingItem(item.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-biz-danger" />
+                              </IconButton>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredItems.length === 0 && (
+                      <tr className="costing-empty-row border-t border-biz-border">
+                        <td
+                          colSpan={15}
+                          className="px-4 py-8 text-center text-[11px] text-biz-muted"
+                        >
+                          {items.length === 0
+                            ? "No items added yet."
+                            : "No pending items. Add another row or edit an item from the Costed Items List."}
                         </td>
                       </tr>
-                    );
-                  })}
-                  {filteredItems.length === 0 && (
-                    <tr className="border-t border-biz-border">
-                      <td colSpan={15} className="px-4 py-8 text-center text-[11px] text-biz-muted">
-                        {items.length === 0
-                          ? "No items added yet."
-                          : "No pending items. Add another row or edit an item from the Costed Items List."}
-                      </td>
-                    </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-biz-border bg-slate-50/50 px-3 py-2">
+                <span className="text-[11px] text-biz-muted">
+                  {costedItemCount} of {items.length} items costed &middot; {selectedItemIds.size}{" "}
+                  selected
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {readyToSaveCount > 0 &&
+                    activeForeignItems.length === 0 &&
+                    !shouldShowStartCosting && (
+                      <PrimaryButton
+                        className="h-9 bg-biz-success hover:bg-biz-success/90"
+                        disabled={saveCosting.isPending}
+                        onClick={saveAllCosting}
+                      >
+                        <Save className="h-4 w-4" />
+                        {saveCosting.isPending
+                          ? "Saving All..."
+                          : `Save All Costing (${readyToSaveCount})`}
+                      </PrimaryButton>
+                    )}
+                  {selectedItemIds.size > 0 && (
+                    <>
+                      <SelectInput
+                        className="h-9 w-[150px] text-[11px]"
+                        placeholder="Set source"
+                        value={bulkSourcingType}
+                        options={SOURCING_OPTIONS}
+                        onChange={(event) =>
+                          setBulkSourcingType(event.target.value as TenderCostingSourcingType | "")
+                        }
+                      />
+                      <SecondaryButton
+                        className="h-9"
+                        disabled={!bulkSourcingType}
+                        onClick={applyBulkSourcingType}
+                      >
+                        Apply Source
+                      </SecondaryButton>
+                    </>
                   )}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-biz-border px-3 py-2.5">
-              <span className="text-[11px] text-biz-muted">
-                {costedItemCount} of {items.length} items costed &middot; {selectedItemIds.size}{" "}
-                selected
-              </span>
-              <div className="flex flex-wrap items-center gap-2">
-                {readyToSaveCount > 0 &&
-                  activeForeignItems.length === 0 &&
-                  !shouldShowStartCosting && (
+                  {shouldShowStartCosting && (
                     <PrimaryButton
-                      className="h-9 bg-biz-success hover:bg-biz-success/90"
-                      disabled={saveCosting.isPending}
-                      onClick={saveAllCosting}
+                      className="h-9"
+                      disabled={!canStartCosting}
+                      title={
+                        !canStartCosting
+                          ? "Complete Date, Prepared By, Product, Quantity and Unit for the selected or filtered items"
+                          : selectedItemIds.size > 0
+                            ? "Start costing selected items"
+                            : "Start costing all items in the current filter"
+                      }
+                      onClick={startSelectedCosting}
                     >
-                      <Save className="h-4 w-4" />
-                      {saveCosting.isPending
-                        ? "Saving All..."
-                        : `Save All Costing (${readyToSaveCount})`}
+                      {costingCandidateItems.every((item) => item.sourcingType === "FOREIGN")
+                        ? "Start Foreign Costing"
+                        : "Start Selected Costing"}{" "}
+                      ({costingCandidateItems.length})
                     </PrimaryButton>
                   )}
-                {selectedItemIds.size > 0 && (
-                  <>
-                    <SelectInput
-                      className="h-9 w-[150px] text-[11px]"
-                      placeholder="Set source"
-                      value={bulkSourcingType}
-                      options={SOURCING_OPTIONS}
-                      onChange={(event) =>
-                        setBulkSourcingType(event.target.value as TenderCostingSourcingType | "")
-                      }
-                    />
-                    <SecondaryButton
-                      className="h-9"
-                      disabled={!bulkSourcingType}
-                      onClick={applyBulkSourcingType}
-                    >
-                      Apply Source
-                    </SecondaryButton>
-                  </>
-                )}
-                {shouldShowStartCosting && (
-                  <PrimaryButton
-                    className="h-9"
-                    disabled={!canStartCosting}
-                    title={
-                      !canStartCosting
-                        ? "Complete Date, Prepared By, Product, Quantity and Unit for the selected or filtered items"
-                        : selectedItemIds.size > 0
-                          ? "Start costing selected items"
-                          : "Start costing all items in the current filter"
-                    }
-                    onClick={startSelectedCosting}
-                  >
-                    {costingCandidateItems.every((item) => item.sourcingType === "FOREIGN")
-                      ? "Start Foreign Costing"
-                      : "Start Selected Costing"}{" "}
-                    ({costingCandidateItems.length})
-                  </PrimaryButton>
-                )}
+                </div>
               </div>
+              {errors.items && (
+                <p className="border-t border-biz-border px-4 py-2 text-[12px] text-biz-danger">
+                  {errors.items}
+                </p>
+              )}
             </div>
-            {errors.items && (
-              <p className="border-t border-biz-border px-4 py-2 text-[12px] text-biz-danger">
-                {errors.items}
-              </p>
-            )}
-          </div>
 
-          {items.some((item) => activeCostingIds.has(item.id)) && (
-            <div ref={costingWorkspaceRef} className="scroll-mt-20 flex flex-col gap-3">
-              {activeForeignItems.length > 0 && (
-                <ForeignBatchTable
-                  items={activeForeignItems}
-                  saving={saveCosting.isPending}
-                  settings={
-                    <div
-                      className={`grid min-w-0 grid-cols-2 gap-2 overflow-hidden border-b border-biz-border bg-biz-bg/60 px-3 py-3 sm:grid-cols-3 lg:grid-cols-5 xl:items-end ${
-                        activeForeignItems.some(isLcForeignCostingItem)
-                          ? "xl:grid-cols-11"
-                          : "xl:grid-cols-10"
-                      }`}
-                    >
-                      <div className="contents">
-                        <MiniField label="Country" required>
-                          <SelectInput
-                            className="h-9 min-w-0 text-[10px]"
-                            value={bulkForeign.country}
-                            options={countryOptionsWithCurrent(bulkForeign.country)}
-                            onChange={(event) => {
-                              const country = event.target.value;
-                              const currency = COUNTRY_CURRENCY[country] ?? bulkForeign.currency;
-                              const currencyChanged = currency !== bulkForeign.currency;
-                              updateBulkForeignSettings({
-                                ...bulkForeign,
-                                country,
-                                currency,
-                                exchangeRate: currencyChanged
-                                  ? currency === DEFAULT_CHINA_CURRENCY
-                                    ? DEFAULT_CNY_TO_BDT_RATE
-                                    : ""
-                                  : bulkForeign.exchangeRate,
-                                exchangeRateDate: currencyChanged
-                                  ? localDate()
-                                  : bulkForeign.exchangeRateDate,
-                              });
-                            }}
-                          />
-                        </MiniField>
-                        <MiniField label="Currency">
-                          <SelectInput
-                            className="h-9 min-w-0 text-[10px]"
-                            value={bulkForeign.currency}
-                            options={CURRENCY_OPTIONS}
-                            onChange={(event) => {
-                              const currency = event.target.value;
-                              updateBulkForeignSettings({
-                                ...bulkForeign,
-                                currency,
-                                country: CURRENCY_COUNTRY[currency] ?? bulkForeign.country,
-                                exchangeRate:
-                                  currency === bulkForeign.currency
-                                    ? bulkForeign.exchangeRate
-                                    : currency === DEFAULT_CHINA_CURRENCY
-                                      ? DEFAULT_CNY_TO_BDT_RATE
-                                      : "",
-                                exchangeRateDate:
-                                  currency === bulkForeign.currency
-                                    ? bulkForeign.exchangeRateDate
-                                    : localDate(),
-                              });
-                            }}
-                          />
-                        </MiniField>
-                        <MiniField label="Shipping Method" required>
-                          <SelectInput
-                            className="h-9 min-w-0 text-[9px]"
-                            value={bulkForeign.shippingMethod}
-                            options={SHIPPING_METHOD_OPTIONS}
-                            onChange={(event) => {
-                              const shippingMethod = event.target
-                                .value as TenderCostingShippingMethod;
-                              updateBulkForeignSettings({ ...bulkForeign, shippingMethod });
-                            }}
-                          />
-                        </MiniField>
-                        <BulkForeignNumber
-                          required
-                          label="Exchange Rate"
-                          value={bulkForeign.exchangeRate}
-                          onChange={(exchangeRate) =>
-                            updateBulkForeignSettings({ ...bulkForeign, exchangeRate })
-                          }
-                        />
-                        <MiniField label="Rate Date">
-                          <TextInput
-                            type="date"
-                            className="h-9 min-w-0 px-1 text-[9px]"
-                            value={bulkForeign.exchangeRateDate}
-                            onChange={(event) =>
-                              updateBulkForeignSettings({
-                                ...bulkForeign,
-                                exchangeRateDate: event.target.value,
-                              })
-                            }
-                          />
-                        </MiniField>
-                      </div>
-                      <div className="contents">
-                        <div className="hidden">
-                          <div>
-                            <p className="text-[12px] font-bold text-biz-text">
-                              Shipment Common Cost
-                            </p>
-                            <p className="text-[10px] text-biz-muted">
-                              Enter each shared charge once. Product rows show only their allocated
-                              share.
-                            </p>
-                          </div>
-                          <span className="rounded-full bg-biz-blue/10 px-2.5 py-1 text-[10px] font-semibold text-biz-blue">
-                            Current batch: {activeForeignItems.length}{" "}
-                            {activeForeignItems.length === 1 ? "item" : "items"}
-                          </span>
-                        </div>
+            {items.some((item) => activeCostingIds.has(item.id)) && (
+              <div ref={costingWorkspaceRef} className="scroll-mt-20 flex flex-col gap-3">
+                {activeForeignItems.length > 0 && (
+                  <ForeignBatchTable
+                    items={activeForeignItems}
+                    saving={saveCosting.isPending}
+                    settings={
+                      <div
+                        className={`grid min-w-0 grid-cols-2 gap-2 overflow-hidden border-b border-biz-border bg-biz-bg/60 px-3 py-3 sm:grid-cols-3 lg:grid-cols-5 xl:items-end ${
+                          activeForeignItems.some(isLcForeignCostingItem)
+                            ? "xl:grid-cols-11"
+                            : "xl:grid-cols-10"
+                        }`}
+                      >
                         <div className="contents">
-                          <ForeignBatchCostInput
-                            label={`Transport (${bulkForeign.currency})`}
-                            value={foreignBatchCosts.originTransport}
-                            onChange={(originTransport) =>
-                              updateForeignBatchCosts({ originTransport })
-                            }
-                          />
-                          <ForeignBatchCostInput
-                            label="Local Transport"
-                            value={foreignBatchCosts.localTransport}
-                            onChange={(localTransport) =>
-                              updateForeignBatchCosts({ localTransport })
-                            }
-                          />
-                          <ForeignBatchCostInput
-                            label="Project Transport"
-                            value={foreignBatchCosts.projectTransport}
-                            onChange={(projectTransport) =>
-                              updateForeignBatchCosts({ projectTransport })
-                            }
-                          />
-                          <ForeignBatchCostInput
-                            label="Other Cost"
-                            value={foreignBatchCosts.otherCost}
-                            onChange={(otherCost) => updateForeignBatchCosts({ otherCost })}
-                          />
-                          {activeForeignItems.some(isLcForeignCostingItem) && (
-                            <ForeignBatchCostInput
-                              label="Container Fee (BDT)"
-                              value={lcContainerFee}
-                              onChange={updateInlineLcContainerFee}
-                            />
-                          )}
-                          <MiniField label="Allocation Basis">
+                          <MiniField label="Country" required>
                             <SelectInput
                               className="h-9 min-w-0 text-[10px]"
-                              value={foreignBatchCosts.allocationMethod}
-                              options={LC_ALLOCATION_OPTIONS}
+                              value={bulkForeign.country}
+                              options={countryOptionsWithCurrent(bulkForeign.country)}
+                              onChange={(event) => {
+                                const country = event.target.value;
+                                const currency = COUNTRY_CURRENCY[country] ?? bulkForeign.currency;
+                                const currencyChanged = currency !== bulkForeign.currency;
+                                updateBulkForeignSettings({
+                                  ...bulkForeign,
+                                  country,
+                                  currency,
+                                  exchangeRate: currencyChanged
+                                    ? currency === DEFAULT_CHINA_CURRENCY
+                                      ? DEFAULT_CNY_TO_BDT_RATE
+                                      : ""
+                                    : bulkForeign.exchangeRate,
+                                  exchangeRateDate: currencyChanged
+                                    ? localDate()
+                                    : bulkForeign.exchangeRateDate,
+                                });
+                              }}
+                            />
+                          </MiniField>
+                          <MiniField label="Currency">
+                            <SelectInput
+                              className="h-9 min-w-0 text-[10px]"
+                              value={bulkForeign.currency}
+                              options={CURRENCY_OPTIONS}
+                              onChange={(event) => {
+                                const currency = event.target.value;
+                                updateBulkForeignSettings({
+                                  ...bulkForeign,
+                                  currency,
+                                  country: CURRENCY_COUNTRY[currency] ?? bulkForeign.country,
+                                  exchangeRate:
+                                    currency === bulkForeign.currency
+                                      ? bulkForeign.exchangeRate
+                                      : currency === DEFAULT_CHINA_CURRENCY
+                                        ? DEFAULT_CNY_TO_BDT_RATE
+                                        : "",
+                                  exchangeRateDate:
+                                    currency === bulkForeign.currency
+                                      ? bulkForeign.exchangeRateDate
+                                      : localDate(),
+                                });
+                              }}
+                            />
+                          </MiniField>
+                          <MiniField label="Shipping Method" required>
+                            <SelectInput
+                              className="h-9 min-w-0 text-[9px]"
+                              value={bulkForeign.shippingMethod}
+                              options={SHIPPING_METHOD_OPTIONS}
+                              onChange={(event) => {
+                                const shippingMethod = event.target
+                                  .value as TenderCostingShippingMethod;
+                                updateBulkForeignSettings({ ...bulkForeign, shippingMethod });
+                              }}
+                            />
+                          </MiniField>
+                          <BulkForeignNumber
+                            required
+                            label="Exchange Rate"
+                            value={bulkForeign.exchangeRate}
+                            onChange={(exchangeRate) =>
+                              updateBulkForeignSettings({ ...bulkForeign, exchangeRate })
+                            }
+                          />
+                          <MiniField label="Rate Date">
+                            <TextInput
+                              type="date"
+                              className="h-9 min-w-0 px-1 text-[9px]"
+                              value={bulkForeign.exchangeRateDate}
                               onChange={(event) =>
-                                updateForeignBatchCosts({
-                                  allocationMethod: event.target
-                                    .value as TenderCostingLcAllocationMethod,
+                                updateBulkForeignSettings({
+                                  ...bulkForeign,
+                                  exchangeRateDate: event.target.value,
                                 })
                               }
                             />
                           </MiniField>
                         </div>
-                        <p className="hidden">
-                          Values are allocated automatically. Missing weight falls back to product
-                          value, then equal split.
-                        </p>
+                        <div className="contents">
+                          <div className="hidden">
+                            <div>
+                              <p className="text-[12px] font-bold text-biz-text">
+                                Shipment Common Cost
+                              </p>
+                              <p className="text-[10px] text-biz-muted">
+                                Enter each shared charge once. Product rows show only their
+                                allocated share.
+                              </p>
+                            </div>
+                            <span className="rounded-full bg-biz-blue/10 px-2.5 py-1 text-[10px] font-semibold text-biz-blue">
+                              Current batch: {activeForeignItems.length}{" "}
+                              {activeForeignItems.length === 1 ? "item" : "items"}
+                            </span>
+                          </div>
+                          <div className="contents">
+                            <ForeignBatchCostInput
+                              label={`Transport (${bulkForeign.currency})`}
+                              value={foreignBatchCosts.originTransport}
+                              onChange={(originTransport) =>
+                                updateForeignBatchCosts({ originTransport })
+                              }
+                            />
+                            <ForeignBatchCostInput
+                              label="Local Transport"
+                              value={foreignBatchCosts.localTransport}
+                              onChange={(localTransport) =>
+                                updateForeignBatchCosts({ localTransport })
+                              }
+                            />
+                            <ForeignBatchCostInput
+                              label="Project Transport"
+                              value={foreignBatchCosts.projectTransport}
+                              onChange={(projectTransport) =>
+                                updateForeignBatchCosts({ projectTransport })
+                              }
+                            />
+                            <ForeignBatchCostInput
+                              label="Other Cost"
+                              value={foreignBatchCosts.otherCost}
+                              onChange={(otherCost) => updateForeignBatchCosts({ otherCost })}
+                            />
+                            {activeForeignItems.some(isLcForeignCostingItem) && (
+                              <ForeignBatchCostInput
+                                label="Container Fee (BDT)"
+                                value={lcContainerFee}
+                                onChange={updateInlineLcContainerFee}
+                              />
+                            )}
+                            <MiniField label="Allocation Basis">
+                              <SelectInput
+                                className="h-9 min-w-0 text-[10px]"
+                                value={foreignBatchCosts.allocationMethod}
+                                options={LC_ALLOCATION_OPTIONS}
+                                onChange={(event) =>
+                                  updateForeignBatchCosts({
+                                    allocationMethod: event.target
+                                      .value as TenderCostingLcAllocationMethod,
+                                  })
+                                }
+                              />
+                            </MiniField>
+                          </div>
+                          <p className="hidden">
+                            Values are allocated automatically. Missing weight falls back to product
+                            value, then equal split.
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  }
-                  onChange={updateForeignBatchItem}
-                  onShippingMethodChange={handleForeignShippingMethodChange}
-                  lcContainerFee={lcContainerFee}
-                  lcContainerAllocationMethod={lcContainerAllocationMethod}
-                  lcProductCount={lcProducts.length}
-                  onValidationBlocked={() => setSaveError("")}
-                  onContainerFeeRequired={() =>
-                    setSaveError("Enter the LC Container Fee in the common costing row.")
-                  }
-                  onSaveAll={saveAllActiveForeignCosting}
-                />
-              )}
-              {items
-                .filter((item) => activeCostingIds.has(item.id) && item.sourcingType !== "FOREIGN")
-                .map((item, itemIndex) => (
-                  <CostingWorkspaceCard
-                    key={`${item.id}-${itemIndex}`}
-                    item={item}
-                    preview={calculateItemPreview(item)}
-                    onChange={(patch) => updateItem(item.id, { ...patch, costingStatus: "DRAFT" })}
-                    onMarkCosted={() => markItemCosted(item)}
+                    }
+                    onChange={updateForeignBatchItem}
+                    onShippingMethodChange={handleForeignShippingMethodChange}
+                    lcContainerFee={lcContainerFee}
+                    lcContainerAllocationMethod={lcContainerAllocationMethod}
+                    lcProductCount={lcProducts.length}
+                    onValidationBlocked={() => setSaveError("")}
+                    onContainerFeeRequired={() =>
+                      setSaveError("Enter the LC Container Fee in the common costing row.")
+                    }
+                    onSaveAll={saveAllActiveForeignCosting}
                   />
-                ))}
-            </div>
-          )}
+                )}
+                {items
+                  .filter(
+                    (item) => activeCostingIds.has(item.id) && item.sourcingType !== "FOREIGN",
+                  )
+                  .map((item, itemIndex) => (
+                    <CostingWorkspaceCard
+                      key={`${item.id}-${itemIndex}`}
+                      item={item}
+                      preview={calculateItemPreview(item)}
+                      onChange={(patch) =>
+                        updateItem(item.id, { ...patch, costingStatus: "DRAFT" })
+                      }
+                      onMarkCosted={() => markItemCosted(item)}
+                    />
+                  ))}
+              </div>
+            )}
 
-          {costedItems.length > 0 && (
-            <div ref={costedItemsListRef} className="scroll-mt-20">
-              <CostedItemsList
-                items={costedItems}
-                saving={saveCosting.isPending}
-                onChange={(itemId, patch) =>
-                  updateItem(itemId, { ...patch, costingStatus: "COSTED" })
-                }
-                onSave={() => void saveCostedItemChanges()}
-                onDelete={(itemIds) => void removeCostingItems(itemIds)}
-                onMoveToIntake={moveCostedItemsToIntake}
-              />
-            </div>
-          )}
-        </fieldset>
-      </div>
-
-      {saveError && (
-        <div className="rounded-md border border-biz-danger/20 bg-biz-danger/5 px-4 py-3 text-[12.5px] text-biz-danger">
-          {saveError}
+            {costedItems.length > 0 && (
+              <div ref={costedItemsListRef} className="scroll-mt-20">
+                <CostedItemsList
+                  items={costedItems}
+                  saving={saveCosting.isPending}
+                  onChange={(itemId, patch) =>
+                    updateItem(itemId, { ...patch, costingStatus: "COSTED" })
+                  }
+                  onSave={() => void saveCostedItemChanges()}
+                  onDelete={(itemIds) => void removeCostingItems(itemIds)}
+                  onMoveToIntake={moveCostedItemsToIntake}
+                />
+              </div>
+            )}
+          </fieldset>
         </div>
-      )}
+
+        {saveError && (
+          <div className="mx-2.5 mb-2.5 rounded-md border border-biz-danger/20 bg-biz-danger/5 px-3 py-2 text-[11px] font-medium text-biz-danger xl:mx-3 xl:mb-3 xl:text-[12px]">
+            {saveError}
+          </div>
+        )}
+      </main>
 
       <Modal
         open={Boolean(productEditor)}
@@ -3727,7 +3742,7 @@ function CostedItemsList({
     onSaveRef.current = onSave;
   }, [onSave]);
   const inputClass =
-    "h-7 w-full min-w-0 rounded border border-biz-blue bg-white px-1 text-[8px] outline-none ring-2 ring-biz-blue/15";
+    "h-7 w-full min-w-0 rounded border border-biz-blue bg-white px-1 text-[8px] outline-none ring-2 ring-biz-blue/15 xl:text-[9px] 2xl:text-[10px]";
   const beginCellEdit = (cell: string) => {
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     setActiveCell(cell);
@@ -3822,16 +3837,18 @@ function CostedItemsList({
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-biz-border/90 bg-biz-surface shadow-[0_10px_28px_rgba(15,48,92,0.07)]">
-      <div className="flex flex-col gap-3 border-b border-biz-border bg-gradient-to-r from-slate-50 via-white to-emerald-50/40 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className="overflow-hidden rounded-lg border border-biz-border bg-white shadow-[0_1px_2px_rgba(15,23,42,0.025)]">
+      <div className="flex flex-col gap-2 border-b border-biz-border bg-slate-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between 2xl:px-4 2xl:py-3">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
               <CheckCircle2 className="h-4 w-4" />
             </span>
-            <h2 className="text-[14px] font-bold text-biz-navy">Costed Items List</h2>
+            <h2 className="text-[13px] font-bold text-biz-text 2xl:text-[15px]">
+              Costed Items List
+            </h2>
           </div>
-          <p className="mt-1 pl-9 text-[10.5px] text-biz-muted">
+          <p className="mt-0.5 pl-9 text-[10px] font-medium text-slate-500 2xl:text-[11px]">
             Click a value to edit. Changes save automatically when you finish.
           </p>
         </div>
@@ -3862,9 +3879,9 @@ function CostedItemsList({
           <StatusBadge label={`${items.length} Costed`} tone="success" />
         </div>
       </div>
-      <div className="overflow-hidden">
-        <table className="w-full table-fixed text-left text-[7px] 2xl:text-[8px]">
-          <thead className="whitespace-nowrap bg-slate-50 text-[7px] font-semibold uppercase tracking-[0.02em] text-biz-muted 2xl:text-[8px]">
+      <div className="overflow-x-hidden">
+        <table className="costing-responsive-table costing-costed-table text-left text-[10px] xl:text-[11px] 2xl:text-[11px]">
+          <thead className="whitespace-nowrap bg-slate-50 text-[8px] font-semibold uppercase tracking-[0.02em] text-slate-500 xl:text-[9px] 2xl:text-[10px]">
             <tr>
               <th className="w-[3.5%] px-0.5 py-2">
                 <div className="flex items-center gap-1">
@@ -3873,7 +3890,9 @@ function CostedItemsList({
                     aria-label="Select all costed items"
                     checked={items.length > 0 && effectiveSelectedIds.size === items.length}
                     onChange={(event) =>
-                      setSelectedIds(event.target.checked ? new Set(items.map((item) => item.id)) : new Set())
+                      setSelectedIds(
+                        event.target.checked ? new Set(items.map((item) => item.id)) : new Set(),
+                      )
                     }
                   />
                   <span>SL</span>
@@ -3902,9 +3921,9 @@ function CostedItemsList({
               return (
                 <tr
                   key={`${item.id}-${index}`}
-                  className="border-t border-biz-border transition-colors odd:bg-white even:bg-slate-50/35 hover:bg-blue-50/40"
+                  className="costing-record-row border-t border-biz-border transition-colors odd:bg-white even:bg-slate-50/35 hover:bg-blue-50/40"
                 >
-                  <td className="px-0.5 py-2.5">
+                  <td data-label="Item" className="px-0.5 py-2.5">
                     <div className="flex items-center gap-1">
                       <input
                         type="checkbox"
@@ -3922,14 +3941,19 @@ function CostedItemsList({
                       <span>{item.sourceItemNo || index + 1}</span>
                     </div>
                   </td>
-                  <td className="px-0.5 py-2 font-medium text-biz-text">
+                  <td
+                    data-label="Item Description"
+                    className="costing-wide-cell px-0.5 py-2 font-medium text-biz-text"
+                  >
                     <div className="flex min-w-0 items-center gap-1 whitespace-nowrap">
                       {activeCell === `${item.id}:description` ? (
                         <input
                           autoFocus
                           className={`${inputClass} flex-1 font-medium`}
                           value={item.description}
-                          onChange={(event) => onChange(item.id, { description: event.target.value })}
+                          onChange={(event) =>
+                            onChange(item.id, { description: event.target.value })
+                          }
                           onBlur={finishAndSave}
                           onKeyDown={finishCellEdit}
                         />
@@ -3950,84 +3974,272 @@ function CostedItemsList({
                       </span>
                     </div>
                   </td>
-                  <td className="px-0.5 py-1">
+                  <td data-label="Unit" className="px-0.5 py-1">
                     {activeCell === `${item.id}:unit` ? (
-                      <select autoFocus className={inputClass} value={item.unit} onChange={(event) => onChange(item.id, { unit: event.target.value })} onBlur={finishAndSave} onKeyDown={finishCellEdit}>
-                        {UNIT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      <select
+                        autoFocus
+                        className={inputClass}
+                        value={item.unit}
+                        onChange={(event) => onChange(item.id, { unit: event.target.value })}
+                        onBlur={finishAndSave}
+                        onKeyDown={finishCellEdit}
+                      >
+                        {UNIT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </select>
                     ) : (
-                      <button type="button" className="w-full cursor-text rounded px-1 text-left hover:bg-blue-50 hover:text-biz-blue" onClick={() => beginCellEdit(`${item.id}:unit`)}>{item.unit}</button>
+                      <button
+                        type="button"
+                        className="w-full cursor-text rounded px-1 text-left hover:bg-blue-50 hover:text-biz-blue"
+                        onClick={() => beginCellEdit(`${item.id}:unit`)}
+                      >
+                        {item.unit}
+                      </button>
                     )}
                   </td>
-                  <td className="px-0.5 py-1 text-right tabular-nums">
+                  <td data-label="Quantity" className="px-0.5 py-1 text-right tabular-nums">
                     {activeCell === `${item.id}:quantity` ? (
-                      <input autoFocus className={`${inputClass} text-right`} type="number" min="0.001" step="any" value={item.quantity} onFocus={(event) => event.currentTarget.select()} onChange={(event) => onChange(item.id, { quantity: event.target.value })} onBlur={finishAndSave} onKeyDown={finishCellEdit} />
+                      <input
+                        autoFocus
+                        className={`${inputClass} text-right`}
+                        type="number"
+                        min="0.001"
+                        step="any"
+                        value={item.quantity}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onChange={(event) => onChange(item.id, { quantity: event.target.value })}
+                        onBlur={finishAndSave}
+                        onKeyDown={finishCellEdit}
+                      />
                     ) : (
-                      <button type="button" className="w-full cursor-text rounded px-1 text-right hover:bg-blue-50 hover:text-biz-blue" onClick={() => beginCellEdit(`${item.id}:quantity`)}>{formatCompactMoney(values.quantity)}</button>
+                      <button
+                        type="button"
+                        className="w-full cursor-text rounded px-1 text-right hover:bg-blue-50 hover:text-biz-blue"
+                        onClick={() => beginCellEdit(`${item.id}:quantity`)}
+                      >
+                        {formatCompactMoney(values.quantity)}
+                      </button>
                     )}
                   </td>
-                  <td className="px-0.5 py-1 text-right tabular-nums">
+                  <td data-label="Unit USD" className="px-0.5 py-1 text-right tabular-nums">
                     {values.isForeign && activeCell === `${item.id}:unitPrice` ? (
-                      <input autoFocus className={`${inputClass} text-right`} type="number" min="0" step="any" value={item.foreignUnitPrice} onFocus={(event) => event.currentTarget.select()} onChange={(event) => onChange(item.id, { foreignUnitPrice: event.target.value })} onBlur={finishAndSave} onKeyDown={finishCellEdit} />
+                      <input
+                        autoFocus
+                        className={`${inputClass} text-right`}
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={item.foreignUnitPrice}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onChange={(event) =>
+                          onChange(item.id, { foreignUnitPrice: event.target.value })
+                        }
+                        onBlur={finishAndSave}
+                        onKeyDown={finishCellEdit}
+                      />
                     ) : values.isForeign ? (
-                      <button type="button" className="w-full cursor-text rounded px-1 text-right hover:bg-blue-50 hover:text-biz-blue" onClick={() => beginCellEdit(`${item.id}:unitPrice`)}>{formatCompactMoney(values.unitUsd)}</button>
-                    ) : "—"}
+                      <button
+                        type="button"
+                        className="w-full cursor-text rounded px-1 text-right hover:bg-blue-50 hover:text-biz-blue"
+                        onClick={() => beginCellEdit(`${item.id}:unitPrice`)}
+                      >
+                        {formatCompactMoney(values.unitUsd)}
+                      </button>
+                    ) : (
+                      "—"
+                    )}
                   </td>
-                  <td className="px-0.5 py-1 text-right tabular-nums">
+                  <td data-label="Unit BDT" className="px-0.5 py-1 text-right tabular-nums">
                     {!values.isForeign && activeCell === `${item.id}:unitPrice` ? (
-                      <input autoFocus className={`${inputClass} text-right`} type="number" min="0" step="any" value={item.localUnitPrice} onFocus={(event) => event.currentTarget.select()} onChange={(event) => onChange(item.id, { localUnitPrice: event.target.value })} onBlur={finishAndSave} onKeyDown={finishCellEdit} />
+                      <input
+                        autoFocus
+                        className={`${inputClass} text-right`}
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={item.localUnitPrice}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onChange={(event) =>
+                          onChange(item.id, { localUnitPrice: event.target.value })
+                        }
+                        onBlur={finishAndSave}
+                        onKeyDown={finishCellEdit}
+                      />
                     ) : !values.isForeign ? (
-                      <button type="button" className="w-full cursor-text rounded px-1 text-right hover:bg-blue-50 hover:text-biz-blue" onClick={() => beginCellEdit(`${item.id}:unitPrice`)}>{formatCompactMoney(values.unitBdt)}</button>
-                    ) : formatCompactMoney(values.unitBdt)}
+                      <button
+                        type="button"
+                        className="w-full cursor-text rounded px-1 text-right hover:bg-blue-50 hover:text-biz-blue"
+                        onClick={() => beginCellEdit(`${item.id}:unitPrice`)}
+                      >
+                        {formatCompactMoney(values.unitBdt)}
+                      </button>
+                    ) : (
+                      formatCompactMoney(values.unitBdt)
+                    )}
                   </td>
-                  <td className="px-0.5 py-2.5 text-right font-semibold tabular-nums text-biz-navy">
+                  <td
+                    data-label="Product Total"
+                    className="px-0.5 py-2.5 text-right font-semibold tabular-nums text-biz-navy"
+                  >
                     {formatCompactMoney(values.baseTotal)}
                   </td>
-                  <td className="px-0.5 py-1 text-right tabular-nums">
+                  <td data-label="Unit Weight" className="px-0.5 py-1 text-right tabular-nums">
                     {values.isForeign && activeCell === `${item.id}:weight` ? (
-                      <input autoFocus className={`${inputClass} text-right`} type="number" min="0" step="any" value={item.shippingWeightKg} onFocus={(event) => event.currentTarget.select()} onChange={(event) => onChange(item.id, { shippingWeightKg: event.target.value })} onBlur={finishAndSave} onKeyDown={finishCellEdit} />
+                      <input
+                        autoFocus
+                        className={`${inputClass} text-right`}
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={item.shippingWeightKg}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onChange={(event) =>
+                          onChange(item.id, { shippingWeightKg: event.target.value })
+                        }
+                        onBlur={finishAndSave}
+                        onKeyDown={finishCellEdit}
+                      />
                     ) : values.isForeign ? (
-                      <button type="button" className="w-full cursor-text rounded px-1 text-right hover:bg-blue-50 hover:text-biz-blue" onClick={() => beginCellEdit(`${item.id}:weight`)}>{formatCompactMoney(values.unitWeight)}</button>
-                    ) : "—"}
+                      <button
+                        type="button"
+                        className="w-full cursor-text rounded px-1 text-right hover:bg-blue-50 hover:text-biz-blue"
+                        onClick={() => beginCellEdit(`${item.id}:weight`)}
+                      >
+                        {formatCompactMoney(values.unitWeight)}
+                      </button>
+                    ) : (
+                      "—"
+                    )}
                   </td>
-                  <td className="px-0.5 py-2.5 text-right font-semibold tabular-nums">
+                  <td
+                    data-label="Total Weight"
+                    className="px-0.5 py-2.5 text-right font-semibold tabular-nums"
+                  >
                     {formatCompactMoney(values.totalWeight)}
                   </td>
-                  <td className="px-0.5 py-2.5 text-right tabular-nums">
+                  <td data-label="Shipping" className="px-0.5 py-2.5 text-right tabular-nums">
                     {formatCompactMoney(values.shipping)}
                   </td>
-                  <td className="px-0.5 py-2.5 text-right font-semibold tabular-nums">
+                  <td
+                    data-label="Landing"
+                    className="px-0.5 py-2.5 text-right font-semibold tabular-nums"
+                  >
                     {formatCompactMoney(values.landing)}
                   </td>
-                  <td className="px-0.5 py-1 text-right font-semibold tabular-nums text-biz-success">
+                  <td
+                    data-label="Profit"
+                    className="px-0.5 py-1 text-right font-semibold tabular-nums text-biz-success"
+                  >
                     {activeCell === `${item.id}:profit` ? (
-                      <input autoFocus className={`${inputClass} text-right font-semibold text-biz-success`} type="number" min="0" max="99.99" step="any" value={item.marginPercent} title={`Profit amount: ${formatCompactMoney(values.profit)}`} onFocus={(event) => event.currentTarget.select()} onChange={(event) => onChange(item.id, { marginPercent: event.target.value })} onBlur={finishAndSave} onKeyDown={finishCellEdit} />
+                      <input
+                        autoFocus
+                        className={`${inputClass} text-right font-semibold text-biz-success`}
+                        type="number"
+                        min="0"
+                        max="99.99"
+                        step="any"
+                        value={item.marginPercent}
+                        title={`Profit amount: ${formatCompactMoney(values.profit)}`}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onChange={(event) =>
+                          onChange(item.id, { marginPercent: event.target.value })
+                        }
+                        onBlur={finishAndSave}
+                        onKeyDown={finishCellEdit}
+                      />
                     ) : (
-                      <button type="button" className="w-full cursor-text rounded px-0.5 text-right hover:bg-blue-50" title="Click to edit profit percentage" onClick={() => beginCellEdit(`${item.id}:profit`)}>
-                        {formatCompactMoney(values.profit)} <span className="text-[6px] font-medium text-biz-muted">({formatCompactMoney(Number(item.marginPercent) || 0)}%)</span>
+                      <button
+                        type="button"
+                        className="w-full cursor-text rounded px-0.5 text-right hover:bg-blue-50"
+                        title="Click to edit profit percentage"
+                        onClick={() => beginCellEdit(`${item.id}:profit`)}
+                      >
+                        {formatCompactMoney(values.profit)}{" "}
+                        <span className="text-[6px] font-medium text-biz-muted">
+                          ({formatCompactMoney(Number(item.marginPercent) || 0)}%)
+                        </span>
                       </button>
                     )}
                   </td>
-                  <td className="px-0.5 py-2.5 text-right font-semibold tabular-nums">
+                  <td
+                    data-label="Cost + Profit"
+                    className="px-0.5 py-2.5 text-right font-semibold tabular-nums"
+                  >
                     {formatCompactMoney(values.totalAfterProfit)}
                   </td>
-                  <td className="px-0.5 py-2 text-right tabular-nums">
+                  <td data-label="VAT + Tax" className="px-0.5 py-2 text-right tabular-nums">
                     {activeCell === `${item.id}:vatTax` ? (
                       <div className="flex items-center gap-px">
-                        <input autoFocus className={`${inputClass} px-0 text-right`} type="number" min="0" max="100" step="any" aria-label={`VAT percentage for ${item.description}`} value={values.isForeign ? item.foreignVatPercent : item.localVatPercent} onFocus={(event) => event.currentTarget.select()} onChange={(event) => onChange(item.id, values.isForeign ? { foreignVatPercent: event.target.value } : { localVatPercent: event.target.value })} onKeyDown={finishCellEdit} />
+                        <input
+                          autoFocus
+                          className={`${inputClass} px-0 text-right`}
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="any"
+                          aria-label={`VAT percentage for ${item.description}`}
+                          value={values.isForeign ? item.foreignVatPercent : item.localVatPercent}
+                          onFocus={(event) => event.currentTarget.select()}
+                          onChange={(event) =>
+                            onChange(
+                              item.id,
+                              values.isForeign
+                                ? { foreignVatPercent: event.target.value }
+                                : { localVatPercent: event.target.value },
+                            )
+                          }
+                          onKeyDown={finishCellEdit}
+                        />
                         <span className="text-biz-muted">+</span>
-                        <input className={`${inputClass} px-0 text-right`} type="number" min="0" max="100" step="any" aria-label={`Tax percentage for ${item.description}`} value={values.isForeign ? item.foreignTaxPercent : item.localTaxPercent} onFocus={(event) => event.currentTarget.select()} onChange={(event) => onChange(item.id, values.isForeign ? { foreignTaxPercent: event.target.value } : { localTaxPercent: event.target.value })} onBlur={finishAndSave} onKeyDown={finishCellEdit} />
+                        <input
+                          className={`${inputClass} px-0 text-right`}
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="any"
+                          aria-label={`Tax percentage for ${item.description}`}
+                          value={values.isForeign ? item.foreignTaxPercent : item.localTaxPercent}
+                          onFocus={(event) => event.currentTarget.select()}
+                          onChange={(event) =>
+                            onChange(
+                              item.id,
+                              values.isForeign
+                                ? { foreignTaxPercent: event.target.value }
+                                : { localTaxPercent: event.target.value },
+                            )
+                          }
+                          onBlur={finishAndSave}
+                          onKeyDown={finishCellEdit}
+                        />
                       </div>
                     ) : (
-                      <button type="button" className="w-full cursor-text rounded px-0.5 text-right hover:bg-blue-50 hover:text-biz-blue" title="Click to edit VAT and Tax percentages" onClick={() => beginCellEdit(`${item.id}:vatTax`)}>
-                        {formatCompactMoney(values.vatTax)} <span className="text-[6px] text-biz-muted">({values.preview.selectedVatPercent.toFixed(0)}%+{values.preview.selectedTaxPercent.toFixed(0)}%)</span>
+                      <button
+                        type="button"
+                        className="w-full cursor-text rounded px-0.5 text-right hover:bg-blue-50 hover:text-biz-blue"
+                        title="Click to edit VAT and Tax percentages"
+                        onClick={() => beginCellEdit(`${item.id}:vatTax`)}
+                      >
+                        {formatCompactMoney(values.vatTax)}{" "}
+                        <span className="text-[6px] text-biz-muted">
+                          ({values.preview.selectedVatPercent.toFixed(0)}%+
+                          {values.preview.selectedTaxPercent.toFixed(0)}%)
+                        </span>
                       </button>
                     )}
                   </td>
-                  <td className="px-0.5 py-2.5 text-right font-bold tabular-nums text-biz-blue">
+                  <td
+                    data-label="Grand Total"
+                    className="px-0.5 py-2.5 text-right font-bold tabular-nums text-biz-blue"
+                  >
                     {formatCompactMoney(values.preview.selectedGrandTotal)}
                   </td>
-                  <td className="px-0.5 py-2.5 text-right font-semibold tabular-nums text-biz-blue">
+                  <td
+                    data-label="Quoted Unit Price"
+                    className="px-0.5 py-2.5 text-right font-semibold tabular-nums text-biz-blue"
+                  >
                     {formatCompactMoney(values.preview.unitSalesPrice)}
                   </td>
                 </tr>
@@ -4035,7 +4247,7 @@ function CostedItemsList({
             })}
           </tbody>
           <tfoot className="sticky bottom-0">
-            <tr className="border-t-2 border-biz-border bg-biz-bg/70">
+            <tr className="costing-totals-row border-t-2 border-biz-border bg-biz-bg/70">
               <td colSpan={6} />
               <td className="bg-biz-bg px-0.5 py-2 text-right font-bold tabular-nums text-biz-navy">
                 <div className="flex min-h-[32px] flex-col items-end justify-center gap-1 leading-none">
@@ -5106,7 +5318,7 @@ function CostingKpi({
             : "text-biz-text";
   return (
     <div
-      className={`group relative min-w-0 overflow-hidden rounded-lg border px-2.5 py-2 shadow-[0_3px_10px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_18px_rgba(15,48,92,0.09)] ${
+      className={`group relative min-w-0 overflow-hidden rounded-lg border px-3 py-2.5 shadow-card transition-shadow hover:shadow-card-hover ${
         tone === "warning"
           ? "border-biz-warning/30 bg-gradient-to-br from-white to-biz-warning/5"
           : tone === "blue"
@@ -5121,7 +5333,7 @@ function CostingKpi({
       />
       <div className="flex min-w-0 items-start justify-between gap-2">
         <p
-          className="truncate text-[8px] font-semibold uppercase tracking-[0.04em] text-biz-muted"
+          className="truncate text-[9px] font-bold uppercase tracking-[0.04em] text-slate-500 xl:text-[10px] 2xl:text-[11px]"
           title={label}
         >
           {label}
@@ -5129,7 +5341,7 @@ function CostingKpi({
         {action}
       </div>
       <p
-        className={`mt-1.5 truncate text-[10px] font-bold tabular-nums 2xl:text-[11px] ${valueTone}`}
+        className={`mt-1.5 truncate text-[11px] font-bold tabular-nums xl:text-[12px] 2xl:text-[14px] ${valueTone}`}
         title={value}
       >
         {value}

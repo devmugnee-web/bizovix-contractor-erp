@@ -141,8 +141,8 @@ export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: Top
 
       <div
         className={cn(
-          "absolute left-1/2 hidden h-6 -translate-x-1/2 items-center gap-1.5 lg:flex",
-          !showWhatsApp && "lg:hidden",
+          "absolute left-1/2 hidden h-6 -translate-x-1/2 items-center gap-1.5 xl:flex",
+          !showWhatsApp && "xl:hidden",
         )}
       >
         <span className="flex h-5 w-5 items-center justify-center text-biz-success">
