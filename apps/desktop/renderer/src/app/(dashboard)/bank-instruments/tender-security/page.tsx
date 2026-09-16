@@ -26,7 +26,7 @@ import {
   useTenderBankSettings,
 } from "@bizovix/api-client";
 import type { FundingType, PendingTenderSecurity, SecurityType, TenderSecurityPendingQuery, TenderStatus } from "@bizovix/types";
-import { Button, DateInput, IconButton, SelectInput, TextInput, cn } from "@bizovix/ui";
+import { Button, DateInput, IconButton, Pagination, SelectInput, TextInput, cn } from "@bizovix/ui";
 import { formatAmount } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
@@ -36,7 +36,8 @@ type SelectedTender = PendingTenderSecurity & {
   referenceNo: string;
 };
 
-const DEFAULT_QUERY: TenderSecurityPendingQuery = { page: 1, limit: 5, securityStatus: "PENDING" };
+const DEFAULT_QUERY: TenderSecurityPendingQuery = { page: 1, limit: 10, securityStatus: "PENDING" };
+type SecurityView = "ready" | "completed" | "notRequired";
 const ACTIVE_TENDER_STATUS_OPTIONS: Array<{ label: string; value: TenderStatus }> = [
   { label: "Draft", value: "DRAFT" },
   { label: "Published", value: "PUBLISHED" },
@@ -175,12 +176,13 @@ function TenderSecurityWorkspace() {
   }));
   const [search, setSearch] = React.useState(incomingTenderId);
   const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const [activeView, setActiveView] = React.useState<SecurityView>("ready");
   const pendingQuery = usePendingTenderSecurities({ ...query, securityStatus: "PENDING" });
   const completedSecurities = usePendingTenderSecurities({
-    page: 1,
-    limit: 100,
+    ...query,
     securityStatus: "CREATED",
   });
+  const notRequiredSecurities = usePendingTenderSecurities({ ...query, securityStatus: "NOT_REQUIRED" });
   const organizations = useAllOrganizations();
   const bankAccounts = useBankAccounts();
   const tenderBankSettings = useTenderBankSettings();
@@ -212,7 +214,11 @@ function TenderSecurityWorkspace() {
   }, [tenderBankSettings.data]);
 
   const pendingItems = pendingQuery.data?.items ?? [];
-  const meta = pendingQuery.data?.meta ?? { page: 1, limit: 5, total: 0, totalPages: 1 };
+  const meta = pendingQuery.data?.meta ?? { page: 1, limit: 10, total: 0, totalPages: 1 };
+  const historyQuery = activeView === "completed" ? completedSecurities : notRequiredSecurities;
+  const historyItems = historyQuery.data?.items ?? [];
+  const historyMeta = historyQuery.data?.meta ?? { page: 1, limit: 10, total: 0, totalPages: 1 };
+  const viewMeta = activeView === "ready" ? meta : historyMeta;
   const guidedRow = incomingTenderId
     ? pendingItems.find((item) => item.tenderId === incomingTenderId) ?? pendingItems[0] ?? null
     : null;
@@ -293,9 +299,16 @@ function TenderSecurityWorkspace() {
     setMessage(null);
     setShowDetails(true);
     window.requestAnimationFrame(() => {
-      section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      section2Ref.current?.scrollTo({ top: 0 });
       section2Ref.current?.focus({ preventScroll: true });
     });
+  }
+
+  function openRowDetails(row: PendingTenderSecurity) {
+    if (!row.eligible || !row.documentPurchaseId) return;
+    setSelectedRowsOverride([toSelectedTender(row, securityType, defaultMarginPct)]);
+    setShowDetails(true);
+    window.requestAnimationFrame(() => section2Ref.current?.focus({ preventScroll: true }));
   }
 
   const totals = selectedRows.reduce(
@@ -327,6 +340,7 @@ function TenderSecurityWorkspace() {
     setPreferCalculatedExpiry(false);
     setManualExpiryDate("");
     updateSelectedRows((rows) => rows.filter((row) => row.id !== id));
+    if (selectedRows.length === 1) setShowDetails(false);
   }
 
   async function save() {
@@ -373,43 +387,38 @@ function TenderSecurityWorkspace() {
   }
 
   return (
-    <div className="flex flex-col gap-3 text-biz-text">
-      <div className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-r from-white via-blue-50/60 to-emerald-50/40 px-5 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-        <div className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-biz-blue">Bank Instrument Workflow</p>
-            <h1 className="text-[22px] font-bold leading-7 tracking-tight text-biz-navy">Tender Security</h1>
-            <p className="mt-1 text-[12px] leading-5 text-biz-muted">
-              Create a Pay Order or Bank Guarantee for document-purchased tenders.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="min-w-[104px] rounded-xl border border-blue-200/80 bg-white/90 px-3.5 py-2 shadow-sm">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-biz-muted">Ready now</p>
-              <p className="mt-0.5 text-[18px] font-bold text-biz-blue">{meta.total}</p>
-            </div>
-            <div className="min-w-[104px] rounded-xl border border-emerald-200/80 bg-white/90 px-3.5 py-2 shadow-sm">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-biz-muted">Completed</p>
-              <p className="mt-0.5 text-[18px] font-bold text-emerald-700">{completedSecurities.data?.meta.total ?? 0}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="flex min-w-0 flex-col gap-2 pb-4 text-biz-text xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pb-0">
+      <header className="shrink-0 px-0.5">
+        <h1 className="text-[21px] font-bold leading-7 tracking-tight text-biz-navy 2xl:text-[25px]">Tender Security</h1>
+      </header>
 
-      {message?.type === "error" && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[12px] font-medium text-biz-danger shadow-sm">
+      {message && (
+        <div className={cn("shrink-0 rounded-lg border px-4 py-2 text-[12px] font-medium", message.type === "error" ? "border-red-200 bg-red-50 text-biz-danger" : "border-emerald-200 bg-emerald-50 text-emerald-700")}>
           {message.text}
         </div>
       )}
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.05)]">
+      {!showDetails && <section className="flex min-w-0 shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-biz-border bg-slate-50/60 px-3 py-2">
+          <div className="flex max-w-full flex-wrap gap-0.5 rounded-lg bg-slate-100 p-1 sm:gap-1" role="tablist" aria-label="Tender security workspace">
+            {([
+              { id: "ready", label: "Ready Now", count: meta.total },
+              { id: "completed", label: "Completed", count: completedSecurities.data?.meta.total ?? 0 },
+              { id: "notRequired", label: "Not Required", count: notRequiredSecurities.data?.meta.total ?? 0 },
+            ] as const).map((view) => (
+              <button key={view.id} type="button" role="tab" aria-selected={activeView === view.id} onClick={() => { setActiveView(view.id); setQuery((current) => ({ ...current, page: 1 })); }} className={cn("inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 text-[11px] font-semibold transition-colors sm:gap-1.5 sm:px-3 sm:text-[12px]", activeView === view.id ? "bg-white text-biz-blue shadow-sm" : "text-biz-muted hover:text-biz-text")}>
+                {view.label} <span className={cn("rounded-full px-1.5 py-0.5 text-[10px]", activeView === view.id ? "bg-biz-blue-soft text-biz-blue" : "bg-white text-biz-muted")}>{view.count}</span>
+              </button>
+            ))}
+          </div>
+          {activeView === "ready" && <p className="hidden text-[11px] text-biz-muted lg:block">Only document-purchased tenders waiting for security are shown.</p>}
+        </div>
         <div className="flex flex-col gap-3 border-b border-slate-100 bg-white px-4 py-3 lg:flex-row lg:items-end">
           <div className="min-w-[240px] flex-1">
             <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-biz-muted">Search Tender ID / Work / Organization</label>
             <TextInput
               icon={Search}
-              placeholder="Search active tenders..."
+              placeholder="Search tender ID, work or organization..."
               value={search}
               className="bg-slate-50/70 focus:bg-white"
               onChange={(event) => setSearch(event.target.value)}
@@ -433,7 +442,7 @@ function TenderSecurityWorkspace() {
             >
               Reset
             </Button>
-            <IconButton className="border-slate-200 bg-white text-biz-blue hover:bg-blue-50" aria-label="Refresh tender list" title="Refresh tender list" onClick={() => pendingQuery.refetch()}>
+            <IconButton className="border-slate-200 bg-white text-biz-blue hover:bg-blue-50" aria-label="Refresh tender list" title="Refresh tender list" onClick={() => (activeView === "ready" ? pendingQuery : historyQuery).refetch()}>
               <RefreshCw className="h-4 w-4" />
             </IconButton>
             <Button
@@ -472,21 +481,10 @@ function TenderSecurityWorkspace() {
           </div>
         )}
 
-        <div
-          className={cn(
-            "sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 backdrop-blur-md",
-            selectedRows.length > 0
-              ? "border-blue-200 bg-blue-50/95"
-              : "border-slate-200 bg-slate-50/95",
-          )}
-        >
+        {activeView === "ready" && selectedRows.length > 0 && <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-blue-200 bg-blue-50 px-4 py-2">
           <div>
-            <p className="text-[12px] font-bold text-biz-navy">
-              {selectedRows.length > 0 ? `${selectedRows.length} tender selected` : "Select a tender to continue"}
-            </p>
-            <p className="text-[11px] text-biz-muted">
-              {selectedRows.length > 0 ? `Total security: BDT ${money(totals.security)}` : "Only document-purchased tenders waiting for security are shown."}
-            </p>
+            <p className="text-[12px] font-bold text-biz-navy">{selectedRows.length} tender selected</p>
+            <p className="text-[11px] text-biz-muted">Total security: BDT {money(totals.security)}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" className="bg-white text-slate-700" disabled={selectedRows.length === 0 || markNotRequired.isPending} onClick={markSelectedNotRequired}>
@@ -499,11 +497,12 @@ function TenderSecurityWorkspace() {
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
-        </div>
+        </div>}
 
-        <div className="overflow-x-auto">
+        {activeView === "ready" ? <>
+        <div className="hidden xl:block xl:max-h-[45vh] xl:overflow-auto">
           <table className="w-full min-w-[1040px] text-[12px]">
-            <thead className="bg-slate-50/90 text-[10px] font-bold uppercase tracking-[0.04em] text-biz-muted">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] font-bold uppercase tracking-[0.04em] text-biz-muted">
               <tr className="border-b border-biz-border">
                 <th className="w-10 px-4 py-2 text-left">
                   <Checkbox
@@ -566,17 +565,7 @@ function TenderSecurityWorkspace() {
                               : row.ineligibleReason ?? undefined
                           }
                           className="whitespace-nowrap shadow-[0_4px_10px_rgba(37,99,235,0.16)]"
-                          onClick={() => {
-                            if (!row.eligible || !row.documentPurchaseId) return;
-                            setSelectedRowsOverride([
-                              toSelectedTender(row, securityType, defaultMarginPct),
-                            ]);
-                            setShowDetails(true);
-                            window.setTimeout(
-                              () => section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-                              0,
-                            );
-                          }}
+                          onClick={() => openRowDetails(row)}
                         >
                           <FileText className="h-4 w-4" />
                           Create Security
@@ -605,52 +594,33 @@ function TenderSecurityWorkspace() {
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-2.5 text-[11px]">
-          <span className="text-biz-muted">
-            {meta.total === 0
-              ? "No active tender records found."
-              : `Showing ${(meta.page - 1) * meta.limit + 1} to ${Math.min(meta.page * meta.limit, meta.total)} of ${meta.total} entries`}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={meta.page <= 1}
-              onClick={() => setQuery((q) => ({ ...q, page: Math.max(1, (q.page ?? 1) - 1) }))}
-              className="h-8 min-w-8 rounded-lg border border-blue-100 bg-white px-2 text-[12px] font-semibold text-biz-navy transition-colors hover:bg-blue-50 disabled:opacity-40"
-            >
-              ‹
-            </button>
-            <span className="px-2 text-[12px] font-semibold text-biz-navy">Page {meta.page} of {meta.totalPages}</span>
-            <button
-              type="button"
-              disabled={meta.page >= meta.totalPages}
-              onClick={() => setQuery((q) => ({ ...q, page: Math.min(meta.totalPages, (q.page ?? 1) + 1) }))}
-              className="h-8 min-w-8 rounded-lg border border-blue-100 bg-white px-2 text-[12px] font-semibold text-biz-navy transition-colors hover:bg-blue-50 disabled:opacity-40"
-            >
-              ›
-            </button>
-          </div>
+        <div className="divide-y divide-biz-border xl:hidden">
+          {pendingQuery.isLoading ? <p className="px-4 py-8 text-center text-[13px] text-biz-muted">Loading active tenders...</p> : pendingItems.length === 0 ? <p className="px-4 py-8 text-center text-[13px] text-biz-muted">No tender is waiting for security. New document-purchased tenders will appear here automatically.</p> : pendingItems.map((row, index) => (
+            <article key={row.id} className={cn("space-y-2.5 px-4 py-3", selectedIds.has(row.id) && "bg-blue-50/70")}>
+              <div className="flex items-start gap-2.5">
+                <Checkbox checked={selectedIds.has(row.id)} onChange={() => toggleRow(row)} label={row.eligible ? `Select ${row.tenderId ?? row.tenderWorkName}` : row.ineligibleReason ?? "Not eligible"} disabled={!row.eligible} />
+                <div className="min-w-0 flex-1"><p className="text-[11px] text-biz-muted">#{(meta.page - 1) * meta.limit + index + 1} · Tender {row.tenderId ?? "N/A"}</p><p className="mt-0.5 text-[13px] font-semibold leading-5 text-biz-navy" title={row.tenderWorkName}>{row.tenderWorkName}</p></div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
+                <div className="col-span-2"><span className="block text-biz-muted">Organization</span><span className="font-medium">{row.organizationMaster?.shortName ?? "Not set"}</span></div>
+                <div><span className="block text-biz-muted">Tender Status</span><span className="font-medium">{TENDER_STATUS_LABELS[row.tenderStatus] ?? row.tenderStatus}</span></div>
+                <div><span className="block text-biz-muted">Security Status</span><span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium", SECURITY_STATUS_META[row.securityStatus].className)}>{SECURITY_STATUS_META[row.securityStatus].label}</span></div>
+                <div><span className="block text-biz-muted">Submission Deadline</span><span className="font-medium">{row.submissionDeadline ? displayDate(row.submissionDeadline) : "—"}</span></div>
+                <div><span className="block text-biz-muted">Security Amount (৳)</span><span className="font-semibold">{money(row.securityAmount)}</span></div>
+                {row.ineligibleReason && <div><span className="block text-biz-muted">Eligibility</span><span>{row.ineligibleReason}</span></div>}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" disabled={!row.eligible || !row.documentPurchaseId} onClick={() => openRowDetails(row)} className="flex-1"><FileText className="h-4 w-4" /> Create Security <ArrowRight className="h-4 w-4" /></Button>
+                <Link href={`/tenders/${row.tenderRecordId}`} title="View Tender Details" aria-label={`View Tender Details: ${row.tenderId ?? row.tenderWorkName}`}><IconButton type="button" aria-label={`View Tender Details: ${row.tenderId ?? row.tenderWorkName}`} className="border-blue-100 bg-blue-50/60"><Eye className="h-4 w-4" /></IconButton></Link>
+              </div>
+            </article>
+          ))}
         </div>
-      </section>
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
-          <div>
-            <h2 className="text-[14px] font-bold tracking-[-0.01em] text-biz-navy">
-              Completed Tender Securities
-              <span className="ml-2 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] text-biz-success">
-                {completedSecurities.data?.meta.total ?? 0}
-              </span>
-            </h2>
-            <p className="mt-0.5 text-[11px] text-biz-muted">Previously created securities are kept here for quick reference.</p>
-          </div>
-          <IconButton className="border-slate-200 bg-slate-50/60 text-emerald-700 hover:bg-emerald-50" aria-label="Refresh completed securities" onClick={() => completedSecurities.refetch()}>
-            <RefreshCw className="h-4 w-4" />
-          </IconButton>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-[11px]">
-            <thead className="bg-slate-50/80 text-[10px] font-bold uppercase tracking-wide text-biz-muted">
+        </> : <>
+        <div className="hidden xl:block xl:max-h-[45vh] xl:overflow-auto">
+          <table className="w-full min-w-[720px] text-[12px]">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-biz-muted">
               <tr>
                 <th className="px-4 py-2 text-left">Tender ID</th>
                 <th className="px-3 py-2 text-left">Organization</th>
@@ -660,31 +630,74 @@ function TenderSecurityWorkspace() {
               </tr>
             </thead>
             <tbody>
-              {completedSecurities.isLoading ? (
-                <tr><td colSpan={5} className="px-4 py-7 text-center text-biz-muted">Loading completed securities...</td></tr>
-              ) : (completedSecurities.data?.items.length ?? 0) === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-7 text-center text-biz-muted">No completed tender securities yet.</td></tr>
-              ) : completedSecurities.data?.items.map((row) => (
+              {historyQuery.isLoading ? (
+                <tr><td colSpan={5} className="px-4 py-7 text-center text-biz-muted">Loading security history...</td></tr>
+              ) : historyItems.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-7 text-center text-biz-muted">No {activeView === "completed" ? "completed securities" : "not-required decisions"} match these filters.</td></tr>
+              ) : historyItems.map((row) => (
                 <tr key={row.id} className="border-t border-biz-border transition-colors hover:bg-emerald-50/30">
                   <td className="px-4 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td>
                   <td className="px-3 py-2">{row.organizationMaster?.shortName ?? "Not set"}</td>
                   <td className="max-w-[520px] px-3 py-2"><p className="line-clamp-2 font-medium leading-4 text-biz-text" title={row.tenderWorkName}>{row.tenderWorkName}</p></td>
                   <td className="px-3 py-2 text-right font-bold text-biz-navy">{money(row.securityAmount)}</td>
-                  <td className="px-4 py-2 text-center"><span className="rounded-full bg-biz-success-soft px-2.5 py-1 font-semibold text-biz-success">Completed</span></td>
+                  <td className="px-4 py-2 text-center"><span className={cn("rounded-full px-2.5 py-1 font-semibold", SECURITY_STATUS_META[row.securityStatus].className)}>{activeView === "completed" ? "Completed" : "Not Required"}</span></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </section>
+        <div className="divide-y divide-biz-border xl:hidden">
+          {historyQuery.isLoading ? <p className="px-4 py-8 text-center text-[13px] text-biz-muted">Loading security history...</p> : historyItems.length === 0 ? <p className="px-4 py-8 text-center text-[13px] text-biz-muted">No {activeView === "completed" ? "completed securities" : "not-required decisions"} match these filters.</p> : historyItems.map((row) => (
+            <article key={row.id} className="space-y-2 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><p className="text-[11px] text-biz-muted">Tender {row.tenderId ?? "Manual"}</p><p className="mt-0.5 text-[13px] font-semibold leading-5 text-biz-navy">{row.tenderWorkName}</p></div>
+                <span className={cn("shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold", SECURITY_STATUS_META[row.securityStatus].className)}>{activeView === "completed" ? "Completed" : "Not Required"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-[12px]"><div><span className="block text-biz-muted">Organization</span><span className="font-medium">{row.organizationMaster?.shortName ?? "Not set"}</span></div><div><span className="block text-biz-muted">Security Amount</span><span className="font-semibold">{money(row.securityAmount)}</span></div></div>
+            </article>
+          ))}
+        </div>
+        </>}
+        <div className="shrink-0 border-t border-slate-100 bg-slate-50/60 [&>div]:!gap-1 [&>div]:!px-3 [&>div]:!py-1.5 [&_button]:!h-7 [&_button]:!w-7 [&_select]:!h-7">
+          <Pagination page={viewMeta.page} limit={viewMeta.limit} total={viewMeta.total} totalPages={viewMeta.totalPages} onPageChange={(page) => setQuery((q) => ({ ...q, page }))} pageSizeOptions={[5, 10, 20]} onLimitChange={(limit) => setQuery((q) => ({ ...q, page: 1, limit }))} />
+        </div>
+      </section>}
 
-      {showDetails && <section ref={section2Ref} tabIndex={-1} className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_5px_18px_rgba(15,23,42,0.05)] outline-none">
+      {!showDetails && activeView === "ready" && (completedSecurities.data?.items.length ?? 0) > 0 && (
+        <section className="shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card" aria-label="Completed securities quick reference">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-1.5">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-700"><Check className="h-3.5 w-3.5" /></span>
+              <h2 className="text-[12px] font-bold text-biz-navy">Completed securities</h2>
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Quick reference</span>
+            </div>
+            <button type="button" className="inline-flex items-center gap-1 text-[11px] font-semibold text-biz-blue hover:underline" onClick={() => { setActiveView("completed"); setQuery((current) => ({ ...current, page: 1 })); }}>
+              View all <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {completedSecurities.data?.items.slice(0, 2).map((row) => (
+              <div key={row.id} className="grid grid-cols-[64px_minmax(0,1fr)_80px] items-center gap-3 px-4 py-1.5 text-[11px] sm:grid-cols-[78px_minmax(0,1fr)_150px_100px] 2xl:text-[12px]">
+                <span className="font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</span>
+                <span className="min-w-0 truncate font-medium text-biz-text" title={row.tenderWorkName}>{row.tenderWorkName}</span>
+                <span className="hidden truncate text-biz-muted sm:block" title={row.organizationMaster?.shortName ?? "Not set"}>{row.organizationMaster?.shortName ?? "Not set"}</span>
+                <span className="text-right font-semibold tabular-nums text-biz-navy">{money(row.securityAmount)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {showDetails && <section ref={section2Ref} tabIndex={-1} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-[0_5px_18px_rgba(15,23,42,0.05)] outline-none xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:[@media(max-height:519px)]:overflow-visible">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-[16px] font-bold tracking-[-0.01em] text-biz-navy">Configure Tender Security</h2>
             <p className="mt-1 text-[11px] text-biz-muted">Complete the common setup, then review the tender-wise amounts before saving.</p>
           </div>
-          <span className="rounded-full border border-blue-100 bg-biz-blue-soft px-3 py-1 text-[11px] font-semibold text-biz-blue">{selectedRows.length} Selected</span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-blue-100 bg-biz-blue-soft px-3 py-1 text-[11px] font-semibold text-biz-blue">{selectedRows.length} Selected</span>
+            <Button variant="outline" size="sm" onClick={() => setShowDetails(false)}>Back to Ready</Button>
+          </div>
         </div>
 
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -761,7 +774,7 @@ function TenderSecurityWorkspace() {
           <h3 className="text-[14px] font-bold text-biz-navy">2. Tender-wise Amounts</h3>
           <p className="mt-0.5 text-[11px] text-biz-muted">Enter each security amount and company cash margin. Bank finance is calculated automatically.</p>
         </div>
-        <div className="overflow-x-auto border-b border-slate-200 bg-white">
+        <div className="hidden overflow-x-auto border-b border-slate-200 bg-white xl:block">
           <table className="w-full min-w-[980px] table-fixed text-[11px] xl:min-w-0">
             <colgroup>
               <col className="w-[4%]" />
@@ -819,6 +832,33 @@ function TenderSecurityWorkspace() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="divide-y divide-slate-200 border-b border-slate-200 xl:hidden">
+          {selectedRows.length === 0 ? <p className="px-4 py-8 text-center text-[12px] text-biz-muted">No selected tenders. Return to Ready Now and select one or more eligible tenders.</p> : selectedRows.map((row, index) => {
+            const securityAmount = Number(row.securityAmount || 0);
+            const marginAmount = (securityAmount * Number(row.marginPercentage || 0)) / 100;
+            const bankFinance = securityAmount - marginAmount;
+            return <article key={row.id} className="space-y-3 p-3 sm:p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0"><p className="text-[11px] text-biz-muted">#{index + 1} · Tender {row.tenderId}</p><p className="mt-0.5 text-[13px] font-semibold text-biz-navy">{row.tenderWorkName}</p><p className="mt-0.5 text-[11px] text-biz-muted">{row.organizationMaster?.shortName ?? "Not set"}</p></div>
+                <IconButton aria-label={`Remove ${row.tenderId ?? row.tenderWorkName}`} onClick={() => removeSelectedTender(row.id)}><Trash2 className="h-4 w-4 text-biz-danger" /></IconButton>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-[11px] font-semibold text-biz-muted">Security Amount (৳)
+                  <input type="number" min={0.01} value={row.securityAmount} onFocus={() => { if (Number(row.securityAmount) === 0) setSelectedValue(row.id, "securityAmount", ""); }} onChange={(e) => setSelectedValue(row.id, "securityAmount", e.target.value)} className="mt-1 h-10 w-full rounded border border-biz-border bg-white px-3 text-right text-[12px] text-biz-text outline-none focus:border-biz-blue focus:ring-2 focus:ring-blue-100" />
+                </label>
+                <label className="block text-[11px] font-semibold text-biz-muted">Company Cash Margin %
+                  <div className="mt-1 flex"><input type="number" min={0} max={100} value={row.marginPercentage} onChange={(e) => setSelectedValue(row.id, "marginPercentage", e.target.value)} className="h-10 w-full rounded-l border border-biz-border bg-white px-3 text-right text-[12px] text-biz-text outline-none focus:border-biz-blue focus:ring-2 focus:ring-blue-100" /><span className="flex h-10 w-9 shrink-0 items-center justify-center rounded-r border border-l-0 border-biz-border bg-slate-50">%</span></div>
+                </label>
+                <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px]"><span className="block text-biz-muted">Company Margin Amount (৳)</span><span className="mt-0.5 block text-[13px] font-semibold text-biz-navy">{money(marginAmount)}</span></div>
+                {fundingType === "LOAN" && <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px]"><span className="block text-biz-muted">Bank Finance (৳)</span><span className="mt-0.5 block text-[13px] font-semibold text-biz-navy">{money(bankFinance)}</span></div>}
+                <label className="block text-[11px] font-semibold text-biz-muted sm:col-span-2">Reference No. ({securityType === "BANK_GUARANTEE" ? "BG No." : "PO No."})
+                  <input value={row.referenceNo} onChange={(e) => setSelectedValue(row.id, "referenceNo", e.target.value)} className="mt-1 h-10 w-full rounded border border-biz-border bg-white px-3 text-[12px] text-biz-text outline-none focus:border-biz-blue focus:ring-2 focus:ring-blue-100" />
+                </label>
+              </div>
+            </article>;
+          })}
         </div>
 
         <div className="sticky bottom-2 z-10 flex flex-col gap-3 bg-white/95 p-3 shadow-[0_-6px_20px_rgba(15,23,42,0.05)] backdrop-blur-md lg:flex-row lg:items-center lg:justify-between">

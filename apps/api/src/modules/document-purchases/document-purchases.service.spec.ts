@@ -97,6 +97,7 @@ function setup() {
   const prisma = {
     organizationMaster: { findFirst: jest.fn().mockResolvedValue({ id: "master-1" }) },
     bankAccount: { findFirst: jest.fn().mockResolvedValue({ id: "account-1" }) },
+    documentPurchase: { findFirst: jest.fn() },
     documentPurchaseRequest: { groupBy: jest.fn() },
     tender: { findFirst: jest.fn() },
     $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
@@ -107,6 +108,33 @@ function setup() {
 }
 
 describe("DocumentPurchasesService Tender business ID compatibility", () => {
+  it("keeps linked approval history on the purchase detail without inventing it for direct purchases", async () => {
+    const { service, prisma } = setup();
+    const workflowRequest = {
+      status: "PURCHASED",
+      requestedAt: new Date("2026-08-28T09:00:00.000Z"),
+      approvedAt: new Date("2026-08-29T09:00:00.000Z"),
+      requestedBy: { id: "requester-1", name: "Requester" },
+      approvedBy: { id: "approver-1", name: "Approver" },
+    };
+    prisma.documentPurchase.findFirst
+      .mockResolvedValueOnce(purchaseFixture({ workflowRequest }))
+      .mockResolvedValueOnce(purchaseFixture({ workflowRequest: null }));
+
+    await expect(service.findOne("org-1", "dp-1")).resolves.toEqual(
+      expect.objectContaining({ tenderId: "EGP-2026-1", workflowRequest }),
+    );
+    await expect(service.findOne("org-1", "dp-1")).resolves.toEqual(
+      expect.objectContaining({ workflowRequest: null }),
+    );
+    expect(prisma.documentPurchase.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "dp-1", organizationId: "org-1" },
+        include: expect.objectContaining({ workflowRequest: expect.any(Object) }),
+      }),
+    );
+  });
+
   it("returns workflow status counts for the current organization", async () => {
     const { service, prisma } = setup();
     prisma.documentPurchaseRequest.groupBy.mockResolvedValue([

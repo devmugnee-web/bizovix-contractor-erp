@@ -20,6 +20,14 @@ export interface DocumentPurchase {
   paymentFromAccount: { id: string; accountName: string };
   createdAt: string;
   updatedAt: string;
+  /** Included on the detail endpoint when the purchase came through an approval request. */
+  workflowRequest?: {
+    status: DocumentPurchaseRequestStatus;
+    requestedAt: string;
+    approvedAt: string | null;
+    requestedBy: { id: string; name: string } | null;
+    approvedBy: { id: string; name: string } | null;
+  } | null;
 }
 
 export interface CreateDocumentPurchaseInput {

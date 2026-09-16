@@ -23,12 +23,29 @@ const includeRelations = {
   paymentFromAccount: { select: { id: true, accountName: true } },
 } satisfies Prisma.DocumentPurchaseInclude;
 
+const detailIncludeRelations = {
+  ...includeRelations,
+  workflowRequest: {
+    select: {
+      status: true,
+      requestedAt: true,
+      approvedAt: true,
+      requestedBy: { select: { id: true, name: true } },
+      approvedBy: { select: { id: true, name: true } },
+    },
+  },
+} satisfies Prisma.DocumentPurchaseInclude;
+
 type DocumentPurchaseWithRelations = Prisma.DocumentPurchaseGetPayload<{
   include: typeof includeRelations;
 }>;
 type DocumentPurchaseDto = Omit<DocumentPurchaseWithRelations, "egpTenderId"> & {
   tenderId: string | null;
 };
+type DocumentPurchaseDetailDto = DocumentPurchaseDto & Pick<
+  Prisma.DocumentPurchaseGetPayload<{ include: typeof detailIncludeRelations }>,
+  "workflowRequest"
+>;
 type DocumentPurchaseStats = {
   totalPurchases: number;
   egpPurchases: number;
@@ -325,15 +342,15 @@ export class DocumentPurchasesService {
     return { items: items.map(toDto), meta: buildPaginationMeta(total, page, limit) };
   }
 
-  async findOne(organizationId: string, id: string): Promise<DocumentPurchaseDto> {
+  async findOne(organizationId: string, id: string): Promise<DocumentPurchaseDetailDto> {
     const record = await this.prisma.documentPurchase.findFirst({
       where: { id, organizationId },
-      include: includeRelations,
+      include: detailIncludeRelations,
     });
     if (!record) {
       throw new NotFoundException("Document purchase not found");
     }
-    return toDto(record);
+    return { ...toDto(record), workflowRequest: record.workflowRequest };
   }
 
   async stats(organizationId: string): Promise<DocumentPurchaseStats> {

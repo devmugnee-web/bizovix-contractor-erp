@@ -259,6 +259,18 @@ export default function DocumentPurchaseViewPage() {
           )}
         </div>
         <DetailRow label="Created At" value={formatDate(record.createdAt)} />
+        {record.workflowRequest && (
+          <>
+            <div className="col-span-full mt-1 border-t border-biz-border pt-3">
+              <h3 className="text-[13px] font-bold text-biz-navy">Approval History</h3>
+              <p className="text-[11px] text-biz-muted">Decision linked to this document purchase</p>
+            </div>
+            <DetailRow label="Requested By" value={record.workflowRequest.requestedBy?.name ?? "Not recorded"} />
+            <DetailRow label="Requested On" value={formatDate(record.workflowRequest.requestedAt)} />
+            <DetailRow label="Approved By" value={record.workflowRequest.approvedBy?.name ?? "Not recorded"} />
+            <DetailRow label="Approved On" value={record.workflowRequest.approvedAt ? formatDate(record.workflowRequest.approvedAt) : "Not recorded"} />
+          </>
+        )}
       </div>
 
       <div className="flex flex-col gap-2 rounded-xl border border-[#d9e7f8] bg-gradient-to-r from-[#f5f9ff] to-white px-4 py-2.5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
