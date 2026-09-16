@@ -188,7 +188,7 @@ const PRIMARY_NAV_ITEMS: NavItem[] = [
             icon: FileBadge2,
           },
           {
-            label: "Work Completion Certificate",
+            label: "Completion Certificate",
             href: "/cms/documentation/work-completion-certificate",
             icon: Award,
           },
@@ -321,7 +321,7 @@ const PRIMARY_NAV_ITEMS: NavItem[] = [
     icon: BarChart3,
     children: [
       {
-        label: "Document Purchase Report",
+        label: "Document Purchases",
         href: "/reports/tenders/document-purchase",
         icon: FileText,
       },
@@ -329,12 +329,12 @@ const PRIMARY_NAV_ITEMS: NavItem[] = [
       { label: "PG / BG", href: "/reports/tenders/pg-bg", icon: FileBadge2 },
       { label: "SD", href: "/reports/tenders/security-deposit", icon: Landmark },
       {
-        label: "Project-wise Profit/Loss",
+        label: "Project Profit/Loss",
         href: "/reports/projects/profit-loss",
         icon: TrendingUp,
       },
       {
-        label: "General Profit/Loss Statement",
+        label: "General Profit/Loss",
         href: "/reports/financial/profit-loss",
         icon: LineChart,
       },
@@ -342,11 +342,11 @@ const PRIMARY_NAV_ITEMS: NavItem[] = [
       { label: "Balance Check", href: "/reports/financial/trial-balance", icon: Scale },
       { label: "Ledger Breakdown", href: "/reports/financial/ledger", icon: BookOpen },
       { label: "Bill Maturity", href: "/reports/expiry-due/bill-maturity", icon: CalendarClock },
-      { label: "Expense Category Report", href: "/reports/expenses/category", icon: PieChart },
+      { label: "Expenses by Category", href: "/reports/expenses/category", icon: PieChart },
       { label: "Inventory Report", href: "/reports/inventory/summary", icon: Package },
-      { label: "Asset Schedule Management", href: "/reports/assets/schedule", icon: ClipboardList },
+      { label: "Asset Schedule", href: "/reports/assets/schedule", icon: ClipboardList },
       {
-        label: "Internal Company Transaction",
+        label: "Internal Transactions",
         href: "/reports/inter-company/transactions",
         icon: ArrowLeftRight,
       },

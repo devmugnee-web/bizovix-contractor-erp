@@ -46,8 +46,8 @@ function SubmenuList({
   return (
     <ul
       className={cn(
-        "flex flex-col gap-1 border-l",
-        nested ? "ml-2 mt-1 border-white/10 pl-3" : "ml-4 mt-1.5 border-white/15 pl-3",
+        "flex flex-col gap-0.5 border-l",
+        nested ? "ml-1 mt-0.5 border-white/10 pl-2" : "ml-3 mt-1 border-white/15 pl-2.5",
       )}
     >
       {items.map((item, index) => {
@@ -64,7 +64,7 @@ function SubmenuList({
           >
             <span
               className={cn(
-                "absolute -left-[9px] top-[18px] h-1.5 w-1.5 -translate-y-1/2 rounded-full transition-all duration-150",
+                "absolute -left-[7px] top-[15px] h-1.5 w-1.5 -translate-y-1/2 rounded-full transition-all duration-150",
                 active || childActive
                   ? "bg-[#63A1FF] shadow-[0_0_0_3px_rgba(30,101,255,0.18)]"
                   : isDisabled
@@ -81,7 +81,7 @@ function SubmenuList({
                     aria-current={active ? "page" : undefined}
                     aria-expanded="true"
                     className={cn(
-                      "flex items-center gap-2 rounded-lg border px-2 py-2 text-[13px] transition-all duration-150 ease-out active:scale-[0.98]",
+                      "flex items-center gap-1.5 rounded-md border px-1.5 py-1.5 text-[11.5px] font-medium leading-none transition-all duration-150 ease-out active:scale-[0.98]",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35 focus-visible:ring-offset-2 focus-visible:ring-offset-biz-navy",
                       active
                         ? "border-biz-blue/35 bg-biz-blue/20 font-semibold text-white"
@@ -90,15 +90,15 @@ function SubmenuList({
                           : "border-transparent text-white/70 hover:translate-x-0.5 hover:border-white/10 hover:bg-white/[0.08] hover:text-white",
                     )}
                   >
-                    <Icon className="h-[15px] w-[15px] shrink-0" />
-                    <span className="min-w-0 flex-1 whitespace-normal break-words leading-4" title={item.label}>{item.label}</span>
-                    <ChevronDown className="h-3.5 w-3.5 shrink-0 rotate-180" />
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate whitespace-nowrap" title={item.label}>{item.label}</span>
+                    <ChevronDown className="h-3 w-3 shrink-0 rotate-180" />
                   </Link>
                 ) : (
-                  <span className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-2 text-[13px] font-semibold text-white">
-                    <Icon className="h-[15px] w-[15px] shrink-0" />
-                    <span className="min-w-0 flex-1 whitespace-normal break-words leading-4" title={item.label}>{item.label}</span>
-                    <ChevronDown className="h-3.5 w-3.5 shrink-0 rotate-180" />
+                  <span className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-1.5 text-[11.5px] font-semibold leading-none text-white">
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate whitespace-nowrap" title={item.label}>{item.label}</span>
+                    <ChevronDown className="h-3 w-3 shrink-0 rotate-180" />
                   </span>
                 )}
                 <SubmenuList items={item.children!} activeItemHref={activeItemHref} nested />
@@ -107,17 +107,17 @@ function SubmenuList({
               <span
                 aria-disabled="true"
                 title="Coming soon"
-                className="flex cursor-not-allowed select-none items-center gap-2 rounded-lg border border-transparent px-2 py-2 text-[13px] text-white/35"
+                className="flex cursor-not-allowed select-none items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1.5 text-[11.5px] font-medium leading-none text-white/35"
               >
-                <Icon className="h-[15px] w-[15px] shrink-0" />
-                <span className="min-w-0 flex-1 whitespace-normal break-words leading-4">{item.label}</span>
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 flex-1 truncate whitespace-nowrap">{item.label}</span>
               </span>
             ) : (
               <Link
                 href={item.href!}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-2 rounded-lg border px-2 py-2 text-[13px] transition-all duration-150 ease-out active:scale-[0.98]",
+                  "flex items-center gap-1.5 rounded-md border px-1.5 py-1.5 text-[11.5px] font-medium leading-none transition-all duration-150 ease-out active:scale-[0.98]",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35 focus-visible:ring-offset-2 focus-visible:ring-offset-biz-navy",
                   active
                     ? "border-biz-blue/35 bg-biz-blue/20 font-semibold text-white"
@@ -126,11 +126,11 @@ function SubmenuList({
               >
                 <Icon
                   className={cn(
-                    "h-[15px] w-[15px] shrink-0 transition-transform duration-150",
+                    "h-3.5 w-3.5 shrink-0 transition-transform duration-150",
                     !active && "group-hover:scale-110",
                   )}
                 />
-                <span className="min-w-0 flex-1 whitespace-normal break-words leading-4" title={item.label}>{item.label}</span>
+                <span className="min-w-0 flex-1 truncate whitespace-nowrap" title={item.label}>{item.label}</span>
               </Link>
             )}
           </li>

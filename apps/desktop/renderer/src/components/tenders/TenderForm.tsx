@@ -376,7 +376,9 @@ export function TenderForm({
     <div
       className={cn(
         "flex flex-col",
-        embedded ? "gap-4" : "h-full min-h-0 gap-2 overflow-hidden subpixel-antialiased 2xl:gap-3",
+        embedded
+          ? "min-h-0 flex-1 overflow-hidden"
+          : "h-full min-h-0 gap-2 overflow-hidden subpixel-antialiased 2xl:gap-3",
       )}
     >
       {!embedded && (
@@ -403,26 +405,35 @@ export function TenderForm({
       )}
 
       {embedded && (
-        <p className="text-[12px] font-medium text-slate-500 2xl:text-[13px]">
-          Enter the tender information, then save a draft or send it for costing approval.
+        <p className="shrink-0 border-b border-biz-border bg-slate-50/70 px-3 py-2 text-[11px] font-medium text-slate-600 sm:px-4 sm:text-[12px]">
+          Complete the tender details, then save a draft or submit for costing approval.
         </p>
       )}
 
       <form
         className={cn(
           embedded
-            ? "bg-biz-surface pt-1"
+            ? "flex min-h-0 flex-1 flex-col bg-white"
             : "flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-biz-border bg-slate-50/70 shadow-card",
         )}
       >
         <div
           className={cn(
             "space-y-3 [&_input]:h-10 [&_input]:text-[12px] [&_label]:text-[12px] [&_select]:h-10 [&_select]:text-[12px] [&_textarea]:text-[12px] xl:[&_input]:text-[13px] xl:[&_label]:text-[13px] xl:[&_select]:text-[13px] xl:[&_textarea]:text-[13px] 2xl:space-y-4 2xl:[&_input]:h-11 2xl:[&_input]:text-[14px] 2xl:[&_label]:text-[14px] 2xl:[&_select]:h-11 2xl:[&_select]:text-[14px] 2xl:[&_textarea]:text-[14px]",
-            embedded ? "" : "scrollbar-hidden min-h-0 flex-1 overflow-y-auto p-3 xl:p-4 2xl:p-5",
+            embedded
+              ? "min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4"
+              : "scrollbar-hidden min-h-0 flex-1 overflow-y-auto p-3 xl:p-4 2xl:p-5",
           )}
         >
           {mode === "create" && (
-            <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50/60 p-2.5 2xl:p-3">
+            <div
+              className={cn(
+                "rounded-lg border",
+                embedded
+                  ? "border-blue-200 bg-blue-50/40 p-1.5 2xl:p-2"
+                  : "border-dashed border-blue-300 bg-blue-50/60 p-2.5 2xl:p-3",
+              )}
+            >
               <input
                 ref={pdfInputRef}
                 type="file"
@@ -439,12 +450,24 @@ export function TenderForm({
                   event.preventDefault();
                   void readTenderPdf(event.dataTransfer.files?.[0]);
                 }}
-                className="flex w-full items-center justify-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-blue-100/60 disabled:cursor-wait disabled:opacity-70 2xl:py-3"
+                className={cn(
+                  "flex w-full items-center rounded-md text-left transition-colors hover:bg-blue-100/60 disabled:cursor-wait disabled:opacity-70",
+                  embedded
+                    ? "justify-start gap-2.5 px-2.5 py-1.5"
+                    : "justify-center gap-3 px-3 py-2 2xl:py-3",
+                )}
               >
                 {isReadingPdf ? (
-                  <LoaderCircle className="h-6 w-6 shrink-0 animate-spin text-biz-blue" />
+                  <LoaderCircle
+                    className={cn(
+                      "shrink-0 animate-spin text-biz-blue",
+                      embedded ? "h-5 w-5" : "h-6 w-6",
+                    )}
+                  />
                 ) : (
-                  <UploadCloud className="h-6 w-6 shrink-0 text-biz-blue" />
+                  <UploadCloud
+                    className={cn("shrink-0 text-biz-blue", embedded ? "h-5 w-5" : "h-6 w-6")}
+                  />
                 )}
                 <span>
                   <span className="block text-[13px] font-semibold text-biz-text 2xl:text-[15px]">
@@ -694,79 +717,97 @@ export function TenderForm({
             </FormSection>
           </div>
 
-          <FormSection
-            icon={ContactRound}
-            title="Procuring Entity Contact"
-            description="Contact person information from the tender notice"
-          >
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-12 2xl:gap-4">
-              <div className="md:col-span-4">
-                <FormField label="PA Name" htmlFor="paName" error={errors.paName?.message}>
-                  <TextInput id="paName" {...register("paName")} />
-                </FormField>
+          <div className={cn("grid grid-cols-1 gap-3 2xl:gap-4", embedded && "lg:grid-cols-12")}>
+            <FormSection
+              icon={ContactRound}
+              title="Procuring Entity Contact"
+              description="Contact person information from the tender notice"
+              className={embedded ? "lg:col-span-7" : undefined}
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-12 2xl:gap-4">
+                <div className="md:col-span-4">
+                  <FormField label="PA Name" htmlFor="paName" error={errors.paName?.message}>
+                    <TextInput id="paName" {...register("paName")} />
+                  </FormField>
+                </div>
+                <div className="md:col-span-4">
+                  <FormField
+                    label="PA Designation"
+                    htmlFor="paDesignation"
+                    error={errors.paDesignation?.message}
+                  >
+                    <TextInput id="paDesignation" {...register("paDesignation")} />
+                  </FormField>
+                </div>
+                <div className="md:col-span-4">
+                  <FormField
+                    label="PA Phone Number"
+                    htmlFor="paPhone"
+                    error={errors.paPhone?.message}
+                  >
+                    <TextInput id="paPhone" type="tel" {...register("paPhone")} />
+                  </FormField>
+                </div>
+                <div className="md:col-span-12">
+                  <FormField
+                    label="PE Address"
+                    htmlFor="paAddress"
+                    error={errors.paAddress?.message}
+                  >
+                    <TextInput id="paAddress" {...register("paAddress")} />
+                  </FormField>
+                </div>
               </div>
-              <div className="md:col-span-4">
-                <FormField
-                  label="PA Designation"
-                  htmlFor="paDesignation"
-                  error={errors.paDesignation?.message}
-                >
-                  <TextInput id="paDesignation" {...register("paDesignation")} />
-                </FormField>
-              </div>
-              <div className="md:col-span-4">
-                <FormField
-                  label="PA Phone Number"
-                  htmlFor="paPhone"
-                  error={errors.paPhone?.message}
-                >
-                  <TextInput id="paPhone" type="tel" {...register("paPhone")} />
-                </FormField>
-              </div>
-              <div className="md:col-span-12">
-                <FormField label="PE Address" htmlFor="paAddress" error={errors.paAddress?.message}>
-                  <TextInput id="paAddress" {...register("paAddress")} />
-                </FormField>
-              </div>
-            </div>
-          </FormSection>
+            </FormSection>
 
-          <FormSection
-            icon={MessageSquareText}
-            title="Notes"
-            description="Optional internal remarks about this tender"
-          >
-            <FormField label="Remarks" error={errors.remarks?.message}>
-              <textarea
-                rows={3}
-                placeholder="Additional notes about this tender..."
-                className="min-h-[76px] w-full resize-y rounded-sm border border-biz-border bg-white px-3 py-2 text-biz-text placeholder:text-biz-muted focus:outline-none focus:ring-2 focus:ring-biz-blue/30 2xl:min-h-[96px]"
-                {...register("remarks")}
-              />
-            </FormField>
-          </FormSection>
+            <FormSection
+              icon={MessageSquareText}
+              title="Notes"
+              description="Optional internal remarks about this tender"
+              className={embedded ? "lg:col-span-5" : undefined}
+            >
+              <FormField label="Remarks" error={errors.remarks?.message}>
+                <textarea
+                  rows={3}
+                  placeholder="Additional notes about this tender..."
+                  className="min-h-[76px] w-full resize-y rounded-sm border border-biz-border bg-white px-3 py-2 text-biz-text placeholder:text-biz-muted focus:outline-none focus:ring-2 focus:ring-biz-blue/30 2xl:min-h-[96px]"
+                  {...register("remarks")}
+                />
+              </FormField>
+            </FormSection>
+          </div>
 
-          {saveError && (
-            <p className="rounded-md border border-biz-danger/20 bg-biz-danger/5 px-3 py-2 text-[12px] font-medium text-biz-danger 2xl:text-[13px]">
+          {saveError && !embedded && (
+            <p
+              role="alert"
+              className="rounded-md border border-biz-danger/20 bg-biz-danger/5 px-3 py-2 text-[12px] font-medium text-biz-danger 2xl:text-[13px]"
+            >
               {saveError}
             </p>
           )}
         </div>
 
+        {saveError && embedded && (
+          <p
+            role="alert"
+            className="shrink-0 border-t border-biz-danger/20 bg-biz-danger/5 px-4 py-2 text-[12px] font-medium text-biz-danger"
+          >
+            {saveError}
+          </p>
+        )}
+
         <div
           className={cn(
             "flex flex-wrap items-center gap-2",
             embedded
-              ? "mt-6 justify-end border-t border-biz-border pt-4"
+              ? "shrink-0 justify-between border-t border-biz-border bg-white px-3 py-2.5 sm:px-4"
               : "shrink-0 justify-between border-t border-biz-border bg-white px-3 py-2.5 xl:px-4 2xl:px-5 2xl:py-3",
           )}
         >
-          {!embedded && (
-            <p className="text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
-              <span className="font-bold text-biz-danger">*</span> Required information must be
-              completed before submission.
-            </p>
-          )}
+          <p className="text-[10px] font-medium text-slate-500 xl:text-[11px] 2xl:text-[12px]">
+            <span className="font-bold text-biz-danger">*</span> Required information must be
+            completed before submission.
+          </p>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <SecondaryButton
               type="button"
@@ -777,6 +818,7 @@ export function TenderForm({
             </SecondaryButton>
             <SecondaryButton
               type="button"
+              data-shortcut-action="save"
               className="h-9 text-[12px] 2xl:h-10 2xl:px-4 2xl:text-[14px]"
               disabled={isPending}
               onClick={handleSubmit((values) => save(values, "DRAFT"))}
@@ -797,7 +839,12 @@ export function TenderForm({
         </div>
       </form>
 
-      <Modal open={!!duplicate} onClose={() => setDuplicate(null)} title="Tender ID already exists">
+      <Modal
+        open={!!duplicate}
+        onClose={() => setDuplicate(null)}
+        title="Tender ID already exists"
+        portal
+      >
         {duplicate && (
           <div className="flex flex-col gap-4">
             <div className="rounded-md border border-biz-danger/20 bg-biz-danger/5 p-3 text-[13px] text-biz-text">

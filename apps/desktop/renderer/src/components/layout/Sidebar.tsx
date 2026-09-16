@@ -128,26 +128,24 @@ export function Sidebar({
           type="button"
           aria-label="Close sidebar"
           onClick={onMobileClose}
-          className="fixed inset-0 top-14 z-30 bg-biz-navy/25 md:hidden"
+          className="fixed inset-0 top-7 z-30 bg-biz-navy/25 md:hidden"
         />
       )}
       <aside
-        className={`${mobileOpen ? "fixed bottom-0 left-0 top-7 z-40 flex" : "hidden"} ${collapsed ? "md:hidden" : "md:static md:flex"} h-[calc(100vh-1.75rem)] w-[256px] max-w-[88vw] shrink-0 flex-col bg-biz-navy md:h-full md:max-w-none print:hidden`}
+        className={`${mobileOpen ? "fixed bottom-0 left-0 top-7 z-40 flex" : "hidden"} ${collapsed ? "md:hidden" : "md:static md:flex"} h-[calc(100vh-1.75rem)] w-[202px] max-w-[88vw] shrink-0 flex-col border-r border-white/10 bg-gradient-to-b from-[#062D63] via-biz-navy to-[#041F46] shadow-[4px_0_18px_rgba(2,23,52,0.08)] md:h-full md:max-w-none print:hidden`}
       >
-        <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-4">
-          <ul className="flex flex-col gap-1">{upperItems.map(renderItem)}</ul>
-          <div className="my-3 border-t border-white/10" />
-          <ul className="flex flex-col gap-1">{lowerItems.map(renderItem)}</ul>
+        <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto py-2.5 pl-1.5 pr-1">
+          <ul className="flex flex-col gap-0.5">{upperItems.map(renderItem)}</ul>
+          <div className="my-2 border-t border-white/10" />
+          <ul className="flex flex-col gap-0.5">{lowerItems.map(renderItem)}</ul>
         </nav>
         {trial && (
-          <div className="mx-3 mb-3">
+          <div className="mx-2 mb-2">
             <TrialCard daysLeft={trial.daysLeft} totalDays={trial.totalDays} onUpgradeClick={onUpgradeClick} />
           </div>
         )}
-        <div className="border-t border-white/10 px-3 py-3 text-center text-[11px] text-white/50">
-          © 2024 Bizovix Contractor ERP
-          <br />
-          v1.0.0
+        <div className="shrink-0 whitespace-nowrap border-t border-white/10 px-2 py-2 text-center text-[10px] font-medium tracking-[0.01em] text-white/50">
+          {"\u00A9 2024 Bizovix Contractor ERP \u00B7 v1.0.0"}
         </div>
       </aside>
     </>

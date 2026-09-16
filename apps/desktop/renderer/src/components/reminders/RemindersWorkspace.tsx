@@ -104,12 +104,24 @@ function Overlay({
   children: React.ReactNode;
   wide?: boolean;
 }) {
+  React.useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || document.querySelector("[data-shortcut-center]")) return;
+      event.preventDefault();
+      onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-3"
       onMouseDown={onClose}
     >
       <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className={cn(
           "max-h-[calc(100vh-1rem)] w-full rounded-lg bg-white p-4 shadow-card-hover",
           wide ? "max-w-4xl overflow-hidden" : "max-w-xl overflow-y-auto",
@@ -460,7 +472,7 @@ function ReminderForm({ record, onClose }: { record?: ReminderRecord; onClose: (
       )}
       <div className="-mx-4 -mb-4 mt-3 flex justify-end gap-2 rounded-b-lg border-t border-biz-border bg-slate-50/70 px-4 py-3">
         <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
-        <PrimaryButton disabled={create.isPending || update.isPending} onClick={save}>
+        <PrimaryButton data-shortcut-action="save" disabled={create.isPending || update.isPending} onClick={save}>
           {create.isPending || update.isPending ? "Saving..." : "Save Reminder"}
         </PrimaryButton>
       </div>
@@ -795,6 +807,14 @@ export function RemindersWorkspace() {
     if (deepLinked.data) router.replace("/reminders");
   }, [deepLinked.data, router]);
   React.useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    const timer = window.setTimeout(() => {
+      setForm("new");
+      router.replace("/reminders");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [searchParams, router]);
+  React.useEffect(() => {
     const nextSearch = draft.search ?? "";
     if ((filters.search ?? "") === nextSearch) return;
 
@@ -839,7 +859,7 @@ export function RemindersWorkspace() {
         <div>
           <h1 className="text-page-title text-biz-text">Reminders</h1>
         </div>
-        <PrimaryButton size="sm" onClick={() => setForm("new")}>
+        <PrimaryButton data-shortcut-action="new" size="sm" onClick={() => setForm("new")}>
           <Plus className="h-4 w-4" />
           Add Reminder
         </PrimaryButton>
@@ -919,6 +939,7 @@ export function RemindersWorkspace() {
               <div className="flex min-w-0 items-center gap-1.5 sm:w-[min(100%,430px)]">
                 <div className="min-w-0 flex-1">
                   <TextInput
+                    data-shortcut-action="filters"
                     icon={Search}
                     className="h-9 text-[11px] xl:text-[13px] 2xl:h-10 2xl:text-[14px]"
                     placeholder="Search title, reference, project..."

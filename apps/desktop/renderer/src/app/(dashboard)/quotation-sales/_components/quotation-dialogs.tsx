@@ -394,6 +394,7 @@ export function QuotationFormDialog({
           </button>
           <button
             type="submit"
+            data-shortcut-action="save"
             disabled={pending || options.isError}
             className="h-9 rounded-[5px] bg-[#0867e8] px-5 text-[10px] font-semibold text-white disabled:opacity-50"
           >

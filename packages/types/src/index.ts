@@ -57,3 +57,4 @@ export * from "./lc";
 export * from "./bill-workspace";
 export * from "./project-costing-report";
 export * from "./tender-challan";
+export * from "./support-ticket";

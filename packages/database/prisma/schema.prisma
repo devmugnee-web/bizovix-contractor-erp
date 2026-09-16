@@ -517,6 +517,9 @@ model Organization {
   receiptSequences               ReceiptSequence[]
   reminders                      Reminder[]
   notifications                  Notification[]
+  supportTickets                SupportTicket[]
+  supportMessages               SupportTicketMessage[]
+  supportAttachments            SupportTicketAttachment[]
   documents                      Document[]
   auditLogs                      AuditLog[]
   appSettings                    AppSetting[]
@@ -650,6 +653,8 @@ model User {
   auditLogs                    AuditLog[]
   expensesThrough              Expense[]                     @relation("ExpenseThrough")
   notifications                Notification[]
+  supportTicketsCreated        SupportTicket[]                @relation("SupportTicketCreatedBy")
+  supportMessages              SupportTicketMessage[]
   salesQuotationsCreated       SalesQuotation[]              @relation("SalesQuotationCreatedBy")
   salesQuotationsAssigned      SalesQuotation[]              @relation("SalesQuotationSalesPerson")
   salesQuotationsSent          SalesQuotation[]              @relation("SalesQuotationSentBy")
@@ -3056,6 +3061,98 @@ model Notification {
   @@map("notifications")
 }
 
+enum SupportTicketIssueType {
+  TECHNICAL
+  HOW_TO
+  DATA
+  FEATURE
+  ACCOUNT
+}
+
+enum SupportTicketPriority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum SupportMessageAuthorType {
+  CUSTOMER
+  SUPPORT
+}
+
+model SupportTicket {
+  id             String                @id @default(cuid())
+  number         Int                   @unique @default(autoincrement())
+  organizationId String
+  createdById    String
+  subject        String                @db.VarChar(180)
+  issueType      SupportTicketIssueType
+  moduleName     String                @db.VarChar(100)
+  priority       SupportTicketPriority @default(NORMAL)
+  status         SupportTicketStatus   @default(OPEN)
+  pagePath       String?               @db.VarChar(500)
+  appVersion     String?               @db.VarChar(50)
+  lastActivityAt DateTime              @default(now())
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy     User                      @relation("SupportTicketCreatedBy", fields: [createdById], references: [id])
+  messages      SupportTicketMessage[]
+  attachments   SupportTicketAttachment[]
+
+  @@index([organizationId, createdById, lastActivityAt])
+  @@index([status, lastActivityAt])
+  @@map("support_tickets")
+}
+
+model SupportTicketMessage {
+  id                  String                   @id @default(cuid())
+  organizationId      String
+  ticketId            String
+  authorType          SupportMessageAuthorType
+  authorUserId        String?
+  authorVendorAdminId String?
+  body                String                   @db.Text
+  createdAt           DateTime                 @default(now())
+
+  organization      Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket            SupportTicket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorUser        User?                     @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  authorVendorAdmin VendorAdminUser?          @relation(fields: [authorVendorAdminId], references: [id], onDelete: SetNull)
+  attachments       SupportTicketAttachment[]
+
+  @@index([organizationId, ticketId, createdAt])
+  @@map("support_ticket_messages")
+}
+
+model SupportTicketAttachment {
+  id             String   @id @default(cuid())
+  organizationId String
+  ticketId       String
+  messageId      String
+  fileName       String   @db.VarChar(255)
+  mimeType       String   @db.VarChar(100)
+  fileSize       Int
+  data           Bytes
+  createdAt      DateTime @default(now())
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket       SupportTicket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message      SupportTicketMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, ticketId, messageId])
+  @@map("support_ticket_attachments")
+}
+
 model Document {
   id                      String    @id @default(cuid())
   organizationId          String
@@ -4489,6 +4586,7 @@ model VendorAdminUser {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  supportMessages SupportTicketMessage[]
 
   @@map("vendor_admin_users")
 }

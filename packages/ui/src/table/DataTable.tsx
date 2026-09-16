@@ -104,7 +104,19 @@ export function DataTable<T>({
                   onRowClick(row);
                 }}
                 onKeyDown={(event) => {
-                  if (!onRowClick || (event.key !== "Enter" && event.key !== " ")) return;
+                  if (!onRowClick || event.target !== event.currentTarget) return;
+                  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    const rows = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLTableRowElement>('tr[role="link"]') ?? []);
+                    const index = rows.indexOf(event.currentTarget);
+                    const next = rows[index + (event.key === "ArrowDown" ? 1 : -1)];
+                    if (next) {
+                      event.preventDefault();
+                      next.focus();
+                      next.scrollIntoView({ block: "nearest" });
+                    }
+                    return;
+                  }
+                  if (event.key !== "Enter" && event.key !== " ") return;
                   event.preventDefault();
                   onRowClick(row);
                 }}

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 export interface ModalProps {
@@ -11,6 +12,9 @@ export interface ModalProps {
   wide?: boolean;
   contentClassName?: string;
   draggable?: boolean;
+  workspace?: boolean;
+  closeOnBackdrop?: boolean;
+  portal?: boolean;
 }
 
 type DragState = {
@@ -25,12 +29,13 @@ type DragState = {
   maxY: number;
 };
 
-type ModalContentProps = Omit<ModalProps, "open">;
+type ModalContentProps = Omit<ModalProps, "open" | "portal">;
 
-export function Modal({ open, ...props }: ModalProps) {
+export function Modal({ open, portal = false, ...props }: ModalProps) {
   if (!open) return null;
 
-  return <ModalContent {...props} />;
+  const content = <ModalContent {...props} />;
+  return portal && typeof document !== "undefined" ? createPortal(content, document.body) : content;
 }
 
 function ModalContent({
@@ -40,7 +45,10 @@ function ModalContent({
   wide = false,
   contentClassName = "",
   draggable = false,
+  workspace = false,
+  closeOnBackdrop = true,
 }: ModalContentProps) {
+  const headingId = React.useId();
   const [dragOffset, setDragOffset] = React.useState({ x: 0, y: 0 });
   const [dragging, setDragging] = React.useState(false);
   const dialogRef = React.useRef<HTMLDivElement>(null);
@@ -119,15 +127,21 @@ function ModalContent({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/40 ${workspace ? "p-2 sm:p-4" : "p-4"}`}
+      onClick={closeOnBackdrop ? onClose : undefined}
+    >
       <div
         ref={dialogRef}
-        className={`w-full ${wide ? "max-w-5xl" : "max-w-md"} rounded-lg bg-biz-surface p-5 shadow-card-hover ${contentClassName}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        className={`w-full ${wide ? "max-w-5xl" : "max-w-md"} ${workspace ? "flex min-h-0 flex-col overflow-hidden rounded-xl border border-biz-border bg-white shadow-[0_22px_70px_rgba(7,27,73,0.22)]" : "rounded-lg bg-biz-surface p-5 shadow-card-hover"} ${contentClassName}`}
         style={{ transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)` }}
         onClick={(e) => e.stopPropagation()}
       >
         <div
-          className={`mb-4 flex items-center justify-between ${
+          className={`flex items-center justify-between ${workspace ? "mb-0 shrink-0 border-b border-biz-border bg-white px-4 py-3 sm:px-5" : "mb-4"} ${
             draggable
               ? `select-none touch-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`
               : ""
@@ -138,12 +152,17 @@ function ModalContent({
           onPointerUp={stopDragging}
           onPointerCancel={stopDragging}
         >
-          <h3 className="text-[16px] font-semibold text-biz-text">{title}</h3>
+          <h3
+            id={headingId}
+            className={`${workspace ? "text-[17px] font-bold" : "text-[16px] font-semibold"} text-biz-text`}
+          >
+            {title}
+          </h3>
           <button
             type="button"
             aria-label="Close modal"
             onClick={onClose}
-            className="text-biz-muted hover:text-biz-text"
+            className={`${workspace ? "flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-biz-blue/40" : ""} text-biz-muted hover:text-biz-text`}
           >
             <X className="h-4 w-4" />
           </button>

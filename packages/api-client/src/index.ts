@@ -62,3 +62,4 @@ export * from "./hooks/use-lc";
 export * from "./hooks/use-bill-workspace";
 export * from "./hooks/use-project-costing-report";
 export * from "./hooks/use-tender-challan";
+export * from "./hooks/use-support-tickets";

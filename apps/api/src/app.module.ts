@@ -73,6 +73,7 @@ import { WorkIousModule } from "./modules/work-ious/work-ious.module";
 import { FixedAssetsModule } from "./modules/fixed-assets/fixed-assets.module";
 import { HrModule } from "./modules/hr/hr.module";
 import { LcModule } from "./modules/lc/lc.module";
+import { SupportTicketsModule } from "./modules/support-tickets/support-tickets.module";
 
 @Module({
   imports: [
@@ -144,6 +145,7 @@ import { LcModule } from "./modules/lc/lc.module";
     FixedAssetsModule,
     HrModule,
     LcModule,
+    SupportTicketsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

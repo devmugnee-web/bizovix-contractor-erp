@@ -2612,6 +2612,7 @@ export default function TenderCostingEditorPage() {
                     <SecondaryButton
                       className="h-9 flex-1 border-biz-blue bg-biz-blue px-3 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700 hover:text-white sm:flex-none 2xl:h-10 2xl:text-[13px]"
                       disabled={isReadingCostingPdfs}
+                      data-shortcut-action="upload"
                       onClick={() => costingPdfInputRef.current?.click()}
                       title="Import product rows from one or more BOQ PDFs"
                     >
@@ -2624,6 +2625,7 @@ export default function TenderCostingEditorPage() {
                     </SecondaryButton>
                     <PrimaryButton
                       className="h-9 flex-1 border border-blue-200 bg-white px-3 text-[11px] font-semibold text-biz-blue shadow-none hover:bg-blue-50 sm:flex-none 2xl:h-10 2xl:text-[13px]"
+                      data-shortcut-action="new"
                       onClick={addAnotherItem}
                     >
                       <Plus className="h-4 w-4" />

@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Check, Menu, MessageCircle, Plus, Search } from "lucide-react";
+import { Bell, Check, Headphones, Menu, MessageCircle, Plus, Search } from "lucide-react";
 import { Breadcrumb, cn, type BreadcrumbItem } from "@bizovix/ui";
 import {
   useMarkAllNotificationsRead,
@@ -12,6 +12,8 @@ import {
   useUnreadNotificationCount,
 } from "@bizovix/api-client";
 import type { NotificationRecord } from "@bizovix/types";
+import { ShortcutCenter } from "./ShortcutCenter";
+import { SupportCenterDrawer } from "./SupportCenterDrawer";
 
 export interface TopbarUser {
   name: string;
@@ -33,6 +35,8 @@ const PRIORITY_DOT: Record<string, string> = {
   LOW: "bg-biz-muted",
 };
 
+const SUPPORT_WHATSAPP_URL = "https://wa.me/8801700000000";
+
 function timeAgo(value: string): string {
   const diffMs = Date.now() - new Date(value).getTime();
   const minutes = Math.round(diffMs / 60_000);
@@ -50,7 +54,10 @@ export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: Top
   const [searchValue, setSearchValue] = React.useState("");
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [notifOpen, setNotifOpen] = React.useState(false);
+  const [supportOpen, setSupportOpen] = React.useState(false);
+  const [supportTicketId, setSupportTicketId] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<"all" | "unread">("all");
+  const closeSupport = React.useCallback(() => { setSupportOpen(false); setSupportTicketId(null); }, []);
 
   const unreadCount = useUnreadNotificationCount();
   const notifications = useNotifications({ limit: 8, isRead: tab === "unread" ? false : undefined });
@@ -64,17 +71,22 @@ export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: Top
   function openNotification(item: NotificationRecord) {
     if (!item.isRead) markRead.mutate(item.id);
     setNotifOpen(false);
+    if (item.sourceModule === "SUPPORT" && item.sourceId) {
+      setSupportTicketId(item.sourceId);
+      setSupportOpen(true);
+      return;
+    }
     router.push(item.reminderId ? `/reminders?open=${item.reminderId}` : "/reminders");
   }
 
   return (
     <header className="relative flex h-7 shrink-0 items-center border-b border-biz-border bg-white px-3 shadow-[0_1px_3px_rgba(13,27,62,0.04)] sm:px-4 print:hidden">
-      <div className="flex w-[204px] shrink-0 items-center gap-4">
-        <div className="flex items-center gap-2" aria-label="Bizovix Contractor ERP">
+      <div className="flex w-[204px] shrink-0 items-center gap-2">
+        <div className="flex items-center gap-1.5" aria-label="Bizovix Contractor ERP">
           <span className="text-[16px] font-black leading-none text-biz-blue">X</span>
-          <span className="leading-none">
-            <span className="block text-[10px] font-extrabold text-biz-blue">BIZOVIX</span>
-            <span className="block text-center text-[5px] font-semibold text-biz-blue">Contractor ERP</span>
+          <span className="whitespace-nowrap leading-none">
+            <span className="block text-[10px] font-extrabold leading-[10px] text-biz-blue">BIZOVIX</span>
+            <span className="block text-center text-[9px] font-bold leading-[10px] text-biz-navy">Contractor ERP</span>
           </span>
         </div>
         <button
@@ -86,6 +98,7 @@ export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: Top
         >
           <Menu className="h-3.5 w-3.5" />
         </button>
+        <ShortcutCenter />
       </div>
 
       <div className="hidden min-w-0 flex-1 items-center md:flex">
@@ -139,22 +152,33 @@ export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: Top
         )}
       </div>
 
-      <div
-        className={cn(
-          "absolute left-1/2 hidden h-6 -translate-x-1/2 items-center gap-1.5 xl:flex",
-          !showWhatsApp && "xl:hidden",
-        )}
-      >
-        <span className="flex h-5 w-5 items-center justify-center text-biz-success">
-          <MessageCircle className="h-3 w-3" />
-        </span>
-        <span className="flex items-center gap-1 whitespace-nowrap leading-none">
-          <span className="text-[8px] font-bold text-biz-navy">WhatsApp Support</span>
-          <span className="text-[8px] font-semibold text-biz-success">+880 1700 000000</span>
-        </span>
+      <div className="absolute left-1/2 hidden h-7 -translate-x-1/2 items-center whitespace-nowrap xl:flex">
+        <span className="text-[11px] font-semibold text-biz-navy/75">Need Help?</span>
+        <a
+          href={SUPPORT_WHATSAPP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open Bizovix support chat in WhatsApp"
+          title="Chat with Bizovix Support on WhatsApp"
+          className="ml-2 inline-flex h-6 items-center gap-1 rounded px-1 text-[11px] font-semibold text-[#128C4A] transition-colors hover:bg-emerald-50 hover:text-[#075E35] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+        >
+          <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
+          WhatsApp
+        </a>
+        <span className="mx-2 h-3.5 w-px bg-biz-border" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => { setSupportTicketId(null); setSupportOpen(true); }}
+          className="inline-flex h-6 items-center gap-1 rounded px-1 text-[11px] font-semibold text-biz-navy hover:bg-biz-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-biz-blue/40"
+          title="Bizovix Support Center"
+        >
+          <Headphones className="h-3.5 w-3.5 text-biz-muted" aria-hidden="true" />
+          Support Center
+        </button>
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
+        <button type="button" onClick={() => { setSupportTicketId(null); setSupportOpen(true); }} className="flex h-6 w-6 items-center justify-center rounded-sm text-biz-navy hover:bg-biz-bg xl:hidden" aria-label="Support Center" title="Support Center"><Headphones className="h-3.5 w-3.5" /></button>
         <div className={cn("hidden items-center gap-2 md:flex", !showWhatsApp && "md:hidden")}>
           <Link
             href="/tenders?addTender=1"
@@ -262,6 +286,7 @@ export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: Top
           )}
         </div>
       </div>
+      {supportOpen && <SupportCenterDrawer key={supportTicketId ?? "new"} open onClose={closeSupport} ticketId={supportTicketId} />}
     </header>
   );
 }

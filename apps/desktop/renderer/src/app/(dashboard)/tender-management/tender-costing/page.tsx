@@ -220,7 +220,7 @@ export default function TenderCostingPage() {
           </div>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end [&_button]:h-9 [&_button]:text-[11px] 2xl:[&_button]:h-10 2xl:[&_button]:text-[13px]">
-          <SecondaryButton disabled={!records.length} onClick={() => downloadCsv(records)}>
+          <SecondaryButton data-shortcut-action="export" disabled={!records.length} onClick={() => downloadCsv(records)}>
             <Download className="h-4 w-4" />
             Export
           </SecondaryButton>
@@ -285,6 +285,7 @@ export default function TenderCostingPage() {
               Search Tender ID / Work Name
             </label>
             <TextInput
+              data-shortcut-action="filters"
               icon={Search}
               className="h-9 min-w-0 text-[11px] xl:text-[12px] 2xl:h-10 2xl:text-[14px]"
               placeholder="Search tender ID or work..."

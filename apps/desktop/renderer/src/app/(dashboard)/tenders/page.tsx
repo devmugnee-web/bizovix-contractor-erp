@@ -538,6 +538,7 @@ export default function TendersListPage() {
 
           <button
             type="button"
+            data-shortcut-action="export"
             onClick={() => void exportCsv()}
             disabled={isExporting || tenders.isFetching || meta.total === 0}
             title="Export all filtered tenders as CSV"
@@ -621,6 +622,7 @@ export default function TendersListPage() {
             <label className="min-w-[190px] flex-1 sm:max-w-[300px] 2xl:max-w-[380px]">
               <span className="sr-only">Search tender ID, work name or organization</span>
               <TextInput
+                data-shortcut-action="filters"
                 icon={Search}
                 placeholder="Search ID, work or org..."
                 value={draft.search}
@@ -981,7 +983,9 @@ export default function TendersListPage() {
         onClose={() => setCreateTenderOpen(false)}
         title="Add New Tender"
         wide
-        contentClassName="max-h-[calc(100vh-2rem)] overflow-y-auto"
+        workspace
+        closeOnBackdrop={false}
+        contentClassName="max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]"
       >
         <TenderForm
           mode="create"

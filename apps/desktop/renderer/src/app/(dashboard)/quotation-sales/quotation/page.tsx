@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   CalendarDays,
   CheckCircle2,
@@ -409,6 +410,8 @@ function csvCell(value: string | number) {
 
 export function QuotationWorkspace({ variant }: { variant: QuotationWorkspaceVariant }) {
   const isDashboard = variant === "dashboard";
+  const router = useRouter();
+  const searchParams = useSearchParams();
   useSetBreadcrumb(
     isDashboard ? [{ label: "Quotation / Sales" }] : [{ label: "Quotation / Sales" }, { label: "Quotation" }],
   );
@@ -421,6 +424,15 @@ export function QuotationWorkspace({ variant }: { variant: QuotationWorkspaceVar
     [menuId, setMenuId] = React.useState<string>(),
     [error, setError] = React.useState<string>(),
     [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
+  React.useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    const timer = window.setTimeout(() => {
+      setEdit(undefined);
+      setForm(true);
+      router.replace(variant === "dashboard" ? "/quotation-sales" : "/quotation-sales/quotation");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [searchParams, router, variant]);
   const query: SalesQuotationQuery = {
     page,
     limit: PAGE_SIZE,
@@ -614,6 +626,7 @@ export function QuotationWorkspace({ variant }: { variant: QuotationWorkspaceVar
         </label>
         {isDashboard && (
           <button
+            data-shortcut-action="new"
             onClick={() => { setEdit(undefined); setForm(true); }}
             className="flex h-[32px] w-full items-center justify-center gap-1 rounded-[4px] bg-[#0867e8] px-4 text-[9px] font-semibold text-white sm:w-[132px]"
           >
@@ -674,6 +687,7 @@ export function QuotationWorkspace({ variant }: { variant: QuotationWorkspaceVar
           <label className="relative">
             <span className="mb-1.5 block text-[8.5px] font-semibold">Search</span>
             <input
+              data-shortcut-action="filters"
               value={draft.search}
               onChange={(e) => setDraft((v) => ({ ...v, search: e.target.value }))}
               placeholder="Search by Quotation No, Customer, Project..."
@@ -776,6 +790,7 @@ export function QuotationWorkspace({ variant }: { variant: QuotationWorkspaceVar
             action={
               isDashboard ? (
                 <button
+                  data-shortcut-action="export"
                   onClick={exportRows}
                   disabled={exporter.isPending}
                   className="flex h-[31px] items-center gap-1 rounded border px-3 text-[9px]"
@@ -786,6 +801,7 @@ export function QuotationWorkspace({ variant }: { variant: QuotationWorkspaceVar
               ) : (
                 <button
                   type="button"
+                  data-shortcut-action="new"
                   onClick={() => { setEdit(undefined); setForm(true); }}
                   className="flex h-[31px] items-center gap-1 rounded bg-[#0867e8] px-3 text-[9px] font-semibold text-white"
                 >
@@ -991,5 +1007,5 @@ export function QuotationWorkspace({ variant }: { variant: QuotationWorkspaceVar
 }
 
 export default function QuotationPage() {
-  return <QuotationWorkspace variant="quotation" />;
+  return <React.Suspense fallback={null}><QuotationWorkspace variant="quotation" /></React.Suspense>;
 }
