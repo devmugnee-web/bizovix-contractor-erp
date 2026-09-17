@@ -13,6 +13,7 @@ import {
   ChevronRight,
   FileText,
   Info,
+  RefreshCw,
   Search,
 } from "lucide-react";
 import {
@@ -52,7 +53,7 @@ type GuaranteeDraft = {
   expiryDate: string;
 };
 
-const DEFAULT_QUERY: PgBgEligibleQuery = { page: 1, limit: 5, workflowStatus: "READY" };
+const DEFAULT_QUERY: PgBgEligibleQuery = { page: 1, limit: 10, workflowStatus: "READY" };
 const STEPS = [
   ["Select Tender", "Choose one tender"],
   ["NOA & Decision", "Enter NOA and contact details"],
@@ -114,13 +115,6 @@ function initialForm(tender?: EligiblePgBgTender | null): PgBgWorkflowFormValues
     pgBgRequired: true,
     currentStep: 1,
   };
-}
-
-function paginationWindow(currentPage: number, totalPages: number) {
-  const size = Math.min(5, totalPages);
-  const maximumStart = Math.max(1, totalPages - size + 1);
-  const start = Math.min(Math.max(1, currentPage - 2), maximumStart);
-  return Array.from({ length: size }, (_, index) => start + index);
 }
 
 function Field({
@@ -196,13 +190,16 @@ export default function PgBgPage() {
   const router = useRouter();
   useSetBreadcrumb([
     { label: "Bank Instruments" },
-    { label: "PG/BG Management", href: "/bank-instruments/pg-bg" },
-    { label: "Accept NOA & Create PG/BG" },
+    { label: "PG/BG" },
   ]);
 
   const [query, setQuery] = React.useState<PgBgEligibleQuery>(DEFAULT_QUERY);
+  const [activeList, setActiveList] = React.useState<"ready" | "completed">("ready");
+  const [completedPage, setCompletedPage] = React.useState(1);
+  const [completedLimit, setCompletedLimit] = React.useState(10);
+  const [completedSearch, setCompletedSearch] = React.useState("");
   const eligible = useEligiblePgBgTenders(query);
-  const completedPgBg = useEligiblePgBgTenders({ page: 1, limit: 5, workflowStatus: "FINALIZED" });
+  const completedPgBg = useEligiblePgBgTenders({ page: completedPage, limit: completedLimit, search: completedSearch, workflowStatus: "FINALIZED" });
   const [selected, setSelected] = React.useState<EligiblePgBgTender | null>(null);
   const [uiStep, setUiStep] = React.useState<UiStep>(1);
   const [message, setMessage] = React.useState<{
@@ -267,9 +264,9 @@ export default function PgBgPage() {
     return () => window.clearTimeout(timer);
   }, [reset, selected, workflowQuery.data]);
 
-  const meta = eligible.data?.meta ?? { page: 1, limit: 5, total: 0, totalPages: 1 };
+  const meta = eligible.data?.meta ?? { page: query.page ?? 1, limit: query.limit ?? 10, total: 0, totalPages: 1 };
   const pageItems = eligible.data?.items ?? [];
-  const visiblePages = paginationWindow(meta.page, meta.totalPages);
+  const completedMeta = completedPgBg.data?.meta ?? { page: completedPage, limit: completedLimit, total: 0, totalPages: 1 };
   const isDraftLookupPending = Boolean(selected) &&
     (workflowQuery.isLoading || workflowQuery.isFetching);
   const isWorking =
@@ -283,6 +280,17 @@ export default function PgBgPage() {
     setCompletion(null);
     setGuarantee(initialGuarantee());
     reset(initialForm(row));
+  }
+
+  function openTender(row: EligiblePgBgTender) {
+    if (!row.category?.trim()) {
+      router.push(`/bank-instruments/document-purchase/${row.id}?returnTo=${encodeURIComponent("/bank-instruments/pg-bg")}`);
+    } else if (row.cmsWorkId) {
+      router.push(`/cms/ongoing-works/${row.cmsWorkId}`);
+    } else {
+      selectTender(row);
+      if (row.workflowStatus === "READY") setUiStep(2);
+    }
   }
 
   function resetFlow() {
@@ -451,7 +459,7 @@ export default function PgBgPage() {
   }
 
   return (
-    <div id="pg-bg-page" className="flex flex-col gap-3 text-biz-text antialiased">
+    <div id="pg-bg-page" className="flex min-w-0 flex-col gap-2.5 text-biz-text antialiased xl:h-full xl:min-h-0 xl:overflow-hidden">
       <style jsx global>{`
         #pg-bg-page { text-rendering: optimizeLegibility; }
         #pg-bg-page .text-\\[9px\\] { font-size: 10px; line-height: 14px; }
@@ -475,28 +483,13 @@ export default function PgBgPage() {
         dismissOnEscape={false}
       />
 
-      <div className="relative overflow-hidden rounded-xl border border-blue-200/80 bg-gradient-to-r from-[#edf5ff] via-white to-[#eefbf5] px-5 py-3.5 shadow-[0_5px_18px_rgba(15,48,92,0.05)]">
-        <div className="absolute inset-y-0 left-0 w-1 bg-biz-blue" />
-        <div className="absolute -right-12 -top-16 h-40 w-40 rounded-full bg-biz-blue/5" />
-        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-biz-blue">Bank Instrument Workflow</p>
-            <h1 className="text-[24px] font-bold leading-7 tracking-tight text-biz-navy">
-              Accept NOA &amp; Create PG/BG
-            </h1>
-            <p className="mt-1 max-w-2xl text-[12px] text-biz-muted">
-              Select the awarded tender, record the NOA decision, then complete the required guarantee.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 rounded-lg border border-emerald-200 bg-white/90 px-3 py-2 shadow-sm">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-[13px] font-bold text-emerald-700">{uiStep}</span>
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-wider text-biz-muted">Current stage</p>
-              <p className="text-[11px] font-semibold text-biz-navy">{uiStep === 1 ? "Select Tender" : uiStep === 2 ? "NOA & Decision" : "PG/BG & Finish"}</p>
-            </div>
-          </div>
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-0.5">
+        <div className="min-w-0">
+          <h1 className="text-[21px] font-bold leading-7 tracking-tight text-biz-navy">Accept NOA &amp; Create PG/BG</h1>
+          <p className="text-[11px] text-biz-muted">Select an awarded tender, record the NOA decision and complete the guarantee.</p>
         </div>
-      </div>
+        <span className="rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-biz-blue">Step {uiStep} of 3</span>
+      </header>
 
       {message && (
         <div
@@ -512,56 +505,47 @@ export default function PgBgPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-1">
+      <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-1 shadow-card" aria-label="PG/BG workflow progress">
+        <div className="grid grid-cols-3 gap-1">
           {STEPS.map(([title, subtitle], index) => {
             const step = (index + 1) as UiStep;
             const active = step === uiStep;
             const complete = step < uiStep;
             return (
-              <div key={title} className={cn("relative flex items-center gap-2 rounded-lg px-2.5 py-2 sm:pr-4", active && "bg-biz-blue-soft/80 shadow-[inset_0_0_0_1px_rgba(37,99,235,0.08)]")}>
+              <div key={title} aria-current={active ? "step" : undefined} className={cn("flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5", active ? "bg-biz-blue-soft text-biz-blue" : complete ? "bg-emerald-50/60" : "text-biz-muted")}>
                 <span
                   className={cn(
-                    "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold",
-                    active || complete
-                      ? "border-biz-blue bg-biz-blue text-white"
-                      : "border-[#A9B7CC] bg-white text-biz-navy",
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold",
+                    active ? "border-biz-blue bg-biz-blue text-white" : complete ? "border-emerald-200 bg-emerald-100 text-emerald-700" : "border-biz-border bg-white text-biz-muted",
                   )}
                 >
-                  {complete ? <Check className="h-4 w-4" /> : step}
+                  {complete ? <Check className="h-3.5 w-3.5" /> : step}
                 </span>
                 <span className="min-w-0">
-                  <span
-                    className={cn(
-                      "block truncate text-[11px] font-bold",
-                      active ? "text-biz-blue" : "text-biz-navy",
-                    )}
-                  >
-                    {title}
-                  </span>
-                  <span className="block truncate text-[9px] text-biz-muted">{subtitle}</span>
+                  <span className={cn("block truncate text-[10px] font-bold sm:text-[11px]", active ? "text-biz-blue" : "text-biz-navy")}><span className="sm:hidden">{step === 1 ? "Tender" : step === 2 ? "NOA" : "PG/BG"}</span><span className="hidden sm:inline">{title}</span></span>
+                  <span className="hidden truncate text-[9px] text-biz-muted lg:block">{subtitle}</span>
                 </span>
-                {index < STEPS.length - 1 && (
-                  <span className="absolute left-[calc(100%-14px)] top-4 hidden h-px w-7 bg-[#CCD7E7] sm:block" />
-                )}
               </div>
             );
           })}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0 space-y-3">
-          {uiStep === 1 && (
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
-              <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/55 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 className="text-[14px] font-bold text-biz-navy">Ready Tenders</h2>
-                  <p className="mt-0.5 text-[10px] text-biz-muted">
-                    Select a tender for review, or use Continue to open its NOA information directly.
-                  </p>
-                </div>
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+      <div className={cn("grid min-h-0 flex-1 grid-cols-1 gap-2.5", uiStep > 1 && "xl:grid-cols-[minmax(0,1fr)_280px] xl:overflow-y-auto")}>
+        <div className={cn("min-w-0", uiStep === 1 ? "flex min-h-0 flex-col" : "space-y-2.5")}>
+          {uiStep === 1 && <div className="flex min-h-[360px] min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card xl:min-h-0 xl:flex-1">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-biz-border bg-slate-50/60 px-3 py-2">
+              <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="PG/BG records">
+                <button type="button" role="tab" aria-selected={activeList === "ready"} onClick={() => setActiveList("ready")} className={cn("rounded-md px-3 py-1.5 text-[11px] font-semibold", activeList === "ready" ? "bg-white text-biz-blue shadow-sm" : "text-biz-muted hover:text-biz-navy")}>Tender queue <span className="ml-1 rounded-full bg-blue-50 px-1.5 py-0.5">{meta.total}</span></button>
+                <button type="button" role="tab" aria-selected={activeList === "completed"} onClick={() => setActiveList("completed")} className={cn("rounded-md px-3 py-1.5 text-[11px] font-semibold", activeList === "completed" ? "bg-white text-biz-blue shadow-sm" : "text-biz-muted hover:text-biz-navy")}>Completed <span className="ml-1 rounded-full bg-emerald-50 px-1.5 py-0.5">{completedMeta.total}</span></button>
+              </div>
+              {selected && <span className="max-w-full truncate rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-biz-blue" title={selected.tenderWorkName}>Selected: {selected.tenderId ?? "Manual"}</span>}
+            </div>
+          {activeList === "ready" && (
+            <section className="flex min-h-0 flex-1 flex-col">
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-biz-border px-3 py-2">
+                <h2 className="text-[12px] font-bold text-biz-navy">Tender queue</h2>
+                <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
                 <select
                   aria-label="PG/BG workflow status"
                   value={query.workflowStatus ?? "READY"}
@@ -573,14 +557,14 @@ export default function PgBgPage() {
                       workflowStatus: event.target.value as PgBgEligibleQuery["workflowStatus"],
                     });
                   }}
-                  className={`${inputClass} sm:w-[160px]`}
+                  className={`${inputClass} w-full sm:w-[150px]`}
                 >
                   <option value="READY">Ready</option>
                   <option value="DRAFT">Draft</option>
                   <option value="NOA_ACCEPTED">NOA Accepted</option>
                   <option value="NOA_REJECTED">Rejected</option>
                 </select>
-                <label className="relative block w-full sm:w-[330px]">
+                <label className="relative block w-full sm:w-[270px]">
                   <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" />
                   <input
                     aria-label="Search eligible tenders"
@@ -595,8 +579,8 @@ export default function PgBgPage() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto border-b border-slate-100">
-                <table className="w-full min-w-[680px] table-fixed text-[10px] xl:min-w-0">
+              <div className="hidden min-h-0 flex-1 overflow-auto md:block">
+                <table className="w-full min-w-[760px] table-fixed text-[10px] xl:min-w-0">
                   <colgroup>
                     <col className="w-[5%]" />
                     <col className="w-[10%]" />
@@ -702,17 +686,7 @@ export default function PgBgPage() {
                                 disabled={active || rejected}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  if (!hasCategory) {
-                                    router.push(`/bank-instruments/document-purchase/${row.id}?returnTo=${encodeURIComponent("/bank-instruments/pg-bg")}`);
-                                  } else if (row.cmsWorkId) {
-                                    router.push(`/cms/ongoing-works/${row.cmsWorkId}`);
-                                  } else {
-                                    selectTender(row);
-                                    if (row.workflowStatus === "READY") {
-                                      setUiStep(2);
-                                      window.scrollTo({ top: 0, behavior: "smooth" });
-                                    }
-                                  }
+                                  openTender(row);
                                 }}
                                 className={cn(
                                   "inline-flex min-w-[76px] items-center justify-center rounded-md border px-3 py-1.5 font-semibold transition-colors",
@@ -748,70 +722,29 @@ export default function PgBgPage() {
                 </table>
               </div>
 
-              <div className="flex flex-col gap-2 px-3 py-2 text-[10px] sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-biz-muted">
-                    Showing {meta.total ? (meta.page - 1) * meta.limit + 1 : 0} to{" "}
-                    {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} entries
-                  </span>
-                  <label className="flex items-center gap-1.5 font-medium text-biz-muted">
-                    Show
-                    <select
-                      aria-label="Tenders per page"
-                      value={meta.limit}
-                      onChange={(event) =>
-                        setQuery({ ...query, page: 1, limit: Number(event.target.value) })
-                      }
-                      className="h-7 rounded border border-biz-border bg-white px-2 text-[10px] font-semibold text-biz-navy outline-none focus:border-biz-blue"
-                    >
-                      {[5, 10, 20, 50].map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                    entries
-                  </label>
-                </div>
-                {meta.totalPages > 1 && (
-                  <div className="flex gap-1 self-end sm:self-auto">
-                  <button
-                    type="button"
-                    aria-label="Previous page"
-                    disabled={meta.page <= 1}
-                    onClick={() => setQuery({ ...query, page: meta.page - 1 })}
-                    className="flex h-7 w-7 items-center justify-center rounded border border-biz-border disabled:opacity-40"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </button>
-                  {visiblePages.map((page) => (
-                    <button
-                      type="button"
-                      key={page}
-                      aria-label={`Go to page ${page}`}
-                      aria-current={page === meta.page ? "page" : undefined}
-                      onClick={() => setQuery({ ...query, page })}
-                      className={cn(
-                        "h-7 min-w-7 rounded border px-1",
-                        page === meta.page
-                          ? "border-biz-blue bg-biz-blue text-white"
-                          : "border-biz-border",
-                      )}
-                    >
-                      {page}
+              <div className="min-h-0 flex-1 overflow-y-auto md:hidden">
+                {eligible.isLoading ? <p className="p-6 text-center text-[12px] text-biz-muted">Loading eligible tenders...</p> : eligible.isError ? <div className="p-6 text-center text-[12px] text-biz-danger">Could not load eligible tenders. <button type="button" onClick={() => void eligible.refetch()} className="font-semibold underline">Retry</button></div> : pageItems.length === 0 ? <p className="p-8 text-center text-[12px] text-biz-muted">No eligible tenders found.</p> : pageItems.map((row) => {
+                  const active = selected?.id === row.id;
+                  const hasCategory = Boolean(row.category?.trim());
+                  const completed = row.workflowStatus === "FINALIZED" || Boolean(row.cmsWorkId);
+                  const rejected = row.workflowStatus === "NOA_REJECTED";
+                  return <div key={row.id} className={cn("border-b border-biz-border p-3 last:border-0", active && "bg-blue-50/70")}>
+                    <button type="button" disabled={!hasCategory || completed || rejected} aria-pressed={active} onClick={() => selectTender(row)} className="flex w-full items-start gap-2 text-left disabled:cursor-default">
+                      <span className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border", active ? "border-biz-blue" : "border-slate-300")}>{active && <span className="h-2 w-2 rounded-full bg-biz-blue" />}</span>
+                      <span className="min-w-0 flex-1"><span className="block text-[12px] font-bold text-biz-navy">{row.tenderId ?? "Manual"}</span><span className="mt-1 block text-[12px] text-biz-text">{row.tenderWorkName}</span></span>
                     </button>
-                  ))}
-                  <button
-                    type="button"
-                    aria-label="Next page"
-                    disabled={meta.page >= meta.totalPages}
-                    onClick={() => setQuery({ ...query, page: meta.page + 1 })}
-                    className="flex h-7 w-7 items-center justify-center rounded border border-biz-border disabled:opacity-40"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                  </div>
-                )}
+                    <div className="mt-2 flex items-center justify-between gap-2 pl-6 text-[11px]"><span className="min-w-0 truncate text-biz-muted">{row.organizationMaster.shortName} · {row.category ?? "Category not set"}</span><span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-biz-blue">{row.workflowStatus.replaceAll("_", " ")}</span></div>
+                    <button type="button" disabled={active || rejected} onClick={() => openTender(row)} className="mt-3 ml-6 h-8 rounded-md border border-blue-200 bg-blue-50 px-3 text-[11px] font-semibold text-biz-blue disabled:opacity-50">{active ? "Selected" : !hasCategory ? "Complete Purchase Info" : row.cmsWorkId ? "View Work" : rejected ? "Rejected" : row.workflowStatus === "READY" ? "Continue" : "Resume"}</button>
+                  </div>;
+                })}
+              </div>
+
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-biz-border bg-slate-50/40 px-3 py-1 text-[10px]">
+                <span className="text-biz-muted">{meta.total ? (meta.page - 1) * meta.limit + 1 : 0}–{Math.min(meta.page * meta.limit, meta.total)} of {meta.total} entries</span>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1 text-biz-muted">Rows <select aria-label="Tenders per page" value={query.limit ?? 10} onChange={(event) => setQuery((current) => ({ ...current, page: 1, limit: Number(event.target.value) }))} className="h-7 rounded-md border border-biz-border bg-white px-2 font-semibold text-biz-navy">{[5, 10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
+                  <div className="flex h-7 items-center rounded-md border border-biz-border bg-white p-0.5"><button type="button" disabled={meta.page <= 1} onClick={() => setQuery((current) => ({ ...current, page: meta.page - 1 }))} className="flex h-6 w-6 items-center justify-center disabled:opacity-40" aria-label="Previous ready page"><ChevronLeft className="h-3.5 w-3.5" /></button><span className="min-w-[40px] text-center font-semibold text-biz-navy">{meta.page} / {meta.totalPages}</span><button type="button" disabled={meta.page >= meta.totalPages} onClick={() => setQuery((current) => ({ ...current, page: meta.page + 1 }))} className="flex h-6 w-6 items-center justify-center disabled:opacity-40" aria-label="Next ready page"><ChevronRight className="h-3.5 w-3.5" /></button></div>
+                </div>
               </div>
 
               {selected && (isDraftLookupPending || workflowQuery.isError) && (
@@ -844,72 +777,40 @@ export default function PgBgPage() {
             </section>
           )}
 
-          {uiStep === 1 && (
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.03)]">
-              <div className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
-                <h2 className="text-[14px] font-bold text-biz-navy">
-                  Completed PG/BG Workflows
-                  <span className="ml-2 rounded bg-biz-success-soft px-2 py-1 text-[11px] text-biz-success">
-                    {completedPgBg.data?.meta.total ?? 0}
-                  </span>
-                </h2>
-                <button type="button" onClick={() => completedPgBg.refetch()} className="flex h-8 w-8 items-center justify-center rounded border border-biz-border" aria-label="Refresh completed PG/BG">
-                  <Search className="h-3.5 w-3.5" />
-                </button>
+          {activeList === "completed" && (
+            <section className="flex min-h-0 flex-1 flex-col">
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-biz-border px-3 py-2">
+                <h2 className="text-[12px] font-bold text-biz-navy">Completed workflows</h2>
+                <div className="flex w-full items-center gap-2 sm:w-auto">
+                  <label className="relative block flex-1 sm:w-[270px] sm:flex-none"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-biz-muted" /><input aria-label="Search completed PG/BG workflows" value={completedSearch} onChange={(event) => { setCompletedSearch(event.target.value); setCompletedPage(1); }} placeholder="Search tender ID or work..." className={`${inputClass} pl-9`} /></label>
+                  <button type="button" onClick={() => void completedPgBg.refetch()} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-biz-border text-biz-blue hover:bg-blue-50" aria-label="Refresh completed PG/BG"><RefreshCw className="h-3.5 w-3.5" /></button>
+                </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="hidden min-h-0 flex-1 overflow-auto md:block">
                 <table className="w-full min-w-[680px] text-[10px]">
-                  <thead className="bg-[#F7FAFF] text-biz-navy">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Tender ID</th>
-                      <th className="px-3 py-2 text-left">Work / Project Name</th>
-                      <th className="px-3 py-2 text-left">Organization</th>
-                      <th className="px-3 py-2 text-center">Status</th>
-                      <th className="px-3 py-2 text-center">Action</th>
-                    </tr>
-                  </thead>
+                  <thead className="sticky top-0 bg-slate-50 text-biz-muted"><tr><th className="px-3 py-2 text-left">Tender ID</th><th className="px-3 py-2 text-left">Work / Project Name</th><th className="px-3 py-2 text-left">Organization</th><th className="px-3 py-2 text-center">Status</th><th className="px-3 py-2 text-center">Action</th></tr></thead>
                   <tbody>
-                    {completedPgBg.isLoading ? (
-                      <tr><td colSpan={5} className="px-3 py-8 text-center text-biz-muted">Loading completed workflows...</td></tr>
-                    ) : (completedPgBg.data?.items.length ?? 0) === 0 ? (
-                      <tr><td colSpan={5} className="px-3 py-8 text-center text-biz-muted">No completed PG/BG workflows yet.</td></tr>
-                    ) : completedPgBg.data?.items.map((row) => (
-                      <tr key={row.id} className="border-t border-biz-border">
-                        <td className="px-3 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td>
-                        <td className="px-3 py-2">{row.tenderWorkName}</td>
-                        <td className="px-3 py-2">{row.organizationMaster.shortName}</td>
-                        <td className="px-3 py-2 text-center"><span className="rounded bg-biz-success-soft px-2 py-1 font-semibold text-biz-success">Completed</span></td>
-                        <td className="px-3 py-2 text-center">
-                          {row.cmsWorkId ? (
-                            <button type="button" onClick={() => router.push(`/cms/ongoing-works/${row.cmsWorkId}`)} className="rounded border border-biz-blue px-3 py-1 font-semibold text-biz-blue">View Work</button>
-                          ) : <span className="text-biz-muted">View only</span>}
-                        </td>
-                      </tr>
-                    ))}
+                    {completedPgBg.isLoading ? <tr><td colSpan={5} className="px-3 py-8 text-center text-biz-muted">Loading completed workflows...</td></tr> : completedPgBg.isError ? <tr><td colSpan={5} className="px-3 py-8 text-center text-biz-danger">Could not load completed workflows.</td></tr> : (completedPgBg.data?.items.length ?? 0) === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-biz-muted">No completed PG/BG workflows found.</td></tr> : completedPgBg.data?.items.map((row) => <tr key={row.id} className="border-t border-biz-border hover:bg-slate-50/50"><td className="px-3 py-2 font-semibold text-biz-navy">{row.tenderId ?? "Manual"}</td><td className="px-3 py-2"><span className="line-clamp-2" title={row.tenderWorkName}>{row.tenderWorkName}</span></td><td className="px-3 py-2">{row.organizationMaster.shortName}</td><td className="px-3 py-2 text-center"><span className="rounded-full bg-biz-success-soft px-2 py-1 font-semibold text-biz-success">Completed</span></td><td className="px-3 py-2 text-center">{row.cmsWorkId ? <button type="button" onClick={() => router.push(`/cms/ongoing-works/${row.cmsWorkId}`)} className="rounded-md border border-blue-200 px-3 py-1 font-semibold text-biz-blue hover:bg-blue-50">View Work</button> : <span className="text-biz-muted">View only</span>}</td></tr>)}
                   </tbody>
                 </table>
               </div>
+              <div className="min-h-0 flex-1 overflow-y-auto md:hidden">{completedPgBg.isLoading ? <p className="p-6 text-center text-[12px] text-biz-muted">Loading completed workflows...</p> : completedPgBg.isError ? <p className="p-6 text-center text-[12px] text-biz-danger">Could not load completed workflows.</p> : (completedPgBg.data?.items.length ?? 0) === 0 ? <p className="p-8 text-center text-[12px] text-biz-muted">No completed PG/BG workflows found.</p> : completedPgBg.data?.items.map((row) => <div key={row.id} className="border-b border-biz-border p-3 text-[12px] last:border-0"><div className="flex items-center justify-between gap-2"><strong className="text-biz-navy">{row.tenderId ?? "Manual"}</strong><span className="rounded-full bg-biz-success-soft px-2 py-0.5 text-[10px] font-semibold text-biz-success">Completed</span></div><p className="mt-1">{row.tenderWorkName}</p><p className="mt-1 text-biz-muted">{row.organizationMaster.shortName}</p>{row.cmsWorkId && <button type="button" onClick={() => router.push(`/cms/ongoing-works/${row.cmsWorkId}`)} className="mt-2 rounded-md border border-blue-200 px-3 py-1.5 font-semibold text-biz-blue">View Work</button>}</div>)}</div>
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-biz-border bg-slate-50/40 px-3 py-1 text-[10px]"><span className="text-biz-muted">{completedMeta.total ? (completedMeta.page - 1) * completedMeta.limit + 1 : 0}–{Math.min(completedMeta.page * completedMeta.limit, completedMeta.total)} of {completedMeta.total} entries</span><div className="flex items-center gap-2"><label className="flex items-center gap-1 text-biz-muted">Rows <select aria-label="Completed workflows per page" value={completedLimit} onChange={(event) => { setCompletedLimit(Number(event.target.value)); setCompletedPage(1); }} className="h-7 rounded-md border border-biz-border bg-white px-2 font-semibold text-biz-navy">{[10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}</select></label><div className="flex h-7 items-center rounded-md border border-biz-border bg-white p-0.5"><button type="button" disabled={completedPage <= 1} onClick={() => setCompletedPage((page) => page - 1)} className="flex h-6 w-6 items-center justify-center disabled:opacity-40" aria-label="Previous completed page"><ChevronLeft className="h-3.5 w-3.5" /></button><span className="min-w-[40px] text-center font-semibold text-biz-navy">{completedPage} / {completedMeta.totalPages}</span><button type="button" disabled={completedPage >= completedMeta.totalPages} onClick={() => setCompletedPage((page) => page + 1)} className="flex h-6 w-6 items-center justify-center disabled:opacity-40" aria-label="Next completed page"><ChevronRight className="h-3.5 w-3.5" /></button></div></div></div>
             </section>
           )}
+          </div>}
 
           {uiStep > 1 && selected && (
-            <section className="flex flex-col gap-3 rounded-md border border-biz-border bg-white px-4 py-3 shadow-card sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-biz-muted">
-                  Selected Tender
-                </p>
-                <p className="mt-1 text-[13px] font-bold text-biz-navy">
-                  {selected.tenderId ?? "Manual"} · {selected.tenderWorkName}
-                </p>
-                <p className="mt-0.5 text-[10px] text-biz-muted">
-                  {selected.organizationMaster.shortName} · {selected.category ?? "Category not set"}
-                </p>
+            <section className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-biz-border bg-white px-3 py-2 shadow-card">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-biz-muted">Selected tender</p>
+                <p className="truncate text-[12px] font-bold text-biz-navy" title={selected.tenderWorkName}>{selected.tenderId ?? "Manual"} · {selected.tenderWorkName}</p>
               </div>
               <button
                 type="button"
                 disabled={isWorking}
                 onClick={changeTender}
-                className="h-8 rounded-md border border-biz-border bg-white px-3 text-[10px] font-semibold text-biz-blue disabled:opacity-50"
+                className="h-8 shrink-0 rounded-md border border-biz-border bg-white px-3 text-[10px] font-semibold text-biz-blue disabled:opacity-50"
               >
                 Change Tender
               </button>
@@ -917,8 +818,8 @@ export default function PgBgPage() {
           )}
 
           {uiStep === 2 && selected && (
-            <section className="rounded-md border border-biz-border bg-white p-4 shadow-card">
-              <div className="mb-4">
+            <section className="rounded-xl border border-biz-border bg-white p-4 shadow-card">
+              <div className="mb-3 border-b border-biz-border pb-3">
                 <h2 className="text-[14px] font-bold text-biz-navy">2. NOA &amp; Decision</h2>
                 <p className="mt-0.5 text-[10px] text-biz-muted">
                   Enter the NOA, contact and acceptance decision for the selected tender.
@@ -1121,15 +1022,15 @@ export default function PgBgPage() {
           )}
 
           {uiStep === 3 && selected && (
-            <section className="rounded-md border border-biz-border bg-white p-4 shadow-card">
-              <div className="mb-4">
+            <section className="rounded-xl border border-biz-border bg-white p-4 shadow-card">
+              <div className="mb-3 border-b border-biz-border pb-3">
                 <h2 className="text-[14px] font-bold text-biz-navy">3. PG/BG Details &amp; Final Review</h2>
                 <p className="mt-0.5 text-[10px] text-biz-muted">
                   Enter the guarantee details and review everything before creating the ongoing work.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <Field label="Type *">
                   <select
                     value={guarantee.type}
@@ -1225,16 +1126,15 @@ export default function PgBgPage() {
           )}
         </div>
 
-        <aside className="space-y-3 xl:sticky xl:top-3">
-          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-blue-50/80 to-white px-4 py-3">
+        {uiStep > 1 && selected && <aside className="xl:sticky xl:top-0 xl:self-start">
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+            <div className="border-b border-slate-100 bg-slate-50/60 px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-[13px] font-bold text-biz-navy">Selected Work Summary</h2>
-                <span className={cn("rounded-full px-2 py-1 text-[9px] font-bold", selected ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-biz-muted")}>{selected ? "SELECTED" : "WAITING"}</span>
+                <h2 className="text-[12px] font-bold text-biz-navy">Selected work</h2>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">SELECTED</span>
               </div>
-              <p className="mt-0.5 text-[10px] text-biz-muted">Key information stays visible while you complete the workflow.</p>
             </div>
-            <div className="p-4">
+            <div className="px-3 py-1">
             <SummaryRow label="Organization" value={selected?.organizationMaster.shortName} />
             <SummaryRow label="Tender / Work" value={selected?.tenderWorkName} />
             <SummaryRow label="Tender ID" value={selected?.tenderId} />
@@ -1244,33 +1144,11 @@ export default function PgBgPage() {
             <SummaryRow label="PE Name" value={values.contact?.name} />
             </div>
           </section>
-
-          <section className="rounded-xl border border-slate-200 bg-slate-50/55 p-4 shadow-[0_3px_12px_rgba(15,23,42,0.03)]">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-biz-blue">What happens next</p>
-            <h3 className="mt-1 text-[13px] font-bold text-biz-navy">
-              {uiStep === 1 ? "Choose one ready tender" : uiStep === 2 ? "Review the NOA decision" : "Add guarantee details and finish"}
-            </h3>
-            <div className="mt-3 space-y-3">
-              {[
-                ["1", "Select Tender", "Choose the awarded work from the ready list."],
-                ["2", "NOA & Decision", "Confirm NOA amount, date and responsible contact."],
-                ["3", "PG/BG & Finish", "Save the guarantee and move the work forward."],
-              ].map(([number, title, description], index) => (
-                <div key={number} className="flex gap-3">
-                  <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold", index + 1 <= uiStep ? "bg-biz-blue text-white" : "border border-biz-border bg-white text-biz-muted")}>{number}</span>
-                  <div>
-                    <p className="text-[11px] font-semibold text-biz-navy">{title}</p>
-                    <p className="mt-0.5 text-[9px] leading-4 text-biz-muted">{description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </aside>
+        </aside>}
       </div>
 
       {(uiStep > 1 || selected) && (
-      <div className="sticky bottom-2 z-20 flex flex-col gap-2 rounded-xl border border-blue-200 bg-white/95 px-4 py-2.5 shadow-[0_10px_28px_rgba(15,48,92,0.12)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+      <div className="sticky bottom-0 z-20 flex shrink-0 flex-col gap-2 rounded-xl border border-blue-200 bg-white/95 px-3 py-2 shadow-[0_8px_22px_rgba(15,48,92,0.1)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
         {(uiStep > 1 || selected) && (
           <button
             type="button"

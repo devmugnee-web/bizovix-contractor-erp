@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { tokenStorage, useDevLogin, useMe, useReminderStats, useSubscription } from "@bizovix/api-client";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
-import { BreadcrumbProvider, useBreadcrumbContext } from "@/components/providers/BreadcrumbContext";
+import { BreadcrumbProvider } from "@/components/providers/BreadcrumbContext";
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -15,7 +15,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const me = useMe();
   const reminderStats = useReminderStats();
   const subscription = useSubscription();
-  const { breadcrumb } = useBreadcrumbContext();
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
   const [devAuthAttempt, setDevAuthAttempt] = React.useState(0);
@@ -106,7 +105,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           if (window.matchMedia("(max-width: 767px)").matches) setMobileSidebarOpen((value) => !value);
           else setSidebarCollapsed((value) => !value);
         }}
-        breadcrumb={breadcrumb ?? undefined}
         showWhatsApp={
           !pathname.startsWith("/bank-instruments/pg-bg") &&
           !pathname.startsWith("/cms") &&
@@ -124,7 +122,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           onMobileClose={() => setMobileSidebarOpen(false)}
         />
         <div className="flex min-w-0 flex-1 flex-col print:block">
-          <main className={`min-h-0 flex-1 overflow-y-auto bg-biz-bg p-2 sm:p-3 print:overflow-visible print:bg-white print:p-0 ${pathname === "/dashboard" ? "md:overflow-hidden" : ""}`}>{children}</main>
+          <main className={`min-h-0 flex-1 overflow-y-auto bg-biz-bg p-2 sm:p-3 print:overflow-visible print:bg-white print:p-0 ${pathname === "/dashboard" ? "md:overflow-hidden" : pathname === "/cms/ongoing-works" ? "lg:overflow-hidden" : ""}`}>{children}</main>
         </div>
       </div>
     </div>

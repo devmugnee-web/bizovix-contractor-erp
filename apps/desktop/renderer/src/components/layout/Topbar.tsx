@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Check, Headphones, Menu, MessageCircle, Plus, Search } from "lucide-react";
-import { Breadcrumb, cn, type BreadcrumbItem } from "@bizovix/ui";
+import { cn } from "@bizovix/ui";
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
@@ -24,7 +24,6 @@ export interface TopbarUser {
 export interface TopbarProps {
   user: TopbarUser;
   onToggleSidebar: () => void;
-  breadcrumb?: BreadcrumbItem[];
   showWhatsApp?: boolean;
 }
 
@@ -48,7 +47,7 @@ function timeAgo(value: string): string {
   return `${days}d ago`;
 }
 
-export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: TopbarProps) {
+export function Topbar({ onToggleSidebar, showWhatsApp = true }: TopbarProps) {
   const router = useRouter();
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchValue, setSearchValue] = React.useState("");
@@ -102,9 +101,6 @@ export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: Top
       </div>
 
       <div className="hidden min-w-0 flex-1 items-center md:flex">
-        {breadcrumb?.length ? (
-          <Breadcrumb items={breadcrumb} className="min-w-0 text-[11px]" />
-        ) : (
           <div
             className={cn(
               "relative flex h-6 shrink-0 items-center transition-all duration-300 ease-out",
@@ -149,7 +145,6 @@ export function Topbar({ onToggleSidebar, breadcrumb, showWhatsApp = true }: Top
               )}
             />
           </div>
-        )}
       </div>
 
       <div className="absolute left-1/2 hidden h-7 -translate-x-1/2 items-center whitespace-nowrap xl:flex">
