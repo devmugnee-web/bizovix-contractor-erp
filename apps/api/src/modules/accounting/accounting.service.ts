@@ -17,51 +17,63 @@ import type {
 type Tx = Prisma.TransactionClient;
 const D = (v: Prisma.Decimal | number | string) => new Prisma.Decimal(v);
 const ROOTS = [
-  ["1000", "Assets", "ASSET", "DEBIT", "ASSETS"],
-  ["2000", "Liabilities", "LIABILITY", "CREDIT", "LIABILITIES"],
-  ["3000", "Equity", "EQUITY", "CREDIT", "EQUITY"],
-  ["4000", "Income", "INCOME", "CREDIT", "INCOME"],
-  ["5000", "Expenses", "EXPENSE", "DEBIT", "EXPENSES"],
+  ["1000000", "Assets", "ASSET", "DEBIT", "ASSETS"],
+  ["2000000", "Liabilities", "LIABILITY", "CREDIT", "LIABILITIES"],
+  ["3000000", "Equity", "EQUITY", "CREDIT", "EQUITY"],
+  ["4000000", "Expenses", "EXPENSE", "DEBIT", "EXPENSES"],
+  ["5000000", "Revenue", "INCOME", "CREDIT", "INCOME"],
 ] as const;
 const SYSTEM = [
-  ["1010", "Cash", "ASSET", "DEBIT", "CASH", "ASSETS"],
-  ["1020", "Bank", "ASSET", "DEBIT", "BANK", "ASSETS"],
-  ["1100", "Accounts Receivable", "ASSET", "DEBIT", "ACCOUNTS_RECEIVABLE", "ASSETS"],
-  ["1110", "Retention Receivable", "ASSET", "DEBIT", "RETENTION_RECEIVABLE", "ASSETS"],
-  ["1120", "VAT Deducted at Source", "ASSET", "DEBIT", "TAX_DEDUCTED_VAT", "ASSETS"],
-  ["1130", "AIT Deducted at Source", "ASSET", "DEBIT", "TAX_DEDUCTED_AIT", "ASSETS"],
-  ["1140", "Other Bill Deductions Receivable", "ASSET", "DEBIT", "OTHER_DEDUCTION_RECEIVABLE", "ASSETS"],
-  ["1200", "Security Deposit", "ASSET", "DEBIT", "SECURITY_DEPOSIT", "ASSETS"],
-  ["1300", "Advances", "ASSET", "DEBIT", "ADVANCES", "ASSETS"],
-  ["2010", "Accounts Payable", "LIABILITY", "CREDIT", "ACCOUNTS_PAYABLE", "LIABILITIES"],
-  ["2020", "AIT Payable (Withheld from Suppliers)", "LIABILITY", "CREDIT", "AIT_PAYABLE_SUPPLIERS", "LIABILITIES"],
-  ["2030", "Other Payable Deductions Withheld", "LIABILITY", "CREDIT", "OTHER_PAYABLE_DEDUCTION", "LIABILITIES"],
-  ["2100", "Loans", "LIABILITY", "CREDIT", "LOANS", "LIABILITIES"],
-  ["2200", "Accrued Expenses", "LIABILITY", "CREDIT", "ACCRUED_EXPENSES", "LIABILITIES"],
-  ["3010", "Owner's Capital", "EQUITY", "CREDIT", "OWNERS_CAPITAL", "EQUITY"],
-  ["3020", "Retained Earnings", "EQUITY", "CREDIT", "RETAINED_EARNINGS", "EQUITY"],
-  ["3030", "Opening Balance Equity", "EQUITY", "CREDIT", "OPENING_BALANCE_EQUITY", "EQUITY"],
-  ["4010", "Project Revenue", "INCOME", "CREDIT", "PROJECT_REVENUE", "INCOME"],
-  ["4020", "Other Business Income", "INCOME", "CREDIT", "OTHER_INCOME", "INCOME"],
-  ["5010", "Project Expense", "EXPENSE", "DEBIT", "PROJECT_EXPENSE", "EXPENSES"],
-  ["5020", "General Expense", "EXPENSE", "DEBIT", "GENERAL_EXPENSE", "EXPENSES"],
-  ["5030", "Bank Charges", "EXPENSE", "DEBIT", "BANK_CHARGES", "EXPENSES"],
-  ["5040", "Tender Security Charges", "EXPENSE", "DEBIT", "TENDER_SECURITY_CHARGES", "EXPENSES"],
-  [
-    "5050",
-    "Credit Commitment Charges",
-    "EXPENSE",
-    "DEBIT",
-    "CREDIT_COMMITMENT_CHARGES",
-    "EXPENSES",
-  ],
-  ["5060", "PG/BG Charges", "EXPENSE", "DEBIT", "PG_BG_CHARGES", "EXPENSES"],
+  ["1100000", "Fixed Assets", "ASSET", "DEBIT", "ASSET_FIXED", "ASSETS"],
+  ["1200000", "Current Assets", "ASSET", "DEBIT", "ASSET_CURRENT", "ASSETS"],
+  ["1210000", "Cash & Cash Equivalent", "ASSET", "DEBIT", "CASH_EQUIVALENT", "ASSET_CURRENT"],
+  ["1211000", "Cash & Petty Cash", "ASSET", "DEBIT", "CASH", "CASH_EQUIVALENT"],
+  ["1212000", "Bank Accounts", "ASSET", "DEBIT", "BANK", "CASH_EQUIVALENT"],
+  ["1300000", "Investments", "ASSET", "DEBIT", "INVESTMENTS", "ASSETS"],
+  ["12200001", "Accounts Receivable", "ASSET", "DEBIT", "ACCOUNTS_RECEIVABLE", "ASSET_CURRENT"],
+  ["12200002", "Retention Receivable", "ASSET", "DEBIT", "RETENTION_RECEIVABLE", "ASSET_CURRENT"],
+  ["12200003", "VAT Deducted at Source", "ASSET", "DEBIT", "TAX_DEDUCTED_VAT", "ASSET_CURRENT"],
+  ["12200004", "AIT Deducted at Source", "ASSET", "DEBIT", "TAX_DEDUCTED_AIT", "ASSET_CURRENT"],
+  ["12200005", "Other Bill Deductions Receivable", "ASSET", "DEBIT", "OTHER_DEDUCTION_RECEIVABLE", "ASSET_CURRENT"],
+  ["12200006", "Security Deposit", "ASSET", "DEBIT", "SECURITY_DEPOSIT", "ASSET_CURRENT"],
+  ["12200007", "Advances", "ASSET", "DEBIT", "ADVANCES", "ASSET_CURRENT"],
+  ["2100000", "Long Term Liabilities", "LIABILITY", "CREDIT", "LONG_TERM_LIABILITIES", "LIABILITIES"],
+  ["2200000", "Current Liabilities", "LIABILITY", "CREDIT", "CURRENT_LIABILITIES", "LIABILITIES"],
+  ["21100001", "Loans", "LIABILITY", "CREDIT", "LOANS", "LONG_TERM_LIABILITIES"],
+  ["22100001", "Accounts Payable", "LIABILITY", "CREDIT", "ACCOUNTS_PAYABLE", "CURRENT_LIABILITIES"],
+  ["22100002", "AIT Payable (Withheld from Suppliers)", "LIABILITY", "CREDIT", "AIT_PAYABLE_SUPPLIERS", "CURRENT_LIABILITIES"],
+  ["22100003", "Other Payable Deductions Withheld", "LIABILITY", "CREDIT", "OTHER_PAYABLE_DEDUCTION", "CURRENT_LIABILITIES"],
+  ["22100004", "Accrued Expenses", "LIABILITY", "CREDIT", "ACCRUED_EXPENSES", "CURRENT_LIABILITIES"],
+  ["3100000", "Capital Accounts", "EQUITY", "CREDIT", "CAPITAL_ACCOUNTS", "EQUITY"],
+  ["3200000", "Reserve & Surplus", "EQUITY", "CREDIT", "RESERVE_SURPLUS", "EQUITY"],
+  ["31100001", "Owner's Capital", "EQUITY", "CREDIT", "OWNERS_CAPITAL", "CAPITAL_ACCOUNTS"],
+  ["31100002", "Opening Balance Equity", "EQUITY", "CREDIT", "OPENING_BALANCE_EQUITY", "CAPITAL_ACCOUNTS"],
+  ["32100001", "Retained Earnings", "EQUITY", "CREDIT", "RETAINED_EARNINGS", "RESERVE_SURPLUS"],
+  ["4100000", "Project Expenses", "EXPENSE", "DEBIT", "PROJECT_EXPENSES", "EXPENSES"],
+  ["4200000", "Direct Expenses", "EXPENSE", "DEBIT", "DIRECT_EXPENSES", "EXPENSES"],
+  ["4300000", "Administrative Expenses", "EXPENSE", "DEBIT", "ADMINISTRATIVE_EXPENSES", "EXPENSES"],
+  ["4400000", "Financial Expenses", "EXPENSE", "DEBIT", "FINANCIAL_EXPENSES", "EXPENSES"],
+  ["4500000", "Sales & Marketing Expenses", "EXPENSE", "DEBIT", "SALES_MARKETING_EXPENSES", "EXPENSES"],
+  ["41100001", "Project Expense", "EXPENSE", "DEBIT", "PROJECT_EXPENSE", "PROJECT_EXPENSES"],
+  ["43100001", "General Expense", "EXPENSE", "DEBIT", "GENERAL_EXPENSE", "ADMINISTRATIVE_EXPENSES"],
+  ["44100001", "Bank Charges", "EXPENSE", "DEBIT", "BANK_CHARGES", "FINANCIAL_EXPENSES"],
+  ["44100002", "Tender Security Charges", "EXPENSE", "DEBIT", "TENDER_SECURITY_CHARGES", "FINANCIAL_EXPENSES"],
+  ["44100003", "Credit Commitment Charges", "EXPENSE", "DEBIT", "CREDIT_COMMITMENT_CHARGES", "FINANCIAL_EXPENSES"],
+  ["44100004", "PG/BG Charges", "EXPENSE", "DEBIT", "PG_BG_CHARGES", "FINANCIAL_EXPENSES"],
+  ["5100000", "Operating Revenue", "INCOME", "CREDIT", "OPERATING_REVENUE", "INCOME"],
+  ["5200000", "Other Revenue", "INCOME", "CREDIT", "OTHER_REVENUE", "INCOME"],
+  ["51100001", "Project Revenue", "INCOME", "CREDIT", "PROJECT_REVENUE", "OPERATING_REVENUE"],
+  ["52100001", "Other Business Income", "INCOME", "CREDIT", "OTHER_INCOME", "OTHER_REVENUE"],
 ] as const;
 // Sub-ledger-backed accounts: a manual journal entry must never post to these directly —
 // doing so would let Receivable/Payable/Cash/Bank/Opening-balance sub-ledgers diverge from
 // the GL. Real business modules (Receipts, Payables, Cash & Bank, Opening Balances) post to
 // them through AccountingService.post()/bankLedgerAccount(), which is unaffected by this gate.
-const CONTROL_SYSTEM_KEYS = new Set(["ACCOUNTS_RECEIVABLE", "ACCOUNTS_PAYABLE", "RETENTION_RECEIVABLE", "TAX_DEDUCTED_VAT", "TAX_DEDUCTED_AIT", "OTHER_DEDUCTION_RECEIVABLE", "OPENING_BALANCE_EQUITY", "CASH", "BANK"]);
+const CONTROL_SYSTEM_KEYS = new Set([
+  "ACCOUNTS_RECEIVABLE", "ACCOUNTS_PAYABLE", "RETENTION_RECEIVABLE", "TAX_DEDUCTED_VAT", "TAX_DEDUCTED_AIT", "OTHER_DEDUCTION_RECEIVABLE", "OPENING_BALANCE_EQUITY", "CASH", "BANK",
+  ...ROOTS.map(([, , , , key]) => key),
+  ...SYSTEM.filter(([code]) => code.length === 7).map(([, , , , key]) => key),
+]);
 // The one normal balance each account type is allowed to carry — enforced at account
 // create/update so LedgerAccount.normalBalance can never silently drift out of sync with
 // accountType (which is what every balance/report calculation actually keys off).
@@ -72,6 +84,8 @@ const NORMAL_BALANCE_BY_TYPE: Record<string, "DEBIT" | "CREDIT"> = {
   EQUITY: "CREDIT",
   INCOME: "CREDIT",
 };
+const isAccountGroup = (account: { isSystem: boolean; code: string }) =>
+  account.isSystem && /^\d{7}$/.test(account.code);
 @Injectable()
 export class AccountingService {
   constructor(
@@ -85,39 +99,99 @@ export class AccountingService {
   }
   async ensureChart(org: string, tx: Tx | PrismaService = this.prisma) {
     const parents = new Map<string, string>();
+    const existingRows = await tx.ledgerAccount.findMany({
+      where: { organizationId: org, systemKey: { not: null } },
+      select: { id: true, code: true, name: true, parentId: true, systemKey: true, isControlAccount: true },
+    });
+    const existingByKey = new Map(existingRows.map((row) => [row.systemKey!, row]));
     for (const [code, name, type, normal, key] of ROOTS) {
-      const row = await tx.ledgerAccount.upsert({
-        where: { organizationId_systemKey: { organizationId: org, systemKey: key } },
-        update: {},
-        create: {
-          organizationId: org,
-          code,
-          name,
-          accountType: type,
-          normalBalance: normal,
-          isSystem: true,
-          isControlAccount: CONTROL_SYSTEM_KEYS.has(key),
-          systemKey: key,
-        },
-      });
+      const existing = existingByKey.get(key);
+      const row = existing
+        ? existing.code !== code || existing.name !== name || existing.parentId || existing.isControlAccount !== CONTROL_SYSTEM_KEYS.has(key)
+          ? await tx.ledgerAccount.update({ where: { id: existing.id }, data: { code, name, parentId: null, isControlAccount: CONTROL_SYSTEM_KEYS.has(key) } })
+          : existing
+        : await tx.ledgerAccount.upsert({
+            where: { organizationId_systemKey: { organizationId: org, systemKey: key } },
+            update: {},
+            create: { organizationId: org, code, name, accountType: type, normalBalance: normal, isSystem: true, isControlAccount: CONTROL_SYSTEM_KEYS.has(key), systemKey: key },
+          });
       parents.set(key, row.id);
     }
-    for (const [code, name, type, normal, key, parent] of SYSTEM)
-      await tx.ledgerAccount.upsert({
-        where: { organizationId_systemKey: { organizationId: org, systemKey: key } },
-        update: {},
-        create: {
-          organizationId: org,
-          code,
-          name,
-          accountType: type,
-          normalBalance: normal,
-          isSystem: true,
-          isControlAccount: CONTROL_SYSTEM_KEYS.has(key),
-          systemKey: key,
-          parentId: parents.get(parent),
-        },
-      });
+    for (const [code, name, type, normal, key, parent] of SYSTEM) {
+      const parentId = parents.get(parent);
+      if (!parentId) throw new Error(`Missing chart parent ${parent}`);
+      const existing = existingByKey.get(key);
+      const row = existing
+        ? existing.code !== code || existing.name !== name || existing.parentId !== parentId || existing.isControlAccount !== CONTROL_SYSTEM_KEYS.has(key)
+          ? await tx.ledgerAccount.update({ where: { id: existing.id }, data: { code, name, parentId, isControlAccount: CONTROL_SYSTEM_KEYS.has(key) } })
+          : existing
+        : await tx.ledgerAccount.upsert({
+            where: { organizationId_systemKey: { organizationId: org, systemKey: key } },
+            update: {},
+            create: { organizationId: org, code, name, accountType: type, normalBalance: normal, isSystem: true, isControlAccount: CONTROL_SYSTEM_KEYS.has(key), systemKey: key, parentId },
+          });
+      parents.set(key, row.id);
+    }
+    const linked = await tx.ledgerAccount.findMany({
+      where: { organizationId: org, linkedBankAccountId: { not: null } },
+      include: { bankAccount: true },
+      orderBy: { code: "asc" },
+    });
+    const cash = linked.filter((row) => row.bankAccount?.accountType === "CASH");
+    const banks = linked.filter((row) => row.bankAccount?.accountType !== "CASH");
+    const cashInHand = cash.find((row) => /^(main cash|cash in hand)$/i.test(row.bankAccount?.accountName ?? row.name));
+    const pettyCash = cash.find((row) => /^petty cash$/i.test(row.bankAccount?.accountName ?? row.name));
+    const orderedCash = [cashInHand, pettyCash, ...cash.filter((row) => row.id !== cashInHand?.id && row.id !== pettyCash?.id)].filter((row): row is (typeof cash)[number] => Boolean(row));
+    for (const [index, row] of orderedCash.entries()) {
+      const code = row.id === cashInHand?.id ? "12111001" : row.id === pettyCash?.id ? "12111002" : `12111${String(index + 3).padStart(3, "0")}`;
+      const name = row.id === cashInHand?.id ? "Cash in Hand" : row.id === pettyCash?.id ? "Petty Cash" : row.name;
+      if (row.code !== code || row.name !== name || row.parentId !== parents.get("CASH"))
+        await tx.ledgerAccount.update({ where: { id: row.id }, data: { code, name, parentId: parents.get("CASH") } });
+    }
+    for (const [index, row] of banks.entries()) {
+      const code = `1212${String(index + 1).padStart(4, "0")}`;
+      if (row.code !== code || row.parentId !== parents.get("BANK"))
+        await tx.ledgerAccount.update({ where: { id: row.id }, data: { code, parentId: parents.get("BANK") } });
+    }
+    const moduleAccounts = await tx.ledgerAccount.findMany({
+      where: { organizationId: org, isSystem: false, OR: [
+        { code: { in: ["LC-CLEARING", "LC-INVENTORY"] } },
+        { code: { startsWith: "FA-" } },
+        { code: { startsWith: "AD-" } },
+        { code: { startsWith: "AS-" } },
+        { code: { startsWith: "DE-" } },
+      ] },
+      select: { id: true, code: true, parentId: true },
+    });
+    for (const row of moduleAccounts) {
+      const parentId = /^(FA|AD|AS)-/.test(row.code) ? parents.get("ASSET_FIXED")
+        : row.code.startsWith("DE-") ? parents.get("ADMINISTRATIVE_EXPENSES")
+        : parents.get("ASSET_CURRENT");
+      if (parentId && row.parentId !== parentId)
+        await tx.ledgerAccount.update({ where: { id: row.id }, data: { parentId } });
+    }
+    const allAccounts = await tx.ledgerAccount.findMany({
+      where: { organizationId: org },
+      select: { id: true, code: true, parentId: true, accountType: true, isSystem: true },
+    });
+    const byId = new Map(allAccounts.map((account) => [account.id, account]));
+    const rootByType: Record<string, string | undefined> = {
+      ASSET: parents.get("ASSETS"), LIABILITY: parents.get("LIABILITIES"),
+      EQUITY: parents.get("EQUITY"), EXPENSE: parents.get("EXPENSES"), INCOME: parents.get("INCOME"),
+    };
+    for (const account of allAccounts) {
+      if (isAccountGroup(account)) continue;
+      let ancestor = account.parentId ? byId.get(account.parentId) : undefined;
+      const visited = new Set([account.id]);
+      while (ancestor && !isAccountGroup(ancestor) && !visited.has(ancestor.id)) {
+        visited.add(ancestor.id);
+        ancestor = ancestor.parentId ? byId.get(ancestor.parentId) : undefined;
+      }
+      const parentId = ancestor && isAccountGroup(ancestor) && ancestor.accountType === account.accountType
+        ? ancestor.id : rootByType[account.accountType];
+      if (parentId && account.parentId !== parentId)
+        await tx.ledgerAccount.update({ where: { id: account.id }, data: { parentId } });
+    }
   }
   async systemAccount(tx: Tx, org: string, key: string) {
     await this.ensureChart(org, tx);
@@ -166,13 +240,18 @@ export class AccountingService {
     });
     if (existing) return existing;
     const parent = await this.systemAccount(tx, org, bank.accountType === "CASH" ? "CASH" : "BANK");
-    const count = await tx.ledgerAccount.count({
-      where: { organizationId: org, parentId: parent.id },
-    });
+    let sequence = bank.accountType === "CASH"
+      ? /^petty cash$/i.test(bank.accountName) ? 2 : /^(main cash|cash in hand)$/i.test(bank.accountName) ? 1 : 3
+      : 1;
+    let code = "";
+    do {
+      code = bank.accountType === "CASH" ? `12111${String(sequence).padStart(3, "0")}` : `1212${String(sequence).padStart(4, "0")}`;
+      sequence += 1;
+    } while (await tx.ledgerAccount.findFirst({ where: { organizationId: org, code }, select: { id: true } }));
     return tx.ledgerAccount.create({
       data: {
         organizationId: org,
-        code: `${parent.code}.${String(count + 1).padStart(2, "0")}`,
+        code,
         name: bank.accountName,
         parentId: parent.id,
         accountType: "ASSET",
@@ -195,9 +274,9 @@ export class AccountingService {
     });
     if (controlAccounts.length > 0) {
       throw new BadRequestException(
-        `Manual journal entries cannot post directly to control accounts: ${controlAccounts
+        `Manual journal entries cannot post directly to a class, category, or control account: ${controlAccounts
           .map((a) => a.name)
-          .join(", ")}. Use the dedicated module (Receipts, Payables, Cash & Bank, Opening Balances) instead.`,
+          .join(", ")}. Select a ledger below the category or use the relevant business module.`,
       );
     }
   }
@@ -322,13 +401,13 @@ export class AccountingService {
     }
   }
   async createAccount(org: string, userId: string, dto: CreateAccountDto) {
-    if (
-      dto.parentId &&
-      !(await this.prisma.ledgerAccount.findFirst({
-        where: { id: dto.parentId, organizationId: org },
-      }))
-    )
-      throw new NotFoundException("Parent account not found");
+    const parent = dto.parentId ? await this.prisma.ledgerAccount.findFirst({
+      where: { id: dto.parentId, organizationId: org },
+    }) : null;
+    if (!parent) throw new BadRequestException("Select a parent class or category");
+    if (!isAccountGroup(parent)) throw new BadRequestException("A ledger cannot be created under another ledger");
+    if (parent && parent.accountType !== dto.accountType)
+      throw new BadRequestException("Ledger type must match its parent category");
     this.assertValidNormalBalance(dto.accountType, dto.normalBalance);
     const row = await this.prisma.ledgerAccount.create({
       data: { organizationId: org, ...dto, isSystem: false },
@@ -342,6 +421,11 @@ export class AccountingService {
     if (old.isSystem) {
       throw new BadRequestException("Protected system accounts cannot be changed");
     }
+    const effectiveParentId = dto.parentId ?? old.parentId;
+    const parent = effectiveParentId ? await this.prisma.ledgerAccount.findFirst({ where: { id: effectiveParentId, organizationId: org } }) : null;
+    if (!parent || !isAccountGroup(parent)) throw new BadRequestException("A ledger must be under a class or category");
+    if (parent.accountType !== (dto.accountType ?? old.accountType))
+      throw new BadRequestException("Ledger type must match its parent class or category");
     this.assertValidNormalBalance(dto.accountType ?? old.accountType, dto.normalBalance ?? old.normalBalance);
     const row = await this.prisma.ledgerAccount.update({ where: { id, organizationId: org }, data: dto });
     await this.log(org, userId, "ACCOUNT_UPDATED", id, row.code);

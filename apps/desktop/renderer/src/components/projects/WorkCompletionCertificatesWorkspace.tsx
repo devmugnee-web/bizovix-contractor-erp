@@ -120,7 +120,7 @@ const EMPTY_STATS: WorkCompletionCertificateStats = {
   withoutWcc: 0,
 };
 const CONTROL_CLASS =
-  "h-[36px] w-full rounded-[5px] border border-[#dbe3ef] bg-white px-3 text-[10px] font-medium text-[#10244c] outline-none transition focus:border-[#1769e8] focus:ring-2 focus:ring-[#1769e8]/10";
+  "h-9 w-full rounded-md border border-[#dbe3ef] bg-white px-3 text-[13px] font-medium text-[#10244c] outline-none transition focus:border-[#1769e8] focus:ring-2 focus:ring-[#1769e8]/10";
 
 const STATUS_LABEL: Record<WccStatus, string> = {
   WCC_OBTAINED: "WCC Obtained",
@@ -183,9 +183,9 @@ const STATUS_OPTIONS: Array<{ value: WccStatus; label: string }> = Object.entrie
   ([value, label]) => ({ value: value as WccStatus, label }),
 );
 
-const EGP_STATUS_OPTIONS: Array<{ value: WccEgpStatus; label: string }> = Object.entries(EGP_STATUS_LABEL).map(
-  ([value, label]) => ({ value: value as WccEgpStatus, label }),
-);
+const EGP_STATUS_OPTIONS: Array<{ value: WccEgpStatus; label: string }> = Object.entries(
+  EGP_STATUS_LABEL,
+).map(([value, label]) => ({ value: value as WccEgpStatus, label }));
 
 function isoToday() {
   return new Date().toISOString().slice(0, 10);
@@ -315,13 +315,24 @@ function KpiCard({
   };
 
   return (
-    <div className="flex h-[87px] min-w-0 items-center rounded-[7px] border border-[#dfe6f1] bg-white px-3 shadow-[0_1px_2px_rgba(15,34,70,0.025)]">
-      <span className={cn("flex h-[43px] w-[43px] shrink-0 items-center justify-center rounded-full", tones[tone])}>
-        {Icon ? <Icon className="h-[20px] w-[20px]" /> : <span className="text-[12px] font-bold">{textIcon}</span>}
+    <div className="flex h-[64px] min-w-0 items-center rounded-lg border border-[#dfe6f1] bg-white px-3 shadow-sm">
+      <span
+        className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", tones[tone])}
+      >
+        {Icon ? (
+          <Icon className="h-[17px] w-[17px]" />
+        ) : (
+          <span className="text-[12px] font-bold">{textIcon}</span>
+        )}
       </span>
       <span className="ml-3 min-w-0">
-        <span className="block text-[9.5px] font-semibold leading-tight text-[#172b55]">{label}</span>
-        <span className="mt-2 block text-[19px] font-bold leading-none text-[#071b49]">{value}</span>
+        <span
+          className="block truncate text-[12px] font-medium leading-4 text-[#52627d]"
+          title={label}
+        >
+          {label}
+        </span>
+        <span className="mt-0.5 block text-[18px] font-bold leading-5 text-[#071b49]">{value}</span>
       </span>
     </div>
   );
@@ -342,13 +353,16 @@ function SelectControl({
 }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">{label}</span>
+      <span className="mb-1 block text-[12px] font-medium text-[#52627d]">{label}</span>
       <span className="relative block">
         <select
           value={value}
           onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
-          className={cn(CONTROL_CLASS, "appearance-none pr-8 disabled:cursor-not-allowed disabled:bg-[#f3f6fa] disabled:text-[#71819b]")}
+          className={cn(
+            CONTROL_CLASS,
+            "appearance-none pr-8 disabled:cursor-not-allowed disabled:bg-[#f3f6fa] disabled:text-[#71819b]",
+          )}
         >
           {children}
         </select>
@@ -372,15 +386,27 @@ function ApplicationDialog({
   const initialRow = state.row;
   const applicationProjects = initialRow?.recordId
     ? projects
-    : projects.filter((project) => !["COMPLETED", "ARCHIVED", "CANCELLED"].includes(project.status));
-  const [workId, setWorkId] = React.useState(state.workId || initialRow?.workId || projects[0]?.id || "");
+    : projects.filter(
+        (project) => !["COMPLETED", "ARCHIVED", "CANCELLED"].includes(project.status),
+      );
+  const [workId, setWorkId] = React.useState(
+    state.workId || initialRow?.workId || projects[0]?.id || "",
+  );
   const [contractId, setContractId] = React.useState(initialRow?.contractId ?? "");
   const [source, setSource] = React.useState<WccSource>(initialRow?.source ?? "EGP");
-  const [applicationDate, setApplicationDate] = React.useState(initialRow?.applicationDate?.slice(0, 10) ?? isoToday());
-  const [actualCompletionDate, setActualCompletionDate] = React.useState(initialRow?.actualCompletionDate?.slice(0, 10) ?? "");
-  const [certifiedCompletionDate, setCertifiedCompletionDate] = React.useState(initialRow?.certifiedCompletionDate?.slice(0, 10) ?? "");
+  const [applicationDate, setApplicationDate] = React.useState(
+    initialRow?.applicationDate?.slice(0, 10) ?? isoToday(),
+  );
+  const [actualCompletionDate, setActualCompletionDate] = React.useState(
+    initialRow?.actualCompletionDate?.slice(0, 10) ?? "",
+  );
+  const [certifiedCompletionDate, setCertifiedCompletionDate] = React.useState(
+    initialRow?.certifiedCompletionDate?.slice(0, 10) ?? "",
+  );
   const [obtainedOn, setObtainedOn] = React.useState(initialRow?.obtainedOn?.slice(0, 10) ?? "");
-  const [issuingAuthority, setIssuingAuthority] = React.useState(initialRow?.issuingAuthority ?? "");
+  const [issuingAuthority, setIssuingAuthority] = React.useState(
+    initialRow?.issuingAuthority ?? "",
+  );
   const [remarks, setRemarks] = React.useState(initialRow?.remarks ?? "");
   const [error, setError] = React.useState("");
   const contracts = useContracts({ page: 1, limit: 100, cmsWorkId: workId || "unselected" });
@@ -419,44 +445,120 @@ function ApplicationDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#071b49]/35 p-4" role="dialog" aria-modal="true" aria-label={initialRow?.recordId ? "Edit WCC application" : "New WCC application"}>
-      <form onSubmit={submit} className="w-full max-w-[720px] overflow-hidden rounded-[8px] border border-[#dce4ef] bg-white shadow-2xl">
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-[#071b49]/35 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={initialRow?.recordId ? "Edit WCC application" : "New WCC application"}
+    >
+      <form
+        onSubmit={submit}
+        className="w-full max-w-[720px] overflow-hidden rounded-[8px] border border-[#dce4ef] bg-white shadow-2xl"
+      >
         <div className="flex items-center justify-between border-b border-[#e2e8f1] px-5 py-4">
           <div>
-            <h2 className="text-[15px] font-bold text-[#071b49]">{initialRow?.recordId ? "Update WCC Application" : "New WCC Application"}</h2>
-            <p className="mt-1 text-[10px] text-[#60718e]">Record the project completion source and application details.</p>
+            <h2 className="text-[15px] font-bold text-[#071b49]">
+              {initialRow?.recordId ? "Update WCC Application" : "New WCC Application"}
+            </h2>
+            <p className="mt-1 text-[10px] text-[#60718e]">
+              Record the project completion source and application details.
+            </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#f1f5fa]"><X className="h-4 w-4" /></button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#f1f5fa]"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         <div className="grid max-h-[68vh] grid-cols-1 gap-4 overflow-y-auto p-5 sm:grid-cols-2">
-          <SelectControl label="Project *" value={workId} disabled={Boolean(initialRow?.recordId)} onChange={(value) => { setWorkId(value); setContractId(""); }}>
+          <SelectControl
+            label="Project *"
+            value={workId}
+            disabled={Boolean(initialRow?.recordId)}
+            onChange={(value) => {
+              setWorkId(value);
+              setContractId("");
+            }}
+          >
             <option value="">Select project</option>
-            {applicationProjects.map((project) => <option key={project.id} value={project.id}>{project.workName}</option>)}
+            {applicationProjects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.workName}
+              </option>
+            ))}
           </SelectControl>
-          <SelectControl label="Contract / Work Order *" value={contractId} disabled={Boolean(initialRow?.recordId)} onChange={setContractId}>
-            <option value="">{contracts.isLoading ? "Loading contracts..." : "Select contract"}</option>
-            {contractOptions.map((contract) => <option key={contract.id} value={contract.id}>{contract.contractNo}</option>)}
+          <SelectControl
+            label="Contract / Work Order *"
+            value={contractId}
+            disabled={Boolean(initialRow?.recordId)}
+            onChange={setContractId}
+          >
+            <option value="">
+              {contracts.isLoading ? "Loading contracts..." : "Select contract"}
+            </option>
+            {contractOptions.map((contract) => (
+              <option key={contract.id} value={contract.id}>
+                {contract.contractNo}
+              </option>
+            ))}
           </SelectControl>
-          <SelectControl label="Source *" value={source} onChange={(value) => setSource(value as WccSource)}>
+          <SelectControl
+            label="Source *"
+            value={source}
+            onChange={(value) => setSource(value as WccSource)}
+          >
             <option value="EGP">e-GP</option>
             <option value="MANUAL">Manual</option>
           </SelectControl>
           <label className="block">
-            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">Application Date *</span>
-            <input type="date" required value={applicationDate} onChange={(event) => setApplicationDate(event.target.value)} className={CONTROL_CLASS} />
+            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">
+              Application Date *
+            </span>
+            <input
+              type="date"
+              required
+              value={applicationDate}
+              onChange={(event) => setApplicationDate(event.target.value)}
+              className={CONTROL_CLASS}
+            />
           </label>
           <label className="block">
-            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">Actual Completion Date *</span>
-            <input type="date" required value={actualCompletionDate} onChange={(event) => setActualCompletionDate(event.target.value)} className={CONTROL_CLASS} />
+            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">
+              Actual Completion Date *
+            </span>
+            <input
+              type="date"
+              required
+              value={actualCompletionDate}
+              onChange={(event) => setActualCompletionDate(event.target.value)}
+              className={CONTROL_CLASS}
+            />
           </label>
           <label className="block">
-            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">WCC Obtained On</span>
-            <input type="date" value={obtainedOn} onChange={(event) => setObtainedOn(event.target.value)} className={CONTROL_CLASS} />
+            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">
+              WCC Obtained On
+            </span>
+            <input
+              type="date"
+              value={obtainedOn}
+              onChange={(event) => setObtainedOn(event.target.value)}
+              className={CONTROL_CLASS}
+            />
           </label>
           <label className="block">
-            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">Certified Completion Date</span>
-            <input type="date" value={certifiedCompletionDate} onChange={(event) => setCertifiedCompletionDate(event.target.value)} className={CONTROL_CLASS} />
+            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">
+              Certified Completion Date
+            </span>
+            <input
+              type="date"
+              value={certifiedCompletionDate}
+              onChange={(event) => setCertifiedCompletionDate(event.target.value)}
+              className={CONTROL_CLASS}
+            />
           </label>
           {source === "MANUAL" && (
             <p className="rounded-md border border-[#dce8fa] bg-[#f2f7ff] px-3 py-2 text-[9px] leading-relaxed text-[#31527e] sm:col-span-2">
@@ -464,26 +566,64 @@ function ApplicationDialog({
             </p>
           )}
           <label className="block sm:col-span-2">
-            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">Issuing Authority</span>
-            <input value={issuingAuthority} onChange={(event) => setIssuingAuthority(event.target.value)} placeholder="Enter issuing authority" className={CONTROL_CLASS} />
+            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">
+              Issuing Authority
+            </span>
+            <input
+              value={issuingAuthority}
+              onChange={(event) => setIssuingAuthority(event.target.value)}
+              placeholder="Enter issuing authority"
+              className={CONTROL_CLASS}
+            />
           </label>
           <label className="block sm:col-span-2">
             <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">Remarks</span>
-            <textarea value={remarks} onChange={(event) => setRemarks(event.target.value)} placeholder="Optional remarks" className="min-h-[72px] w-full resize-y rounded-[5px] border border-[#dbe3ef] bg-white px-3 py-2 text-[10px] text-[#10244c] outline-none focus:border-[#1769e8] focus:ring-2 focus:ring-[#1769e8]/10" />
+            <textarea
+              value={remarks}
+              onChange={(event) => setRemarks(event.target.value)}
+              placeholder="Optional remarks"
+              className="min-h-[72px] w-full resize-y rounded-[5px] border border-[#dbe3ef] bg-white px-3 py-2 text-[10px] text-[#10244c] outline-none focus:border-[#1769e8] focus:ring-2 focus:ring-[#1769e8]/10"
+            />
           </label>
-          {error && <p className="sm:col-span-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[10px] text-red-700">{error}</p>}
+          {error && (
+            <p className="sm:col-span-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[10px] text-red-700">
+              {error}
+            </p>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-[#e2e8f1] px-5 py-4">
-          <button type="button" onClick={onClose} className="h-9 rounded-[5px] border border-[#d9e1ed] bg-white px-4 text-[10px] font-semibold text-[#33496f] hover:bg-[#f7f9fc]">Cancel</button>
-          <button type="submit" disabled={saving} className="h-9 rounded-[5px] bg-[#0765e9] px-5 text-[10px] font-semibold text-white hover:bg-[#0458ce] disabled:opacity-50">{saving ? "Saving..." : initialRow?.recordId ? "Update Application" : "Save Application"}</button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 rounded-[5px] border border-[#d9e1ed] bg-white px-4 text-[10px] font-semibold text-[#33496f] hover:bg-[#f7f9fc]"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="h-9 rounded-[5px] bg-[#0765e9] px-5 text-[10px] font-semibold text-white hover:bg-[#0458ce] disabled:opacity-50"
+          >
+            {saving
+              ? "Saving..."
+              : initialRow?.recordId
+                ? "Update Application"
+                : "Save Application"}
+          </button>
         </div>
       </form>
     </div>
   );
 }
 
-function DetailsDialog({ row, onClose }: { row: WorkCompletionCertificateListRow; onClose: () => void }) {
+function DetailsDialog({
+  row,
+  onClose,
+}: {
+  row: WorkCompletionCertificateListRow;
+  onClose: () => void;
+}) {
   const fields = [
     ["Tender ID", row.tid],
     ["Project", row.project],
@@ -505,14 +645,34 @@ function DetailsDialog({ row, onClose }: { row: WorkCompletionCertificateListRow
   ];
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#071b49]/35 p-4" role="dialog" aria-modal="true" aria-label="WCC details">
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-[#071b49]/35 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="WCC details"
+    >
       <div className="w-full max-w-[520px] overflow-hidden rounded-[8px] border border-[#dce4ef] bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-[#e2e8f1] px-5 py-4">
-          <div><h2 className="text-[15px] font-bold text-[#071b49]">Work Completion Certificate</h2><p className="mt-1 text-[10px] text-[#60718e]">{row.tid}</p></div>
-          <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#f1f5fa]"><X className="h-4 w-4" /></button>
+          <div>
+            <h2 className="text-[15px] font-bold text-[#071b49]">Work Completion Certificate</h2>
+            <p className="mt-1 text-[10px] text-[#60718e]">{row.tid}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#f1f5fa]"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 p-5 sm:grid-cols-2">
-          {fields.map(([label, value]) => <div key={label}><dt className="text-[9px] text-[#71819b]">{label}</dt><dd className="mt-1 text-[11px] font-semibold text-[#10244c]">{value}</dd></div>)}
+          {fields.map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-[9px] text-[#71819b]">{label}</dt>
+              <dd className="mt-1 text-[11px] font-semibold text-[#10244c]">{value}</dd>
+            </div>
+          ))}
         </dl>
       </div>
     </div>
@@ -539,16 +699,17 @@ function WorkflowDialog({
   const egpMutation = useUpdateCompletionCertificateEgpTracking();
   const [remarks, setRemarks] = React.useState(row.remarks ?? "");
   const [egpStatus, setEgpStatus] = React.useState<"PENDING" | "UNDER_PROCESS" | "OBTAINED">(
-    row.egpStatus === "UNDER_PROCESS" || row.egpStatus === "OBTAINED"
-      ? row.egpStatus
-      : "PENDING",
+    row.egpStatus === "UNDER_PROCESS" || row.egpStatus === "OBTAINED" ? row.egpStatus : "PENDING",
   );
-  const [egpAppliedOn, setEgpAppliedOn] = React.useState(row.egpAppliedOn?.slice(0, 10) ?? isoToday());
+  const [egpAppliedOn, setEgpAppliedOn] = React.useState(
+    row.egpAppliedOn?.slice(0, 10) ?? isoToday(),
+  );
   const [egpObtainedOn, setEgpObtainedOn] = React.useState("");
   const [error, setError] = React.useState("");
   const pending = statusMutation.isPending || egpMutation.isPending;
   const projectAllowsChanges = !["COMPLETED", "ARCHIVED", "CANCELLED"].includes(row.projectStatus);
-  const editable = projectAllowsChanges && (row.coreStatus === "DRAFT" || row.coreStatus === "REJECTED");
+  const editable =
+    projectAllowsChanges && (row.coreStatus === "DRAFT" || row.coreStatus === "REJECTED");
   const canTrackEgp =
     projectAllowsChanges &&
     canUpdate &&
@@ -586,61 +747,157 @@ function WorkflowDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#071b49]/35 p-4" role="dialog" aria-modal="true" aria-label="WCC workflow actions">
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-[#071b49]/35 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="WCC workflow actions"
+    >
       <div className="w-full max-w-[520px] overflow-hidden rounded-[8px] border border-[#dce4ef] bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-[#e2e8f1] px-5 py-4">
           <div>
             <h2 className="text-[15px] font-bold text-[#071b49]">WCC Workflow</h2>
-            <p className="mt-1 text-[10px] text-[#60718e]">{row.tid} · {row.project}</p>
+            <p className="mt-1 text-[10px] text-[#60718e]">
+              {row.tid} · {row.project}
+            </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#f1f5fa]"><X className="h-4 w-4" /></button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#f1f5fa]"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         <div className="space-y-4 p-5">
           <div className="flex items-center justify-between rounded-md border border-[#e2e8f1] bg-[#f8faff] px-3 py-2.5 text-[10px]">
             <span className="text-[#60718e]">Approval status</span>
-            <span className="font-semibold text-[#10244c]">{row.coreStatus?.replaceAll("_", " ") ?? "Not available"}</span>
+            <span className="font-semibold text-[#10244c]">
+              {row.coreStatus?.replaceAll("_", " ") ?? "Not available"}
+            </span>
           </div>
           <label className="block">
-            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">Workflow Remarks</span>
-            <textarea value={remarks} onChange={(event) => setRemarks(event.target.value)} className="min-h-[68px] w-full resize-y rounded-[5px] border border-[#dbe3ef] px-3 py-2 text-[10px] text-[#10244c] outline-none focus:border-[#1769e8]" />
+            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">
+              Workflow Remarks
+            </span>
+            <textarea
+              value={remarks}
+              onChange={(event) => setRemarks(event.target.value)}
+              className="min-h-[68px] w-full resize-y rounded-[5px] border border-[#dbe3ef] px-3 py-2 text-[10px] text-[#10244c] outline-none focus:border-[#1769e8]"
+            />
           </label>
 
           {canTrackEgp && (
-            <form onSubmit={saveEgpTracking} className="grid grid-cols-1 gap-3 rounded-md border border-[#dce8fa] bg-[#f7faff] p-3 sm:grid-cols-2">
-              <div className="sm:col-span-2 text-[10px] font-semibold text-[#17365f]">Manual WCC · e-GP Follow-up</div>
-              <SelectControl label="e-GP Status" value={egpStatus} onChange={(value) => setEgpStatus(value as "PENDING" | "UNDER_PROCESS" | "OBTAINED")}>
+            <form
+              onSubmit={saveEgpTracking}
+              className="grid grid-cols-1 gap-3 rounded-md border border-[#dce8fa] bg-[#f7faff] p-3 sm:grid-cols-2"
+            >
+              <div className="sm:col-span-2 text-[10px] font-semibold text-[#17365f]">
+                Manual WCC · e-GP Follow-up
+              </div>
+              <SelectControl
+                label="e-GP Status"
+                value={egpStatus}
+                onChange={(value) =>
+                  setEgpStatus(value as "PENDING" | "UNDER_PROCESS" | "OBTAINED")
+                }
+              >
                 <option value="PENDING">Pending</option>
                 <option value="UNDER_PROCESS">Under Process</option>
                 <option value="OBTAINED">EGP Obtained</option>
               </SelectControl>
               <label className="block">
-                <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">e-GP Applied On *</span>
-                <input type="date" required value={egpAppliedOn} onChange={(event) => setEgpAppliedOn(event.target.value)} className={CONTROL_CLASS} />
+                <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">
+                  e-GP Applied On *
+                </span>
+                <input
+                  type="date"
+                  required
+                  value={egpAppliedOn}
+                  onChange={(event) => setEgpAppliedOn(event.target.value)}
+                  className={CONTROL_CLASS}
+                />
               </label>
               {egpStatus === "OBTAINED" && (
                 <label className="block sm:col-span-2">
-                  <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">e-GP Obtained On *</span>
-                  <input type="date" required value={egpObtainedOn} onChange={(event) => setEgpObtainedOn(event.target.value)} className={CONTROL_CLASS} />
+                  <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">
+                    e-GP Obtained On *
+                  </span>
+                  <input
+                    type="date"
+                    required
+                    value={egpObtainedOn}
+                    onChange={(event) => setEgpObtainedOn(event.target.value)}
+                    className={CONTROL_CLASS}
+                  />
                 </label>
               )}
-              <button type="submit" disabled={pending} className="h-9 rounded-[5px] bg-[#0765e9] px-4 text-[10px] font-semibold text-white disabled:opacity-50 sm:col-span-2">Save e-GP Tracking</button>
+              <button
+                type="submit"
+                disabled={pending}
+                className="h-9 rounded-[5px] bg-[#0765e9] px-4 text-[10px] font-semibold text-white disabled:opacity-50 sm:col-span-2"
+              >
+                Save e-GP Tracking
+              </button>
             </form>
           )}
 
-          {error && <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[10px] text-red-700">{error}</p>}
+          {error && (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[10px] text-red-700">
+              {error}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap justify-end gap-2 border-t border-[#e2e8f1] px-5 py-4">
-          {editable && canUpdate && <button type="button" onClick={onEdit} className="h-9 rounded-[5px] border border-[#d9e1ed] px-4 text-[10px] font-semibold text-[#33496f]">Edit Application</button>}
-          {editable && canSubmit && <button type="button" disabled={pending} onClick={() => void changeStatus("SUBMITTED")} className="h-9 rounded-[5px] bg-[#0765e9] px-4 text-[10px] font-semibold text-white disabled:opacity-50">Submit for Review</button>}
+          {editable && canUpdate && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="h-9 rounded-[5px] border border-[#d9e1ed] px-4 text-[10px] font-semibold text-[#33496f]"
+            >
+              Edit Application
+            </button>
+          )}
+          {editable && canSubmit && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void changeStatus("SUBMITTED")}
+              className="h-9 rounded-[5px] bg-[#0765e9] px-4 text-[10px] font-semibold text-white disabled:opacity-50"
+            >
+              Submit for Review
+            </button>
+          )}
           {projectAllowsChanges && row.coreStatus === "SUBMITTED" && canApprove && (
             <>
-              <button type="button" disabled={pending} onClick={() => void changeStatus("REJECTED")} className="h-9 rounded-[5px] border border-[#f0c7cc] px-4 text-[10px] font-semibold text-[#cf3547] disabled:opacity-50">Return</button>
-              <button type="button" disabled={pending} onClick={() => void changeStatus("APPROVED")} className="h-9 rounded-[5px] bg-[#1f9f50] px-4 text-[10px] font-semibold text-white disabled:opacity-50">Approve</button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void changeStatus("REJECTED")}
+                className="h-9 rounded-[5px] border border-[#f0c7cc] px-4 text-[10px] font-semibold text-[#cf3547] disabled:opacity-50"
+              >
+                Return
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void changeStatus("APPROVED")}
+                className="h-9 rounded-[5px] bg-[#1f9f50] px-4 text-[10px] font-semibold text-white disabled:opacity-50"
+              >
+                Approve
+              </button>
             </>
           )}
-          <button type="button" onClick={onClose} className="h-9 rounded-[5px] border border-[#d9e1ed] bg-white px-4 text-[10px] font-semibold text-[#33496f]">Close</button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 rounded-[5px] border border-[#d9e1ed] bg-white px-4 text-[10px] font-semibold text-[#33496f]"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -665,11 +922,19 @@ export function WorkCompletionCertificatesWorkspace() {
   const canApprove = permissions.includes("completion_certificate.approve");
   const canDownload = permissions.includes("documents.download");
   const [searchDraft, setSearchDraft] = React.useState("");
-  const [filters, setFilters] = React.useState<AppliedFilters>({ search: "", projectId: "", status: "", source: "", egpStatus: "" });
+  const [filters, setFilters] = React.useState<AppliedFilters>({
+    search: "",
+    projectId: "",
+    status: "",
+    source: "",
+    egpStatus: "",
+  });
   const [page, setPage] = React.useState(1);
   const dataSource = useWorkCompletionCertificatePageData(filters, page);
   const [viewing, setViewing] = React.useState<WorkCompletionCertificateListRow | null>(null);
-  const [workflowing, setWorkflowing] = React.useState<WorkCompletionCertificateListRow | null>(null);
+  const [workflowing, setWorkflowing] = React.useState<WorkCompletionCertificateListRow | null>(
+    null,
+  );
   const [application, setApplication] = React.useState<ApplicationState | null>(() =>
     openCreateOnLoad ? { workId: requestedWorkId, row: null } : null,
   );
@@ -691,10 +956,7 @@ export function WorkCompletionCertificatesWorkspace() {
     return () => window.clearTimeout(timer);
   }, [searchDraft]);
 
-  function updateFilter<Key extends keyof AppliedFilters>(
-    key: Key,
-    value: AppliedFilters[Key],
-  ) {
+  function updateFilter<Key extends keyof AppliedFilters>(key: Key, value: AppliedFilters[Key]) {
     setFilters((current) => ({ ...current, [key]: value }));
     setPage(1);
   }
@@ -722,211 +984,385 @@ export function WorkCompletionCertificatesWorkspace() {
   }
 
   return (
-    <div className="min-h-full bg-[#f8faff] pb-4 pt-2 text-[#0b1f4b]">
-      <div className="mb-4 pt-1">
-        <h1 className="text-[25px] font-bold leading-tight tracking-[-0.02em] text-[#071b49]">Work Completion Certificate</h1>
-        <p className="mt-1 text-[11px] text-[#40577f]">Completed projects and their work completion certificate status</p>
-      </div>
+    <div className="flex min-h-full flex-col gap-2.5 bg-[#f8faff] text-[#0b1f4b] lg:h-full lg:min-h-0 lg:overflow-hidden">
+      <header className="shrink-0">
+        <h1 className="text-[22px] font-bold leading-7 tracking-[-0.02em] text-[#071b49]">
+          Work Completion Certificate
+        </h1>
+        <p className="mt-0.5 text-[13px] leading-[18px] text-[#52627d]">
+          Completed projects and their work completion certificate status
+        </p>
+      </header>
 
-      <section className="rounded-[8px] border border-[#dce5f1] bg-gradient-to-r from-white to-[#f8fbff] px-4 py-3 shadow-[0_3px_12px_rgba(15,34,70,0.04)]">
-        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-[1.15fr_1fr_0.9fr_0.82fr_1fr_40px]">
+      <section className="shrink-0 rounded-lg border border-[#dce5f1] bg-white p-2.5 shadow-sm">
+        <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-2 lg:grid-cols-[1.15fr_1fr_0.9fr_0.82fr_1fr_40px]">
           <label className="block min-w-0">
-            <span className="mb-[6px] block text-[9px] font-medium text-[#33496f]">Search by TID</span>
+            <span className="mb-1 block text-[12px] font-medium text-[#52627d]">Search by TID</span>
             <span className="relative block">
-              <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Enter Tender ID (TID)" className={cn(CONTROL_CLASS, "border-[#d8e2ef] bg-white pr-9 shadow-sm placeholder:text-[#8a98ad] focus:border-[#1769e8] focus:ring-2 focus:ring-[#1769e8]/10")} />
+              <input
+                value={searchDraft}
+                onChange={(event) => setSearchDraft(event.target.value)}
+                placeholder="Enter Tender ID (TID)"
+                className={cn(
+                  CONTROL_CLASS,
+                  "border-[#d8e2ef] bg-white pr-9 shadow-sm placeholder:text-[#8a98ad] focus:border-[#1769e8] focus:ring-2 focus:ring-[#1769e8]/10",
+                )}
+              />
               <Search className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#1769e8]" />
             </span>
           </label>
-          <SelectControl label="Project" value={filters.projectId} onChange={(value) => updateFilter("projectId", value)}>
+          <SelectControl
+            label="Project"
+            value={filters.projectId}
+            onChange={(value) => updateFilter("projectId", value)}
+          >
             <option value="">All Projects</option>
-            {dataSource.projects.map((project) => <option key={project.id} value={project.id}>{project.workName}</option>)}
+            {dataSource.projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.workName}
+              </option>
+            ))}
           </SelectControl>
-          <SelectControl label="WCC Status" value={filters.status} onChange={(value) => updateFilter("status", value as "" | WccStatus)}>
+          <SelectControl
+            label="WCC Status"
+            value={filters.status}
+            onChange={(value) => updateFilter("status", value as "" | WccStatus)}
+          >
             <option value="">All Status</option>
-            {STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </SelectControl>
-          <SelectControl label="Source" value={filters.source} onChange={(value) => updateFilter("source", value as "" | WccSource)}>
-            <option value="">All Sources</option><option value="EGP">e-GP</option><option value="MANUAL">Manual</option>
+          <SelectControl
+            label="Source"
+            value={filters.source}
+            onChange={(value) => updateFilter("source", value as "" | WccSource)}
+          >
+            <option value="">All Sources</option>
+            <option value="EGP">e-GP</option>
+            <option value="MANUAL">Manual</option>
           </SelectControl>
-          <SelectControl label="EGP Status (For Manual)" value={filters.egpStatus} onChange={(value) => updateFilter("egpStatus", value as "" | WccEgpStatus)}>
+          <SelectControl
+            label="EGP Status (For Manual)"
+            value={filters.egpStatus}
+            onChange={(value) => updateFilter("egpStatus", value as "" | WccEgpStatus)}
+          >
             <option value="">All EGP Status</option>
-            {EGP_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {EGP_STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </SelectControl>
-          <button type="button" onClick={resetFilters} aria-label="Reset filters" title="Reset filters" className="inline-flex h-[36px] w-full items-center justify-center gap-2 rounded-[6px] border border-[#d8e2ef] bg-white text-[10px] font-semibold text-[#50627f] shadow-sm transition hover:border-[#aac6ee] hover:bg-[#f2f7ff] hover:text-[#075fdf] sm:w-[40px] xl:w-[40px]"><RotateCcw className="h-3.5 w-3.5" /><span className="sm:hidden">Reset</span></button>
+          <button
+            type="button"
+            onClick={resetFilters}
+            aria-label="Reset filters"
+            title="Reset filters"
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-[#d8e2ef] bg-white text-[12px] font-semibold text-[#50627f] shadow-sm transition hover:border-[#aac6ee] hover:bg-[#f2f7ff] hover:text-[#075fdf] sm:w-10 xl:w-10"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span className="sm:hidden">Reset</span>
+          </button>
         </div>
       </section>
 
-      <section className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <KpiCard label="Total Projects" value={dataSource.stats.totalProjects} tone="blue" icon={FileText} />
-        <KpiCard label="WCC Obtained" value={dataSource.stats.wccObtained} tone="green" icon={ShieldCheck} />
-        <KpiCard label="Obtained (EGP)" value={dataSource.stats.obtainedEgp} tone="green" textIcon="e-GP" />
-        <KpiCard label="Obtained (Manual)" value={dataSource.stats.obtainedManual} tone="orange" icon={Award} />
-        <KpiCard label="EGP Applied (For Manual)" value={dataSource.stats.egpAppliedForManual} tone="purple" icon={Workflow} />
-        <KpiCard label="Without WCC" value={dataSource.stats.withoutWcc} tone="red" icon={ClipboardCheck} />
+      <section className="grid shrink-0 grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
+        <KpiCard
+          label="Total Projects"
+          value={dataSource.stats.totalProjects}
+          tone="blue"
+          icon={FileText}
+        />
+        <KpiCard
+          label="WCC Obtained"
+          value={dataSource.stats.wccObtained}
+          tone="green"
+          icon={ShieldCheck}
+        />
+        <KpiCard
+          label="Obtained (EGP)"
+          value={dataSource.stats.obtainedEgp}
+          tone="green"
+          textIcon="e-GP"
+        />
+        <KpiCard
+          label="Obtained (Manual)"
+          value={dataSource.stats.obtainedManual}
+          tone="orange"
+          icon={Award}
+        />
+        <KpiCard
+          label="EGP Applied (For Manual)"
+          value={dataSource.stats.egpAppliedForManual}
+          tone="purple"
+          icon={Workflow}
+        />
+        <KpiCard
+          label="Without WCC"
+          value={dataSource.stats.withoutWcc}
+          tone="red"
+          icon={ClipboardCheck}
+        />
       </section>
 
-      {(dataSource.error || downloadError) && <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[10px] text-red-700">{dataSource.error ?? downloadError}</div>}
+      {(dataSource.error || downloadError) && (
+        <div className="shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+          {dataSource.error ?? downloadError}
+        </div>
+      )}
 
-      <section className="mt-3 overflow-hidden rounded-[7px] border border-[#dfe6f1] bg-white shadow-[0_1px_2px_rgba(15,34,70,0.02)]">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] table-fixed text-left text-[9.5px] text-[#10244c]">
-            <colgroup>
-              <col className="w-[45px]" />
-              <col className="w-[120px]" />
-              <col className="w-[260px]" />
-              <col className="w-[170px]" />
-              <col className="w-[190px]" />
-              <col className="w-[150px]" />
-              <col className="w-[100px]" />
-            </colgroup>
-            <thead>
-              <tr className="h-[36px] border-b border-[#e2e8f1] bg-[#fbfcfe] text-[9.5px] font-semibold text-[#172c53]">
-                {[
-                  "SL",
-                  "Tender ID",
-                  "Work Name",
-                  "Completion Status",
-                  "Certificate Status",
-                  "Completion Date",
-                  "Action",
-                ].map((header) => (
-                  <th key={header} className="px-3 py-2">
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {dataSource.isLoading ? (
-                <tr>
-                  <td colSpan={7} className="h-[90px] text-center text-[10px] text-[#6d7e99]">
-                    Loading completed projects...
-                  </td>
+      <div className="grid min-h-0 flex-1 gap-2.5 lg:grid-cols-[minmax(0,1fr)_270px]">
+        <section className="flex min-h-[320px] min-w-0 flex-col overflow-hidden rounded-lg border border-[#dfe6f1] bg-white shadow-sm lg:min-h-0">
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full min-w-[820px] table-fixed text-left text-[12px] leading-[18px] text-[#10244c]">
+              <colgroup>
+                <col className="w-[5%]" />
+                <col className="w-[12%]" />
+                <col className="w-[29%]" />
+                <col className="w-[17%]" />
+                <col className="w-[18%]" />
+                <col className="w-[12%]" />
+                <col className="w-[7%]" />
+              </colgroup>
+              <thead className="sticky top-0 z-10">
+                <tr className="h-9 border-b border-[#e2e8f1] bg-[#f8fafc] text-[12px] font-semibold text-[#52627d]">
+                  {[
+                    "SL",
+                    "Tender ID",
+                    "Work Name",
+                    "Completion Status",
+                    "Certificate Status",
+                    "Completion Date",
+                    "Action",
+                  ].map((header) => (
+                    <th key={header} className="px-3 py-2">
+                      {header}
+                    </th>
+                  ))}
                 </tr>
-              ) : (
-                visibleRows.map((row, index) => (
-                  <tr
-                    key={row.id}
-                    className="min-h-[54px] border-b border-[#e6ebf2] align-middle last:border-0 hover:bg-[#fbfdff]"
-                  >
-                    <td className="px-3 py-2.5">{(page - 1) * PAGE_SIZE + index + 1}</td>
-                    <td className="break-words px-3 py-2.5 font-semibold">{row.tid}</td>
-                    <td className="truncate px-3 py-2.5 font-semibold" title={row.project}>
-                      {row.project}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span
-                        className={cn(
-                          "inline-flex max-w-full whitespace-nowrap rounded-[4px] px-2 py-[4px] text-[8px] font-semibold leading-none",
-                          PROJECT_STATUS_CLASS[row.projectStatus],
-                        )}
-                      >
-                        {PROJECT_STATUS_LABEL[row.projectStatus]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span
-                        className={cn(
-                          "inline-flex max-w-full whitespace-nowrap rounded-[4px] px-2 py-[4px] text-[8px] font-semibold leading-none",
-                          STATUS_CLASS[row.status],
-                        )}
-                      >
-                        {STATUS_LABEL[row.status]}
-                      </span>
-                      {row.coreStatus && (
-                        <p className="mt-1 text-[8px] text-[#71819b]">
-                          {CORE_STATUS_LABEL[row.coreStatus]}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 font-medium">{formatDate(row.actualCompletionDate)}</td>
-                    <td className="px-3">
-                      {row.status === "NOT_APPLIED" ? (
-                        <button
-                          type="button"
-                          disabled={
-                            !canCreate ||
-                            ["COMPLETED", "ARCHIVED", "CANCELLED"].includes(row.projectStatus)
-                          }
-                          onClick={() => setApplication({ workId: row.workId, row: null })}
-                          aria-label={`Create WCC application for ${row.project}`}
-                          title={
-                            ["COMPLETED", "ARCHIVED", "CANCELLED"].includes(row.projectStatus)
-                              ? "Reopen this project before creating a WCC application"
-                              : "New WCC application"
-                          }
-                          className="inline-flex h-[27px] w-[27px] items-center justify-center rounded-[5px] border border-[#dce4ef] hover:border-[#0b63e5] hover:text-[#0b63e5] disabled:opacity-40"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setViewing(row)}
-                            aria-label={`View ${row.project} WCC`}
-                            title="View"
-                            className="flex h-[27px] w-[27px] items-center justify-center rounded-[5px] border border-[#dce4ef] hover:border-[#0b63e5] hover:text-[#0b63e5]"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!row.documentId || !canDownload}
-                            onClick={() => void download(row)}
-                            aria-label={`Download ${row.project} WCC`}
-                            title={row.documentId ? "Download" : "No certificate file"}
-                            className="flex h-[27px] w-[27px] items-center justify-center rounded-[5px] border border-[#dce4ef] hover:border-[#0b63e5] hover:text-[#0b63e5] disabled:opacity-40"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!canUpdate && !canSubmit && !canApprove}
-                            onClick={() => setWorkflowing(row)}
-                            aria-label={`More actions for ${row.project} WCC`}
-                            title="Workflow actions"
-                            className="flex h-[27px] w-[27px] items-center justify-center rounded-[5px] border border-[#dce4ef] hover:border-[#0b63e5] hover:text-[#0b63e5] disabled:opacity-40"
-                          >
-                            <MoreVertical className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      )}
+              </thead>
+              <tbody>
+                {dataSource.isLoading ? (
+                  <tr>
+                    <td colSpan={7} className="h-[90px] text-center text-[13px] text-[#6d7e99]">
+                      Loading completed projects...
                     </td>
                   </tr>
-                ))
-              )}
-              {!dataSource.isLoading && !visibleRows.length && (
-                <tr>
-                  <td colSpan={7} className="h-[90px] text-center text-[10px] text-[#6d7e99]">
-                    No completed projects found.
-                  </td>
-                </tr>
-              )}
-              {!dataSource.isLoading &&
-                visibleRows.length > 0 &&
-                visibleRows.length < PAGE_SIZE && (
-                  <tr aria-hidden="true" className="pointer-events-none">
-                    <td
-                      colSpan={7}
-                      style={{ height: `${(PAGE_SIZE - visibleRows.length) * 54}px` }}
-                    />
+                ) : (
+                  visibleRows.map((row, index) => (
+                    <tr
+                      key={row.id}
+                      className="border-b border-[#e6ebf2] align-middle last:border-0 even:bg-slate-50/40 hover:bg-[#f3f7ff]"
+                    >
+                      <td className="px-3 py-2.5">{(page - 1) * PAGE_SIZE + index + 1}</td>
+                      <td className="break-words px-3 py-2.5 font-semibold">{row.tid}</td>
+                      <td className="px-3 py-2.5 font-semibold" title={row.project}>
+                        <span className="line-clamp-2">{row.project}</span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className={cn(
+                            "inline-flex max-w-full whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-semibold leading-[14px]",
+                            PROJECT_STATUS_CLASS[row.projectStatus],
+                          )}
+                        >
+                          {PROJECT_STATUS_LABEL[row.projectStatus]}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className={cn(
+                            "inline-flex max-w-full whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-semibold leading-[14px]",
+                            STATUS_CLASS[row.status],
+                          )}
+                        >
+                          {STATUS_LABEL[row.status]}
+                        </span>
+                        {row.coreStatus && (
+                          <p className="mt-1 text-[11px] text-[#71819b]">
+                            {CORE_STATUS_LABEL[row.coreStatus]}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 font-medium">
+                        {formatDate(row.actualCompletionDate)}
+                      </td>
+                      <td className="px-3">
+                        {row.status === "NOT_APPLIED" ? (
+                          <button
+                            type="button"
+                            disabled={
+                              !canCreate ||
+                              ["COMPLETED", "ARCHIVED", "CANCELLED"].includes(row.projectStatus)
+                            }
+                            onClick={() => setApplication({ workId: row.workId, row: null })}
+                            aria-label={`Create WCC application for ${row.project}`}
+                            title={
+                              ["COMPLETED", "ARCHIVED", "CANCELLED"].includes(row.projectStatus)
+                                ? "Reopen this project before creating a WCC application"
+                                : "New WCC application"
+                            }
+                            className="inline-flex h-[27px] w-[27px] items-center justify-center rounded-[5px] border border-[#dce4ef] hover:border-[#0b63e5] hover:text-[#0b63e5] disabled:opacity-40"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setViewing(row)}
+                              aria-label={`View ${row.project} WCC`}
+                              title="View"
+                              className="flex h-[27px] w-[27px] items-center justify-center rounded-[5px] border border-[#dce4ef] hover:border-[#0b63e5] hover:text-[#0b63e5]"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!row.documentId || !canDownload}
+                              onClick={() => void download(row)}
+                              aria-label={`Download ${row.project} WCC`}
+                              title={row.documentId ? "Download" : "No certificate file"}
+                              className="flex h-[27px] w-[27px] items-center justify-center rounded-[5px] border border-[#dce4ef] hover:border-[#0b63e5] hover:text-[#0b63e5] disabled:opacity-40"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!canUpdate && !canSubmit && !canApprove}
+                              onClick={() => setWorkflowing(row)}
+                              aria-label={`More actions for ${row.project} WCC`}
+                              title="Workflow actions"
+                              className="flex h-[27px] w-[27px] items-center justify-center rounded-[5px] border border-[#dce4ef] hover:border-[#0b63e5] hover:text-[#0b63e5] disabled:opacity-40"
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+                {!dataSource.isLoading && !visibleRows.length && (
+                  <tr>
+                    <td colSpan={7} className="h-[90px] text-center text-[13px] text-[#6d7e99]">
+                      No completed projects found.
+                    </td>
                   </tr>
                 )}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex min-h-[52px] flex-wrap items-center justify-between gap-3 border-t border-[#e2e8f1] px-3 text-[9px] text-[#40577f]"><span>Showing {startEntry} to {endEntry} of {dataSource.totalRows} entries</span><div className="flex items-center gap-2"><button type="button" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} aria-label="Previous page" className="flex h-[28px] w-[28px] items-center justify-center rounded-[5px] border border-[#dce4ef] disabled:text-[#bcc6d5]"><ChevronLeft className="h-4 w-4" /></button>{Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => <button key={pageNumber} type="button" onClick={() => setPage(pageNumber)} className={cn("flex h-[28px] min-w-[28px] items-center justify-center rounded-[5px] border px-2 font-semibold", page === pageNumber ? "border-[#0765e9] bg-[#0765e9] text-white" : "border-[#dce4ef] bg-white text-[#10244c]")}>{pageNumber}</button>)}<button type="button" disabled={page === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} aria-label="Next page" className="flex h-[28px] w-[28px] items-center justify-center rounded-[5px] border border-[#dce4ef] disabled:text-[#bcc6d5]"><ChevronRight className="h-4 w-4" /></button></div></div>
-      </section>
+              </tbody>
+            </table>
+          </div>
+          <div className="flex h-11 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#e2e8f1] px-3 text-[12px] text-[#52627d]">
+            <span>
+              Showing {startEntry} to {endEntry} of {dataSource.totalRows} entries
+            </span>
+            {pageCount > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={page === 1}
+                  onClick={() => setPage((value) => Math.max(1, value - 1))}
+                  aria-label="Previous page"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-[5px] border border-[#dce4ef] disabled:text-[#bcc6d5]"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                {Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => setPage(pageNumber)}
+                    className={cn(
+                      "flex h-[28px] min-w-[28px] items-center justify-center rounded-[5px] border px-2 font-semibold",
+                      page === pageNumber
+                        ? "border-[#0765e9] bg-[#0765e9] text-white"
+                        : "border-[#dce4ef] bg-white text-[#10244c]",
+                    )}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  disabled={page === pageCount}
+                  onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+                  aria-label="Next page"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-[5px] border border-[#dce4ef] disabled:text-[#bcc6d5]"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
 
-      <section className="mt-3 rounded-[6px] border border-[#dfe6f1] bg-white px-3 py-2.5"><h2 className="text-[9.5px] font-semibold text-[#172b55]">Status Legend</h2><div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-[8.5px] text-[#40577f]">{[["WCC Obtained (EGP)", "bg-[#28a655]"], ["WCC Obtained (Manual)", "bg-[#f39a1b]"], ["EGP Applied (For Manual)", "bg-[#814ee8]"], ["Manual WCC Obtained, EGP Applied", "bg-[#9a67e8]"], ["Manual WCC Obtained, EGP Not Applied", "bg-[#1767c9]"], ["WCC Applied", "bg-[#e5a712]"], ["Not Applied", "bg-[#e14958]"]].map(([label, color]) => <span key={label} className="inline-flex items-center gap-2"><span className={cn("h-1.5 w-1.5 rounded-full", color)} />{label}</span>)}</div></section>
+        <aside className="flex min-h-0 flex-col gap-2.5 overflow-auto">
+          <section className="rounded-lg border border-[#dfe6f1] bg-white px-3 py-3 shadow-sm">
+            <h2 className="text-[13px] font-semibold text-[#172b55]">Status Legend</h2>
+            <div className="mt-2 grid gap-2 text-[11px] leading-4 text-[#40577f]">
+              {[
+                ["WCC Obtained (EGP)", "bg-[#28a655]"],
+                ["WCC Obtained (Manual)", "bg-[#f39a1b]"],
+                ["EGP Applied (For Manual)", "bg-[#814ee8]"],
+                ["Manual WCC Obtained, EGP Applied", "bg-[#9a67e8]"],
+                ["Manual WCC Obtained, EGP Not Applied", "bg-[#1767c9]"],
+                ["WCC Applied", "bg-[#e5a712]"],
+                ["Not Applied", "bg-[#e14958]"],
+              ].map(([label, color]) => (
+                <span key={label} className="inline-flex items-start gap-2">
+                  <span className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", color)} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          </section>
 
-      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[1.55fr_1fr]">
-        <section className="flex min-h-[68px] items-start gap-3 rounded-[6px] border border-[#dce8fa] bg-[#f2f7ff] px-4 py-3"><Info className="mt-0.5 h-[17px] w-[17px] shrink-0 text-[#1267df]" /><div><h2 className="text-[9.5px] font-semibold text-[#172b55]">Notes:</h2><ul className="mt-1 list-disc space-y-0.5 pl-4 text-[8.5px] leading-[1.45] text-[#314b78]"><li>If WCC is obtained manually, you can apply for e-GP.</li><li>After applying for e-GP, you can track the status until e-GP WCC is obtained.</li></ul></div></section>
-        <section className="min-h-[68px] rounded-[6px] border border-[#dfe6f1] bg-white px-4 py-3"><h2 className="text-[9.5px] font-semibold text-[#172b55]">Source Guide</h2><div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-[8.5px] text-[#314b78]"><span className="inline-flex items-center gap-2"><span className="rounded-[4px] bg-[#e8f8ec] px-2 py-1 font-semibold text-[#249b4a]">e-GP</span>= Work Completion via e-GP</span><span className="inline-flex items-center gap-2"><span className="rounded-[4px] bg-[#fff3df] px-2 py-1 font-semibold text-[#b66c0d]">Manual</span>= Work Completion via Manual Process</span></div></section>
+          <div className="flex flex-col gap-2.5">
+            <section className="flex items-start gap-2.5 rounded-lg border border-[#dce8fa] bg-[#f2f7ff] px-3 py-3">
+              <Info className="mt-0.5 h-[17px] w-[17px] shrink-0 text-[#1267df]" />
+              <div>
+                <h2 className="text-[13px] font-semibold text-[#172b55]">Workflow Notes</h2>
+                <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[11px] leading-4 text-[#314b78]">
+                  <li>If WCC is obtained manually, you can apply for e-GP.</li>
+                  <li>
+                    After applying for e-GP, you can track the status until e-GP WCC is obtained.
+                  </li>
+                </ul>
+              </div>
+            </section>
+            <section className="rounded-lg border border-[#dfe6f1] bg-white px-3 py-3 shadow-sm">
+              <h2 className="text-[13px] font-semibold text-[#172b55]">Source Guide</h2>
+              <div className="mt-2 grid gap-2 text-[11px] leading-4 text-[#314b78]">
+                <span className="inline-flex items-center gap-2">
+                  <span className="rounded-[4px] bg-[#e8f8ec] px-2 py-1 font-semibold text-[#249b4a]">
+                    e-GP
+                  </span>
+                  = Work Completion via e-GP
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <span className="rounded-[4px] bg-[#fff3df] px-2 py-1 font-semibold text-[#b66c0d]">
+                    Manual
+                  </span>
+                  = Work Completion via Manual Process
+                </span>
+              </div>
+            </section>
+          </div>
+        </aside>
       </div>
 
-      {application && <ApplicationDialog state={application} projects={dataSource.projects} onClose={() => setApplication(null)} onSaved={() => setPage(1)} />}
+      {application && (
+        <ApplicationDialog
+          state={application}
+          projects={dataSource.projects}
+          onClose={() => setApplication(null)}
+          onSaved={() => setPage(1)}
+        />
+      )}
       {viewing && <DetailsDialog row={viewing} onClose={() => setViewing(null)} />}
       {workflowing && (
         <WorkflowDialog

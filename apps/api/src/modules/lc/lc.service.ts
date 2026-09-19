@@ -121,8 +121,8 @@ export class LcService {
   }
 
   private async lcLedgers(tx: Tx, org: string) {
-    const clearing = await this.accounting.ensureCustomAccount(tx, org, { code: "LC-CLEARING", name: "LC Import Clearing", parentSystemKey: "ASSETS", accountType: "ASSET", normalBalance: "DEBIT" });
-    const inventory = await this.accounting.ensureCustomAccount(tx, org, { code: "LC-INVENTORY", name: "Imported Inventory", parentSystemKey: "ASSETS", accountType: "ASSET", normalBalance: "DEBIT" });
+    const clearing = await this.accounting.ensureCustomAccount(tx, org, { code: "LC-CLEARING", name: "LC Import Clearing", parentSystemKey: "ASSET_CURRENT", accountType: "ASSET", normalBalance: "DEBIT" });
+    const inventory = await this.accounting.ensureCustomAccount(tx, org, { code: "LC-INVENTORY", name: "Imported Inventory", parentSystemKey: "ASSET_CURRENT", accountType: "ASSET", normalBalance: "DEBIT" });
     return { clearing, inventory };
   }
 

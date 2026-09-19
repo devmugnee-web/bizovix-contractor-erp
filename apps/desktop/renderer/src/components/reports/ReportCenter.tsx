@@ -6,6 +6,7 @@ import { cn } from "@bizovix/ui";
 import { formatBDT } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { REPORT_CATEGORIES } from "@/config/reports";
+import { ReportNavigation } from "./ReportNavigation";
 const money = (v: unknown) => formatBDT(Number(v ?? 0));
 export function ReportCenter({ category }: { category?: string }) {
   useSetBreadcrumb([
@@ -19,7 +20,7 @@ export function ReportCenter({ category }: { category?: string }) {
     ? REPORT_CATEGORIES.filter((c) => c.slug === category)
     : REPORT_CATEGORIES;
   const kpis = [
-    [FileChartColumn, "Total Reports", summary.data?.totalReports ?? 42, "text-blue-600"],
+    [FileChartColumn, "Total Reports", summary.data?.totalReports ?? REPORT_CATEGORIES.reduce((count, group) => count + group.reports.length, 0), "text-blue-600"],
     [WalletCards, "This Month Expenses", money(summary.data?.thisMonthExpenses), "text-red-600"],
     [ReceiptText, "This Month Receipts", money(summary.data?.thisMonthReceipts), "text-green-700"],
     [
@@ -30,7 +31,7 @@ export function ReportCenter({ category }: { category?: string }) {
     ],
   ] as const;
   return (
-    <div className="flex flex-col gap-5">
+    <ReportNavigation><div className="flex flex-col gap-5">
       <div>
         <h1 className="text-page-title text-biz-text">
           {category ? (groups[0]?.shortTitle ?? "Reports") : "Reports"}
@@ -98,6 +99,6 @@ export function ReportCenter({ category }: { category?: string }) {
           </div>
         </section>
       ))}
-    </div>
+    </div></ReportNavigation>
   );
 }

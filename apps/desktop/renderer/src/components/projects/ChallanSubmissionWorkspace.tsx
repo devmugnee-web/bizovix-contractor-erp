@@ -286,7 +286,13 @@ function IconButton({
   );
 }
 
-export function ChallanSubmissionWorkspace({ challanId }: { challanId?: string }) {
+export function ChallanSubmissionWorkspace({
+  challanId,
+  initialWorkId,
+}: {
+  challanId?: string;
+  initialWorkId?: string;
+}) {
   useSetBreadcrumb([
     { label: "Projects", href: "/cms/ongoing-works" },
     { label: "Project Documentation", href: "/cms/documentation" },
@@ -309,10 +315,22 @@ export function ChallanSubmissionWorkspace({ challanId }: { challanId?: string }
     );
   }
 
-  return <ChallanSubmissionEditor key={challan.data?.id ?? "new"} initialRecord={challan.data} />;
+  return (
+    <ChallanSubmissionEditor
+      key={challan.data?.id ?? initialWorkId ?? "new"}
+      initialRecord={challan.data}
+      initialWorkId={initialWorkId}
+    />
+  );
 }
 
-function ChallanSubmissionEditor({ initialRecord }: { initialRecord?: ChallanSubmissionRecord }) {
+function ChallanSubmissionEditor({
+  initialRecord,
+  initialWorkId,
+}: {
+  initialRecord?: ChallanSubmissionRecord;
+  initialWorkId?: string;
+}) {
   const router = useRouter();
 
   const cmsProjects = useCmsWorks({ limit: 100 });
@@ -321,7 +339,7 @@ function ChallanSubmissionEditor({ initialRecord }: { initialRecord?: ChallanSub
     [cmsProjects.data?.items],
   );
   const [selectedProjectChoice, setSelectedProjectChoice] = React.useState(
-    initialRecord?.cmsWorkId ?? "",
+    initialRecord?.cmsWorkId ?? initialWorkId ?? "",
   );
   const selectedProjectId = selectedProjectChoice || projectOptions[0]?.id || "";
   const contracts = useContracts({ cmsWorkId: selectedProjectId || undefined, limit: 100 });
@@ -366,11 +384,22 @@ function ChallanSubmissionEditor({ initialRecord }: { initialRecord?: ChallanSub
 
   const record = savedRecord ?? initialRecord ?? null;
   // Never silently export older saved goods while the user is editing newer ones.
-  const pdfHasUnsavedChanges = !record || selectedProjectId !== record.cmsWorkId ||
+  const pdfHasUnsavedChanges =
+    !record ||
+    selectedProjectId !== record.cmsWorkId ||
     selectedContractId !== (record.contractId ?? "") ||
-    form.challanDate !== initialForm(record).challanDate || form.receivedAt !== record.receivedAt ||
-    JSON.stringify(items.map(({ description, unit, quantity }) => ({ description, unit, quantity }))) !==
-      JSON.stringify(initialItems(record).map(({ description, unit, quantity }) => ({ description, unit, quantity })));
+    form.challanDate !== initialForm(record).challanDate ||
+    form.receivedAt !== record.receivedAt ||
+    JSON.stringify(
+      items.map(({ description, unit, quantity }) => ({ description, unit, quantity })),
+    ) !==
+      JSON.stringify(
+        initialItems(record).map(({ description, unit, quantity }) => ({
+          description,
+          unit,
+          quantity,
+        })),
+      );
   const selectedContract =
     contractOptions.find((contract) => contract.id === selectedContractId) ??
     (record?.contractId === selectedContractId ? record.contract : null);
@@ -832,7 +861,11 @@ function ChallanSubmissionEditor({ initialRecord }: { initialRecord?: ChallanSub
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to Challan Submissions
           </Link>
-          <ChallanPdfActions key={record?.id ?? "new"} challanId={record?.id} disabled={isBusy || pdfHasUnsavedChanges || !record?.items.length} />
+          <ChallanPdfActions
+            key={record?.id ?? "new"}
+            challanId={record?.id}
+            disabled={isBusy || pdfHasUnsavedChanges || !record?.items.length}
+          />
         </div>
       </header>
 

@@ -7,7 +7,11 @@ import { AuditLogService } from "../audit-logs/audit-log.service";
 import { AccountingService } from "../accounting/accounting.service";
 import { DeductionConfigsService } from "../deduction-configs/deduction-configs.service";
 import { NumberingService } from "../settings-numbering/numbering.service";
-import { SaveProjectBillDto, BillAdjustmentInputDto, BillItemInputDto } from "./dto/save-project-bill.dto";
+import {
+  SaveProjectBillDto,
+  BillAdjustmentInputDto,
+  BillItemInputDto,
+} from "./dto/save-project-bill.dto";
 import { QueryProjectBillDto } from "./dto/query-project-bill.dto";
 import { calculateBillItem, summarizeBill } from "./bill-calculations";
 import { assertBillQuantities, billQuantities, COMMITTED_BILL_STATUSES } from "./bill-availability";
@@ -24,8 +28,13 @@ const includeRelations = {
       tender: { select: { id: true, egpTenderId: true } },
     },
   },
-  contract: { select: { id: true, contractNo: true, retentionPct: true, currentContractValue: true } },
-  items: { include: { boqItem: { select: { id: true, itemCode: true } } }, orderBy: { boqItem: { sortOrder: "asc" as const } } },
+  contract: {
+    select: { id: true, contractNo: true, retentionPct: true, currentContractValue: true },
+  },
+  items: {
+    include: { boqItem: { select: { id: true, itemCode: true } } },
+    orderBy: { boqItem: { sortOrder: "asc" as const } },
+  },
   adjustments: { orderBy: { sortOrder: "asc" as const } },
   receivable: true,
 } satisfies Prisma.ProjectBillInclude;
@@ -70,7 +79,11 @@ function toDto(record: BillRecord) {
       amount: money(a.amount),
     })),
     receivable: record.receivable
-      ? { ...record.receivable, amount: money(record.receivable.amount), receivedAmount: money(record.receivable.receivedAmount) }
+      ? {
+          ...record.receivable,
+          amount: money(record.receivable.amount),
+          receivedAmount: money(record.receivable.receivedAmount),
+        }
       : null,
   };
 }
@@ -95,18 +108,31 @@ export class ProjectBillsService {
     return work;
   }
 
-  private async assertContract(organizationId: string, contractId: string, client: PrismaService | Tx = this.prisma) {
-    const contract = await client.projectContract.findFirst({ where: { id: contractId, organizationId } });
+  private async assertContract(
+    organizationId: string,
+    contractId: string,
+    client: PrismaService | Tx = this.prisma,
+  ) {
+    const contract = await client.projectContract.findFirst({
+      where: { id: contractId, organizationId },
+    });
     if (!contract) throw new NotFoundException("Contract not found");
-    if (contract.status !== "ACTIVE") throw new BadRequestException("An active contract is required for billing");
-    if (contract.currency !== "BDT") throw new BadRequestException("Project billing currently requires a BDT contract");
+    if (contract.status !== "ACTIVE")
+      throw new BadRequestException("An active contract is required for billing");
+    if (contract.currency !== "BDT")
+      throw new BadRequestException("Project billing currently requires a BDT contract");
     return contract;
   }
 
   private async lockWork(tx: Tx, organizationId: string, cmsWorkId: string) {
     // Serialize quantity reservations and certification for this project.
     await tx.$queryRaw`SELECT id FROM cms_works WHERE id = ${cmsWorkId} AND "organizationId" = ${organizationId} FOR UPDATE`;
-    await this.lifecycle.assertOperationalMutationAllowed(organizationId, cmsWorkId, "changing project bills", tx);
+    await this.lifecycle.assertOperationalMutationAllowed(
+      organizationId,
+      cmsWorkId,
+      "changing project bills",
+      tx,
+    );
   }
 
   async findAll(organizationId: string, query: QueryProjectBillDto) {
@@ -117,12 +143,24 @@ export class ProjectBillsService {
       ...(query.cmsWorkId ? { cmsWorkId: query.cmsWorkId } : {}),
       ...(query.billType ? { billType: query.billType } : {}),
       ...(query.status ? { status: query.status } : {}),
+      ...(query.fromDate || query.toDate
+        ? {
+            billDate: {
+              ...(query.fromDate ? { gte: new Date(query.fromDate) } : {}),
+              ...(query.toDate ? { lte: new Date(`${query.toDate}T23:59:59.999Z`) } : {}),
+            },
+          }
+        : {}),
       ...(query.search
         ? {
             OR: [
               { billNo: { contains: query.search, mode: "insensitive" } },
               { cmsWork: { workName: { contains: query.search, mode: "insensitive" } } },
-              { cmsWork: { tender: { egpTenderId: { contains: query.search, mode: "insensitive" } } } },
+              {
+                cmsWork: {
+                  tender: { egpTenderId: { contains: query.search, mode: "insensitive" } },
+                },
+              },
             ],
           }
         : {}),
@@ -141,7 +179,10 @@ export class ProjectBillsService {
   }
 
   async stats(organizationId: string, cmsWorkId?: string) {
-    const where: Prisma.ProjectBillWhereInput = { organizationId, ...(cmsWorkId ? { cmsWorkId } : {}) };
+    const where: Prisma.ProjectBillWhereInput = {
+      organizationId,
+      ...(cmsWorkId ? { cmsWorkId } : {}),
+    };
     const [total, certifiedAgg, retentionAgg] = await Promise.all([
       this.prisma.projectBill.count({ where }),
       this.prisma.projectBill.aggregate({
@@ -155,7 +196,9 @@ export class ProjectBillsService {
     ]);
     const netCertified = D(certifiedAgg._sum.netCertifiedAmount ?? 0);
     const received = D(certifiedAgg._sum.receivedAmount ?? 0);
-    const retentionHeld = D(retentionAgg._sum.retentionAmount ?? 0).sub(retentionAgg._sum.retentionReleasedAmount ?? 0);
+    const retentionHeld = D(retentionAgg._sum.retentionAmount ?? 0).sub(
+      retentionAgg._sum.retentionReleasedAmount ?? 0,
+    );
     return {
       totalBills: total,
       grossCertified: money(D(certifiedAgg._sum.grossBillAmount ?? 0)),
@@ -167,7 +210,10 @@ export class ProjectBillsService {
   }
 
   async findOne(organizationId: string, id: string) {
-    const record = await this.prisma.projectBill.findFirst({ where: { id, organizationId }, include: includeRelations });
+    const record = await this.prisma.projectBill.findFirst({
+      where: { id, organizationId },
+      include: includeRelations,
+    });
     if (!record) throw new NotFoundException("Running Bill not found");
     return toDto(record);
   }
@@ -185,22 +231,36 @@ export class ProjectBillsService {
   ) {
     assertBillQuantities(items);
     const boqItemIds = items.map((i) => i.boqItemId);
-    const boqItems = await tx.boqItem.findMany({ where: { id: { in: boqItemIds }, organizationId, cmsWorkId } });
-    if (boqItems.length !== new Set(boqItemIds).size) throw new NotFoundException("One or more BOQ items were not found on this project");
+    const boqItems = await tx.boqItem.findMany({
+      where: { id: { in: boqItemIds }, organizationId, cmsWorkId },
+    });
+    if (boqItems.length !== new Set(boqItemIds).size)
+      throw new NotFoundException("One or more BOQ items were not found on this project");
     const boqById = new Map(boqItems.map((b) => [b.id, b]));
 
     const certifiedRows = await tx.projectBillItem.findMany({
       where: {
         boqItemId: { in: boqItemIds },
-        bill: { organizationId, cmsWorkId, status: { in: COMMITTED_BILL_STATUSES }, ...(excludeBillId ? { id: { not: excludeBillId } } : {}) },
+        bill: {
+          organizationId,
+          cmsWorkId,
+          status: { in: COMMITTED_BILL_STATUSES },
+          ...(excludeBillId ? { id: { not: excludeBillId } } : {}),
+        },
       },
       select: { boqItemId: true, currentQty: true, bill: { select: { status: true } } },
     });
 
     return items.map((item) => {
       const boqItem = boqById.get(item.boqItemId)!;
-      const quantities = billQuantities(boqItem.contractQty, certifiedRows.filter((row) => row.boqItemId === item.boqItemId));
-      if (D(item.currentQty).gt(quantities.remaining)) throw new BadRequestException(`Billing quantity exceeds the available quantity for "${boqItem.description}". Check existing draft and submitted bills.`);
+      const quantities = billQuantities(
+        boqItem.contractQty,
+        certifiedRows.filter((row) => row.boqItemId === item.boqItemId),
+      );
+      if (D(item.currentQty).gt(quantities.remaining))
+        throw new BadRequestException(
+          `Billing quantity exceeds the available quantity for "${boqItem.description}". Check existing draft and submitted bills.`,
+        );
       return calculateBillItem(boqItem, quantities.previous, item.currentQty);
     });
   }
@@ -211,7 +271,9 @@ export class ProjectBillsService {
       let amount: Prisma.Decimal;
       if (calculationType === "PERCENTAGE") {
         if (adj.rate === undefined || adj.baseAmount === undefined) {
-          throw new BadRequestException(`Adjustment "${adj.type}" requires a rate and base amount for percentage calculation`);
+          throw new BadRequestException(
+            `Adjustment "${adj.type}" requires a rate and base amount for percentage calculation`,
+          );
         }
         amount = D(adj.baseAmount).mul(adj.rate).div(100);
       } else {
@@ -243,27 +305,83 @@ export class ProjectBillsService {
 
   async preview(organizationId: string, dto: SaveProjectBillDto, excludeBillId?: string) {
     const contract = await this.assertContract(organizationId, dto.contractId);
-    await this.lifecycle.assertOperationalMutationAllowed(organizationId, contract.cmsWorkId, "preparing project bills");
-    if (excludeBillId && !await this.prisma.projectBill.findFirst({ where: { id: excludeBillId, organizationId, cmsWorkId: contract.cmsWorkId, status: "DRAFT" }, select: { id: true } })) throw new NotFoundException("Draft bill not found on this project");
+    await this.lifecycle.assertOperationalMutationAllowed(
+      organizationId,
+      contract.cmsWorkId,
+      "preparing project bills",
+    );
+    if (
+      excludeBillId &&
+      !(await this.prisma.projectBill.findFirst({
+        where: {
+          id: excludeBillId,
+          organizationId,
+          cmsWorkId: contract.cmsWorkId,
+          status: "DRAFT",
+        },
+        select: { id: true },
+      }))
+    )
+      throw new NotFoundException("Draft bill not found on this project");
     const totals = await this.prisma.$transaction(async (tx) => {
-      const items = await this.calculateItems(tx, organizationId, contract.cmsWorkId, dto.items, excludeBillId ?? null);
-      const vat = await this.deductionConfigs.effectiveConfig(organizationId, "VAT", new Date(dto.billDate));
-      const ait = await this.deductionConfigs.effectiveConfig(organizationId, "AIT", new Date(dto.billDate));
-      return this.summarize(items, this.calculateAdjustments(dto.adjustments), dto.retentionPctOverride !== undefined ? D(dto.retentionPctOverride) : contract.retentionPct, vat ? D(vat.rate) : null, ait ? D(ait.rate) : null);
+      const items = await this.calculateItems(
+        tx,
+        organizationId,
+        contract.cmsWorkId,
+        dto.items,
+        excludeBillId ?? null,
+      );
+      const vat = await this.deductionConfigs.effectiveConfig(
+        organizationId,
+        "VAT",
+        new Date(dto.billDate),
+      );
+      const ait = await this.deductionConfigs.effectiveConfig(
+        organizationId,
+        "AIT",
+        new Date(dto.billDate),
+      );
+      return this.summarize(
+        items,
+        this.calculateAdjustments(dto.adjustments),
+        dto.retentionPctOverride !== undefined
+          ? D(dto.retentionPctOverride)
+          : contract.retentionPct,
+        vat ? D(vat.rate) : null,
+        ait ? D(ait.rate) : null,
+      );
     });
-    return { grossWorkValue: money(totals.grossWorkValue), grossBillAmount: money(totals.grossBillAmount), retentionAmount: money(totals.retentionAmount), vatAmount: money(totals.vatAmount), aitAmount: money(totals.aitAmount), otherDeductionAmount: money(totals.otherDeductionAmount), netCertifiedAmount: money(totals.netCertifiedAmount) };
+    return {
+      grossWorkValue: money(totals.grossWorkValue),
+      grossBillAmount: money(totals.grossBillAmount),
+      retentionAmount: money(totals.retentionAmount),
+      vatAmount: money(totals.vatAmount),
+      aitAmount: money(totals.aitAmount),
+      otherDeductionAmount: money(totals.otherDeductionAmount),
+      netCertifiedAmount: money(totals.netCertifiedAmount),
+    };
   }
 
-  async saveDraft(organizationId: string, userId: string, id: string | null, dto: SaveProjectBillDto) {
+  async saveDraft(
+    organizationId: string,
+    userId: string,
+    id: string | null,
+    dto: SaveProjectBillDto,
+  ) {
     const contract = await this.assertContract(organizationId, dto.contractId);
-    await this.lifecycle.assertOperationalMutationAllowed(organizationId, contract.cmsWorkId, "changing project bills");
+    await this.lifecycle.assertOperationalMutationAllowed(
+      organizationId,
+      contract.cmsWorkId,
+      "changing project bills",
+    );
     await this.assertWork(organizationId, contract.cmsWorkId);
 
     const existing = id
       ? await this.prisma.projectBill.findFirst({ where: { id, organizationId } })
       : null;
     if (id && !existing) throw new NotFoundException("Running Bill not found");
-    if (existing && existing.cmsWorkId !== contract.cmsWorkId) throw new BadRequestException("A bill cannot be moved to another project");
+    if (existing && existing.cmsWorkId !== contract.cmsWorkId)
+      throw new BadRequestException("A bill cannot be moved to another project");
     if (existing && !EDITABLE_STATUSES.has(existing.status)) {
       throw new BadRequestException("Only a Draft bill can be edited");
     }
@@ -278,29 +396,75 @@ export class ProjectBillsService {
         },
         select: { id: true },
       });
-      if (otherFinal) throw new BadRequestException("Only one active Final Bill is allowed for a project");
+      if (otherFinal)
+        throw new BadRequestException("Only one active Final Bill is allowed for a project");
     }
 
     const record = await this.prisma.$transaction(async (tx) => {
       await this.lockWork(tx, organizationId, contract.cmsWorkId);
       await this.assertContract(organizationId, contract.id, tx);
       if (existing) {
-        const current = await tx.projectBill.findFirst({ where: { id: existing.id, organizationId } });
-        if (current?.status !== "DRAFT") throw new BadRequestException("Only a Draft bill can be edited");
+        const current = await tx.projectBill.findFirst({
+          where: { id: existing.id, organizationId },
+        });
+        if (current?.status !== "DRAFT")
+          throw new BadRequestException("Only a Draft bill can be edited");
       }
-      if (dto.billType === "FINAL" && await tx.projectBill.findFirst({ where: { organizationId, cmsWorkId: contract.cmsWorkId, billType: "FINAL", status: { notIn: ["CANCELLED", "REJECTED"] }, ...(existing ? { id: { not: existing.id } } : {}) }, select: { id: true } })) {
+      if (
+        dto.billType === "FINAL" &&
+        (await tx.projectBill.findFirst({
+          where: {
+            organizationId,
+            cmsWorkId: contract.cmsWorkId,
+            billType: "FINAL",
+            status: { notIn: ["CANCELLED", "REJECTED"] },
+            ...(existing ? { id: { not: existing.id } } : {}),
+          },
+          select: { id: true },
+        }))
+      ) {
         throw new BadRequestException("Only one active Final Bill is allowed for a project");
       }
-      const calculatedItems = await this.calculateItems(tx, organizationId, contract.cmsWorkId, dto.items, existing?.id ?? null);
+      const calculatedItems = await this.calculateItems(
+        tx,
+        organizationId,
+        contract.cmsWorkId,
+        dto.items,
+        existing?.id ?? null,
+      );
       const calculatedAdjustments = this.calculateAdjustments(dto.adjustments);
-      const adjustmentAccountIds = calculatedAdjustments.map((item) => item.ledgerAccountId).filter((id): id is string => Boolean(id));
+      const adjustmentAccountIds = calculatedAdjustments
+        .map((item) => item.ledgerAccountId)
+        .filter((id): id is string => Boolean(id));
       if (adjustmentAccountIds.length) {
-        const allowed = await tx.ledgerAccount.findMany({ where: { id: { in: adjustmentAccountIds }, organizationId, isActive: true, isControlAccount: false }, select: { id: true } });
-        if (allowed.length !== new Set(adjustmentAccountIds).size) throw new BadRequestException("One or more adjustment ledger accounts are invalid, inactive, cross-tenant, or control accounts");
+        const allowed = await tx.ledgerAccount.findMany({
+          where: {
+            id: { in: adjustmentAccountIds },
+            organizationId,
+            isActive: true,
+            isControlAccount: false,
+          },
+          select: { id: true },
+        });
+        if (allowed.length !== new Set(adjustmentAccountIds).size)
+          throw new BadRequestException(
+            "One or more adjustment ledger accounts are invalid, inactive, cross-tenant, or control accounts",
+          );
       }
-      const retentionPct = dto.retentionPctOverride !== undefined ? D(dto.retentionPctOverride) : contract.retentionPct;
-      const vatConfig = await this.deductionConfigs.effectiveConfig(organizationId, "VAT", new Date(dto.billDate));
-      const aitConfig = await this.deductionConfigs.effectiveConfig(organizationId, "AIT", new Date(dto.billDate));
+      const retentionPct =
+        dto.retentionPctOverride !== undefined
+          ? D(dto.retentionPctOverride)
+          : contract.retentionPct;
+      const vatConfig = await this.deductionConfigs.effectiveConfig(
+        organizationId,
+        "VAT",
+        new Date(dto.billDate),
+      );
+      const aitConfig = await this.deductionConfigs.effectiveConfig(
+        organizationId,
+        "AIT",
+        new Date(dto.billDate),
+      );
       const totals = this.summarize(
         calculatedItems,
         calculatedAdjustments,
@@ -378,16 +542,38 @@ export class ProjectBillsService {
   async submit(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectBill.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Running Bill not found");
-    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "submitting project bills");
-    if (existing.status !== "DRAFT") throw new BadRequestException("Only a Draft bill can be submitted");
+    await this.lifecycle.assertOperationalMutationAllowed(
+      organizationId,
+      existing.cmsWorkId,
+      "submitting project bills",
+    );
+    if (existing.status !== "DRAFT")
+      throw new BadRequestException("Only a Draft bill can be submitted");
 
     const record = await this.prisma.$transaction(async (tx) => {
       await this.lockWork(tx, organizationId, existing.cmsWorkId);
-      const current = await tx.projectBill.findFirst({ where: { id, organizationId }, include: { items: true } });
-      if (current?.status !== "DRAFT") throw new BadRequestException("Only a Draft bill can be submitted");
+      const current = await tx.projectBill.findFirst({
+        where: { id, organizationId },
+        include: { items: true },
+      });
+      if (current?.status !== "DRAFT")
+        throw new BadRequestException("Only a Draft bill can be submitted");
       await this.assertContract(organizationId, current.contractId, tx);
-      await this.calculateItems(tx, organizationId, current.cmsWorkId, current.items.map((item) => ({ boqItemId: item.boqItemId, currentQty: Number(item.currentQty) })), id);
-      return tx.projectBill.update({ where: { id }, data: { status: "SUBMITTED", submissionDate: new Date(), submittedById: userId }, include: includeRelations });
+      await this.calculateItems(
+        tx,
+        organizationId,
+        current.cmsWorkId,
+        current.items.map((item) => ({
+          boqItemId: item.boqItemId,
+          currentQty: Number(item.currentQty),
+        })),
+        id,
+      );
+      return tx.projectBill.update({
+        where: { id },
+        data: { status: "SUBMITTED", submissionDate: new Date(), submittedById: userId },
+        include: includeRelations,
+      });
     });
 
     await this.auditLogService.record({
@@ -406,9 +592,18 @@ export class ProjectBillsService {
   async startReview(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectBill.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Running Bill not found");
-    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "certifying project bills");
-    if (existing.status !== "SUBMITTED") throw new BadRequestException("Only a Submitted bill can move to review");
-    const record = await this.prisma.projectBill.update({ where: { id }, data: { status: "UNDER_REVIEW" }, include: includeRelations });
+    await this.lifecycle.assertOperationalMutationAllowed(
+      organizationId,
+      existing.cmsWorkId,
+      "certifying project bills",
+    );
+    if (existing.status !== "SUBMITTED")
+      throw new BadRequestException("Only a Submitted bill can move to review");
+    const record = await this.prisma.projectBill.update({
+      where: { id },
+      data: { status: "UNDER_REVIEW" },
+      include: includeRelations,
+    });
     await this.auditLogService.record({
       organizationId,
       userId,
@@ -424,11 +619,19 @@ export class ProjectBillsService {
   async reject(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectBill.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Running Bill not found");
-    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "rejecting project bills");
+    await this.lifecycle.assertOperationalMutationAllowed(
+      organizationId,
+      existing.cmsWorkId,
+      "rejecting project bills",
+    );
     if (!["SUBMITTED", "UNDER_REVIEW"].includes(existing.status)) {
       throw new BadRequestException("Only a Submitted or Under Review bill can be rejected");
     }
-    const record = await this.prisma.projectBill.update({ where: { id }, data: { status: "REJECTED" }, include: includeRelations });
+    const record = await this.prisma.projectBill.update({
+      where: { id },
+      data: { status: "REJECTED" },
+      include: includeRelations,
+    });
     await this.auditLogService.record({
       organizationId,
       userId,
@@ -444,13 +647,21 @@ export class ProjectBillsService {
   async cancel(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectBill.findFirst({ where: { id, organizationId } });
     if (!existing) throw new NotFoundException("Running Bill not found");
-    await this.lifecycle.assertOperationalMutationAllowed(organizationId, existing.cmsWorkId, "cancelling project bills");
+    await this.lifecycle.assertOperationalMutationAllowed(
+      organizationId,
+      existing.cmsWorkId,
+      "cancelling project bills",
+    );
     if (!CANCELLABLE_STATUSES.has(existing.status)) {
       throw new BadRequestException(
         "A Certified bill cannot be cancelled directly — this requires a formal reversal, which is not yet supported",
       );
     }
-    const record = await this.prisma.projectBill.update({ where: { id }, data: { status: "CANCELLED" }, include: includeRelations });
+    const record = await this.prisma.projectBill.update({
+      where: { id },
+      data: { status: "CANCELLED" },
+      include: includeRelations,
+    });
     await this.auditLogService.record({
       organizationId,
       userId,
@@ -470,122 +681,208 @@ export class ProjectBillsService {
   async certify(organizationId: string, userId: string, id: string) {
     const existing = await this.prisma.projectBill.findFirst({
       where: { id, organizationId },
-      include: { items: true, adjustments: true, contract: true, cmsWork: { include: { organizationMaster: true } } },
+      include: {
+        items: true,
+        adjustments: true,
+        contract: true,
+        cmsWork: { include: { organizationMaster: true } },
+      },
     });
     if (!existing) throw new NotFoundException("Running Bill not found");
     if (!["SUBMITTED", "UNDER_REVIEW"].includes(existing.status)) {
       throw new BadRequestException("Only a Submitted or Under Review bill can be certified");
     }
 
-    const record = await this.prisma.$transaction(async (tx) => {
-      await this.lockWork(tx, organizationId, existing.cmsWorkId);
-      const alreadyPosted = await tx.journalEntry.findFirst({
-        where: { organizationId, sourceModule: "PROJECT_BILL", sourceType: "CERTIFICATION", sourceId: id },
-      });
-      if (alreadyPosted) {
-        const already = await tx.projectBill.findFirst({ where: { id }, include: includeRelations });
-        return already!;
-      }
-
-      const current = await tx.projectBill.findFirst({ where: { id, organizationId } });
-      if (!current || !["SUBMITTED", "UNDER_REVIEW"].includes(current.status)) throw new BadRequestException("Only a Submitted or Under Review bill can be certified");
-      await this.assertContract(organizationId, current.contractId, tx);
-
-      const itemInputs: BillItemInputDto[] = existing.items.map((i) => ({ boqItemId: i.boqItemId, currentQty: Number(i.currentQty) }));
-      const calculatedItems = await this.calculateItems(tx, organizationId, existing.cmsWorkId, itemInputs, existing.id);
-      const vatConfig = await this.deductionConfigs.effectiveConfig(organizationId, "VAT", existing.billDate);
-      const aitConfig = await this.deductionConfigs.effectiveConfig(organizationId, "AIT", existing.billDate);
-      const adjustments = existing.adjustments.map((a) => ({ direction: a.direction, amount: a.amount }));
-      const totals = this.summarize(
-        calculatedItems,
-        adjustments,
-        existing.retentionPct,
-        vatConfig ? D(vatConfig.rate) : null,
-        aitConfig ? D(aitConfig.rate) : null,
-      );
-
-      await tx.projectBillItem.deleteMany({ where: { billId: id } });
-      for (const item of calculatedItems) {
-        await tx.projectBillItem.create({ data: { billId: id, ...item } });
-        await tx.boqItem.update({
-          where: { id: item.boqItemId },
-          data: { executedQty: item.cumulativeQty, executedValue: item.cumulativeValue },
+    const record = await this.prisma.$transaction(
+      async (tx) => {
+        await this.lockWork(tx, organizationId, existing.cmsWorkId);
+        const alreadyPosted = await tx.journalEntry.findFirst({
+          where: {
+            organizationId,
+            sourceModule: "PROJECT_BILL",
+            sourceType: "CERTIFICATION",
+            sourceId: id,
+          },
         });
-      }
+        if (alreadyPosted) {
+          const already = await tx.projectBill.findFirst({
+            where: { id },
+            include: includeRelations,
+          });
+          return already!;
+        }
 
-      const updated = await tx.projectBill.update({
-        where: { id },
-        data: {
-          status: "CERTIFIED",
-          certificationDate: new Date(),
-          certifiedById: userId,
-          grossWorkValue: totals.grossWorkValue,
-          approvedAdditions: totals.approvedAdditions,
-          grossBillAmount: totals.grossBillAmount,
-          vatRate: vatConfig ? D(vatConfig.rate) : null,
-          vatAmount: totals.vatAmount,
-          aitRate: aitConfig ? D(aitConfig.rate) : null,
-          aitAmount: totals.aitAmount,
-          otherDeductionAmount: totals.otherDeductionAmount,
-          netCertifiedAmount: totals.netCertifiedAmount,
-          retentionAmount: totals.retentionAmount,
-          retentionReleaseDueDate: existing.contract.dlpDays
-            ? new Date(existing.contract.currentCompletionDate.getTime() + existing.contract.dlpDays * 86_400_000)
-            : null,
-        },
-      });
+        const current = await tx.projectBill.findFirst({ where: { id, organizationId } });
+        if (!current || !["SUBMITTED", "UNDER_REVIEW"].includes(current.status))
+          throw new BadRequestException("Only a Submitted or Under Review bill can be certified");
+        await this.assertContract(organizationId, current.contractId, tx);
 
-      const partyName = existing.cmsWork.organizationMaster.shortName;
-      await tx.receivable.create({
-        data: {
+        const itemInputs: BillItemInputDto[] = existing.items.map((i) => ({
+          boqItemId: i.boqItemId,
+          currentQty: Number(i.currentQty),
+        }));
+        const calculatedItems = await this.calculateItems(
+          tx,
           organizationId,
-          projectId: existing.cmsWorkId,
-          contractId: existing.contractId,
-          projectBillId: id,
-          partyName,
-          billNo: updated.billNo,
-          billDate: updated.billDate,
-          amount: totals.netCertifiedAmount,
-        },
-      });
+          existing.cmsWorkId,
+          itemInputs,
+          existing.id,
+        );
+        const vatConfig = await this.deductionConfigs.effectiveConfig(
+          organizationId,
+          "VAT",
+          existing.billDate,
+        );
+        const aitConfig = await this.deductionConfigs.effectiveConfig(
+          organizationId,
+          "AIT",
+          existing.billDate,
+        );
+        const adjustments = existing.adjustments.map((a) => ({
+          direction: a.direction,
+          amount: a.amount,
+        }));
+        const totals = this.summarize(
+          calculatedItems,
+          adjustments,
+          existing.retentionPct,
+          vatConfig ? D(vatConfig.rate) : null,
+          aitConfig ? D(aitConfig.rate) : null,
+        );
 
-      const deductionLines = adjustments
-        .filter((a) => a.direction === "DEDUCTION")
-        .map((a, index) => ({
-          systemKey: "OTHER_DEDUCTION_RECEIVABLE",
-          debit: a.amount,
-          credit: 0,
-          description: `Bill deduction ${index + 1}`,
-        }))
-        .filter((line) => D(line.debit).gt(0));
+        await tx.projectBillItem.deleteMany({ where: { billId: id } });
+        for (const item of calculatedItems) {
+          await tx.projectBillItem.create({ data: { billId: id, ...item } });
+          await tx.boqItem.update({
+            where: { id: item.boqItemId },
+            data: { executedQty: item.cumulativeQty, executedValue: item.cumulativeValue },
+          });
+        }
 
-      await this.accounting.post(tx, {
-        organizationId,
-        userId,
-        journalDate: updated.billDate,
-        referenceNo: updated.billNo,
-        description: `Running Bill ${updated.billNo} certified`,
-        sourceModule: "PROJECT_BILL",
-        sourceType: "CERTIFICATION",
-        sourceId: id,
-        lines: [
-          { systemKey: "ACCOUNTS_RECEIVABLE", projectId: existing.cmsWorkId, partyName, partyType: "CUSTOMER", debit: totals.netCertifiedAmount, credit: 0 },
-          ...(totals.retentionAmount.gt(0)
-            ? [{ systemKey: "RETENTION_RECEIVABLE", projectId: existing.cmsWorkId, partyName, partyType: "CUSTOMER", debit: totals.retentionAmount, credit: 0 }]
-            : []),
-          ...(totals.vatAmount.gt(0)
-            ? [{ systemKey: "TAX_DEDUCTED_VAT", projectId: existing.cmsWorkId, partyName, partyType: "CUSTOMER", debit: totals.vatAmount, credit: 0 }]
-            : []),
-          ...(totals.aitAmount.gt(0)
-            ? [{ systemKey: "TAX_DEDUCTED_AIT", projectId: existing.cmsWorkId, partyName, partyType: "CUSTOMER", debit: totals.aitAmount, credit: 0 }]
-            : []),
-          ...deductionLines.map((line) => ({ ...line, projectId: existing.cmsWorkId, partyName, partyType: "CUSTOMER" })),
-          { systemKey: "PROJECT_REVENUE", projectId: existing.cmsWorkId, partyName, partyType: "CUSTOMER", debit: 0, credit: totals.grossBillAmount },
-        ],
-      });
+        const updated = await tx.projectBill.update({
+          where: { id },
+          data: {
+            status: "CERTIFIED",
+            certificationDate: new Date(),
+            certifiedById: userId,
+            grossWorkValue: totals.grossWorkValue,
+            approvedAdditions: totals.approvedAdditions,
+            grossBillAmount: totals.grossBillAmount,
+            vatRate: vatConfig ? D(vatConfig.rate) : null,
+            vatAmount: totals.vatAmount,
+            aitRate: aitConfig ? D(aitConfig.rate) : null,
+            aitAmount: totals.aitAmount,
+            otherDeductionAmount: totals.otherDeductionAmount,
+            netCertifiedAmount: totals.netCertifiedAmount,
+            retentionAmount: totals.retentionAmount,
+            retentionReleaseDueDate: existing.contract.dlpDays
+              ? new Date(
+                  existing.contract.currentCompletionDate.getTime() +
+                    existing.contract.dlpDays * 86_400_000,
+                )
+              : null,
+          },
+        });
 
-      return tx.projectBill.findFirst({ where: { id }, include: includeRelations });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 });
+        const partyName = existing.cmsWork.organizationMaster.shortName;
+        await tx.receivable.create({
+          data: {
+            organizationId,
+            projectId: existing.cmsWorkId,
+            contractId: existing.contractId,
+            projectBillId: id,
+            partyName,
+            billNo: updated.billNo,
+            billDate: updated.billDate,
+            amount: totals.netCertifiedAmount,
+          },
+        });
+
+        const deductionLines = adjustments
+          .filter((a) => a.direction === "DEDUCTION")
+          .map((a, index) => ({
+            systemKey: "OTHER_DEDUCTION_RECEIVABLE",
+            debit: a.amount,
+            credit: 0,
+            description: `Bill deduction ${index + 1}`,
+          }))
+          .filter((line) => D(line.debit).gt(0));
+
+        await this.accounting.post(tx, {
+          organizationId,
+          userId,
+          journalDate: updated.billDate,
+          referenceNo: updated.billNo,
+          description: `Running Bill ${updated.billNo} certified`,
+          sourceModule: "PROJECT_BILL",
+          sourceType: "CERTIFICATION",
+          sourceId: id,
+          lines: [
+            {
+              systemKey: "ACCOUNTS_RECEIVABLE",
+              projectId: existing.cmsWorkId,
+              partyName,
+              partyType: "CUSTOMER",
+              debit: totals.netCertifiedAmount,
+              credit: 0,
+            },
+            ...(totals.retentionAmount.gt(0)
+              ? [
+                  {
+                    systemKey: "RETENTION_RECEIVABLE",
+                    projectId: existing.cmsWorkId,
+                    partyName,
+                    partyType: "CUSTOMER",
+                    debit: totals.retentionAmount,
+                    credit: 0,
+                  },
+                ]
+              : []),
+            ...(totals.vatAmount.gt(0)
+              ? [
+                  {
+                    systemKey: "TAX_DEDUCTED_VAT",
+                    projectId: existing.cmsWorkId,
+                    partyName,
+                    partyType: "CUSTOMER",
+                    debit: totals.vatAmount,
+                    credit: 0,
+                  },
+                ]
+              : []),
+            ...(totals.aitAmount.gt(0)
+              ? [
+                  {
+                    systemKey: "TAX_DEDUCTED_AIT",
+                    projectId: existing.cmsWorkId,
+                    partyName,
+                    partyType: "CUSTOMER",
+                    debit: totals.aitAmount,
+                    credit: 0,
+                  },
+                ]
+              : []),
+            ...deductionLines.map((line) => ({
+              ...line,
+              projectId: existing.cmsWorkId,
+              partyName,
+              partyType: "CUSTOMER",
+            })),
+            {
+              systemKey: "PROJECT_REVENUE",
+              projectId: existing.cmsWorkId,
+              partyName,
+              partyType: "CUSTOMER",
+              debit: 0,
+              credit: totals.grossBillAmount,
+            },
+          ],
+        });
+
+        return tx.projectBill.findFirst({ where: { id }, include: includeRelations });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 },
+    );
 
     await this.auditLogService.record({
       organizationId,

@@ -15,6 +15,8 @@ import { PrimaryButton, SecondaryButton, SelectInput, TextInput, cn } from "@biz
 import { formatBDT } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { findReport, REPORT_CATEGORIES } from "@/config/reports";
+import { ReportNavigation } from "./ReportNavigation";
+import { AllTransactionsReport } from "./AllTransactionsReport";
 const money = (v: unknown) => formatBDT(Number(v ?? 0));
 const date = (v: unknown) => (v ? new Date(String(v)).toLocaleDateString("en-GB") : "-");
 function download(name: string, content: string) {
@@ -25,6 +27,10 @@ function download(name: string, content: string) {
   URL.revokeObjectURL(a.href);
 }
 export function ReportWorkspace({ category, report }: { category: string; report: string }) {
+  if (category === "transactions" && report === "all") return <ReportNavigation><AllTransactionsReport /></ReportNavigation>;
+  return <ReportNavigation><StandardReportWorkspace category={category} report={report} /></ReportNavigation>;
+}
+function StandardReportWorkspace({ category, report }: { category: string; report: string }) {
   const router = useRouter(),
     def = findReport(category, report),
     group = REPORT_CATEGORIES.find((c) => c.slug === category),

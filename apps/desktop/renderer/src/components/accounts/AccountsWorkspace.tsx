@@ -23,6 +23,7 @@ import type { AccountingQuery, JournalRecord, LedgerAccountRecord } from "@bizov
 import { PrimaryButton, SecondaryButton, SelectInput, TextInput, cn } from "@bizovix/ui";
 import { formatBDT } from "@bizovix/utils";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
+import { ChartOfAccountsTree } from "./ChartOfAccountsTree";
 export type AccountsView =
   | "overview"
   | "chart"
@@ -185,8 +186,8 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
       { accountId: "", debit: "", credit: "", description: "" },
     ]);
   const payPayable = usePayPayable(selectedPayable);
-  const open = (m: string) => {
-    setForm({ date: today(), post: "true" });
+  const open = (m: string, parent?: LedgerAccountRecord) => {
+    setForm({ date: today(), post: "true", ...(parent ? { parentId: parent.id, accountType: parent.accountType } : {}) });
     setLines([
       { accountId: "", debit: "", credit: "", description: "" },
       { accountId: "", debit: "", credit: "", description: "" },
@@ -223,6 +224,10 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
   );
   async function save() {
     try {
+      if (modal === "account" && !form.parentId) {
+        setNotice("Select a parent class or category for the ledger.");
+        return;
+      }
       if (modal === "account")
         await createAccount.mutateAsync({
           code: form.code,
@@ -306,12 +311,15 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
     }
   }
   const accountOpts = (chart.data ?? [])
-      .filter((a) => a.isActive)
+      .filter((a) => a.isActive && !a.isControlAccount)
+      .map((a) => [a.id, `${a.code} - ${a.name}`] as [string, string]),
+    groupOpts = (chart.data ?? [])
+      .filter((a) => a.isActive && a.isSystem && /^\d{7}$/.test(a.code))
       .map((a) => [a.id, `${a.code} - ${a.name}`] as [string, string]),
     projectOpts = (works.data?.items ?? []).map((w) => [w.id, w.workName] as [string, string]);
   const action =
     view === "chart"
-      ? ["Add Account", "account"]
+      ? ["Add Ledger", "account"]
       : view === "journals"
         ? ["New Journal Entry", "journal"]
         : view === "payables"
@@ -419,31 +427,10 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
       )}
       {view !== "overview" && view !== "chart" && commonFilter}
       {view === "chart" && (
-        <section className="overflow-hidden rounded-lg border bg-white shadow-card">
+        <>
           <State query={chart} empty={!chart.data?.length} />
-          {!!chart.data?.length && (
-            <table className="w-full text-left text-[11px]">
-              <Head labels={["Code", "Account Name", "Type", "Status", "System", "Transactions"]} />
-              <tbody>
-                {chart.data.map((a) => (
-                  <tr key={a.id} className="border-t">
-                    <td className="px-3 py-3 font-semibold text-biz-blue">{a.code}</td>
-                    <td className="px-3" style={{ paddingLeft: `${12 + (a.parentId ? 18 : 0)}px` }}>
-                      {a.parentId ? "- " : ""}
-                      {a.name}
-                    </td>
-                    <td>{a.accountType}</td>
-                    <td className={a.isActive ? "text-green-700" : "text-red-600"}>
-                      {a.isActive ? "Active" : "Inactive"}
-                    </td>
-                    <td>{a.isSystem ? "System" : "Custom"}</td>
-                    <td>{a._count?.journalLines ?? 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
+          {!!chart.data?.length && <ChartOfAccountsTree accounts={chart.data} onAddLedger={(category) => open("account", category)} />}
+        </>
       )}
       {view === "journals" && <JournalTable rows={journals.data?.items ?? []} query={journals} />}{" "}
       {view === "openings" && <JournalTable rows={openings.data?.items ?? []} query={openings} />}
@@ -801,12 +788,15 @@ export function AccountsWorkspace({ view }: { view: AccountsView }) {
               <>
                 {input("code", "Account Code")}
                 {input("name", "Account Name")}
-                {select("parentId", "Parent Account", accountOpts)}
-                {select(
-                  "accountType",
-                  "Account Type",
-                  ["ASSET", "LIABILITY", "INCOME", "EXPENSE", "EQUITY"].map((v) => [v, v]),
-                )}
+                <label className="text-[11px] font-semibold">Parent Class / Category
+                  <select className="mt-1 h-10 w-full rounded-md border px-3 text-[12px]" value={form.parentId ?? ""} onChange={(event) => { const parent = chart.data?.find((item) => item.id === event.target.value); setForm((value) => ({ ...value, parentId: event.target.value, accountType: parent?.accountType ?? "" })); }}>
+                    <option value="">Select class or category...</option>
+                    {groupOpts.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                  </select>
+                </label>
+                <label className="text-[11px] font-semibold">Account Type
+                  <input className="mt-1 h-10 w-full rounded-md border bg-slate-50 px-3 text-[12px]" value={form.accountType ?? ""} readOnly />
+                </label>
                 {input("description", "Description")}
               </>
             )}

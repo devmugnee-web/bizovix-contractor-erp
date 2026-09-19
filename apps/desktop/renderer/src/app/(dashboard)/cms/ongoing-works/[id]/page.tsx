@@ -48,7 +48,7 @@ function InfoRow({
   strong?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[95px_minmax(0,1fr)] gap-2 py-0.5 text-[12px] leading-snug">
+    <div className="grid grid-cols-[95px_minmax(0,1fr)] gap-2 py-px text-[12px] leading-snug">
       <span className="text-biz-muted">{label}</span>
       <span className={strong ? "font-bold text-biz-navy" : "font-semibold text-biz-text"}>
         {value}
@@ -67,7 +67,7 @@ function SecurityDetail({
   strong?: boolean;
 }) {
   return (
-    <div className="min-w-0 py-0.5">
+    <div className="min-w-0">
       <p className="text-[11px] leading-tight text-biz-muted">{label}</p>
       <p
         className={cn(
@@ -93,7 +93,7 @@ function FinancialMetric({
   return (
     <div
       className={cn(
-        "min-w-0 rounded-lg border px-2.5 py-1.5",
+        "min-w-0 rounded-lg border px-2.5 py-1",
         tone === "primary"
           ? "border-blue-200 bg-blue-50/60"
           : tone === "success"
@@ -310,14 +310,14 @@ export function ApprovedWorkDetails({
       </header>
 
       <div className="grid items-stretch gap-2.5 lg:grid-cols-2 xl:min-h-0 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1.4fr)_minmax(220px,0.9fr)]">
-        <section className="flex min-w-0 flex-col rounded-xl border border-biz-border bg-white p-2.5 shadow-sm xl:min-h-0 xl:overflow-y-auto">
-          <h2 className="mb-1.5 flex items-center gap-2 border-b border-slate-100 pb-1.5 text-[13px] font-bold text-biz-navy">
+        <section className="flex min-w-0 flex-col rounded-xl border border-biz-border bg-white px-2.5 py-2 shadow-sm xl:min-h-0 xl:overflow-y-auto">
+          <h2 className="mb-1 flex items-center gap-2 border-b border-slate-100 pb-1 text-[13px] font-bold text-biz-navy">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-biz-blue">
               <UserRound className="h-4 w-4" />
             </span>
             Project &amp; Contact Information
           </h2>
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <div className="rounded-lg bg-slate-50/70 px-2.5 py-1">
               <InfoRow label="Organization" value={project.organizationMaster.shortName} />
               <InfoRow label="PE Name" value={data.primaryContact?.name ?? "Not Configured"} />
@@ -329,7 +329,7 @@ export function ApprovedWorkDetails({
               <InfoRow label="Address" value={data.primaryContact?.address ?? "Not Configured"} />
             </div>
             <div>
-              <div className="mb-1 flex h-7 items-center justify-between">
+              <div className="mb-1 flex h-6 items-center justify-between">
                 <h3 className="text-[12px] font-bold text-biz-navy">Other Contacts</h3>
                 <button
                   type="button"
@@ -337,7 +337,7 @@ export function ApprovedWorkDetails({
                     setContactError("");
                     setContactOpen(true);
                   }}
-                  className="flex h-7 items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[11px] font-semibold text-biz-blue transition-colors hover:bg-blue-100"
+                  className="flex h-6 items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[11px] font-semibold text-biz-blue transition-colors hover:bg-blue-100"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add Contact
@@ -348,7 +348,7 @@ export function ApprovedWorkDetails({
                   data.otherContacts.map((contact) => (
                     <div
                       key={contact.id}
-                      className="flex items-center justify-between border-b border-biz-border px-2.5 py-1 last:border-0"
+                      className="flex items-center justify-between border-b border-biz-border px-2.5 py-0.5 last:border-0"
                     >
                       <div>
                         <div className="text-[12px] font-semibold text-biz-navy">
@@ -368,8 +368,8 @@ export function ApprovedWorkDetails({
             </div>
           </div>
         </section>
-        <section className="flex min-w-0 flex-col rounded-xl border border-biz-border bg-white p-2.5 shadow-sm xl:min-h-0 xl:overflow-y-auto">
-          <div className="mb-1.5 flex flex-col gap-2 border-b border-slate-100 pb-1.5 sm:flex-row sm:items-center sm:justify-between">
+        <section className="flex min-w-0 flex-col rounded-xl border border-biz-border bg-white px-2.5 py-2 shadow-sm xl:min-h-0 xl:overflow-y-auto">
+          <div className="mb-1 flex flex-col gap-2 border-b border-slate-100 pb-1 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="flex items-center gap-2 text-[13px] font-bold text-biz-navy">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
                 <WalletCards className="h-4 w-4" />
@@ -406,7 +406,7 @@ export function ApprovedWorkDetails({
               </Link>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-1.5 2xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-1 2xl:grid-cols-4">
             <FinancialMetric
               label="Contract Value (Incl. VAT & Tax)"
               value={money(financial.contractValue)}
@@ -426,7 +426,7 @@ export function ApprovedWorkDetails({
               value={money(financial.taxAmount)}
             />
           </div>
-          <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50/40 px-2.5 py-1.5">
+          <div className="mt-1 rounded-lg border border-emerald-200 bg-emerald-50/40 px-2.5 py-1">
             <div className="mb-0.5 flex items-center justify-between text-[12px] font-bold text-biz-navy">
               <span>Security Deposit (SD)</span>
               <span>{sdLabel}</span>
@@ -467,8 +467,8 @@ export function ApprovedWorkDetails({
             </div>
           </div>
         </section>
-        <section className="flex min-w-0 flex-col rounded-xl border border-biz-border bg-white p-2.5 shadow-sm lg:col-span-2 xl:col-span-1 xl:min-h-0 xl:overflow-y-auto">
-          <h2 className="mb-1.5 flex items-center gap-2 border-b border-slate-100 pb-1.5 text-[13px] font-bold text-biz-navy">
+        <section className="flex min-w-0 flex-col rounded-xl border border-biz-border bg-white px-2.5 py-2 shadow-sm lg:col-span-2 xl:col-span-1 xl:min-h-0 xl:overflow-y-auto">
+          <h2 className="mb-1 flex items-center gap-2 border-b border-slate-100 pb-1 text-[13px] font-bold text-biz-navy">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-700">
               <Activity className="h-4 w-4" />
             </span>

@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { tokenStorage, useDevLogin, useMe, useReminderStats, useSubscription } from "@bizovix/api-client";
+import {
+  tokenStorage,
+  useDevLogin,
+  useMe,
+  useReminderStats,
+  useSubscription,
+} from "@bizovix/api-client";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { BreadcrumbProvider } from "@/components/providers/BreadcrumbContext";
@@ -66,7 +72,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   if (devAuthBypass && devAuthFailed) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-3 bg-biz-bg px-4 text-center">
-        <p className="text-[13px] font-semibold text-biz-danger">Could not start the ERP server session.</p>
+        <p className="text-[13px] font-semibold text-biz-danger">
+          Could not start the ERP server session.
+        </p>
         <button
           type="button"
           onClick={() => {
@@ -90,7 +98,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     : 0;
 
   const trial =
-    subscription.data && (subscription.data.status === "TRIALING" || subscription.data.status === "EXPIRED")
+    subscription.data &&
+    (subscription.data.status === "TRIALING" || subscription.data.status === "EXPIRED")
       ? {
           daysLeft: Math.max(0, subscription.data.trialDaysRemaining ?? 0),
           totalDays: subscription.data.trialDaysTotal ?? 30,
@@ -98,11 +107,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       : null;
 
   return (
-    <div className="flex h-screen flex-col print:block print:h-auto">
+    <div className="erp-shell flex h-screen flex-col print:block print:h-auto">
       <Topbar
         user={me.data}
         onToggleSidebar={() => {
-          if (window.matchMedia("(max-width: 767px)").matches) setMobileSidebarOpen((value) => !value);
+          if (window.matchMedia("(max-width: 767px)").matches)
+            setMobileSidebarOpen((value) => !value);
           else setSidebarCollapsed((value) => !value);
         }}
         showWhatsApp={
@@ -122,7 +132,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           onMobileClose={() => setMobileSidebarOpen(false)}
         />
         <div className="flex min-w-0 flex-1 flex-col print:block">
-          <main className={`min-h-0 flex-1 overflow-y-auto bg-biz-bg p-2 sm:p-3 print:overflow-visible print:bg-white print:p-0 ${pathname === "/dashboard" ? "md:overflow-hidden" : pathname === "/cms/ongoing-works" ? "lg:overflow-hidden" : ""}`}>{children}</main>
+          <main
+            className={`min-h-0 flex-1 overflow-y-auto bg-biz-bg p-2 sm:p-3 print:overflow-visible print:bg-white print:p-0 ${pathname === "/dashboard" ? "md:overflow-hidden" : pathname === "/cms/ongoing-works" ? "lg:overflow-hidden" : ""}`}
+          >
+            {children}
+          </main>
         </div>
       </div>
     </div>

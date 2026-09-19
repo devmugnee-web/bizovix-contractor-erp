@@ -66,9 +66,9 @@ module.exports = {
         "card-hover": "0 2px 6px rgba(13, 27, 62, 0.08)",
       },
       fontSize: {
-        "page-title": ["24px", { lineHeight: "32px", fontWeight: "700" }],
-        "card-header": ["15px", { lineHeight: "20px", fontWeight: "600" }],
-        body: ["13px", { lineHeight: "20px" }],
+        "page-title": ["22px", { lineHeight: "28px", fontWeight: "700" }],
+        "card-header": ["14px", { lineHeight: "20px", fontWeight: "600" }],
+        body: ["14px", { lineHeight: "20px" }],
         helper: ["12px", { lineHeight: "16px" }],
         "kpi-value": ["20px", { lineHeight: "26px", fontWeight: "700" }],
       },

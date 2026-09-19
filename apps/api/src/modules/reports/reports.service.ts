@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@bizovix/database";
+import { randomUUID } from "node:crypto";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
 import type { QueryReportDto } from "./dto/query-report.dto";
@@ -72,7 +73,7 @@ export class ReportsService {
       new Prisma.Decimal(0),
     );
     return {
-      totalReports: 15,
+      totalReports: 16,
       thisMonthExpenses: s(expenses._sum.amount),
       thisMonthReceipts: s(receipts._sum.amount),
       outstandingReceivables: s(outstanding),
@@ -118,6 +119,7 @@ export class ReportsService {
     };
   }
   async run(org: string, category: string, report: string, q: QueryReportDto): Promise<Report> {
+    if (category === "transactions" && report === "all") return this.allTransactions(org, q);
     if (category === "tenders") return this.tenders(org, report, q);
     if (category === "projects") return this.projects(org, report, q);
     if (category === "expenses") return this.expenses(org, report, q);
@@ -128,6 +130,96 @@ export class ReportsService {
     if (["inventory", "assets", "inter-company"].includes(category))
       return this.unavailable(category, report, q);
     throw new NotFoundException("Report category not found");
+  }
+  async hideTransactions(org: string, userId: string, ids: string[]) {
+    const uniqueIds = [...new Set(ids)];
+    if (!uniqueIds.length) throw new BadRequestException("Select at least one transaction");
+    const existing = await this.prisma.journalEntry.findMany({
+      where: { id: { in: uniqueIds }, organizationId: org, status: "POSTED", sourceModule: { not: "JOURNAL_REVERSAL" } },
+      select: { id: true },
+    });
+    if (existing.length !== uniqueIds.length) throw new BadRequestException("One or more selected transactions are unavailable");
+    await this.prisma.$transaction(async (tx) => {
+      for (const journalEntryId of uniqueIds) {
+        await tx.$executeRaw`INSERT INTO "hidden_report_transactions" ("id", "organizationId", "journalEntryId", "hiddenById") VALUES (${randomUUID()}, ${org}, ${journalEntryId}, ${userId}) ON CONFLICT ("organizationId", "journalEntryId") DO NOTHING`;
+      }
+      await this.audit.record({
+        organizationId: org,
+        userId,
+        action: "REPORT_TRANSACTIONS_HIDDEN",
+        module: "Reports",
+        description: `Removed ${uniqueIds.length} transactions from All Transactions report`,
+        entityType: "Report",
+        newValue: { journalEntryIds: uniqueIds },
+      }, tx);
+    });
+    return { hidden: uniqueIds.length };
+  }
+  private async allTransactions(org: string, q: QueryReportDto): Promise<Report> {
+    const hidden = await this.prisma.$queryRaw<Array<{ journalEntryId: string }>>`SELECT "journalEntryId" FROM "hidden_report_transactions" WHERE "organizationId" = ${org}`;
+    const entries = await this.prisma.journalEntry.findMany({
+      where: {
+        organizationId: org,
+        id: { notIn: hidden.map((item) => item.journalEntryId) },
+        status: "POSTED",
+        sourceModule: { not: "JOURNAL_REVERSAL" },
+        journalDate: this.dates(q),
+        lines: q.workId || q.organizationMasterId || q.accountId ? {
+          some: {
+            projectId: q.workId,
+            project: q.organizationMasterId ? { organizationMasterId: q.organizationMasterId } : undefined,
+            accountId: q.accountId,
+          },
+        } : undefined,
+        OR: q.search ? [
+          { journalNo: { contains: q.search, mode: "insensitive" } },
+          { referenceNo: { contains: q.search, mode: "insensitive" } },
+          { description: { contains: q.search, mode: "insensitive" } },
+          { sourceModule: { contains: q.search, mode: "insensitive" } },
+          { lines: { some: { partyName: { contains: q.search, mode: "insensitive" } } } },
+        ] : undefined,
+      },
+      include: { lines: { include: { account: true } } },
+      orderBy: [{ journalDate: "desc" }, { createdAt: "desc" }],
+    });
+    const zero = () => new Prisma.Decimal(0);
+    const rows = entries.map((entry) => {
+      const amount = entry.lines.reduce((total, line) => total.add(line.debit), zero());
+      const cashLines = entry.lines.filter((line) => line.account.linkedBankAccountId || line.account.systemKey === "CASH_IN_HAND");
+      const inflow = cashLines.reduce((total, line) => total.add(line.debit), zero());
+      const outflow = cashLines.reduce((total, line) => total.add(line.credit), zero());
+      return {
+        journalId: entry.id,
+        date: entry.journalDate.toISOString(),
+        type: entry.sourceModule.replaceAll("_", " "),
+        voucher: entry.journalNo,
+        party: entry.lines.find((line) => line.partyName)?.partyName ?? "-",
+        amount: s(amount),
+        status: entry.status,
+        reference: entry.referenceNo ?? "-",
+        description: entry.description,
+        inflow,
+        outflow,
+      };
+    });
+    return this.finish({
+      title: "All Transactions",
+      subtitle: "Posted journal transactions across all modules.",
+      kpis: [
+        { label: "Transactions", value: String(rows.length) },
+        { label: "Inflow", value: s(rows.reduce((total, row) => total.add(row.inflow), zero())), kind: "money" },
+        { label: "Outflow", value: s(rows.reduce((total, row) => total.add(row.outflow), zero())), kind: "money" },
+      ],
+      columns: [
+        { key: "date", label: "Date", type: "date" },
+        { key: "type", label: "Type" },
+        { key: "voucher", label: "Voucher" },
+        { key: "party", label: "Party" },
+        moneyCol("amount", "Amount"),
+        { key: "status", label: "Status" },
+      ],
+      rows: rows.map(({ inflow, outflow, ...row }) => row),
+    }, q);
   }
   private unavailable(category: string, report: string, q: QueryReportDto) {
     const label =

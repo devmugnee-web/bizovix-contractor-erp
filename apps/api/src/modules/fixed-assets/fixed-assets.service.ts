@@ -52,8 +52,8 @@ export class FixedAssetsService {
   private async ensureCategoryLedgers(tx: Tx, org: string, categoryId: string) {
     const category = await this.category(org, categoryId, tx);
     await this.accounting.ensureChart(org, tx);
-    const assetsRoot = await this.accounting.systemAccount(tx, org, "ASSETS");
-    const expenseRoot = await this.accounting.systemAccount(tx, org, "EXPENSES");
+    const assetsRoot = await this.accounting.systemAccount(tx, org, "ASSET_FIXED");
+    const expenseRoot = await this.accounting.systemAccount(tx, org, "ADMINISTRATIVE_EXPENSES");
     const create = (data: Prisma.LedgerAccountUncheckedCreateInput) => tx.ledgerAccount.create({ data });
     const assetLedger = category.assetLedgerId
       ? await tx.ledgerAccount.findFirst({ where: { id: category.assetLedgerId, organizationId: org, isActive: true } })
@@ -65,7 +65,7 @@ export class FixedAssetsService {
       ? await tx.ledgerAccount.findFirst({ where: { id: category.depreciationExpenseLedgerId, organizationId: org, isActive: true } })
       : null;
     const nextAsset = assetLedger ?? await create({ organizationId: org, code: this.code("FA", category.code), name: `${category.name} - Fixed Assets`, parentId: assetsRoot.id, accountType: "ASSET", normalBalance: "DEBIT", isSystem: false });
-    const nextAccumulated = accumulatedLedger ?? await create({ organizationId: org, code: this.code("AD", category.code), name: `${category.name} - Accumulated Depreciation`, parentId: nextAsset.id, accountType: "ASSET", normalBalance: "CREDIT", isSystem: false });
+    const nextAccumulated = accumulatedLedger ?? await create({ organizationId: org, code: this.code("AD", category.code), name: `${category.name} - Accumulated Depreciation`, parentId: assetsRoot.id, accountType: "ASSET", normalBalance: "CREDIT", isSystem: false });
     const nextExpense = expenseLedger ?? await create({ organizationId: org, code: this.code("DE", category.code), name: `${category.name} - Depreciation Expense`, parentId: expenseRoot.id, accountType: "EXPENSE", normalBalance: "DEBIT", isSystem: false });
     if (!category.assetLedgerId || !category.accumulatedDepreciationLedgerId || !category.depreciationExpenseLedgerId) {
       await tx.assetCategory.update({
@@ -192,7 +192,8 @@ export class FixedAssetsService {
         if (!supplier) throw new NotFoundException("Supplier not found");
       }
       if (dto.fundingBankAccountId && !(await tx.bankAccount.findFirst({ where: { id: dto.fundingBankAccountId, organizationId: org } }))) throw new NotFoundException("Funding account not found");
-      const assetLedger = await tx.ledgerAccount.create({ data: { organizationId: org, code: this.code("AS", ledgers.category.code), name: dto.name.trim(), parentId: ledgers.assetLedger.id, accountType: "ASSET", normalBalance: "DEBIT", isSystem: false } });
+      const fixedAssetsCategory = await this.accounting.systemAccount(tx, org, "ASSET_FIXED");
+      const assetLedger = await tx.ledgerAccount.create({ data: { organizationId: org, code: this.code("AS", ledgers.category.code), name: dto.name.trim(), parentId: fixedAssetsCategory.id, accountType: "ASSET", normalBalance: "DEBIT", isSystem: false } });
       let payableId: string | undefined;
       if (dto.fundingMode === "CREDIT") {
         const payable = await tx.payable.create({ data: { organizationId: org, partyId: supplier!.id, partyName: supplier!.name, partyType: "SUPPLIER", billNo: `ASSET-${assetCode}`, billDate: new Date(dto.purchaseDate), amount: capitalized, description: `Fixed asset acquisition: ${dto.name.trim()}`, createdById: userId } });

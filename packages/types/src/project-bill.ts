@@ -64,7 +64,12 @@ export interface ProjectBillRecord {
     tender: { id: string; egpTenderId: string | null } | null;
   };
   contractId: string;
-  contract: { id: string; contractNo: string; retentionPct: string | null; currentContractValue: string };
+  contract: {
+    id: string;
+    contractNo: string;
+    retentionPct: string | null;
+    currentContractValue: string;
+  };
   billNo: string;
   billType: BillType;
   billDate: string;
@@ -131,6 +136,8 @@ export interface ProjectBillQuery {
   page?: number;
   limit?: number;
   search?: string;
+  fromDate?: string;
+  toDate?: string;
   cmsWorkId?: string;
   billType?: BillType;
   status?: BillStatus;

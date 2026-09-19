@@ -12,7 +12,8 @@ body {
   box-sizing: border-box;
 }
 
-/* Dashboard-only typography tuned for dense financial information. */
+/* Consistent Windows-native typography across the authenticated ERP shell. */
+.erp-shell,
 .dashboard-workspace {
   font-family:
     "Segoe UI Variable Text",
@@ -28,6 +29,19 @@ body {
     "cv03" 1,
     "cv04" 1;
   text-rendering: optimizeLegibility;
+}
+
+.erp-shell {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.erp-shell button,
+.erp-shell input,
+.erp-shell select,
+.erp-shell textarea {
+  font-family: inherit;
+  font-feature-settings: inherit;
 }
 
 /* Keep number fields visually consistent with text fields across the ERP. */

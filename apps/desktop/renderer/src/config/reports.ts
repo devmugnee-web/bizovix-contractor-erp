@@ -8,6 +8,7 @@ import {
   FileChartColumn,
   Landmark,
   WalletCards,
+  ListFilter,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,6 +33,13 @@ const r = (slug: string, title: string, description: string): ReportCardDef => (
 });
 
 export const REPORT_CATEGORIES: ReportCategoryDef[] = [
+  {
+    slug: "transactions",
+    title: "Transaction Reports",
+    shortTitle: "Transaction Reports",
+    icon: ListFilter,
+    reports: [r("all", "All Transactions", "All posted transactions across the business.")],
+  },
   {
     slug: "tenders",
     title: "Tender Reports",

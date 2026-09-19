@@ -526,6 +526,7 @@ model Organization {
   monthlyTargets                 MonthlyTarget[]
   ledgerAccounts                 LedgerAccount[]
   journalEntries                 JournalEntry[]
+  hiddenReportTransactions       HiddenReportTransaction[]
   payables                       Payable[]
   financialTransactions          FinancialTransaction[]
   fundTransfers                  FundTransfer[]
@@ -2946,6 +2947,20 @@ model JournalLine {
   @@index([projectId, journalEntryId])
   @@index([partyName, journalEntryId])
   @@map("journal_lines")
+}
+
+model HiddenReportTransaction {
+  id             String   @id @default(cuid())
+  organizationId String
+  journalEntryId String
+  hiddenById     String?
+  hiddenAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, journalEntryId])
+  @@index([organizationId, hiddenAt])
+  @@map("hidden_report_transactions")
 }
 
 model Payable {
