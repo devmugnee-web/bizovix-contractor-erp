@@ -107,7 +107,7 @@ export default function GeneralExpensePage() {
   }
 
   async function onSubmit(values: GeneralExpenseFormValues) {
-    const payload: SaveGeneralExpenseInput = { ...values, amount: Number(values.amount), description: values.description || undefined };
+    const payload: SaveGeneralExpenseInput = { ...values, amount: Number(values.amount), paidFromAccountId: values.paidFromAccountId || undefined, payablePartyId: values.payablePartyId || undefined, expenseLedgerAccountId: values.expenseLedgerAccountId || undefined, description: values.description || undefined };
     try {
       const saved = editingId ? await updateExpense.mutateAsync({ id: editingId, payload }) : await createExpense.mutateAsync(payload);
       if (files.length) await uploadAttachments.mutateAsync({ id: saved.id, files });
@@ -148,7 +148,7 @@ export default function GeneralExpensePage() {
         <FormField label="Expense Nature" required error={form.formState.errors.expenseNature?.message}><SelectInput options={[{ label: "Indirect / General", value: "INDIRECT" }, { label: "Direct", value: "DIRECT" }]} {...form.register("expenseNature")} /></FormField>
         <FormField label="Payment Mode" required error={form.formState.errors.paymentMode?.message}><SelectInput options={[{ label: "Cash / Bank", value: "CASH_BANK" }, { label: "Create Payable", value: "PAYABLE" }]} {...form.register("paymentMode")} /></FormField>
         {paymentMode === "CASH_BANK" ? <FormField label="Paid From" required error={form.formState.errors.paidFromAccountId?.message}><SelectInput placeholder="Select account" options={(accounts.data ?? []).map((item) => ({ label: `${item.accountName}${item.accountNumber ? ` (${item.accountNumber})` : ""}`, value: item.id }))} {...form.register("paidFromAccountId")} /></FormField> : <FormField label="Payable Party" required error={form.formState.errors.payablePartyId?.message}><SelectInput placeholder="Select vendor / supplier" options={(parties.data?.items ?? []).map((item) => ({ label: `${item.code} - ${item.name}`, value: item.id }))} {...form.register("payablePartyId")} /></FormField>}
-        <FormField label="Expense Ledger"><SelectInput placeholder="Default from expense head" options={(chart.data ?? []).filter((account) => account.isActive && account.accountType === "EXPENSE").map((account) => ({ label: `${account.code} - ${account.name}`, value: account.id }))} {...form.register("expenseLedgerAccountId")} /></FormField>
+        <FormField label="Expense Ledger"><SelectInput placeholder="Default from expense head" options={(chart.data ?? []).filter((account) => account.isActive && account.accountType === "EXPENSE" && !account.isControlAccount).map((account) => ({ label: `${account.code} - ${account.name}`, value: account.id }))} {...form.register("expenseLedgerAccountId")} /></FormField>
         <FormField label="Description / Remarks" error={form.formState.errors.description?.message}><TextInput placeholder="Stationery and office supplies" {...form.register("description")} /></FormField>
       </fieldset><div className="mt-5 flex justify-end gap-3"><SecondaryButton type="button" onClick={resetForm}>Reset</SecondaryButton><PrimaryButton type="submit" disabled={saving || (!editingId && !canCreate) || (!!editingId && !canUpdate)} className="min-w-36"><Save className="h-4 w-4" /> {saving ? "Saving..." : editingId ? "Update Expense" : "Save Expense"}</PrimaryButton></div></form>
     </section>

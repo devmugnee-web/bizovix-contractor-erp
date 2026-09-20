@@ -137,10 +137,14 @@ export class AccountingService {
       include: { bankAccount: true },
       orderBy: { code: "asc" },
     });
+    const financeSetting = await tx.financeSetting.findUnique({
+      where: { organizationId: org },
+      select: { defaultCashAccountId: true, defaultPettyCashAccountId: true },
+    });
     const cash = linked.filter((row) => row.bankAccount?.accountType === "CASH");
     const banks = linked.filter((row) => row.bankAccount?.accountType !== "CASH");
-    const cashInHand = cash.find((row) => /^(main cash|cash in hand)$/i.test(row.bankAccount?.accountName ?? row.name));
-    const pettyCash = cash.find((row) => /^petty cash$/i.test(row.bankAccount?.accountName ?? row.name));
+    const cashInHand = cash.find((row) => row.id === financeSetting?.defaultCashAccountId);
+    const pettyCash = cash.find((row) => row.id === financeSetting?.defaultPettyCashAccountId);
     const orderedCash = [cashInHand, pettyCash, ...cash.filter((row) => row.id !== cashInHand?.id && row.id !== pettyCash?.id)].filter((row): row is (typeof cash)[number] => Boolean(row));
     for (const [index, row] of orderedCash.entries()) {
       const code = row.id === cashInHand?.id ? "12111001" : row.id === pettyCash?.id ? "12111002" : `12111${String(index + 3).padStart(3, "0")}`;
@@ -229,7 +233,7 @@ export class AccountingService {
       },
     });
   }
-  async bankLedgerAccount(tx: Tx, org: string, bankAccountId: string) {
+  async bankLedgerAccount(tx: Tx, org: string, bankAccountId: string, cashRole?: "MAIN_CASH" | "PETTY_CASH") {
     const bank = await tx.bankAccount.findFirst({
       where: { id: bankAccountId, organizationId: org },
     });
@@ -241,7 +245,7 @@ export class AccountingService {
     if (existing) return existing;
     const parent = await this.systemAccount(tx, org, bank.accountType === "CASH" ? "CASH" : "BANK");
     let sequence = bank.accountType === "CASH"
-      ? /^petty cash$/i.test(bank.accountName) ? 2 : /^(main cash|cash in hand)$/i.test(bank.accountName) ? 1 : 3
+      ? cashRole === "MAIN_CASH" ? 1 : cashRole === "PETTY_CASH" ? 2 : 3
       : 1;
     let code = "";
     do {
@@ -385,12 +389,39 @@ export class AccountingService {
   }
   async chart(org: string) {
     await this.ensureChart(org);
-    const rows = await this.prisma.ledgerAccount.findMany({
-      where: { organizationId: org },
-      include: { _count: { select: { journalLines: true } } },
-      orderBy: { code: "asc" },
-    });
-    return rows;
+    const [rows, totals] = await Promise.all([
+      this.prisma.ledgerAccount.findMany({
+        where: { organizationId: org },
+        include: { _count: { select: { journalLines: true } } },
+        orderBy: { code: "asc" },
+      }),
+      this.prisma.journalLine.groupBy({
+        by: ["accountId"],
+        where: { journalEntry: { organizationId: org, status: "POSTED" } },
+        _sum: { debit: true, credit: true },
+      }),
+    ]);
+    const direct = new Map(totals.map((total) => {
+      const account = rows.find((row) => row.id === total.accountId);
+      const debit = D(total._sum.debit ?? 0);
+      const credit = D(total._sum.credit ?? 0);
+      return [total.accountId, account?.normalBalance === "CREDIT" ? credit.sub(debit) : debit.sub(credit)];
+    }));
+    const children = new Map<string, string[]>();
+    for (const row of rows) {
+      if (row.parentId) children.set(row.parentId, [...(children.get(row.parentId) ?? []), row.id]);
+    }
+    const aggregate = new Map<string, Prisma.Decimal>();
+    const balance = (accountId: string, visiting = new Set<string>()): Prisma.Decimal => {
+      const cached = aggregate.get(accountId);
+      if (cached) return cached;
+      if (visiting.has(accountId)) return D(0);
+      const next = new Set(visiting).add(accountId);
+      const amount = (children.get(accountId) ?? []).reduce((sum, childId) => sum.add(balance(childId, next)), direct.get(accountId) ?? D(0));
+      aggregate.set(accountId, amount);
+      return amount;
+    };
+    return rows.map((row) => ({ ...row, balance: balance(row.id).toFixed(2) }));
   }
   private assertValidNormalBalance(accountType: string, normalBalance: string) {
     const expected = NORMAL_BALANCE_BY_TYPE[accountType];

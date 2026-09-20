@@ -87,9 +87,10 @@ export class GeneralExpensesService {
     if (!person) throw new NotFoundException("Expense person not found");
     if (paymentMode === "CASH_BANK" && !account) throw new NotFoundException("Payment account not found");
     if (paymentMode === "PAYABLE" && !party) throw new NotFoundException("Payable party not found");
-    const ledgerId = dto.expenseLedgerAccountId ?? head.ledgerAccountId;
+    const ledgerId = dto.expenseLedgerAccountId?.trim() || head.ledgerAccountId;
+    if (!ledgerId) throw new BadRequestException("Expense head must have a Chart of Accounts ID before posting");
     const ledger = ledgerId ? await this.prisma.ledgerAccount.findFirst({ where: { id: ledgerId, organizationId, isActive: true, accountType: "EXPENSE", isControlAccount: false } }) : null;
-    if (ledgerId && !ledger) throw new NotFoundException("Expense ledger account not found");
+    if (!ledger) throw new NotFoundException("Expense ledger Account ID not found");
     return { head, account, party, ledger, paymentMode };
   }
 
@@ -122,7 +123,7 @@ export class GeneralExpensesService {
         amount: dto.amount, expenseDate: new Date(dto.expenseDate), status: "APPROVED", referenceNo, createdById: userId,
       }, include: includeRelations });
       if (paymentMode === "CASH_BANK") await this.cashBank.post(tx, { organizationId, accountId: account!.id, direction: "OUT", amount: dto.amount, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, referenceNo, description: dto.description?.trim() || head.name, transactionDate: expense.expenseDate, createdById: userId });
-      await this.accounting.post(tx, { organizationId, userId, journalDate: expense.expenseDate, referenceNo, description: dto.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, lines: buildGeneralExpenseJournalLines({ amount: dto.amount, paymentMode, expenseLedgerAccountId: ledger?.id, bankAccountId: account?.id, partyName: party?.name }) });
+      await this.accounting.post(tx, { organizationId, userId, journalDate: expense.expenseDate, referenceNo, description: dto.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: expense.id, lines: buildGeneralExpenseJournalLines({ amount: dto.amount, paymentMode, expenseLedgerAccountId: ledger.id, bankAccountId: account?.id, partyName: party?.name }) });
       return expense;
     });
     await this.auditLogService.record({ organizationId, userId, action: "create", entityType: "GeneralExpense", entityId: record.id, newValue: toDto(record) });
@@ -145,7 +146,7 @@ export class GeneralExpensesService {
       paidFromAccountId: dto.paidFromAccountId ?? existing.paidFromAccount?.id ?? undefined,
       paymentMode: dto.paymentMode ?? existing.paymentMode,
       expenseNature: dto.expenseNature ?? existing.expenseNature,
-      expenseLedgerAccountId: dto.expenseLedgerAccountId ?? existing.expenseLedger?.id ?? undefined,
+      expenseLedgerAccountId: dto.expenseLedgerAccountId?.trim() || (dto.expenseHeadId && dto.expenseHeadId !== existing.expenseHead.id ? undefined : existing.expenseLedger?.id) || undefined,
       payablePartyId: dto.payablePartyId ?? existing.payableParty?.id ?? undefined,
       description: dto.description ?? existing.description ?? undefined,
     };
@@ -168,7 +169,7 @@ export class GeneralExpensesService {
       const payable = paymentMode === "PAYABLE" ? await tx.payable.create({ data: { organizationId, partyId: party!.id, partyName: party!.name, partyType: "VENDOR", billNo: referenceNo, billDate: new Date(merged.expenseDate), amount: merged.amount, description: merged.description?.trim() || head.name, createdById: userId } }) : null;
       const replacement = await tx.expense.create({ data: { organizationId, workId: null, expenseHeadId: merged.expenseHeadId, expenseById: merged.expenseById, paidFromAccountId: account?.id, expenseLedgerAccountId: ledger?.id, payablePartyId: party?.id, payableId: payable?.id, expenseNature: merged.expenseNature ?? head.nature, paymentMode, category: head.name, description: merged.description?.trim() || null, amount: merged.amount, expenseDate: new Date(merged.expenseDate), status: "APPROVED", referenceNo, createdById: userId, replacesExpenseId: id }, include: includeRelations });
       if (paymentMode === "CASH_BANK") await this.cashBank.post(tx, { organizationId, accountId: account!.id, direction: "OUT", amount: merged.amount, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, referenceNo, description: merged.description?.trim() || head.name, transactionDate: replacement.expenseDate, createdById: userId });
-      await this.accounting.post(tx, { organizationId, userId, journalDate: replacement.expenseDate, referenceNo, description: merged.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, lines: buildGeneralExpenseJournalLines({ amount: merged.amount, paymentMode, expenseLedgerAccountId: ledger?.id, bankAccountId: account?.id, partyName: party?.name }) });
+      await this.accounting.post(tx, { organizationId, userId, journalDate: replacement.expenseDate, referenceNo, description: merged.description?.trim() || head.name, sourceModule: "GENERAL_EXPENSE", sourceType: "EXPENSE", sourceId: replacement.id, lines: buildGeneralExpenseJournalLines({ amount: merged.amount, paymentMode, expenseLedgerAccountId: ledger.id, bankAccountId: account?.id, partyName: party?.name }) });
       return replacement;
     });
     await this.auditLogService.record({ organizationId, userId, action: "EXPENSE_AMENDED", entityType: "GeneralExpense", entityId: id, oldValue: existing, newValue: toDto(record) });

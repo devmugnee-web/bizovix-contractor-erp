@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class SaveExpenseHeadDto {
   @IsString()
@@ -10,6 +10,14 @@ export class SaveExpenseHeadDto {
   @IsString()
   @MaxLength(120)
   budgetCategory?: string | null;
+
+  @IsOptional()
+  @IsIn(["DIRECT", "INDIRECT"])
+  nature?: "DIRECT" | "INDIRECT";
+
+  @IsString()
+  @MinLength(1)
+  ledgerAccountId!: string;
 
   @IsOptional()
   @IsBoolean()

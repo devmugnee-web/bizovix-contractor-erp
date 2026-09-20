@@ -1,7 +1,16 @@
 "use client";
 
 import { cn } from "@bizovix/ui";
-import type { SearchActivityShareItem } from "@/app/(dashboard)/tender-management/mock-data";
+
+export interface SearchActivityShareItem {
+  member: {
+    id: string;
+    name: string;
+    initial: string;
+    color: string;
+  };
+  count: number;
+}
 
 export interface SearchActivityShareCardProps {
   items: SearchActivityShareItem[];

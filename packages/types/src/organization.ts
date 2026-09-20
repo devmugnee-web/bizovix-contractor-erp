@@ -11,6 +11,8 @@ export interface BankAccountOption {
   bankName?: string | null;
   accountNumber?: string | null;
   isActive: boolean;
+  ledgerAccountId?: string | null;
+  cashRole?: "MAIN_CASH" | "PETTY_CASH" | null;
 }
 
 export interface OrganizationMasterRecord {

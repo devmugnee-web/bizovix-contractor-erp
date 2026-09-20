@@ -717,7 +717,7 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
       ],
   );
   const pettyCashSources = (accounts.data ?? [])
-    .filter((account) => account.accountName !== "Petty Cash")
+    .filter((account) => account.cashRole !== "PETTY_CASH")
     .map(
       (account) =>
         [

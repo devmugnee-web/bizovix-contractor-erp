@@ -1,15 +1,11 @@
 import { Injectable } from "@nestjs/common";
-import type { BankAccount } from "@bizovix/database";
-import { PrismaService } from "../prisma/prisma.service";
+import { CashBankService } from "../cash-bank/cash-bank.service";
 
 @Injectable()
 export class BankAccountsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly cashBank: CashBankService) {}
 
-  findAll(organizationId: string): Promise<BankAccount[]> {
-    return this.prisma.bankAccount.findMany({
-      where: { organizationId },
-      orderBy: { accountName: "asc" },
-    });
+  findAll(organizationId: string) {
+    return this.cashBank.accounts(organizationId);
   }
 }

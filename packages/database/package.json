@@ -13,6 +13,7 @@
     "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "seed:banks:verify": "dotenv -e ../../.env -- tsx prisma/seed-bank-accounts.ts",
+    "map:expense-heads": "dotenv -e ../../.env -- tsx prisma/scripts/map-expense-heads-to-chart.ts",
     "sync-permissions": "dotenv -e ../../.env -- tsx prisma/sync-permissions.ts",
     "studio": "dotenv -e ../../.env -- prisma studio",
     "typecheck": "tsc --noEmit"

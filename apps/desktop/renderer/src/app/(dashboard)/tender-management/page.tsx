@@ -20,7 +20,12 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { useTenderStats } from "@bizovix/api-client";
+import {
+  useItemPriceHistory,
+  useTenderCostings,
+  useTenders,
+  useTenderStats,
+} from "@bizovix/api-client";
 import {
   DataTable,
   IconButton,
@@ -33,23 +38,67 @@ import {
   type StatusBadgeTone,
 } from "@bizovix/ui";
 import { formatBDTCompact, formatDate } from "@bizovix/utils";
+import type { TenderCostingStatus, TenderStatus } from "@bizovix/types";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
-import { SearchActivityShareCard } from "@/components/tender-management/SearchActivityShareCard";
 import {
-  ITEM_PRICE_HISTORY_ROWS,
-  SEARCH_ACTIVITY_SHARE,
-  SLT_CALCULATION_ROWS,
-  TENDER_COSTING_ROWS,
-  TENDER_SEARCH_ACTIVITIES,
-  type CostingStatus,
-  type Priority,
-  type SearchStatus,
-} from "./mock-data";
+  SearchActivityShareCard,
+  type SearchActivityShareItem,
+} from "@/components/tender-management/SearchActivityShareCard";
 
-// "Total Value" has no backing API field on TenderStats yet — every other KPI
-// below reads from the real useTenderStats() hook. This one constant is the
-// only mocked KPI value on the page; replace once the backend exposes it.
-const MOCK_TOTAL_TENDER_VALUE = 456_800_000;
+type Priority = "High" | "Medium" | "Low";
+type SearchStatus = "New" | "In Progress" | "Qualified" | "Closed";
+type CostingStatus = "Completed" | "In Progress" | "Pending" | "Cancelled";
+
+interface TeamMember {
+  id: string;
+  name: string;
+  initial: string;
+  color: string;
+}
+
+interface TenderSearchActivity {
+  id: string;
+  tenderSearchId: string;
+  workName: string;
+  organization: string;
+  source: string;
+  searchDate: string;
+  assignedTo: TeamMember;
+  nextFollowUp: string;
+  status: SearchStatus;
+  priority: Priority;
+}
+
+interface TenderCostingRow {
+  id: string;
+  tenderId: string;
+  workName: string;
+  estimatedCost: number;
+  ourCost: number;
+  marginPercent: number;
+  status: CostingStatus;
+}
+
+interface SltCalculationRow {
+  id: string;
+  tenderId: string;
+  workName: string;
+  organization: string;
+  sltAmount: number;
+  status: CostingStatus;
+}
+
+interface ItemPriceHistoryRow {
+  id: string;
+  itemDescription: string;
+  brandModel: string;
+  supplier: string;
+  latestPrice: number;
+  updatedOn: string;
+}
+
+const EMPTY_SLT_ROWS: SltCalculationRow[] = [];
+const TEAM_COLORS = ["#2563EB", "#F97316", "#64748B", "#DB2777", "#DC2626", "#059669"];
 
 const SEARCH_STATUS_TONE: Record<SearchStatus, StatusBadgeTone> = {
   New: "info",
@@ -68,7 +117,60 @@ const COSTING_STATUS_TONE: Record<CostingStatus, StatusBadgeTone> = {
   Completed: "success",
   "In Progress": "warning",
   Pending: "neutral",
+  Cancelled: "danger",
 };
+
+function toTeamMember(
+  id: string | null | undefined,
+  name: string | null | undefined,
+): TeamMember {
+  const memberName = name?.trim() || "Unassigned";
+  const memberId = id || memberName.toLowerCase().replace(/\s+/g, "-");
+  const colorIndex = Array.from(memberId).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return {
+    id: memberId,
+    name: memberName,
+    initial: memberName.charAt(0).toUpperCase() || "U",
+    color: TEAM_COLORS[colorIndex % TEAM_COLORS.length]!,
+  };
+}
+
+function toSearchStatus(status: TenderStatus): SearchStatus {
+  if (status === "DRAFT" || status === "PUBLISHED") return "New";
+  if (["NOA", "AWARDED", "ONGOING", "COMPLETED"].includes(status)) return "Qualified";
+  if (status === "REJECTED" || status === "CANCELLED") return "Closed";
+  return "In Progress";
+}
+
+function toCostingStatus(status: TenderCostingStatus): CostingStatus {
+  if (status === "COMPLETED") return "Completed";
+  if (status === "IN_PROGRESS") return "In Progress";
+  if (status === "CANCELLED") return "Cancelled";
+  return "Pending";
+}
+
+function toPriority(deadline: string | null): Priority {
+  if (!deadline) return "Low";
+  const days = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86_400_000);
+  if (days <= 3) return "High";
+  if (days <= 7) return "Medium";
+  return "Low";
+}
+
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function initialDateRange() {
+  const now = new Date();
+  return {
+    from: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)),
+    to: toDateInputValue(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+}
 
 type InsightTab = "costing" | "slt" | "price";
 
@@ -174,6 +276,9 @@ export default function TenderManagementPage() {
   useSetBreadcrumb([{ label: "Tender Management" }]);
 
   const stats = useTenderStats();
+  const tenders = useTenders({ page: 1, limit: 500 });
+  const tenderCostings = useTenderCostings({ page: 1, limit: 500 });
+  const itemPriceHistory = useItemPriceHistory();
   const isShortViewport = React.useSyncExternalStore(
     subscribeToShortViewport,
     getShortViewportSnapshot,
@@ -191,7 +296,7 @@ export default function TenderManagementPage() {
   const [priorityFilter, setPriorityFilter] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [dateRangeOpen, setDateRangeOpen] = React.useState(false);
-  const [dateRange, setDateRange] = React.useState({ from: "2024-05-01", to: "2024-05-31" });
+  const [dateRange, setDateRange] = React.useState(initialDateRange);
   const [viewing, setViewing] = React.useState<{
     title: string;
     fields: Array<[string, string]>;
@@ -206,14 +311,50 @@ export default function TenderManagementPage() {
   const [priceSearch, setPriceSearch] = React.useState("");
   const [activeInsight, setActiveInsight] = React.useState<InsightTab>("costing");
 
-  const organizations = React.useMemo(
-    () => Array.from(new Set(TENDER_SEARCH_ACTIVITIES.map((row) => row.organization))).sort(),
-    [],
+  const activities = React.useMemo<TenderSearchActivity[]>(
+    () =>
+      (tenders.data?.items ?? []).map((tender) => {
+        const assignedTo = toTeamMember(
+          tender.assignedToUserId ?? tender.foundByUserId ?? tender.createdById,
+          tender.assignedToName ?? tender.foundBy?.name ?? tender.foundByName ?? tender.createdBy?.name,
+        );
+        const nextFollowUp =
+          tender.submissionDeadline ?? tender.documentPurchaseDeadline ?? tender.openingDate ?? tender.updatedAt;
+        return {
+          id: tender.id,
+          tenderSearchId: tender.egpTenderId ?? tender.id,
+          workName: tender.workName,
+          organization:
+            tender.organizationMaster?.shortName ?? tender.noticeOrganization ?? "Not set",
+          source: tender.egpTenderId ? "e-GP" : tender.procurementMethod,
+          searchDate: tender.findingDate ?? tender.createdAt,
+          assignedTo,
+          nextFollowUp,
+          status: toSearchStatus(tender.status),
+          priority: toPriority(nextFollowUp),
+        };
+      }),
+    [tenders.data?.items],
   );
+
+  const organizations = React.useMemo(
+    () => Array.from(new Set(activities.map((row) => row.organization))).sort(),
+    [activities],
+  );
+
+  const activityShare = React.useMemo<SearchActivityShareItem[]>(() => {
+    const byMember = new Map<string, SearchActivityShareItem>();
+    for (const activity of activities) {
+      const current = byMember.get(activity.assignedTo.id);
+      if (current) current.count += 1;
+      else byMember.set(activity.assignedTo.id, { member: activity.assignedTo, count: 1 });
+    }
+    return Array.from(byMember.values()).sort((left, right) => right.count - left.count);
+  }, [activities]);
 
   const filteredActivities = React.useMemo(() => {
     const term = search.trim().toLowerCase();
-    return TENDER_SEARCH_ACTIVITIES.filter((row) => {
+    return activities.filter((row) => {
       const matchesSearch =
         !term ||
         row.tenderSearchId.toLowerCase().includes(term) ||
@@ -222,7 +363,7 @@ export default function TenderManagementPage() {
       const matchesPriority = !priorityFilter || row.priority === priorityFilter;
       return matchesSearch && matchesOrg && matchesPriority;
     });
-  }, [search, orgFilter, priorityFilter]);
+  }, [activities, search, orgFilter, priorityFilter]);
 
   const limit = isShortViewport ? 4 : isTallViewport ? 6 : 5;
   const total = filteredActivities.length;
@@ -238,19 +379,33 @@ export default function TenderManagementPage() {
     setPage(1);
   }
 
+  const costingSourceRows = React.useMemo<TenderCostingRow[]>(
+    () =>
+      (tenderCostings.data?.items ?? []).map((costing) => ({
+        id: costing.id,
+        tenderId: costing.tender.egpTenderId ?? costing.tender.id,
+        workName: costing.tender.workName,
+        estimatedCost: Number(costing.estimatedCost),
+        ourCost: Number(costing.ourCost),
+        marginPercent: Number(costing.marginPercent),
+        status: toCostingStatus(costing.status),
+      })),
+    [tenderCostings.data?.items],
+  );
+
   const costingRows = React.useMemo(() => {
     const term = costingSearch.trim().toLowerCase();
-    return TENDER_COSTING_ROWS.filter(
+    return costingSourceRows.filter(
       (row) =>
         !term ||
         row.tenderId.toLowerCase().includes(term) ||
         row.workName.toLowerCase().includes(term),
     );
-  }, [costingSearch]);
+  }, [costingSearch, costingSourceRows]);
 
   const sltRows = React.useMemo(() => {
     const term = sltSearch.trim().toLowerCase();
-    return SLT_CALCULATION_ROWS.filter(
+    return EMPTY_SLT_ROWS.filter(
       (row) =>
         !term ||
         row.tenderId.toLowerCase().includes(term) ||
@@ -259,16 +414,38 @@ export default function TenderManagementPage() {
     );
   }, [sltSearch]);
 
+  const priceSourceRows = React.useMemo<ItemPriceHistoryRow[]>(
+    () =>
+      (itemPriceHistory.data ?? []).map((row) => ({
+        id: row.id,
+        itemDescription: row.itemDescription,
+        brandModel: row.brandModel,
+        supplier: row.supplier,
+        latestPrice: row.currentPrice,
+        updatedOn: row.priceDate,
+      })),
+    [itemPriceHistory.data],
+  );
+
   const priceRows = React.useMemo(() => {
     const term = priceSearch.trim().toLowerCase();
-    return ITEM_PRICE_HISTORY_ROWS.filter(
+    return priceSourceRows.filter(
       (row) =>
         !term ||
         row.itemDescription.toLowerCase().includes(term) ||
         row.brandModel.toLowerCase().includes(term) ||
         row.supplier.toLowerCase().includes(term),
     );
-  }, [priceSearch]);
+  }, [priceSearch, priceSourceRows]);
+
+  const totalTenderValue = React.useMemo(
+    () =>
+      (tenders.data?.items ?? []).reduce(
+        (sum, tender) => sum + (Number(tender.contractValue) || 0),
+        0,
+      ),
+    [tenders.data?.items],
+  );
 
   function exportSearchTeamCsv() {
     const header = [
@@ -440,7 +617,7 @@ export default function TenderManagementPage() {
           icon={Coins}
           iconClassName="bg-biz-purple-soft text-biz-purple"
           label="Total Value (BDT)"
-          value={formatBDTCompact(MOCK_TOTAL_TENDER_VALUE)}
+          value={formatBDTCompact(totalTenderValue)}
           helper="All Time"
         />
       </div>
@@ -667,7 +844,7 @@ export default function TenderManagementPage() {
           </section>
 
           <SearchActivityShareCard
-            items={SEARCH_ACTIVITY_SHARE}
+            items={activityShare}
             className="h-full min-h-[300px] xl:min-h-0"
           />
         </div>
@@ -679,10 +856,10 @@ export default function TenderManagementPage() {
                 const TabIcon = tab.icon;
                 const count =
                   tab.key === "costing"
-                    ? TENDER_COSTING_ROWS.length
+                    ? costingSourceRows.length
                     : tab.key === "slt"
-                      ? SLT_CALCULATION_ROWS.length
-                      : ITEM_PRICE_HISTORY_ROWS.length;
+                      ? EMPTY_SLT_ROWS.length
+                      : priceSourceRows.length;
                 return (
                   <button
                     key={tab.key}

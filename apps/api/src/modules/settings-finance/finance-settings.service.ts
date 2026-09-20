@@ -15,6 +15,18 @@ const ACCOUNT_FIELDS = [
   "defaultCreditCommitmentChargeAccountId",
 ] as const;
 
+const ACCOUNT_RULES: Record<(typeof ACCOUNT_FIELDS)[number], { accountType: string; linkedCash?: boolean }> = {
+  defaultCashAccountId: { accountType: "ASSET", linkedCash: true },
+  defaultPettyCashAccountId: { accountType: "ASSET", linkedCash: true },
+  defaultBankChargeAccountId: { accountType: "EXPENSE" },
+  defaultReceivableAccountId: { accountType: "ASSET" },
+  defaultPayableAccountId: { accountType: "LIABILITY" },
+  defaultProjectRevenueAccountId: { accountType: "INCOME" },
+  defaultGeneralExpenseAccountId: { accountType: "EXPENSE" },
+  defaultTenderDocumentExpenseAccountId: { accountType: "EXPENSE" },
+  defaultCreditCommitmentChargeAccountId: { accountType: "EXPENSE" },
+};
+
 @Injectable()
 export class FinanceSettingsService {
   constructor(
@@ -39,17 +51,36 @@ export class FinanceSettingsService {
   }
 
   async update(org: string, userId: string, dto: UpdateFinanceSettingDto) {
-    const ids = ACCOUNT_FIELDS.map((field) => dto[field]).filter((id): id is string => !!id);
+    const accountValues = Object.fromEntries(
+      ACCOUNT_FIELDS
+        .filter((field) => dto[field] !== undefined)
+        .map((field) => [field, dto[field]?.trim() || null]),
+    ) as Partial<Record<(typeof ACCOUNT_FIELDS)[number], string | null>>;
+    const ids = Object.values(accountValues).filter((id): id is string => Boolean(id));
     if (ids.length) {
-      const found = await this.prisma.ledgerAccount.count({
-        where: { organizationId: org, id: { in: ids } },
+      const found = await this.prisma.ledgerAccount.findMany({
+        where: { organizationId: org, id: { in: ids }, isActive: true },
+        include: { bankAccount: true },
       });
-      if (found !== new Set(ids).size) throw new NotFoundException("One or more selected accounts were not found");
+      if (found.length !== new Set(ids).size) throw new NotFoundException("One or more selected Account IDs were not found or are inactive");
+      const byId = new Map(found.map((account) => [account.id, account]));
+      for (const field of ACCOUNT_FIELDS) {
+        const id = accountValues[field];
+        if (!id) continue;
+        const account = byId.get(id)!;
+        const rule = ACCOUNT_RULES[field];
+        if (account.accountType !== rule.accountType) {
+          throw new BadRequestException(`${field} must reference an active ${rule.accountType} Account ID`);
+        }
+        if (rule.linkedCash && (!account.bankAccount || account.bankAccount.accountType !== "CASH" || !account.bankAccount.isActive)) {
+          throw new BadRequestException(`${field} must reference an active Chart of Accounts ID linked to a cash account`);
+        }
+      }
     }
     const old = await this.get(org);
     const row = await this.prisma.financeSetting.update({
       where: { organizationId: org },
-      data: { ...dto, updatedById: userId },
+      data: { ...dto, ...accountValues, updatedById: userId },
     });
     await this.audit.record({
       organizationId: org,

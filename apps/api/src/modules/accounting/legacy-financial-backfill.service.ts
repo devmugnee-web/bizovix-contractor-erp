@@ -176,7 +176,9 @@ export class LegacyFinancialBackfillService {
             await this.cashBank.post(tx, { organizationId, accountId: row.paidFromAccountId, direction: "OUT", amount: row.amount, sourceModule: action.module, sourceType: "EXPENSE", sourceId: row.id, referenceNo: row.referenceNo, description, transactionDate: row.expenseDate, createdById: userId });
             created.financialTransactions++;
           }
-          await this.accounting.post(tx, { organizationId, userId, journalDate: row.expenseDate, referenceNo: row.referenceNo, description, sourceModule: action.module, sourceType: "EXPENSE", sourceId: row.id, lines: [{ systemKey: row.workId ? "PROJECT_EXPENSE" : "GENERAL_EXPENSE", projectId: row.workId, debit: row.amount, credit: 0 }, { bankAccountId: row.paidFromAccountId, projectId: row.workId, debit: 0, credit: row.amount }] });
+          const expenseLedgerAccountId = row.expenseLedgerAccountId ?? row.expenseHead?.ledgerAccountId;
+          if (!expenseLedgerAccountId) throw new Error(`Expense ${row.id} has no Chart of Accounts ID; map its expense head before backfill`);
+          await this.accounting.post(tx, { organizationId, userId, journalDate: row.expenseDate, referenceNo: row.referenceNo, description, sourceModule: action.module, sourceType: "EXPENSE", sourceId: row.id, lines: [{ accountId: expenseLedgerAccountId, projectId: row.workId, debit: row.amount, credit: 0 }, { bankAccountId: row.paidFromAccountId, projectId: row.workId, debit: 0, credit: row.amount }] });
         } else if (action.kind === "RECEIPT") {
           const row = await tx.receipt.findFirstOrThrow({ where: { id: action.id, organizationId, status: "RECEIVED" }, include: { receivedInAccount: true, receivable: true } });
           if (!row.receivedInAccountId || !row.receivedInAccount) throw new Error(`Receipt ${row.id} lost its account linkage`);

@@ -6,10 +6,10 @@ describe("general expense accounting", () => {
     expect(lines.reduce((sum, line) => sum + line.debit, 0)).toBe(1250.5);
     expect(lines.reduce((sum, line) => sum + line.credit, 0)).toBe(1250.5);
   });
-  it("falls back to the protected general-expense control key without mutating it", () => {
-    expect(buildGeneralExpenseJournalLines({ amount: 100, paymentMode: "CASH_BANK", bankAccountId: "bank" })[0]).toMatchObject({ systemKey: "GENERAL_EXPENSE", debit: 100 });
+  it("rejects an expense without a direct Chart of Accounts ID", () => {
+    expect(() => buildGeneralExpenseJournalLines({ amount: 100, paymentMode: "CASH_BANK", expenseLedgerAccountId: "", bankAccountId: "bank" })).toThrow("Account ID");
   });
   it("rejects incomplete payment routing", () => {
-    expect(() => buildGeneralExpenseJournalLines({ amount: 100, paymentMode: "PAYABLE" })).toThrow("Payable party");
+    expect(() => buildGeneralExpenseJournalLines({ amount: 100, paymentMode: "PAYABLE", expenseLedgerAccountId: "expense-ledger" })).toThrow("Payable party");
   });
 });

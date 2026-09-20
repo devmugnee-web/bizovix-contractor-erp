@@ -106,7 +106,7 @@ export default function AddProjectReceiptPage() {
   const project = works.data?.items.find((item) => item.id === workId);
   const activeAccounts = (accounts.data ?? []).filter((account) => account.isActive);
   const bankAccounts = activeAccounts.filter((account) => account.accountType === "BANK");
-  const cashAccount = activeAccounts.find((account) => account.accountType === "CASH");
+  const cashAccount = activeAccounts.find((account) => account.cashRole === "MAIN_CASH");
   const receivingAccountId =
     form.paymentMethod === "CASH" ? (cashAccount?.id ?? "") : form.accountId;
   const filteredWorks = (works.data?.items ?? [])
@@ -193,10 +193,6 @@ export default function AddProjectReceiptPage() {
       projectSearchInitialized.current = true;
     }
   }, [project?.tenderNumber]);
-
-  React.useEffect(() => {
-    setHighlightedProjectIndex(0);
-  }, [projectSearch]);
 
   React.useEffect(() => {
     const closeOnOutsideClick = (event: MouseEvent) => {
@@ -358,7 +354,8 @@ export default function AddProjectReceiptPage() {
         <div>
           <h1 className="text-[24px] font-bold leading-tight">Add Project Receipt</h1>
           <p className="mt-1 text-[12px] text-biz-muted">
-            Record the amount received and actual deductions against the selected project's NOA.
+            Record the amount received and actual deductions against the selected project&apos;s
+            NOA.
           </p>
         </div>
         <Link
@@ -400,10 +397,12 @@ export default function AddProjectReceiptPage() {
                 value={projectSearch}
                 onFocus={() => {
                   setProjectSearch("");
+                  setHighlightedProjectIndex(0);
                   setProjectPickerOpen(true);
                 }}
                 onChange={(event) => {
                   setProjectSearch(event.target.value);
+                  setHighlightedProjectIndex(0);
                   setProjectPickerOpen(true);
                 }}
                 onKeyDown={handleProjectKeyDown}

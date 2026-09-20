@@ -8,4 +8,5 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   prisma: true
+  tesseract.js: false
   unrs-resolver: true

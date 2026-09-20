@@ -2698,6 +2698,7 @@ model Receipt {
   receiptNo           String?
   receiptCategory     String        @default("GENERAL")
   receiptType         String        @default("GENERAL_RECEIPT")
+  receiptHeadAccountId String?
   receivedFrom        String        @default("Unknown")
   receivedInAccountId String?
   paymentMethod       String        @default("CASH")
@@ -2731,6 +2732,7 @@ model Receipt {
   tender            Tender?      @relation(fields: [tenderId], references: [id])
   work              CmsWork?     @relation(fields: [workId], references: [id])
   receivedInAccount BankAccount? @relation(fields: [receivedInAccountId], references: [id])
+  receiptHead       LedgerAccount? @relation(fields: [receiptHeadAccountId], references: [id])
   receivable        Receivable?  @relation(fields: [receivableId], references: [id])
   replaces          Receipt?     @relation("ReceiptAmendment", fields: [replacesReceiptId], references: [id])
   replacement       Receipt?     @relation("ReceiptAmendment")
@@ -2739,6 +2741,7 @@ model Receipt {
   @@index([organizationId, receiptDate])
   @@index([organizationId, workId])
   @@index([organizationId, status])
+  @@index([organizationId, receiptHeadAccountId])
   @@index([organizationId, replacesReceiptId])
   @@map("receipts")
 }
@@ -2883,6 +2886,7 @@ model LedgerAccount {
   billAdjustments                          BillAdjustment[]
   expenses                                 Expense[]
   expenseHeads                             ExpenseHead[]
+  receipts                                 Receipt[]
   assetCategoriesByAssetLedger             AssetCategory[]  @relation("AssetCategoryAssetLedger")
   assetCategoriesByAccumulatedDepreciation AssetCategory[]  @relation("AssetCategoryAccumulatedDepreciationLedger")
   assetCategoriesByDepreciationExpense     AssetCategory[]  @relation("AssetCategoryDepreciationExpenseLedger")

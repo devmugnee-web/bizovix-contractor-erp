@@ -7,6 +7,7 @@ export interface ReceiptRecord {
   receiptDate: string;
   receiptCategory: ReceiptCategory;
   receiptType: string;
+  receiptHeadAccountId: string | null;
   receivedFrom: string;
   amount: string;
   grossAmount: string;
@@ -23,6 +24,7 @@ export interface ReceiptRecord {
   status: ReceiptRecordStatus;
   work: { id: string; workName: string; tenderNumber: string | null; noaAmount: string | null; organizationMaster: { shortName: string } } | null;
   receivedInAccount: { id: string; accountName: string; accountNumber: string | null } | null;
+  receiptHead: { id: string; code: string; name: string } | null;
 }
 
 export interface ReceiptQuery {

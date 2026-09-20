@@ -1,7 +1,16 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { rm } from "node:fs/promises";
 import { createServer } from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +21,11 @@ const apiUrl = "http://127.0.0.1:4000/api/v1/auth/dev-login";
 const rendererUrl = "http://127.0.0.1:3010/dashboard";
 const apiBuildDirectory = path.join(repositoryRoot, "apps", "api", "dist");
 const startupTimeoutMs = Number(process.env.BIZOVIX_DEV_STARTUP_TIMEOUT_MS ?? 120_000);
+const lockFile = path.join(
+  os.tmpdir(),
+  `bizovix-dev-${createHash("sha256").update(repositoryRoot.toLowerCase()).digest("hex").slice(0, 12)}.lock`,
+);
+let lockFileDescriptor = null;
 
 function resolveNativeTurboBin() {
   const platform = process.platform === "win32" ? "windows" : process.platform;
@@ -47,6 +61,72 @@ const nativeTurboBin = resolveNativeTurboBin();
 
 function log(message) {
   process.stdout.write(`[dev] ${message}\n`);
+}
+
+function processIsRunning(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+}
+
+function acquireDevLock() {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      lockFileDescriptor = openSync(lockFile, "wx");
+      writeFileSync(
+        lockFileDescriptor,
+        JSON.stringify({ pid: process.pid, repositoryRoot, startedAt: new Date().toISOString() }),
+        "utf8",
+      );
+      process.once("exit", releaseDevLock);
+      return;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+
+      let owner = null;
+      try {
+        owner = JSON.parse(readFileSync(lockFile, "utf8"));
+      } catch {
+        // An invalid lock is treated as stale and replaced below.
+      }
+
+      if (processIsRunning(owner?.pid)) {
+        throw new Error(
+          `Bizovix dev is already running (launcher PID ${owner.pid}). Use that terminal and press Ctrl+C there to stop it.`,
+        );
+      }
+
+      rmSync(lockFile, { force: true });
+    }
+  }
+
+  throw new Error("Could not acquire the Bizovix dev startup lock. Run pnpm dev again.");
+}
+
+function releaseDevLock() {
+  if (lockFileDescriptor === null) return;
+
+  const descriptor = lockFileDescriptor;
+  lockFileDescriptor = null;
+  try {
+    closeSync(descriptor);
+  } catch {
+    // The descriptor may already be closed during process shutdown.
+  }
+  try {
+    rmSync(lockFile, { force: true });
+  } catch {
+    // A later run will safely replace a stale lock owned by a stopped process.
+  }
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function clearStaleApiBuild() {
@@ -99,7 +179,7 @@ async function waitFor(check, timeoutMs, childState) {
   while (Date.now() - startedAt < timeoutMs) {
     if (await check()) return true;
     if (childState?.exited) return false;
-    await new Promise((resolve) => setTimeout(resolve, 750));
+    await delay(750);
   }
   return false;
 }
@@ -115,7 +195,7 @@ async function settleOccupiedService(name, port, check, waitMs) {
   );
 }
 
-async function main() {
+async function runDev() {
   log("Checking the local API and renderer...");
   let apiReady = await settleOccupiedService("API", 4000, apiIsReady, 20_000);
   let rendererReady = await settleOccupiedService("Renderer", 3010, rendererIsReady, 45_000);
@@ -126,7 +206,7 @@ async function main() {
     log("Bizovix is ready: http://localhost:3010");
     log("Monitoring the running services. Press Ctrl+C to stop this command.");
     while (true) {
-      await new Promise((resolve) => setTimeout(resolve, 5_000));
+      await delay(5_000);
       const [apiStillReady, rendererStillReady] = await Promise.all([
         apiIsReady(),
         rendererIsReady(),
@@ -172,16 +252,51 @@ async function main() {
     runners.push(state);
   }
 
-  function stopRunners() {
-    for (const runner of runners) {
-      if (!runner.exited) runner.child.kill("SIGTERM");
+  async function stopRunner(runner) {
+    if (runner.exited || !runner.child.pid) return;
+
+    if (process.platform === "win32") {
+      await new Promise((resolve) => {
+        const killer = spawn("taskkill.exe", ["/PID", String(runner.child.pid), "/T", "/F"], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+        killer.once("error", () => {
+          if (!runner.exited) runner.child.kill("SIGTERM");
+          resolve();
+        });
+        killer.once("exit", resolve);
+      });
+    } else {
+      try {
+        process.kill(-runner.child.pid, "SIGTERM");
+      } catch {
+        if (!runner.exited) runner.child.kill("SIGTERM");
+      }
     }
+
+    await Promise.race([runner.exit, delay(5_000)]);
+    if (!runner.exited) {
+      try {
+        if (process.platform === "win32") runner.child.kill("SIGKILL");
+        else process.kill(-runner.child.pid, "SIGKILL");
+      } catch {
+        // The process may have exited between the readiness check and the kill call.
+      }
+    }
+  }
+
+  let stopPromise = null;
+  function stopRunners() {
+    stopPromise ??= Promise.all(runners.map((runner) => stopRunner(runner)));
+    return stopPromise;
   }
 
   for (const signal of ["SIGINT", "SIGTERM"]) {
     process.once(signal, () => {
       shuttingDown = true;
-      stopRunners();
+      log("Stopping API and renderer...");
+      void stopRunners();
     });
   }
 
@@ -218,12 +333,12 @@ async function main() {
     }
 
     if (runners.every((runner) => runner.exited)) break;
-    await new Promise((resolve) => setTimeout(resolve, 750));
+    await delay(750);
   }
 
   [apiReady, rendererReady] = await Promise.all([apiIsReady(), rendererIsReady()]);
   if (!apiReady || !rendererReady) {
-    stopRunners();
+    await stopRunners();
     throw new Error(
       `Local startup failed: API ${apiReady ? "ready" : "not ready"}, renderer ${
         rendererReady ? "ready" : "not ready"
@@ -239,19 +354,33 @@ async function main() {
       return;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await delay(1_000);
     const [apiStillReady, rendererStillReady] = await Promise.all([
       apiIsReady(),
       rendererIsReady(),
     ]);
     if (!apiStillReady || !rendererStillReady) {
-      stopRunners();
+      await stopRunners();
       throw new Error(
         `A local dev service stopped: API ${apiStillReady ? "ready" : "not ready"}, renderer ${
           rendererStillReady ? "ready" : "not ready"
         }.`,
       );
     }
+  }
+}
+
+async function main() {
+  acquireDevLock();
+  const releaseLockOnSignal = () => releaseDevLock();
+  process.once("SIGINT", releaseLockOnSignal);
+  process.once("SIGTERM", releaseLockOnSignal);
+  try {
+    await runDev();
+  } finally {
+    process.off("SIGINT", releaseLockOnSignal);
+    process.off("SIGTERM", releaseLockOnSignal);
+    releaseDevLock();
   }
 }
 

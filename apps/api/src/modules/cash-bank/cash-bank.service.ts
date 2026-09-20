@@ -7,6 +7,18 @@ import type { CreateBankAccountDto, CreateCashTransactionDto, CreateChequeDto, C
 import { AccountingService } from "../accounting/accounting.service";
 
 type Tx = Prisma.TransactionClient;
+type CashRole = "MAIN_CASH" | "PETTY_CASH";
+
+const CASH_ROLE_CONFIG = {
+  MAIN_CASH: {
+    settingField: "defaultCashAccountId",
+    legacyAccountName: "Main Cash",
+  },
+  PETTY_CASH: {
+    settingField: "defaultPettyCashAccountId",
+    legacyAccountName: "Petty Cash",
+  },
+} as const;
 
 const MAIN_CASH_COUNTERPART_ACCOUNT: Record<string, string> = {
   "Owner Investment": "OWNERS_CAPITAL",
@@ -35,10 +47,27 @@ export class CashBankService {
     if (!row) throw new NotFoundException("Financial account not found");
     return row;
   }
-  private async namedCash(tx: Tx | PrismaService, organizationId: string, name: "Main Cash" | "Petty Cash") {
-    const row = await tx.bankAccount.findFirst({ where: { organizationId, accountType: "CASH", accountName: name } });
-    if (!row) throw new NotFoundException(`${name} account is not configured`);
-    return row;
+  async configuredCashAccount(organizationId: string, role: CashRole) {
+    await this.ensureCashAccounts(organizationId);
+    return this.configuredCashAccountAfterEnsure(organizationId, role);
+  }
+
+  private async configuredCashAccountAfterEnsure(organizationId: string, role: CashRole) {
+    const config = CASH_ROLE_CONFIG[role];
+    const setting = await this.prisma.financeSetting.findUnique({
+      where: { organizationId },
+      select: { defaultCashAccountId: true, defaultPettyCashAccountId: true },
+    });
+    const ledgerAccountId = setting?.[config.settingField];
+    if (!ledgerAccountId) throw new NotFoundException(`${role.replaceAll("_", " ")} Account ID is not configured`);
+    const ledger = await this.prisma.ledgerAccount.findFirst({
+      where: { id: ledgerAccountId, organizationId, isActive: true },
+      include: { bankAccount: true },
+    });
+    if (!ledger?.bankAccount || ledger.bankAccount.accountType !== "CASH" || !ledger.bankAccount.isActive) {
+      throw new BadRequestException(`${role.replaceAll("_", " ")} Account ID must reference an active linked cash account`);
+    }
+    return ledger.bankAccount;
   }
 
   async post(tx: Tx, input: { organizationId: string; accountId: string; direction: "IN" | "OUT"; amount: Prisma.Decimal | number; sourceModule: string; sourceType: string; sourceId: string; referenceNo?: string | null; description: string; transactionDate: Date; createdById?: string | null }) {
@@ -78,21 +107,89 @@ export class CashBankService {
   }
 
   async ensureCashAccounts(organizationId: string) {
-    for (const name of ["Main Cash", "Petty Cash"] as const) {
-      await this.prisma.bankAccount.upsert({ where: { id: `${organizationId}:${name}` }, update: {}, create: { id: `${organizationId}:${name}`, organizationId, accountName: name, accountType: "CASH", openingBalance: 0, currentBalance: 0, openingBalanceDate: new Date(), currency: "BDT" } });
-    }
+    await this.prisma.$transaction(async (tx) => {
+      const entries: Array<{ role: CashRole; ledgerAccountId: string }> = [];
+      for (const [role, config] of Object.entries(CASH_ROLE_CONFIG) as Array<[CashRole, (typeof CASH_ROLE_CONFIG)[CashRole]]>) {
+        const account = await tx.bankAccount.upsert({
+          where: { id: `${organizationId}:${config.legacyAccountName}` },
+          update: {},
+          create: {
+            id: `${organizationId}:${config.legacyAccountName}`,
+            organizationId,
+            accountName: config.legacyAccountName,
+            accountType: "CASH",
+            openingBalance: 0,
+            currentBalance: 0,
+            openingBalanceDate: new Date(),
+            currency: "BDT",
+          },
+        });
+        const ledger = await this.accounting.bankLedgerAccount(tx, organizationId, account.id, role);
+        entries.push({ role, ledgerAccountId: ledger.id });
+      }
+      const current = await tx.financeSetting.findUnique({
+        where: { organizationId },
+        select: { defaultCashAccountId: true, defaultPettyCashAccountId: true },
+      });
+      const validConfiguredIds = await tx.ledgerAccount.findMany({
+        where: {
+          organizationId,
+          id: { in: [current?.defaultCashAccountId, current?.defaultPettyCashAccountId].filter((id): id is string => Boolean(id)) },
+          isActive: true,
+          bankAccount: { accountType: "CASH", isActive: true },
+        },
+        select: { id: true },
+      });
+      const valid = new Set(validConfiguredIds.map((row) => row.id));
+      const generated = new Map(entries.map((entry) => [entry.role, entry.ledgerAccountId]));
+      const defaultCashAccountId = current?.defaultCashAccountId && valid.has(current.defaultCashAccountId)
+        ? current.defaultCashAccountId
+        : generated.get("MAIN_CASH")!;
+      const defaultPettyCashAccountId = current?.defaultPettyCashAccountId && valid.has(current.defaultPettyCashAccountId)
+        ? current.defaultPettyCashAccountId
+        : generated.get("PETTY_CASH")!;
+      await tx.financeSetting.upsert({
+        where: { organizationId },
+        update: { defaultCashAccountId, defaultPettyCashAccountId },
+        create: { organizationId, defaultCashAccountId, defaultPettyCashAccountId },
+      });
+      await this.accounting.ensureChart(organizationId, tx);
+    });
   }
 
-  async accounts(organizationId: string) { await this.ensureCashAccounts(organizationId); return this.prisma.bankAccount.findMany({ where: { organizationId }, orderBy: [{ accountType: "asc" }, { accountName: "asc" }] }); }
+  async accounts(organizationId: string) {
+    await this.ensureCashAccounts(organizationId);
+    const [accounts, setting] = await Promise.all([
+      this.prisma.bankAccount.findMany({
+        where: { organizationId },
+        include: { ledgerAccounts: { select: { id: true } } },
+        orderBy: [{ accountType: "asc" }, { accountName: "asc" }],
+      }),
+      this.prisma.financeSetting.findUnique({
+        where: { organizationId },
+        select: { defaultCashAccountId: true, defaultPettyCashAccountId: true },
+      }),
+    ]);
+    return accounts.map(({ ledgerAccounts, ...account }) => {
+      const ledgerAccountId = ledgerAccounts[0]?.id ?? null;
+      const cashRole = ledgerAccountId === setting?.defaultCashAccountId
+        ? "MAIN_CASH" as const
+        : ledgerAccountId === setting?.defaultPettyCashAccountId
+          ? "PETTY_CASH" as const
+          : null;
+      return { ...account, ledgerAccountId, cashRole };
+    });
+  }
 
   async summary(organizationId: string) {
     await this.ensureCashAccounts(organizationId);
-    const [accounts, today] = await Promise.all([
+    const [accounts, today, mainCash, pettyCash] = await Promise.all([
       this.prisma.bankAccount.findMany({ where: { organizationId, isActive: true } }),
       this.prisma.financialTransaction.groupBy({ by: ["direction"], where: { organizationId, transactionDate: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } }, _sum: { amount: true } }),
+      this.configuredCashAccountAfterEnsure(organizationId, "MAIN_CASH"),
+      this.configuredCashAccountAfterEnsure(organizationId, "PETTY_CASH"),
     ]);
-    const balance = (name: string) => accounts.find((a) => a.accountName === name)?.currentBalance ?? new Prisma.Decimal(0);
-    return { mainCashBalance: balance("Main Cash"), pettyCashBalance: balance("Petty Cash"), totalBankBalance: accounts.filter((a) => a.accountType === "BANK").reduce((n, a) => n.add(a.currentBalance), new Prisma.Decimal(0)), todayCashIn: today.find((v) => v.direction === "IN")?._sum.amount ?? 0, todayCashOut: today.find((v) => v.direction === "OUT")?._sum.amount ?? 0 };
+    return { mainCashBalance: mainCash.currentBalance, pettyCashBalance: pettyCash.currentBalance, totalBankBalance: accounts.filter((a) => a.accountType === "BANK").reduce((n, a) => n.add(a.currentBalance), new Prisma.Decimal(0)), todayCashIn: today.find((v) => v.direction === "IN")?._sum.amount ?? 0, todayCashOut: today.find((v) => v.direction === "OUT")?._sum.amount ?? 0 };
   }
 
   async createBankAccount(organizationId: string, userId: string, dto: CreateBankAccountDto) {
@@ -182,9 +279,9 @@ export class CashBankService {
     return { success: true };
   }
 
-  async cashTransactions(organizationId: string, kind: "Main Cash" | "Petty Cash", query: QueryLedgerDto) { const a = await this.namedCash(this.prisma, organizationId, kind); return this.ledger(organizationId, { ...query, accountId: a.id }); }
+  async cashTransactions(organizationId: string, role: CashRole, query: QueryLedgerDto) { const a = await this.configuredCashAccount(organizationId, role); return this.ledger(organizationId, { ...query, accountId: a.id }); }
   async createMainCash(organizationId: string, userId: string, dto: CreateCashTransactionDto) {
-    const account = await this.namedCash(this.prisma, organizationId, "Main Cash");
+    const account = await this.configuredCashAccount(organizationId, "MAIN_CASH");
     const sourceId = randomUUID();
     const description = `${dto.party}: ${dto.description || dto.category}`;
     const counterpartSystemKey = MAIN_CASH_COUNTERPART_ACCOUNT[dto.category]
@@ -210,7 +307,7 @@ export class CashBankService {
     return row;
   }
   async createPettyExpense(organizationId: string, userId: string, dto: CreatePettyExpenseDto) {
-    const account = await this.namedCash(this.prisma, organizationId, "Petty Cash"); const sourceId = randomUUID();
+    const account = await this.configuredCashAccount(organizationId, "PETTY_CASH"); const sourceId = randomUUID();
     const description = `${dto.party}: ${dto.description}`;
     const row = await this.prisma.$transaction(async (tx) => {
       const posted = await this.post(tx, { organizationId, accountId: account.id, direction: "OUT", amount: dto.amount, sourceModule: "PETTY_CASH", sourceType: dto.category, sourceId, referenceNo: dto.referenceNo, description, transactionDate: new Date(dto.transactionDate), createdById: userId });
@@ -244,7 +341,7 @@ export class CashBankService {
     });
     await this.log(organizationId, userId, replenishment ? "PETTY_CASH_REPLENISHED" : "BANK_TRANSFER_CREATED", "FundTransfer", row.id, row.transferNo, row.amount); return row;
   }
-  async replenish(organizationId: string, userId: string, dto: Omit<CreateTransferDto, "toAccountId">) { const petty = await this.namedCash(this.prisma, organizationId, "Petty Cash"); return this.transfer(organizationId, userId, { ...dto, toAccountId: petty.id }, true); }
+  async replenish(organizationId: string, userId: string, dto: Omit<CreateTransferDto, "toAccountId">) { const petty = await this.configuredCashAccount(organizationId, "PETTY_CASH"); return this.transfer(organizationId, userId, { ...dto, toAccountId: petty.id }, true); }
 
   async transfers(organizationId: string, query: QueryLedgerDto) {
     const page = Math.max(1, query.page ?? 1), limit = Math.min(100, query.limit ?? 10);

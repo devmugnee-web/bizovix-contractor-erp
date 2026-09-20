@@ -106,7 +106,11 @@ const PRIMARY_NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Tender List", href: "/tenders", icon: ClipboardList },
       { label: "Tender Costing", href: "/tender-management/tender-costing", icon: Calculator },
-      { label: "SLT Calculation", icon: FunctionSquare, disabled: true },
+      {
+        label: "SLT Calculation",
+        href: "/tender-management/slt-calculation",
+        icon: FunctionSquare,
+      },
       { label: "Item Price History", href: "/tender-management/item-price-history", icon: History },
     ],
   },

@@ -13,6 +13,7 @@ describe("ReportsService bill maturity report", () => {
       receivable: { findMany: receivableFindMany },
     } as never,
     {} as never,
+    {} as never,
   );
 
   beforeEach(() => {
@@ -192,6 +193,7 @@ describe("ReportsService expense category report", () => {
   const service = new ReportsService(
     { expense: { findMany: expenseFindMany } } as never,
     {} as never,
+    {} as never,
   );
 
   beforeEach(() => {
@@ -262,6 +264,7 @@ describe("ReportsService balance sheet report", () => {
   const journalLineFindMany = jest.fn();
   const service = new ReportsService(
     { journalLine: { findMany: journalLineFindMany } } as never,
+    {} as never,
     {} as never,
   );
   const line = (

@@ -22,6 +22,7 @@ const includeRelations = {
     },
   },
   receivedInAccount: { select: { id: true, accountName: true, accountNumber: true } },
+  receiptHead: { select: { id: true, code: true, name: true } },
 } satisfies Prisma.ReceiptInclude;
 
 type ReceiptRow = Prisma.ReceiptGetPayload<{ include: typeof includeRelations }>;
@@ -187,11 +188,12 @@ export class ReceiptsService {
       dto.workId ? this.prisma.cmsWork.findFirst({ where: { id: dto.workId, organizationId } }) : null,
       this.prisma.bankAccount.findFirst({ where: { id: dto.receivedInAccountId, organizationId } }),
       dto.receivableId ? this.prisma.receivable.findFirst({ where: { id: dto.receivableId, organizationId } }) : null,
-      dto.receiptHeadAccountId ? this.prisma.ledgerAccount.findFirst({ where: { id: dto.receiptHeadAccountId, organizationId, accountType: "INCOME", isActive: true } }) : null,
+      dto.receiptHeadAccountId?.trim() ? this.prisma.ledgerAccount.findFirst({ where: { id: dto.receiptHeadAccountId.trim(), organizationId, accountType: "INCOME", isActive: true, isControlAccount: false } }) : null,
     ]);
     if (dto.receiptCategory === "PROJECT" && !work) throw new NotFoundException("Project not found");
     if (!account) throw new NotFoundException("Receiving account not found");
-    if (dto.receiptHeadAccountId && !receiptHead) throw new NotFoundException("Active receipt head not found");
+    if (dto.receiptCategory === "GENERAL" && !dto.receiptHeadAccountId?.trim()) throw new BadRequestException("General receipt Chart of Accounts ID is required");
+    if (dto.receiptCategory === "GENERAL" && !receiptHead) throw new NotFoundException("Active receipt head Account ID not found");
     if (dto.receivableId) {
       if (!receivable) throw new NotFoundException("Receivable not found");
       if (dto.receiptCategory !== "PROJECT" || !dto.workId || receivable.projectId !== dto.workId) {
@@ -234,6 +236,7 @@ export class ReceiptsService {
           receiptDate: new Date(dto.receiptDate),
           receiptCategory: dto.receiptCategory,
           receiptType: dto.receiptType,
+          receiptHeadAccountId: dto.receiptCategory === "GENERAL" ? receiptHead!.id : null,
           workId: dto.receiptCategory === "PROJECT" ? dto.workId : null,
           receivableId: dto.receivableId,
           receivedFrom: dto.receivedFrom.trim(),
@@ -325,6 +328,7 @@ export class ReceiptsService {
       dto.receiptDate,
       dto.receiptCategory,
       dto.receiptType,
+      dto.receiptHeadAccountId,
       dto.workId,
       dto.receivableId,
       dto.receivedFrom,
@@ -349,7 +353,7 @@ export class ReceiptsService {
         receiptType: dto.receiptType ?? existing.receiptType,
         workId: dto.workId ?? existing.workId ?? undefined,
         receivableId: dto.receivableId ?? existing.receivableId ?? undefined,
-        receiptHeadAccountId: dto.receiptHeadAccountId,
+        receiptHeadAccountId: dto.receiptHeadAccountId ?? existing.receiptHeadAccountId ?? undefined,
         receivedFrom: dto.receivedFrom ?? existing.receivedFrom,
         amount: dto.amount ?? Number(existing.amount),
         grossAmount: dto.grossAmount ?? Number(existing.grossAmount),
@@ -407,6 +411,7 @@ export class ReceiptsService {
             receiptDate: new Date(merged.receiptDate),
             receiptCategory: merged.receiptCategory,
             receiptType: merged.receiptType,
+            receiptHeadAccountId: merged.receiptCategory === "GENERAL" ? receiptHead!.id : null,
             workId: merged.receiptCategory === "PROJECT" ? merged.workId : null,
             receivableId: merged.receivableId,
             receivedFrom: merged.receivedFrom.trim(),

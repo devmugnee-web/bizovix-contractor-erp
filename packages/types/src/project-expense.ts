@@ -2,12 +2,17 @@ export interface ExpenseHeadOption {
   id: string;
   name: string;
   budgetCategory?: string | null;
+  nature?: "DIRECT" | "INDIRECT";
+  ledgerAccountId?: string | null;
+  ledgerAccount?: { id: string; code: string; name: string } | null;
   isActive?: boolean;
 }
 
 export interface SaveExpenseHeadInput {
   name: string;
   budgetCategory?: string | null;
+  nature?: "DIRECT" | "INDIRECT";
+  ledgerAccountId: string;
   isActive?: boolean;
 }
 
@@ -24,6 +29,7 @@ export interface ProjectExpense {
   description: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED";
   expenseHead: ExpenseHeadOption;
+  expenseLedger?: { id: string; code: string; name: string } | null;
   expenseBy: ExpensePersonOption;
   paidFromAccount: { id: string; accountName: string; accountNumber: string | null };
 }

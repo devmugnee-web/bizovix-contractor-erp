@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import {
   useBankAccounts,
+  useChartOfAccounts,
   useCmsWorks,
   useCmsWork,
   useCreateExpenseHead,
@@ -175,6 +176,7 @@ function ProjectExpensePageContent() {
     : selectedProject;
 
   const heads = useExpenseHeads();
+  const chart = useChartOfAccounts();
   const createExpenseHead = useCreateExpenseHead();
   const people = useExpensePeople();
   const accounts = useBankAccounts();
@@ -311,7 +313,9 @@ function ProjectExpensePageContent() {
           );
           expenseHeadId = existingHead?.id ?? resolvedCustomHeads.get(customKey) ?? "";
           if (!expenseHeadId) {
-            const createdHead = await createExpenseHead.mutateAsync({ name: customName });
+            const projectExpenseLedger = (chart.data ?? []).find((account) => account.systemKey === "PROJECT_EXPENSE" && account.isActive && !account.isControlAccount);
+            if (!projectExpenseLedger) throw new Error("Project Expense posting ledger is unavailable");
+            const createdHead = await createExpenseHead.mutateAsync({ name: customName, nature: "DIRECT", ledgerAccountId: projectExpenseLedger.id });
             expenseHeadId = createdHead.id;
             resolvedCustomHeads.set(customKey, createdHead.id);
           }

@@ -3,6 +3,7 @@ import { Prisma } from "@bizovix/database";
 import { randomUUID } from "node:crypto";
 import { AuditLogService } from "../audit-logs/audit-log.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { CashBankService } from "../cash-bank/cash-bank.service";
 import type { QueryReportDto } from "./dto/query-report.dto";
 
 type Cell = string | number | null;
@@ -21,6 +22,7 @@ export class ReportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly cashBankService: CashBankService,
   ) {}
   private dates(q: QueryReportDto) {
     return q.dateFrom || q.dateTo
@@ -2685,13 +2687,16 @@ export class ReportsService {
       );
     }
     const accountType = report === "cash-book" || report === "petty-cash" ? "CASH" : "BANK";
-    const namedCashAccount =
-      report === "cash-book" ? "Main Cash" : report === "petty-cash" ? "Petty Cash" : undefined;
+    const configuredCashAccount = report === "cash-book"
+      ? await this.cashBankService.configuredCashAccount(org, "MAIN_CASH")
+      : report === "petty-cash"
+        ? await this.cashBankService.configuredCashAccount(org, "PETTY_CASH")
+        : null;
     const rows = await this.prisma.financialTransaction.findMany({
       where: {
         organizationId: org,
-        accountId: q.accountId,
-        account: { accountType, accountName: namedCashAccount },
+        accountId: configuredCashAccount?.id ?? q.accountId,
+        account: { accountType },
         transactionDate: this.dates(q),
         OR: q.search
           ? [

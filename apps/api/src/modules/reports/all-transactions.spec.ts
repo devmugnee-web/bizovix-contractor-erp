@@ -17,7 +17,7 @@ describe("All Transactions report", () => {
       },
     ]);
     const hiddenQuery = jest.fn().mockResolvedValue([]);
-    const service = new ReportsService({ journalEntry: { findMany }, $queryRaw: hiddenQuery } as never, {} as never);
+    const service = new ReportsService({ journalEntry: { findMany }, $queryRaw: hiddenQuery } as never, {} as never, {} as never);
     const result = await service.run("org-1", "transactions", "all", { page: 1, limit: 20 });
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: "org-1", status: "POSTED" }) }));
     expect(hiddenQuery).toHaveBeenCalled();
@@ -31,7 +31,7 @@ describe("All Transactions report", () => {
     const service = new ReportsService({
       journalEntry: { findMany: jest.fn().mockResolvedValue([{ id: "own-1" }]) },
       $transaction: transaction,
-    } as never, {} as never);
+    } as never, {} as never, {} as never);
     await expect(service.hideTransactions("org-1", "user-1", ["own-1", "foreign-1"])).rejects.toThrow("unavailable");
     expect(transaction).not.toHaveBeenCalled();
   });
@@ -43,7 +43,7 @@ describe("All Transactions report", () => {
     const service = new ReportsService({
       journalEntry: { findMany: jest.fn().mockResolvedValue([{ id: "own-1" }, { id: "own-2" }]) },
       $transaction: transaction,
-    } as never, audit as never);
+    } as never, audit as never, {} as never);
     await expect(service.hideTransactions("org-1", "user-1", ["own-1", "own-2"])).resolves.toEqual({ hidden: 2 });
     expect(executeRaw).toHaveBeenCalledTimes(2);
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "REPORT_TRANSACTIONS_HIDDEN", organizationId: "org-1" }), expect.anything());

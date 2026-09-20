@@ -36,7 +36,7 @@ export function ChartOfAccountsTree({ accounts, onAddLedger }: { accounts: Ledge
     const isRoot = !account.parentId && account.isSystem && /^\d{7}$/.test(account.code);
     const isCategory = !!account.parentId && account.isSystem && /^\d{7}$/.test(account.code);
     return <React.Fragment key={account.id}>
-      <div className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-100 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_85px_80px] ${isRoot ? `border-t ${ROOT_TONES[account.accountType] ?? "bg-slate-50"}` : depth === 1 ? "bg-slate-50/70 font-semibold" : "bg-white"}`}>
+      <div className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-100 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_85px_110px_70px] ${isRoot ? `border-t ${ROOT_TONES[account.accountType] ?? "bg-slate-50"}` : depth === 1 ? "bg-slate-50/70 font-semibold" : "bg-white"}`}>
         <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: `${Math.min(depth, 5) * 16}px` }}>
           {descendants.length ? <button type="button" onClick={() => setCollapsed((current) => current.includes(account.id) ? current.filter((id) => id !== account.id) : [...current, account.id])} aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${account.name}`} className="rounded p-0.5 hover:bg-black/5">{isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</button> : <span className="w-[18px] shrink-0" />}
           <span className="shrink-0 font-mono text-[11px] font-bold text-blue-700">{account.code}</span>
@@ -45,6 +45,7 @@ export function ChartOfAccountsTree({ accounts, onAddLedger }: { accounts: Ledge
           {!account.isActive && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[9px] text-red-700">Inactive</span>}
         </div>
         <span className="text-right text-[10px] text-slate-500">{isRoot ? "Main class" : isCategory ? "Category" : "Ledger"}</span>
+        <span className="hidden text-right text-[10px] font-semibold tabular-nums text-slate-700 sm:block">BDT {Number(account.balance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         <span className="hidden text-right text-[10px] text-slate-500 sm:block">{account._count?.journalLines ?? 0} entries</span>
       </div>
       {!isCollapsed && descendants.map((child) => renderRow(child, depth + 1))}
