@@ -20,7 +20,7 @@ const turboPackageJson = path.join(repositoryRoot, "node_modules", "turbo", "pac
 const apiUrl = "http://127.0.0.1:4000/api/v1/auth/dev-login";
 const rendererUrl = "http://127.0.0.1:3010/dashboard";
 const apiBuildDirectory = path.join(repositoryRoot, "apps", "api", "dist");
-const startupTimeoutMs = Number(process.env.BIZOVIX_DEV_STARTUP_TIMEOUT_MS ?? 120_000);
+const startupTimeoutMs = Number(process.env.BIZOVIX_DEV_STARTUP_TIMEOUT_MS ?? 300_000);
 const lockFile = path.join(
   os.tmpdir(),
   `bizovix-dev-${createHash("sha256").update(repositoryRoot.toLowerCase()).digest("hex").slice(0, 12)}.lock`,
@@ -74,8 +74,36 @@ function processIsRunning(pid) {
   }
 }
 
-function acquireDevLock() {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+async function stopExistingLauncher(pid) {
+  if (!processIsRunning(pid)) return;
+
+  if (process.platform === "win32") {
+    await new Promise((resolve, reject) => {
+      const killer = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      killer.once("error", reject);
+      killer.once("exit", (code) => {
+        if (code === 0 || !processIsRunning(pid)) resolve();
+        else reject(new Error(`Could not stop the previous Bizovix launcher (PID ${pid}).`));
+      });
+    });
+  } else {
+    process.kill(pid, "SIGTERM");
+  }
+
+  const exitDeadline = Date.now() + 10_000;
+  while (processIsRunning(pid) && Date.now() < exitDeadline) {
+    await delay(250);
+  }
+  if (processIsRunning(pid)) {
+    throw new Error(`Previous Bizovix launcher PID ${pid} did not stop.`);
+  }
+}
+
+async function acquireDevLock() {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       lockFileDescriptor = openSync(lockFile, "wx");
       writeFileSync(
@@ -96,9 +124,14 @@ function acquireDevLock() {
       }
 
       if (processIsRunning(owner?.pid)) {
-        throw new Error(
-          `Bizovix dev is already running (launcher PID ${owner.pid}). Use that terminal and press Ctrl+C there to stop it.`,
+        if (path.resolve(owner?.repositoryRoot ?? "").toLowerCase() !== repositoryRoot.toLowerCase()) {
+          throw new Error(`The Bizovix startup lock is owned by an unexpected process (PID ${owner.pid}).`);
+        }
+
+        log(
+          `Taking over from the previous Bizovix launcher (PID ${owner.pid}) so this terminal owns the dev services...`,
         );
+        await stopExistingLauncher(owner.pid);
       }
 
       rmSync(lockFile, { force: true });
@@ -230,9 +263,14 @@ async function runDev() {
     log(`Starting ${label}...`);
     const command = nativeTurboBin ?? process.execPath;
     const args = nativeTurboBin ? ["run", "dev", ...filters] : [turboBin, "run", "dev", ...filters];
+    const runnerEnvironment = {
+      ...process.env,
+      BIZOVIX_API_READY_TIMEOUT_MS:
+        process.env.BIZOVIX_API_READY_TIMEOUT_MS ?? String(startupTimeoutMs + 30_000),
+    };
     const child = spawn(command, args, {
       cwd: repositoryRoot,
-      env: process.env,
+      env: runnerEnvironment,
       stdio: "inherit",
     });
     const state = { child, exited: false, code: null, signal: null, error: null };
@@ -315,10 +353,19 @@ async function runDev() {
   if (launchedApi) await clearStaleApiBuild();
   startRunner(initialFilters, initialLabels.join(" and "));
 
-  const startupDeadline = Date.now() + startupTimeoutMs;
-  while (Date.now() < startupDeadline) {
+  const apiStartupDeadline = Date.now() + startupTimeoutMs;
+  let rendererStartupDeadline = apiReady ? Date.now() + startupTimeoutMs : null;
+  while (true) {
     [apiReady, rendererReady] = await Promise.all([apiIsReady(), rendererIsReady()]);
     if (apiReady && rendererReady) break;
+
+    if (apiReady && rendererStartupDeadline === null) {
+      rendererStartupDeadline = Date.now() + startupTimeoutMs;
+      log("API is ready; waiting for the renderer to finish starting...");
+    }
+
+    const activeDeadline = apiReady ? rendererStartupDeadline : apiStartupDeadline;
+    if (Date.now() >= activeDeadline) break;
 
     if (!apiReady && !launchedApi && (await portIsAvailable(4000))) {
       log("The reused API stopped during startup; recovering it automatically.");
@@ -371,7 +418,7 @@ async function runDev() {
 }
 
 async function main() {
-  acquireDevLock();
+  await acquireDevLock();
   const releaseLockOnSignal = () => releaseDevLock();
   process.once("SIGINT", releaseLockOnSignal);
   process.once("SIGTERM", releaseLockOnSignal);

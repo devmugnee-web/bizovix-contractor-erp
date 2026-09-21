@@ -1,5 +1,5 @@
 const readyUrl = process.env.BIZOVIX_API_READY_URL ?? "http://127.0.0.1:4000/api/v1/auth/me";
-const timeoutMs = Number(process.env.BIZOVIX_API_READY_TIMEOUT_MS ?? 120_000);
+const timeoutMs = Number(process.env.BIZOVIX_API_READY_TIMEOUT_MS ?? 300_000);
 const pollIntervalMs = 750;
 const expectedStatuses = new Set([200, 401, 403]);
 
