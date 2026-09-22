@@ -168,6 +168,7 @@ export default function DocumentPurchaseViewPage() {
         />
         <DetailRow label="Purchase Date" value={formatDate(record.purchaseDate)} />
         <DetailRow label="Document Price" value={formatBDT(record.documentPrice)} />
+        <DetailRow label="Bank Charge" value={formatBDT(record.bankCharge ?? 0)} />
         <DetailRow label="Payment From" value={record.paymentFromAccount.accountName} />
         <div className="min-h-[50px] rounded-lg border border-[#e4ebf5] bg-[#fbfdff] px-3 py-2 lg:col-span-2">
           {editingBusinessDetails ? (

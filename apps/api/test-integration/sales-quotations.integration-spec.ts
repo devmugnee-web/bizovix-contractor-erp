@@ -51,8 +51,8 @@ describe("Sales quotations lifecycle over HTTP", () => {
       .send({
         customerId,
         workName,
-        quotationDate: "2026-08-01",
-        validUntil: "2026-09-01",
+        quotationDate: new Date().toISOString().slice(0, 10),
+        validUntil: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
         currency: "bdt",
       })
       .expect(201);
@@ -480,6 +480,7 @@ describe("Sales quotations lifecycle over HTTP", () => {
         decision: "ACCEPTED",
         decisionDate: new Date().toISOString(),
         acceptedAmount: "320.00",
+        customerPoWoNo: "PO-QUERY-1",
       })
       .expect(201);
 

@@ -5,6 +5,7 @@ export const REMINDER_TYPES = [
   "PG/BG",
   "SD",
   "Bill Maturity",
+  "EMI",
 ];
 export const SOURCE_MODULES = [
   "MANUAL",
@@ -45,6 +46,7 @@ const SOURCE_MODULE_LABELS: Record<string, string> = {
   DOCUMENT: "Document",
   CONTRACT: "Contract",
   PROJECT_BILL: "Running Bill",
+  BANK_ACCOUNT: "Bank Account",
 };
 export const sourceModuleLabel = (v: string) => SOURCE_MODULE_LABELS[v] ?? label(v);
 export function dateDelta(value: string) {

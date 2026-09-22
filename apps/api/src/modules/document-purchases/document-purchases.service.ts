@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import {
   BadRequestException,
   ConflictException,
@@ -9,6 +10,8 @@ import { normalizeTenderBusinessId, type PaginationMeta } from "@bizovix/types";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
+import { AccountingService } from "../accounting/accounting.service";
+import { CashBankService } from "../cash-bank/cash-bank.service";
 import { CreateDocumentPurchaseDto } from "./dto/create-document-purchase.dto";
 import { UpdateDocumentPurchaseDto } from "./dto/update-document-purchase.dto";
 import { QueryDocumentPurchaseDto } from "./dto/query-document-purchase.dto";
@@ -107,7 +110,136 @@ export class DocumentPurchasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
+    private readonly accounting: AccountingService,
+    private readonly cashBank: CashBankService,
   ) {}
+
+  private validateDocumentPrice(value?: number) {
+    if (value === undefined) return;
+    const amount = new Prisma.Decimal(value);
+    if (!amount.isFinite() || amount.lte(0) || amount.decimalPlaces() > 2) {
+      throw new BadRequestException("Document price must be positive with at most 2 decimal places");
+    }
+  }
+
+  private validateBankCharge(value?: number) {
+    if (value == null) return;
+    const amount = new Prisma.Decimal(value);
+    if (!amount.isFinite() || amount.lt(0) || amount.decimalPlaces() > 2) {
+      throw new BadRequestException("Bank charge must be non-negative with at most 2 decimal places");
+    }
+  }
+
+  private async postPayment(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    purchase: Pick<DocumentPurchaseWithRelations, "id" | "egpTenderId" | "tenderWorkName" | "paymentFromAccountId" | "purchaseDate">,
+    priceChange: Prisma.Decimal,
+    chargeChange: Prisma.Decimal,
+    sourceId = purchase.id,
+    transactionDate = purchase.purchaseDate,
+  ) {
+    if (priceChange.isZero() && chargeChange.isZero()) return;
+    const totalChange = priceChange.add(chargeChange);
+    const referenceNo = purchase.egpTenderId || purchase.id;
+    const description = `Tender schedule purchase${sourceId === purchase.id ? "" : " adjustment"} — ${purchase.tenderWorkName}`;
+    if (!totalChange.isZero()) {
+      await this.cashBank.post(tx, {
+        organizationId, accountId: purchase.paymentFromAccountId, direction: totalChange.gt(0) ? "OUT" : "IN",
+        amount: totalChange.abs(), sourceModule: "DOCUMENT_PURCHASE", sourceType: "PAYMENT", sourceId,
+        referenceNo, description, transactionDate, createdById: userId,
+      });
+    }
+    const amounts = (change: Prisma.Decimal) => ({
+      debit: change.gt(0) ? change : 0,
+      credit: change.lt(0) ? change.abs() : 0,
+    });
+    await this.accounting.post(tx, {
+      organizationId, userId, journalDate: transactionDate, referenceNo, description,
+      sourceModule: "DOCUMENT_PURCHASE", sourceType: "PAYMENT", sourceId,
+      lines: [
+        ...(!priceChange.isZero() ? [{ systemKey: "TENDER_SCHEDULE_PURCHASE", ...amounts(priceChange) }] : []),
+        ...(!chargeChange.isZero() ? [{ systemKey: "BANK_CHARGES", ...amounts(chargeChange) }] : []),
+        ...(!totalChange.isZero() ? [{ bankAccountId: purchase.paymentFromAccountId, ...amounts(totalChange.negated()) }] : []),
+      ],
+    });
+  }
+
+  /** Called only while holding the purchase row lock. Preserve legacy charge journals. */
+  private async ensurePaymentPosted(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    purchase: DocumentPurchaseWithRelations,
+  ) {
+    const where = {
+      organizationId, sourceModule: "DOCUMENT_PURCHASE",
+      OR: [{ sourceId: purchase.id }, { sourceId: { startsWith: `${purchase.id}:` } }],
+    };
+    const journals = await tx.journalEntry.findMany({ where, include: { lines: { include: { account: true } } } });
+    if (journals.some((row) => row.sourceType === "PAYMENT" && row.sourceId === purchase.id)) return false;
+
+    // Older versions posted only bank charges, or no payment at all. Refuse an
+    // inconsistent history instead of guessing and charging the bank twice.
+    const transactions = await tx.financialTransaction.findMany({ where });
+    const bankTotals = new Map<string, Prisma.Decimal>();
+    let postedCharge = new Prisma.Decimal(0);
+    for (const journal of journals) {
+      if (journal.sourceType !== "BANK_CHARGE" || journal.status !== "POSTED") {
+        throw new ConflictException("Document purchase posting history needs reconciliation");
+      }
+      for (const line of journal.lines) {
+        if (line.account.systemKey === "BANK_CHARGES") {
+          postedCharge = postedCharge.add(line.debit).sub(line.credit);
+        } else if (line.account.linkedBankAccountId) {
+          const bankId = line.account.linkedBankAccountId;
+          bankTotals.set(bankId, (bankTotals.get(bankId) ?? new Prisma.Decimal(0)).add(line.credit).sub(line.debit));
+        } else {
+          throw new ConflictException("Document purchase posting history needs reconciliation");
+        }
+      }
+    }
+    const cashTotals = new Map<string, Prisma.Decimal>();
+    for (const row of transactions) {
+      if (row.sourceType !== "BANK_CHARGE" || row.status !== "POSTED") {
+        throw new ConflictException("Document purchase cash history needs reconciliation");
+      }
+      cashTotals.set(row.accountId, (cashTotals.get(row.accountId) ?? new Prisma.Decimal(0))
+        .add(row.direction === "OUT" ? row.amount : row.amount.negated()));
+    }
+    for (const bankId of new Set([...bankTotals.keys(), ...cashTotals.keys(), purchase.paymentFromAccountId])) {
+      const expected = bankId === purchase.paymentFromAccountId ? postedCharge : new Prisma.Decimal(0);
+      if (!(bankTotals.get(bankId) ?? new Prisma.Decimal(0)).eq(expected) ||
+          !(cashTotals.get(bankId) ?? new Prisma.Decimal(0)).eq(expected)) {
+        throw new ConflictException("Document purchase bank and ledger postings do not match");
+      }
+    }
+    if (journals.length && !postedCharge.eq(purchase.bankCharge)) {
+      throw new ConflictException("Document purchase bank charge does not match its postings");
+    }
+    await this.postPayment(tx, organizationId, userId, purchase, purchase.documentPrice, purchase.bankCharge.sub(postedCharge));
+    await this.auditLogService.record({
+      organizationId, userId, action: "DOCUMENT_PURCHASE_PAYMENT_RECONCILED",
+      entityType: "DocumentPurchase", entityId: purchase.id,
+      newValue: { documentPrice: purchase.documentPrice.toFixed(2), bankChargePosted: purchase.bankCharge.sub(postedCharge).toFixed(2) },
+    }, tx);
+    return true;
+  }
+
+  async reconcilePayment(organizationId: string, userId: string, id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const purchase = await this.lockedPurchase(tx, organizationId, id);
+      return this.ensurePaymentPosted(tx, organizationId, userId, purchase);
+    });
+  }
+
+  private async lockedPurchase(tx: Prisma.TransactionClient, organizationId: string, id: string) {
+    await tx.$queryRaw`SELECT "id" FROM "document_purchases" WHERE "id" = ${id} AND "organizationId" = ${organizationId} FOR UPDATE`;
+    const purchase = await tx.documentPurchase.findFirst({ where: { id, organizationId }, include: includeRelations });
+    if (!purchase) throw new NotFoundException("Document purchase not found");
+    return purchase;
+  }
 
   async requestStats(organizationId: string) {
     const grouped = await this.prisma.documentPurchaseRequest.groupBy({
@@ -442,6 +574,8 @@ export class DocumentPurchasesService {
     userId: string,
     dto: CreateDocumentPurchaseDto,
   ): Promise<DocumentPurchaseDto> {
+    this.validateDocumentPrice(dto.documentPrice);
+    this.validateBankCharge(dto.bankCharge);
     await this.assertBelongsToOrg(
       organizationId,
       dto.organizationMasterId,
@@ -515,6 +649,7 @@ export class DocumentPurchasesService {
               tenderWorkName: request?.tender.workName ?? dto.tenderWorkName,
               purchaseDate: new Date(dto.purchaseDate),
               documentPrice: dto.documentPrice,
+              bankCharge: dto.bankCharge ?? 0,
               estimatedTenderAmount,
               category,
               submissionDate:
@@ -560,6 +695,7 @@ export class DocumentPurchasesService {
               );
             }
           }
+          await this.postPayment(tx, organizationId, userId, purchase, purchase.documentPrice, purchase.bankCharge);
           return purchase;
         }
 
@@ -576,6 +712,7 @@ export class DocumentPurchasesService {
             tenderWorkName: dto.tenderWorkName,
             purchaseDate: new Date(dto.purchaseDate),
             documentPrice: dto.documentPrice,
+            bankCharge: dto.bankCharge ?? 0,
             estimatedTenderAmount: dto.estimatedTenderAmount ?? 0,
             category: dto.category,
             submissionDate: dto.submissionDate ? new Date(dto.submissionDate) : null,
@@ -606,11 +743,13 @@ export class DocumentPurchasesService {
           },
         });
 
-        return tx.documentPurchase.update({
+        const linkedPurchase = await tx.documentPurchase.update({
           where: { id: purchase.id, organizationId },
           data: { linkedTenderId: tender.id },
           include: includeRelations,
         });
+        await this.postPayment(tx, organizationId, userId, linkedPurchase, linkedPurchase.documentPrice, linkedPurchase.bankCharge);
+        return linkedPurchase;
       });
     } catch (error) {
       if (
@@ -645,6 +784,8 @@ export class DocumentPurchasesService {
     id: string,
     dto: UpdateDocumentPurchaseDto,
   ): Promise<DocumentPurchaseDto> {
+    this.validateDocumentPrice(dto.documentPrice);
+    this.validateBankCharge(dto.bankCharge);
     const existing = await this.findOne(organizationId, id);
 
     if (dto.organizationMasterId || dto.paymentFromAccountId) {
@@ -659,13 +800,15 @@ export class DocumentPurchasesService {
       await this.assertTenderBelongsToOrg(organizationId, dto.linkedTenderId);
     }
 
-    const purchaseType = dto.purchaseType ?? existing.purchaseType;
     const record = await this.prisma.$transaction(async (tx) => {
+      const current = await this.lockedPurchase(tx, organizationId, id);
+      await this.ensurePaymentPosted(tx, organizationId, userId, current);
+      const purchaseType = dto.purchaseType ?? current.purchaseType;
       const updated = await tx.documentPurchase.update({
         where: { id, organizationId },
         data: {
           ...(dto.purchaseType ? { purchaseType: dto.purchaseType } : {}),
-          egpTenderId: purchaseType === "EGP" ? (dto.tenderId ?? existing.tenderId) : null,
+          egpTenderId: purchaseType === "EGP" ? (dto.tenderId ?? current.egpTenderId) : null,
           ...(dto.linkedTenderId !== undefined
             ? { linkedTenderId: dto.linkedTenderId || null }
             : {}),
@@ -673,6 +816,7 @@ export class DocumentPurchasesService {
           ...(dto.tenderWorkName ? { tenderWorkName: dto.tenderWorkName } : {}),
           ...(dto.purchaseDate ? { purchaseDate: new Date(dto.purchaseDate) } : {}),
           ...(dto.documentPrice !== undefined ? { documentPrice: dto.documentPrice } : {}),
+          ...(dto.bankCharge != null ? { bankCharge: dto.bankCharge } : {}),
           ...(dto.paymentFromAccountId ? { paymentFromAccountId: dto.paymentFromAccountId } : {}),
           ...(dto.estimatedTenderAmount !== undefined
             ? { estimatedTenderAmount: dto.estimatedTenderAmount }
@@ -690,7 +834,7 @@ export class DocumentPurchasesService {
       });
 
       const linkedTenderId =
-        dto.linkedTenderId !== undefined ? dto.linkedTenderId || null : existing.linkedTenderId;
+        dto.linkedTenderId !== undefined ? dto.linkedTenderId || null : current.linkedTenderId;
       if (
         linkedTenderId &&
         (dto.category !== undefined || dto.estimatedTenderAmount !== undefined)
@@ -706,6 +850,12 @@ export class DocumentPurchasesService {
         });
       }
 
+      if (current.paymentFromAccountId === updated.paymentFromAccountId && current.purchaseDate.getTime() === updated.purchaseDate.getTime()) {
+        await this.postPayment(tx, organizationId, userId, updated, updated.documentPrice.minus(current.documentPrice), updated.bankCharge.minus(current.bankCharge), `${id}:${randomUUID()}`);
+      } else {
+        await this.postPayment(tx, organizationId, userId, current, current.documentPrice.negated(), current.bankCharge.negated(), `${id}:${randomUUID()}`);
+        await this.postPayment(tx, organizationId, userId, updated, updated.documentPrice, updated.bankCharge, `${id}:${randomUUID()}`);
+      }
       return updated;
     });
 
@@ -724,7 +874,12 @@ export class DocumentPurchasesService {
 
   async remove(organizationId: string, userId: string, id: string): Promise<null> {
     const existing = await this.findOne(organizationId, id);
-    await this.prisma.documentPurchase.delete({ where: { id, organizationId } });
+    await this.prisma.$transaction(async (tx) => {
+      const current = await this.lockedPurchase(tx, organizationId, id);
+      await this.ensurePaymentPosted(tx, organizationId, userId, current);
+      await this.postPayment(tx, organizationId, userId, current, current.documentPrice.negated(), current.bankCharge.negated(), `${id}:delete`, new Date());
+      await tx.documentPurchase.delete({ where: { id, organizationId } });
+    });
 
     await this.auditLogService.record({
       organizationId,

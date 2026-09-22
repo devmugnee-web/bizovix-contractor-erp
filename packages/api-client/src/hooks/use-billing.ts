@@ -1,6 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getApiClientConfig } from "../config";
-import { tokenStorage } from "../token-storage";
 import type {
   BillingProfileRecord,
   InvoiceQuery,
@@ -13,7 +11,7 @@ import type {
   UpgradePlanResult,
   UsageSummary,
 } from "@bizovix/types";
-import { apiRequest, apiRequestPaginated } from "../http-client";
+import { apiRequest, apiRequestBlob, apiRequestPaginated } from "../http-client";
 
 const root = ["billing"] as const;
 
@@ -85,13 +83,7 @@ export const useRecordPayment = () => {
 };
 
 export async function downloadInvoicePdf(invoiceId: string, invoiceNumber: string) {
-  const token = tokenStorage.getAccessToken();
-  const { baseUrl } = getApiClientConfig();
-  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/billing/invoices/${invoiceId}/pdf`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
-  if (!res.ok) throw new Error("Failed to download invoice PDF");
-  const blob = await res.blob();
+  const { blob } = await apiRequestBlob(`/billing/invoices/${invoiceId}/pdf`);
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

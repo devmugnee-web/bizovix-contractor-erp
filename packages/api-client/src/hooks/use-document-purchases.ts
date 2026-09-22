@@ -67,6 +67,9 @@ function useInvalidateDocumentPurchases() {
     queryClient.invalidateQueries({ queryKey: ["tender-securities"] });
     queryClient.invalidateQueries({ queryKey: ["tenders"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    queryClient.invalidateQueries({ queryKey: ["cash-bank"] });
+    queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
+    queryClient.invalidateQueries({ queryKey: ["accounts"] });
   };
 }
 

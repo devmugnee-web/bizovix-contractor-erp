@@ -4,12 +4,18 @@ Desktop and SaaS ERP platform for contractors — bank instruments, tender manag
 expenses, receipts, and reporting. Electron desktop shell wrapping a Next.js UI backed by
 a NestJS REST API, Prisma, and PostgreSQL, in a Turborepo/pnpm monorepo.
 
+The desktop SQLite pilot supports offline Categories, Units of Measurement, Payment
+Terms and Organizations/Clients, with account-scoped cloud sync. Other ERP workflows
+still need the cloud API. Customers do not install or configure a database; SQLite
+is bundled with the desktop runtime. Vendor cloud configuration and full-product
+release work are tracked in [desktop implementation status](docs/offline-first/implementation-status.md).
+
 ## Stack
 
 - **Desktop shell**: Electron
 - **UI**: Next.js (App Router), Tailwind CSS, Recharts, Lucide icons
 - **API**: NestJS, class-validator, Passport JWT
-- **Data**: Prisma, PostgreSQL
+- **Data**: PostgreSQL/Prisma in the cloud; bundled SQLite for the supported desktop workflows
 - **Monorepo**: pnpm workspaces + Turborepo
 - **Language**: TypeScript everywhere
 
@@ -21,8 +27,10 @@ apps/
   desktop/
     electron/        Electron main process + preload
     renderer/         Next.js UI
+    local-service/    Owned desktop HTTP service and cloud sync
 packages/
   database/          Prisma schema, migrations, seed
+  desktop-storage/   Profile-bound SQLite, immutable commands and verified backups
   types/             Shared TypeScript types/enums
   validation/        Shared Zod schemas (mirrors API DTOs)
   api-client/        Typed fetch client + TanStack Query hooks
@@ -32,13 +40,17 @@ packages/
 docker/              Dockerfile(s) for containerized deployment
 ```
 
-## Prerequisites
+## Developer prerequisites
 
-- Node.js 20+
+- Node.js 24.13+ for the desktop storage/runtime checks
 - pnpm (`npm install -g pnpm`)
-- A local PostgreSQL 14+ instance (or use `docker compose up postgres`)
+- PostgreSQL 18 for the reviewed cloud baseline and organization search policy
 
-## First-time setup
+## First-time developer demo setup
+
+The commands below configure a disposable developer demo. For a new SaaS cloud
+database without demo records, use the [verified cloud bootstrap](docs/offline-first/cloud-database-bootstrap.md).
+Customer desktop installation does not use these commands.
 
 1. **Install dependencies**
 

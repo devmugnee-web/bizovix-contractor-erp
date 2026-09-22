@@ -280,7 +280,7 @@ export default function NewWorkIouPage() {
 
   const selectedTender = tenderRows.find((row) => row.id === tenderId);
   const selectedProject = projectRows.find((row) => row.id === projectId);
-  const payeeNames = React.useMemo(() => Array.from(new Set(people.map((person) => person.name))), [people]);
+  const payeeNames = Array.from(new Set(people.map((person) => person.name)));
 
   const subtotal = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const totalAmount = Math.max(0, subtotal + (Number(otherCharges) || 0) - (Number(discount) || 0));

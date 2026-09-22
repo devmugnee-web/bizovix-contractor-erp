@@ -13,7 +13,7 @@ import { VariationOrdersService } from "../src/modules/variation-orders/variatio
 import { ProjectClosingService } from "../src/modules/project-closing/project-closing.service";
 import { AccountingService } from "../src/modules/accounting/accounting.service";
 import { CashBankService } from "../src/modules/cash-bank/cash-bank.service";
-import { createOrganizationFixture, resetTestDatabase } from "./fixtures";
+import { createOrganizationFixture, mapExpenseHeadToPostingLedger, resetTestDatabase } from "./fixtures";
 
 const D = (value: Prisma.Decimal | number | string) => new Prisma.Decimal(value);
 
@@ -58,6 +58,7 @@ describe("P0 financial PostgreSQL integration", () => {
 
   it("creates, amends and cancels general/project expenses without losing posted history", async () => {
     const f = await createOrganizationFixture(prisma, "EXP");
+    await mapExpenseHeadToPostingLedger(app, f.organization.id, f.user.id, f.expenseHead.id);
     const general = await generalExpenses.create(f.organization.id, f.user.id, { expenseDate: "2026-02-01", expenseHeadId: f.expenseHead.id, amount: 100_000, expenseById: f.user.id, paidFromAccountId: f.bank.id, description: "Original" });
     expect((await prisma.bankAccount.findUniqueOrThrow({ where: { id: f.bank.id } })).currentBalance.toNumber()).toBe(-100_000);
     const journal = await prisma.journalEntry.findFirstOrThrow({ where: { sourceModule: "GENERAL_EXPENSE", sourceId: general.id }, include: { lines: true } });
@@ -100,7 +101,7 @@ describe("P0 financial PostgreSQL integration", () => {
     await receipts.cancel(f.organization.id, f.user.id, second.id);
     expect((await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } })).receivedAmount.toNumber()).toBe(500_000);
     expect((await prisma.projectBill.findUniqueOrThrow({ where: { id: bill.id } })).status).toBe("PARTIALLY_RECEIVED");
-    const replacement = await receipts.update(f.organization.id, f.user.id, first.id, { amount: 450_000 });
+    const replacement = await receipts.update(f.organization.id, f.user.id, first.id, { amount: 450_000, grossAmount: 450_000 });
     expect(replacement.replacesReceiptId).toBe(first.id);
     expect((await prisma.receipt.findUniqueOrThrow({ where: { id: first.id } })).status).toBe("CANCELLED");
     expect((await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } })).receivedAmount.toNumber()).toBe(450_000);
@@ -184,8 +185,10 @@ describe("P0 financial PostgreSQL integration", () => {
     const revenue = await prisma.ledgerAccount.findFirstOrThrow({ where: { organizationId: f.organization.id, systemKey: "PROJECT_REVENUE" } });
     await expect(accounting.createJournal(f.organization.id, f.user.id, { journalDate: "2026-02-01", description: "Unsafe AR", post: true, lines: [{ accountId: ar.id, debit: 1, credit: 0 }, { accountId: revenue.id, debit: 0, credit: 1 }] })).rejects.toBeInstanceOf(BadRequestException);
     await expect(accounting.createJournal(f.organization.id, f.user.id, { journalDate: "2026-02-01", description: "Unsafe AP", post: true, lines: [{ accountId: revenue.id, debit: 1, credit: 0 }, { accountId: ap.id, debit: 0, credit: 1 }] })).rejects.toBeInstanceOf(BadRequestException);
-    const asset = await accounting.createAccount(f.organization.id, f.user.id, { code: "1901", name: "Test Asset", accountType: "ASSET", normalBalance: "DEBIT" });
-    const equity = await accounting.createAccount(f.organization.id, f.user.id, { code: "3901", name: "Test Equity", accountType: "EQUITY", normalBalance: "CREDIT" });
+    const assetParent = await prisma.ledgerAccount.findFirstOrThrow({ where: { organizationId: f.organization.id, systemKey: "ASSETS" } });
+    const equityParent = await prisma.ledgerAccount.findFirstOrThrow({ where: { organizationId: f.organization.id, systemKey: "EQUITY" } });
+    const asset = await accounting.createAccount(f.organization.id, f.user.id, { code: "1901", name: "Test Asset", accountType: "ASSET", normalBalance: "DEBIT", parentId: assetParent.id });
+    const equity = await accounting.createAccount(f.organization.id, f.user.id, { code: "3901", name: "Test Equity", accountType: "EQUITY", normalBalance: "CREDIT", parentId: equityParent.id });
     await accounting.createJournal(f.organization.id, f.user.id, { journalDate: "2026-01-10", description: "January", post: true, lines: [{ accountId: asset.id, debit: 100_000, credit: 0 }, { accountId: equity.id, debit: 0, credit: 100_000 }] });
     await accounting.createJournal(f.organization.id, f.user.id, { journalDate: "2026-02-10", description: "February", post: true, lines: [{ accountId: asset.id, debit: 0, credit: 20_000 }, { accountId: equity.id, debit: 20_000, credit: 0 }] });
     const ledger = await accounting.ledger(f.organization.id, { accountId: asset.id, dateFrom: "2026-02-01" });

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm, useWatch, type Resolver } from "react-hook-form";
 import { z } from "zod";
@@ -42,7 +42,6 @@ import type {
 import { projectExpenseSchema, type ProjectExpenseFormValues } from "@bizovix/validation";
 import { PrimaryButton, SecondaryButton, SelectInput, TextInput } from "@bizovix/ui";
 import { formatAmount } from "@bizovix/utils";
-import { SuccessPopup } from "@/components/layout/SuccessPopup";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
 const PAGE_SIZE = 5;
@@ -82,12 +81,6 @@ const projectExpenseBatchResolver = zodResolver(projectExpenseBatchSchema) as un
   unknown,
   ProjectExpenseBatchFormValues
 >;
-
-interface ExpenseCompletion {
-  count: number;
-  projectHref: string;
-  projectName: string;
-}
 
 function money(value: string) {
   return formatAmount(value);
@@ -150,7 +143,6 @@ function ProjectExpensePageContent() {
     { label: "Add New Expense" },
   ]);
 
-  const router = useRouter();
   const searchParams = useSearchParams();
   const me = useMe();
   const [projectSearch, setProjectSearch] = React.useState("");
@@ -214,7 +206,6 @@ function ProjectExpensePageContent() {
   const exportExpenses = useExportProjectExpenses();
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState("");
-  const [completion, setCompletion] = React.useState<ExpenseCompletion | null>(null);
   const submittingRef = React.useRef(false);
 
   const form = useForm<ProjectExpenseBatchFormInput, unknown, ProjectExpenseBatchFormValues>({
@@ -353,44 +344,21 @@ function ProjectExpensePageContent() {
           }),
         ],
       });
-      setCompletion({
-        count: payloads.length,
-        projectHref: returnTo ?? `/cms/ongoing-works/${activeProject.id}`,
-        projectName: activeProject.workName,
+      const savedCount = payloads.length;
+      setNotice(`${savedCount} expense${savedCount === 1 ? "" : "s"} saved successfully.`);
+      window.requestAnimationFrame(() => {
+        form.setFocus("expenses.0.amount");
+        const listHeading = Array.from(document.querySelectorAll("h2")).find((heading) =>
+          heading.textContent?.includes("Project Expense List"),
+        );
+        listHeading?.closest("section")?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
+      window.setTimeout(() => setNotice(""), 2500);
     } catch {
       setNotice("");
     } finally {
       submittingRef.current = false;
     }
-  }
-
-  function continueAddingExpense() {
-    setCompletion(null);
-    window.requestAnimationFrame(() => form.setFocus("expenses.0.amount"));
-  }
-
-  React.useEffect(() => {
-    if (!completion) return;
-    const savedCount = completion.count;
-    setNotice(`${savedCount} expense${savedCount === 1 ? "" : "s"} saved successfully.`);
-    continueAddingExpense();
-    window.requestAnimationFrame(() => {
-      const listHeading = Array.from(document.querySelectorAll("h2")).find((heading) =>
-        heading.textContent?.includes("Project Expense List"),
-      );
-      listHeading?.closest("section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-    window.setTimeout(() => setNotice(""), 2500);
-    // Run only when a completed save batch is received.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completion]);
-
-  function returnToProject() {
-    if (!completion) return;
-    const projectHref = completion.projectHref;
-    setCompletion(null);
-    router.replace(projectHref);
   }
 
   function editExpense(expense: ProjectExpense) {
@@ -438,18 +406,6 @@ function ProjectExpensePageContent() {
 
   return (
     <div className="flex min-h-full flex-col gap-2.5 lg:h-full lg:min-h-0 lg:overflow-hidden">
-      <SuccessPopup
-        open={false}
-        title={completion?.count === 1 ? "Expense Saved" : "Expenses Saved"}
-        message={`${completion?.count ?? 0} expense${completion?.count === 1 ? "" : "s"} saved successfully for ${completion?.projectName ?? "the selected project"}.`}
-        onClose={continueAddingExpense}
-        primaryLabel="Back to Project"
-        onPrimary={returnToProject}
-        secondaryLabel="Add More Expenses"
-        onSecondary={continueAddingExpense}
-        dismissOnBackdrop={false}
-        dismissOnEscape={false}
-      />
       {notice && (
         <div className="fixed right-5 top-16 z-50 rounded-md bg-biz-success px-4 py-2 text-[12px] font-semibold text-white shadow-lg">
           {notice}

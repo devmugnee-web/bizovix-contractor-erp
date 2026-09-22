@@ -233,14 +233,15 @@ function PermissionMatrixModal({ roleId, onClose, notify }: { roleId: string; on
     setSelected(new Set(role.data.permissionKeys));
   }
 
+  const permissionEntries = catalog.data;
   const groups = React.useMemo(() => {
-    const map = new Map<string, typeof catalog.data>();
-    for (const entry of catalog.data ?? []) {
+    const map = new Map<string, typeof permissionEntries>();
+    for (const entry of permissionEntries ?? []) {
       if (!map.has(entry.group)) map.set(entry.group, []);
       map.get(entry.group)!.push(entry);
     }
     return Array.from(map.entries());
-  }, [catalog.data]);
+  }, [permissionEntries]);
 
   function toggle(key: string) {
     setSelected((prev) => {

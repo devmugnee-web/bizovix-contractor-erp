@@ -7,6 +7,110 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Feature-gated desktop category sync pilot. Existing domain columns are unchanged.
+// Tenant/user/category references are validated by the authenticated service;
+// relations below create foreign keys only on the new metadata tables.
+model DesktopSyncDevice {
+  id             String   @id
+  organizationId String
+  userId         String
+  deviceName     String?
+  createdAt      DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+  revokedAt      DateTime?
+  membership     OrganizationUser @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict, map: "desktop_sync_devices_membership_fkey")
+  receipts       DesktopSyncReceipt[]
+
+  @@index([organizationId, userId])
+  @@map("desktop_sync_devices")
+}
+
+model DesktopSyncClock {
+  organizationId String @id
+  epoch          String
+  sequence       BigInt @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@map("desktop_sync_clocks")
+}
+
+model DesktopSyncCategoryVersion {
+  organizationId String
+  categoryId     String
+  version        Int    @default(1)
+  category       MasterCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@id([organizationId, categoryId])
+  @@map("desktop_sync_category_versions")
+}
+
+model DesktopSyncReceipt {
+  organizationId String
+  deviceId       String
+  operationId    String
+  userId         String
+  requestHash    String
+  result         Json
+  createdAt      DateTime @default(now())
+  membership     OrganizationUser @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict, map: "desktop_sync_receipts_membership_fkey")
+  device         DesktopSyncDevice @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  @@id([organizationId, deviceId, operationId])
+  @@map("desktop_sync_receipts")
+}
+
+model DesktopSyncChange {
+  organizationId String
+  sequence       BigInt
+  categoryId     String
+  operationId    String?
+  category       Json
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@id([organizationId, sequence])
+  @@map("desktop_sync_changes")
+}
+
+// Independent streams preserve the original category cursor and command protocol.
+model DesktopMasterSyncClock {
+  /// Stream type: uom, paymentTerm or organizationMaster (SQL CHECK enforced).
+  organizationId String
+  entityType     String
+  epoch          String
+  sequence       BigInt @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@id([organizationId, entityType])
+  @@map("desktop_master_sync_clocks")
+}
+
+model DesktopMasterSyncVersion {
+  organizationId String
+  entityType     String
+  entityId       String
+  version        Int @default(1)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@id([organizationId, entityType, entityId])
+  @@map("desktop_master_sync_versions")
+}
+
+model DesktopMasterSyncChange {
+  organizationId String
+  entityType     String
+  sequence       BigInt
+  entityId       String
+  operationId    String?
+  record         Json
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@id([organizationId, entityType, sequence])
+  @@map("desktop_master_sync_changes")
+}
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -482,6 +586,12 @@ enum SubscriptionStatus {
 // ---------------------------------------------------------------------------
 
 model Organization {
+  desktopSyncClock            DesktopSyncClock?
+  desktopSyncCategoryVersions DesktopSyncCategoryVersion[]
+  desktopSyncChanges          DesktopSyncChange[]
+  desktopMasterSyncClocks     DesktopMasterSyncClock[]
+  desktopMasterSyncVersions   DesktopMasterSyncVersion[]
+  desktopMasterSyncChanges    DesktopMasterSyncChange[]
   id        String   @id @default(cuid())
   name      String
   shortName String?
@@ -683,6 +793,8 @@ model User {
 }
 
 model OrganizationUser {
+  desktopSyncDevices  DesktopSyncDevice[]
+  desktopSyncReceipts DesktopSyncReceipt[]
   id             String   @id @default(cuid())
   organizationId String
   userId         String
@@ -978,6 +1090,7 @@ model BankAccount {
   branch             String?
   routingNumber      String?
   bankAccountType    String?
+  emiDate            DateTime?   @db.Date
   openingBalance     Decimal     @default(0) @db.Decimal(18, 2)
   openingBalanceDate DateTime?
   currency           String      @default("BDT")
@@ -1383,6 +1496,7 @@ model DocumentPurchase {
   tenderWorkName        String
   purchaseDate          DateTime
   documentPrice         Decimal                      @db.Decimal(18, 2)
+  bankCharge            Decimal                      @default(0) @db.Decimal(18, 2)
   estimatedTenderAmount Decimal                      @default(0) @db.Decimal(18, 2)
   category              String?
   submissionDate        DateTime?
@@ -3834,6 +3948,7 @@ model SubcontractorProfile {
 /// category tables — avoids both a generic over-engineered category engine and duplicate
 /// per-domain category models.
 model MasterCategory {
+  desktopSyncVersions DesktopSyncCategoryVersion[]
   id             String             @id @default(cuid())
   organizationId String
   type           MasterCategoryType

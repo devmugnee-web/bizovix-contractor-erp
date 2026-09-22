@@ -5,6 +5,8 @@ import { buildPaginationMeta } from "@bizovix/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateOrganizationMasterDto } from "./dto/create-organization-master.dto";
 import { QueryOrganizationMasterDto } from "./dto/query-organization-master.dto";
+import { desktopCaptureAvailable, lockDesktopCaptureBoundary } from "../desktop-sync/desktop-sync-capture";
+import { lockDesktopMasterClock, recordDesktopMasterChange } from "../desktop-sync/desktop-master-sync-state";
 
 @Injectable()
 export class OrganizationsService {
@@ -55,8 +57,21 @@ export class OrganizationsService {
   }
 
   create(organizationId: string, dto: CreateOrganizationMasterDto): Promise<OrganizationMaster> {
-    return this.prisma.organizationMaster.create({
+    return this.prisma.$transaction(async (tx) => {
+      await lockDesktopCaptureBoundary(tx, organizationId);
+      if (!await desktopCaptureAvailable(tx, "organizationMaster")) return this.createInTransaction(tx, organizationId, dto);
+      await lockDesktopMasterClock(tx, organizationId, "organizationMaster");
+      const record = await this.createInTransaction(tx, organizationId, dto);
+      await recordDesktopMasterChange(tx, organizationId, "organizationMaster", record, 1);
+      return record;
+    });
+  }
+
+  /** Preserve original exact names and case-sensitive uniqueness; caller owns tx. */
+  createInTransaction(tx: Prisma.TransactionClient, organizationId: string, dto: CreateOrganizationMasterDto, id?: string): Promise<OrganizationMaster> {
+    return tx.organizationMaster.create({
       data: {
+        ...(id ? { id } : {}),
         organizationId,
         shortName: dto.shortName,
         fullName: dto.fullName,

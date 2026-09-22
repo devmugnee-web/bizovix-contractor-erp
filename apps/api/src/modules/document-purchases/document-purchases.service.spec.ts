@@ -15,6 +15,7 @@ function purchaseFixture(overrides: Record<string, unknown> = {}) {
     tenderWorkName: "Supply equipment",
     purchaseDate: new Date("2026-08-30T00:00:00.000Z"),
     documentPrice: new Prisma.Decimal("100.00"),
+    bankCharge: new Prisma.Decimal(0),
     estimatedTenderAmount: new Prisma.Decimal("1000.00"),
     category: "Supply",
     submissionDate: null,
@@ -103,7 +104,7 @@ function setup() {
     $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
   };
   const audit = { record: jest.fn() };
-  const service = new DocumentPurchasesService(prisma as never, audit as never);
+  const service = new DocumentPurchasesService(prisma as never, audit as never, { post: jest.fn() } as never, { post: jest.fn() } as never);
   return { service, prisma, tx, audit };
 }
 

@@ -6,6 +6,12 @@ export interface PaymentTermRecord {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Optional desktop metadata; business fields keep their cloud API shape. */
+  syncStatus?: "SYNCED" | "PENDING" | "REJECTED";
+  version?: number;
+  operationId?: string;
+  syncError?: { kind: string; message: string };
+  cloudRecord?: PaymentTermRecord;
 }
 
 export interface SavePaymentTermInput {

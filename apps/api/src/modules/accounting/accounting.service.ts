@@ -37,6 +37,7 @@ const SYSTEM = [
   ["12200005", "Other Bill Deductions Receivable", "ASSET", "DEBIT", "OTHER_DEDUCTION_RECEIVABLE", "ASSET_CURRENT"],
   ["12200006", "Security Deposit", "ASSET", "DEBIT", "SECURITY_DEPOSIT", "ASSET_CURRENT"],
   ["12200007", "Advances", "ASSET", "DEBIT", "ADVANCES", "ASSET_CURRENT"],
+  ["12200008", "Margin Amount", "ASSET", "DEBIT", "BANK_MARGIN", "ASSET_CURRENT"],
   ["2100000", "Long Term Liabilities", "LIABILITY", "CREDIT", "LONG_TERM_LIABILITIES", "LIABILITIES"],
   ["2200000", "Current Liabilities", "LIABILITY", "CREDIT", "CURRENT_LIABILITIES", "LIABILITIES"],
   ["21100001", "Loans", "LIABILITY", "CREDIT", "LOANS", "LONG_TERM_LIABILITIES"],
@@ -55,6 +56,7 @@ const SYSTEM = [
   ["4400000", "Financial Expenses", "EXPENSE", "DEBIT", "FINANCIAL_EXPENSES", "EXPENSES"],
   ["4500000", "Sales & Marketing Expenses", "EXPENSE", "DEBIT", "SALES_MARKETING_EXPENSES", "EXPENSES"],
   ["41100001", "Project Expense", "EXPENSE", "DEBIT", "PROJECT_EXPENSE", "PROJECT_EXPENSES"],
+  ["41100002", "Tender Schedule Purchase", "EXPENSE", "DEBIT", "TENDER_SCHEDULE_PURCHASE", "PROJECT_EXPENSES"],
   ["43100001", "General Expense", "EXPENSE", "DEBIT", "GENERAL_EXPENSE", "ADMINISTRATIVE_EXPENSES"],
   ["44100001", "Bank Charges", "EXPENSE", "DEBIT", "BANK_CHARGES", "FINANCIAL_EXPENSES"],
   ["44100002", "Tender Security Charges", "EXPENSE", "DEBIT", "TENDER_SECURITY_CHARGES", "FINANCIAL_EXPENSES"],
@@ -70,6 +72,7 @@ const SYSTEM = [
 // the GL. Real business modules (Receipts, Payables, Cash & Bank, Opening Balances) post to
 // them through AccountingService.post()/bankLedgerAccount(), which is unaffected by this gate.
 const CONTROL_SYSTEM_KEYS = new Set([
+  "BANK_MARGIN",
   "ACCOUNTS_RECEIVABLE", "ACCOUNTS_PAYABLE", "RETENTION_RECEIVABLE", "TAX_DEDUCTED_VAT", "TAX_DEDUCTED_AIT", "OTHER_DEDUCTION_RECEIVABLE", "OPENING_BALANCE_EQUITY", "CASH", "BANK",
   ...ROOTS.map(([, , , , key]) => key),
   ...SYSTEM.filter(([code]) => code.length === 7).map(([, , , , key]) => key),
@@ -934,14 +937,24 @@ export class AccountingService {
         organizationMaster: true,
         projectExpenses: { where: { status: { not: "REJECTED" } } },
         receipts: { where: { status: "RECEIVED" } },
-        tender: { include: { tenderSecurities: true, creditCommitments: true } },
+        tender: { include: { creditCommitments: true } },
         documentPurchase: true,
       },
     });
+    const securityCharges = await this.prisma.journalLine.groupBy({
+      by: ["projectId"],
+      where: {
+        projectId: { in: rows.map((row) => row.id) },
+        account: { organizationId: org, systemKey: "TENDER_SECURITY_CHARGES" },
+        journalEntry: { organizationId: org, status: "POSTED" },
+      },
+      _sum: { debit: true, credit: true },
+    });
+    const securityChargeByProject = new Map(securityCharges.map((row) => [row.projectId, D(row._sum.debit ?? 0).sub(row._sum.credit ?? 0)]));
     return rows.map((r) => {
       const expense = r.projectExpenses.reduce((n, x) => n.add(x.amount), D(0)),
         received = r.receipts.reduce((n, x) => n.add(x.amount), D(0)),
-        securityCost = r.tender?.tenderSecurities.reduce((n, x) => n.add(x.marginAmount), D(0)) ?? D(0),
+        securityCost = securityChargeByProject.get(r.id) ?? D(0),
         commitmentCost = r.tender?.creditCommitments.reduce((n, x) => n.add(x.totalAmount), D(0)) ?? D(0),
         otherCost = r.documentPurchase?.documentPrice ?? D(0),
         totalCost = expense.add(securityCost).add(commitmentCost).add(otherCost),

@@ -194,7 +194,7 @@ export class CashBankService {
 
   async createBankAccount(organizationId: string, userId: string, dto: CreateBankAccountDto) {
     const row = await this.prisma.$transaction(async (tx) => {
-      const account = await tx.bankAccount.create({ data: { organizationId, accountType: "BANK", bankName: dto.bankName.trim(), accountName: dto.accountName.trim(), accountNumber: dto.accountNumber.trim(), branch: dto.branch.trim(), routingNumber: dto.routingNumber?.trim() || null, bankAccountType: dto.bankAccountType, openingBalance: dto.openingBalance, openingBalanceDate: new Date(dto.openingBalanceDate), currentBalance: 0, currency: dto.currency || "BDT", remarks: dto.remarks?.trim() || null, isActive: dto.status !== "Inactive" } });
+      const account = await tx.bankAccount.create({ data: { organizationId, accountType: "BANK", bankName: dto.bankName.trim(), accountName: dto.accountName.trim(), accountNumber: dto.accountNumber.trim(), branch: dto.branch.trim(), routingNumber: dto.routingNumber?.trim() || null, bankAccountType: dto.bankAccountType, emiDate: dto.bankAccountType === "OD" && dto.emiDate ? new Date(dto.emiDate) : null, openingBalance: dto.openingBalance, openingBalanceDate: new Date(dto.openingBalanceDate), currentBalance: 0, currency: dto.currency || "BDT", remarks: dto.remarks?.trim() || null, isActive: dto.status !== "Inactive" } });
       if (dto.openingBalance > 0) {
         await this.post(tx, { organizationId, accountId: account.id, direction: "IN", amount: dto.openingBalance, sourceModule: "BANK_ACCOUNT", sourceType: "OPENING_BALANCE", sourceId: account.id, description: "Opening balance", transactionDate: new Date(dto.openingBalanceDate), createdById: userId });
         await this.accounting.post(tx, { organizationId, userId, journalDate: new Date(dto.openingBalanceDate), referenceNo: account.accountName, description: `Opening balance — ${account.accountName}`, sourceModule: "BANK_ACCOUNT", sourceType: "OPENING_BALANCE", sourceId: account.id, lines: [{ bankAccountId: account.id, debit: dto.openingBalance, credit: 0 }, { systemKey: "OPENING_BALANCE_EQUITY", debit: 0, credit: dto.openingBalance }] });
@@ -208,8 +208,11 @@ export class CashBankService {
   async updateBankAccount(organizationId: string, userId: string, id: string, dto: UpdateBankAccountDto) {
     const account = await this.account(this.prisma, organizationId, id);
     if (account.accountType !== "BANK") throw new BadRequestException("Only bank accounts can be edited here");
+    const emiDate = (dto.bankAccountType ?? account.bankAccountType) !== "OD"
+      ? null
+      : dto.emiDate === undefined ? undefined : dto.emiDate ? new Date(dto.emiDate) : null;
     const row = await this.prisma.$transaction(async (tx) => {
-      await tx.bankAccount.update({ where: { id, organizationId }, data: { bankName: dto.bankName, accountName: dto.accountName, accountNumber: dto.accountNumber, branch: dto.branch, routingNumber: dto.routingNumber, bankAccountType: dto.bankAccountType, currency: dto.currency, remarks: dto.remarks, isActive: dto.status ? dto.status === "Active" : undefined } });
+      await tx.bankAccount.update({ where: { id, organizationId }, data: { bankName: dto.bankName, accountName: dto.accountName, accountNumber: dto.accountNumber, branch: dto.branch, routingNumber: dto.routingNumber, bankAccountType: dto.bankAccountType, emiDate, currency: dto.currency, remarks: dto.remarks, isActive: dto.status ? dto.status === "Active" : undefined } });
       if (dto.currentBalance !== undefined) {
         const target = new Prisma.Decimal(dto.currentBalance);
         const difference = target.minus(account.currentBalance);

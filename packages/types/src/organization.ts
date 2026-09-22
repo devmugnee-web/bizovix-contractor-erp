@@ -2,6 +2,11 @@ export interface OrganizationMasterOption {
   id: string;
   shortName: string;
   fullName: string;
+  version?: number;
+  syncStatus?: "SYNCED" | "PENDING" | "REJECTED";
+  operationId?: string;
+  syncError?: { kind: string; message: string };
+  cloudRecord?: OrganizationMasterOption;
 }
 
 export interface BankAccountOption {
@@ -15,11 +20,8 @@ export interface BankAccountOption {
   cashRole?: "MAIN_CASH" | "PETTY_CASH" | null;
 }
 
-export interface OrganizationMasterRecord {
-  id: string;
+export interface OrganizationMasterRecord extends OrganizationMasterOption {
   organizationId: string;
-  shortName: string;
-  fullName: string;
   createdAt: string;
   updatedAt: string;
 }

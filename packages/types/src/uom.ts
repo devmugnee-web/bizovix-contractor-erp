@@ -6,6 +6,12 @@ export interface UomRecord {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Optional desktop metadata; business fields keep their cloud API shape. */
+  syncStatus?: "SYNCED" | "PENDING" | "REJECTED";
+  version?: number;
+  operationId?: string;
+  syncError?: { kind: string; message: string };
+  cloudRecord?: UomRecord;
 }
 
 export interface SaveUomInput {

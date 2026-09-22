@@ -169,6 +169,8 @@ importers:
         specifier: ^8.19.0
         version: 8.67.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
 
+  apps/desktop/local-service: {}
+
   apps/desktop/renderer:
     dependencies:
       '@bizovix/api-client':
@@ -317,6 +319,8 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+
+  packages/desktop-storage: {}
 
   packages/types:
     devDependencies:

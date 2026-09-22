@@ -30,6 +30,7 @@ const AUTO_SOURCE_MODULES = [
   "TENDER_OPENING",
   "CONTRACT",
   "PROJECT_BILL",
+  "BANK_ACCOUNT",
 ] as const;
 const TENDER_NOT_YET_SUBMITTED = ["DRAFT", "PUBLISHED", "DOCUMENT_PURCHASED", "PREPARING"] as const;
 
@@ -276,6 +277,7 @@ export class RemindersService {
       defects,
       pendingCertificates,
       pendingHandovers,
+      odAccounts,
     ] = await Promise.all([
       this.reminderRules.allRules(org),
       this.prisma.tenderSecurity.findMany({
@@ -355,6 +357,10 @@ export class RemindersService {
         where: { organizationId: org, status: { in: ["DRAFT", "SUBMITTED"] } },
         include: { work: true },
       }),
+      this.prisma.bankAccount.findMany({
+        where: { organizationId: org, accountType: "BANK", bankAccountType: "OD", isActive: true, emiDate: { not: null } },
+        select: { id: true, accountName: true, accountNumber: true, bankName: true, emiDate: true },
+      }),
     ]);
     /** Settings-driven priority/notification-window per reminder type, falling back to a
      * sane hardcoded default if the rule row is somehow missing (should not normally happen
@@ -373,6 +379,29 @@ export class RemindersService {
       };
     };
     await Promise.all([
+      ...odAccounts
+        .map((x) => ({ x, rule: effective("LOAN_EMI_DUE", "MEDIUM", 7) }))
+        .filter(({ rule }) => rule.enabled)
+        .map(async ({ x, rule }) => {
+          // A date restored on the account reopens only automatically resolved reminders.
+          // Explicit completion/cancellation by the user remains respected.
+          await this.prisma.reminder.updateMany({
+            where: { organizationId: org, sourceModule: "BANK_ACCOUNT", sourceId: x.id, type: "EMI", dueDate: x.emiDate!, status: "COMPLETED", completedById: null },
+            data: { status: "UPCOMING", isResolved: false, completedAt: null },
+          });
+          return this.source(org, {
+            type: "EMI",
+            title: `OD EMI due — ${x.accountName}`,
+            dueDate: x.emiDate!,
+            sourceModule: "BANK_ACCOUNT",
+            sourceId: x.id,
+            referenceNo: x.accountNumber,
+            relatedEntityName: x.accountName,
+            organizationName: x.bankName,
+            priority: rule.priority,
+            notificationBefore: rule.window,
+          });
+        }),
       ...security
         .map((x) => ({ x, rule: effective("TENDER_SECURITY_EXPIRY", "HIGH", 30) }))
         .filter(({ rule }) => rule.enabled)
@@ -647,6 +676,7 @@ export class RemindersService {
       openingTenders,
       activeContracts,
       retentionBills,
+      odAccounts,
     ] = await Promise.all([
       this.prisma.tenderSecurity.findMany({
         where: { organizationId: org, status: "ACTIVE" },
@@ -711,11 +741,16 @@ export class RemindersService {
           retentionReleasedAmount: true,
         },
       }),
+      this.prisma.bankAccount.findMany({
+        where: { organizationId: org, accountType: "BANK", bankAccountType: "OD", isActive: true, emiDate: { not: null } },
+        select: { id: true, emiDate: true },
+      }),
     ]);
 
     const keyOf = (id: string, date: Date | null | undefined) =>
       `${id}:${date ? date.getTime() : ""}`;
     const activeKeys: Record<(typeof AUTO_SOURCE_MODULES)[number], Set<string>> = {
+      BANK_ACCOUNT: new Set(odAccounts.map((x) => keyOf(x.id, x.emiDate))),
       TENDER_SECURITY: new Set(security.map((x) => keyOf(x.id, x.expiryDate))),
       PG_BG: new Set(guarantees.map((x) => keyOf(x.id, x.expiryDate))),
       SECURITY_DEPOSIT: new Set(

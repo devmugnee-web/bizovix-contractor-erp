@@ -3,16 +3,26 @@ import type { SaveUomInput, UomRecord } from "@bizovix/types";
 import { apiRequest } from "../http-client";
 import { queryKeys } from "./query-keys";
 
-export function useUoms() {
+export function useUoms(options: { includeLocal?: boolean } = {}) {
+  const includeLocal = options.includeLocal === true;
   return useQuery({
-    queryKey: queryKeys.uoms,
-    queryFn: () => apiRequest<UomRecord[]>("/uoms"),
+    queryKey: [...queryKeys.uoms, includeLocal ? "with-local-drafts" : "accepted"],
+    queryFn: async () => {
+      const records = await apiRequest<UomRecord[]>("/uoms");
+      // Cloud workflows may use only accepted IDs and accepted field values.
+      return includeLocal ? records : records.flatMap((record) =>
+        !record.syncStatus || record.syncStatus === "SYNCED" ? [record] : record.cloudRecord ? [record.cloudRecord] : [],
+      );
+    },
   });
 }
 
 function useInvalidateUoms() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ["uoms"] });
+  return () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["uoms"] }),
+    queryClient.invalidateQueries({ queryKey: ["desktop-sync-status"] }),
+  ]);
 }
 
 export function useCreateUom() {

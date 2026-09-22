@@ -61,6 +61,12 @@ function money(value: number | string) {
   return formatAmount(value || 0);
 }
 
+function calculateMarginAmount(securityAmount: number, percentage: string) {
+  const securityCents = Math.round(securityAmount * 100);
+  const percentageBasisPoints = Math.round(Number(percentage || 0) * 100);
+  return Math.round(securityCents * percentageBasisPoints / 10_000) / 100;
+}
+
 function isoDateInput(value: Date) {
   return value.toISOString().slice(0, 10);
 }
@@ -85,21 +91,15 @@ function monthsUntil(issueDate: string, expiryDate: string) {
   return Math.max(1, wholeMonths + (expiryDay! > issueDay! ? 1 : 0));
 }
 
-function makeReference(tenderId: string | null, securityType: SecurityType) {
-  const suffix = (tenderId ?? "0000").slice(-4);
-  return `${securityType === "BANK_GUARANTEE" ? "BG" : "PO"}-${suffix}/24-25`;
-}
-
 function toSelectedTender(
   row: PendingTenderSecurity,
-  securityType: SecurityType,
   defaultMarginPct = "10.00",
 ): SelectedTender {
   return {
     ...row,
     securityAmount: Number(row.securityAmount).toFixed(2),
     marginPercentage: defaultMarginPct,
-    referenceNo: makeReference(row.tenderId, securityType),
+    referenceNo: "",
   };
 }
 
@@ -224,7 +224,7 @@ function TenderSecurityWorkspace() {
     : null;
   const selectedRows = selectedRowsOverride
     ?? (guidedRow?.eligible && guidedRow.documentPurchaseId
-      ? [toSelectedTender(guidedRow, securityType, defaultMarginPct)]
+      ? [toSelectedTender(guidedRow, defaultMarginPct)]
       : []);
   const selectedIds = new Set(selectedRows.map((row) => row.id));
   const selectedNoticeExpiryDates = [
@@ -260,7 +260,7 @@ function TenderSecurityWorkspace() {
     setManualExpiryDate("");
     updateSelectedRows((rows) => {
       if (rows.some((item) => item.id === row.id)) return rows.filter((item) => item.id !== row.id);
-      return [...rows, toSelectedTender(row, securityType, defaultMarginPct)];
+      return [...rows, toSelectedTender(row, defaultMarginPct)];
     });
   }
 
@@ -277,7 +277,7 @@ function TenderSecurityWorkspace() {
         ...rows,
         ...eligibleItems
           .filter((item) => !rows.some((row) => row.id === item.id))
-          .map((item) => toSelectedTender(item, securityType, defaultMarginPct)),
+          .map((item) => toSelectedTender(item, defaultMarginPct)),
       ]);
     }
   }
@@ -288,7 +288,6 @@ function TenderSecurityWorkspace() {
 
   function updateSecurityType(next: SecurityType) {
     setSecurityType(next);
-    updateSelectedRows((rows) => rows.map((row) => ({ ...row, referenceNo: makeReference(row.tenderId, next) })));
   }
 
   function openDetails() {
@@ -306,7 +305,7 @@ function TenderSecurityWorkspace() {
 
   function openRowDetails(row: PendingTenderSecurity) {
     if (!row.eligible || !row.documentPurchaseId) return;
-    setSelectedRowsOverride([toSelectedTender(row, securityType, defaultMarginPct)]);
+    setSelectedRowsOverride([toSelectedTender(row, defaultMarginPct)]);
     setShowDetails(true);
     window.requestAnimationFrame(() => section2Ref.current?.focus({ preventScroll: true }));
   }
@@ -314,11 +313,11 @@ function TenderSecurityWorkspace() {
   const totals = selectedRows.reduce(
     (acc, row) => {
       const securityAmount = Number(row.securityAmount || 0);
-      const marginAmount = (securityAmount * Number(row.marginPercentage || 0)) / 100;
+      const marginAmount = calculateMarginAmount(securityAmount, row.marginPercentage);
       return {
         security: acc.security + securityAmount,
         margin: acc.margin + marginAmount,
-        finance: acc.finance + (fundingType === "LOAN" ? securityAmount - marginAmount : 0),
+        finance: acc.finance + (fundingType === "LOAN" ? securityAmount : 0),
       };
     },
     { security: 0, margin: 0, finance: 0 },
@@ -344,6 +343,7 @@ function TenderSecurityWorkspace() {
   }
 
   async function save() {
+    if (!canSave) return;
     setMessage(null);
     try {
       await createTenderSecurity.mutateAsync({
@@ -360,7 +360,7 @@ function TenderSecurityWorkspace() {
           documentPurchaseId: row.documentPurchaseId!,
           securityAmount: Number(row.securityAmount),
           marginPercentage: Number(row.marginPercentage),
-          referenceNo: row.referenceNo,
+          referenceNo: row.referenceNo.trim(),
         })),
       });
       setSelectedRowsOverride([]);
@@ -747,7 +747,8 @@ function TenderSecurityWorkspace() {
         <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-3">
           <h3 className="text-[14px] font-bold text-biz-navy">2. Tender-wise Amounts</h3>
-          <p className="mt-0.5 text-[11px] text-biz-muted">Enter each security amount and company cash margin. Bank finance is calculated automatically.</p>
+          <p className="mt-0.5 text-[11px] text-biz-muted">Bank finance equals the full security amount for loan funding. Margin is deducted separately from the selected bank account.</p>
+          <p className="mt-0.5 text-[11px] text-biz-muted">Manually enter the {securityType === "BANK_GUARANTEE" ? "BG" : "PO"} number for every selected tender. Reference No. is required.</p>
         </div>
         <div className="hidden overflow-x-auto border-b border-slate-200 bg-white xl:block">
           <table className="w-full min-w-[980px] table-fixed text-[11px] xl:min-w-0">
@@ -766,7 +767,7 @@ function TenderSecurityWorkspace() {
             <thead className="bg-slate-50/90 text-[10px] font-bold uppercase tracking-[0.035em] text-biz-muted">
               <tr className="border-b border-biz-border">
                 {["SL", "Tender ID", "Organization", "Work / Tender Name", "Security Amount (৳)", "Company Cash Margin %", "Company Margin Amount (৳)", ...(fundingType === "LOAN" ? ["Bank Finance (৳)"] : []), `Reference No. (${securityType === "BANK_GUARANTEE" ? "BG No." : "PO No."})`].map((header) => (
-                  <th key={header} className="px-2 py-2 text-left">{header}</th>
+                  <th key={header} className="px-2 py-2 text-left">{header}{header.startsWith("Reference No.") && <span className="ml-0.5 text-biz-danger">*</span>}</th>
                 ))}
                 <th className="px-1 py-2 text-center">Remove</th>
               </tr>
@@ -777,8 +778,8 @@ function TenderSecurityWorkspace() {
               ) : (
                 selectedRows.map((row, index) => {
                   const securityAmount = Number(row.securityAmount || 0);
-                  const marginAmount = (securityAmount * Number(row.marginPercentage || 0)) / 100;
-                  const bankFinance = securityAmount - marginAmount;
+                  const marginAmount = calculateMarginAmount(securityAmount, row.marginPercentage);
+                  const bankFinance = securityAmount;
                   return (
                     <tr key={row.id} className="border-b border-biz-border transition-colors last:border-b-0 hover:bg-blue-50/25">
                       <td className="px-2 py-2.5">{index + 1}</td>
@@ -799,7 +800,7 @@ function TenderSecurityWorkspace() {
                       <td className="px-2 py-2.5"><div className="flex w-full"><input type="number" min={0} max={100} value={row.marginPercentage} onChange={(e) => setSelectedValue(row.id, "marginPercentage", e.target.value)} className="h-8 w-full min-w-0 rounded-l border border-biz-border bg-white px-2 text-right outline-none transition focus:border-biz-blue focus:ring-2 focus:ring-blue-100" /><span className="flex h-8 w-7 shrink-0 items-center justify-center rounded-r border border-l-0 border-biz-border bg-slate-50 text-biz-muted">%</span></div></td>
                       <td className="px-2 py-2.5"><input readOnly value={money(marginAmount)} className="h-8 w-full min-w-0 rounded border border-slate-200 bg-slate-50 px-2 text-right font-semibold text-biz-navy" /></td>
                       {fundingType === "LOAN" && <td className="px-2 py-2.5"><input readOnly value={money(bankFinance)} className="h-8 w-full min-w-0 rounded border border-slate-200 bg-slate-50 px-2 text-right font-semibold text-biz-navy" /></td>}
-                      <td className="px-2 py-2.5"><input value={row.referenceNo} onChange={(e) => setSelectedValue(row.id, "referenceNo", e.target.value)} className="h-8 w-full min-w-0 rounded border border-biz-border bg-white px-2 outline-none transition focus:border-biz-blue focus:ring-2 focus:ring-blue-100" /></td>
+                      <td className="px-2 py-2.5"><input required aria-label={`Reference No. for tender ${row.tenderId ?? row.tenderWorkName}`} placeholder={`Enter ${securityType === "BANK_GUARANTEE" ? "BG" : "PO"} No.`} value={row.referenceNo} onChange={(e) => setSelectedValue(row.id, "referenceNo", e.target.value)} className="h-8 w-full min-w-0 rounded border border-biz-border bg-white px-2 outline-none transition focus:border-biz-blue focus:ring-2 focus:ring-blue-100" /></td>
                       <td className="px-1 py-2.5 text-center"><IconButton aria-label={`Remove ${row.tenderId ?? row.tenderWorkName}`} onClick={() => removeSelectedTender(row.id)}><Trash2 className="h-4 w-4 text-biz-danger" /></IconButton></td>
                     </tr>
                   );
@@ -812,8 +813,8 @@ function TenderSecurityWorkspace() {
         <div className="divide-y divide-slate-200 border-b border-slate-200 xl:hidden">
           {selectedRows.length === 0 ? <p className="px-4 py-8 text-center text-[12px] text-biz-muted">No selected tenders. Return to Ready Now and select one or more eligible tenders.</p> : selectedRows.map((row, index) => {
             const securityAmount = Number(row.securityAmount || 0);
-            const marginAmount = (securityAmount * Number(row.marginPercentage || 0)) / 100;
-            const bankFinance = securityAmount - marginAmount;
+            const marginAmount = calculateMarginAmount(securityAmount, row.marginPercentage);
+            const bankFinance = securityAmount;
             return <article key={row.id} className="space-y-3 p-3 sm:p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0"><p className="text-[11px] text-biz-muted">#{index + 1} · Tender {row.tenderId}</p><p className="mt-0.5 text-[13px] font-semibold text-biz-navy">{row.tenderWorkName}</p><p className="mt-0.5 text-[11px] text-biz-muted">{row.organizationMaster?.shortName ?? "Not set"}</p></div>
@@ -828,8 +829,8 @@ function TenderSecurityWorkspace() {
                 </label>
                 <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px]"><span className="block text-biz-muted">Company Margin Amount (৳)</span><span className="mt-0.5 block text-[13px] font-semibold text-biz-navy">{money(marginAmount)}</span></div>
                 {fundingType === "LOAN" && <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px]"><span className="block text-biz-muted">Bank Finance (৳)</span><span className="mt-0.5 block text-[13px] font-semibold text-biz-navy">{money(bankFinance)}</span></div>}
-                <label className="block text-[11px] font-semibold text-biz-muted sm:col-span-2">Reference No. ({securityType === "BANK_GUARANTEE" ? "BG No." : "PO No."})
-                  <input value={row.referenceNo} onChange={(e) => setSelectedValue(row.id, "referenceNo", e.target.value)} className="mt-1 h-10 w-full rounded border border-biz-border bg-white px-3 text-[12px] text-biz-text outline-none focus:border-biz-blue focus:ring-2 focus:ring-blue-100" />
+                <label className="block text-[11px] font-semibold text-biz-muted sm:col-span-2">Reference No. ({securityType === "BANK_GUARANTEE" ? "BG No." : "PO No."})<span className="ml-0.5 text-biz-danger">*</span>
+                  <input required aria-label={`Reference No. for tender ${row.tenderId ?? row.tenderWorkName}`} placeholder={`Enter ${securityType === "BANK_GUARANTEE" ? "BG" : "PO"} No.`} value={row.referenceNo} onChange={(e) => setSelectedValue(row.id, "referenceNo", e.target.value)} className="mt-1 h-10 w-full rounded border border-biz-border bg-white px-3 text-[12px] text-biz-text outline-none focus:border-biz-blue focus:ring-2 focus:ring-blue-100" />
                 </label>
               </div>
             </article>;

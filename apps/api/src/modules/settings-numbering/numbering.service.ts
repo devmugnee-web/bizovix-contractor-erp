@@ -107,9 +107,9 @@ export class NumberingService {
     private readonly audit: AuditLogService,
   ) {}
 
-  async ensureDefaults(org: string) {
+  async ensureDefaults(org: string, tx: Prisma.TransactionClient | PrismaService = this.prisma) {
     for (const moduleKey of NUMBERING_MODULE_KEYS) {
-      await this.prisma.numberSequence.upsert({
+      await tx.numberSequence.upsert({
         where: { organizationId_moduleKey: { organizationId: org, moduleKey } },
         update: {},
         create: {
@@ -185,7 +185,9 @@ export class NumberingService {
     moduleKey: string,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
-    await this.ensureDefaults(org);
+    // Default creation and counter consumption belong to the same client. An
+    // outer transaction must be able to roll back both, including a new tenant.
+    await this.ensureDefaults(org, tx);
     const year = new Date().getFullYear();
     const rows = await tx.$queryRaw<
       Array<{

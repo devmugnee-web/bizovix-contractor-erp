@@ -174,7 +174,7 @@ export default function DocumentPurchaseListPage() {
       return `"${safe.replaceAll('"', '""')}"`;
     };
     const rows = [
-      ["Purchase Type", "Tender ID", "Organization", "Tender / Work Name", "Purchase Date", "Document Price (BDT)", "Payment From"],
+      ["Purchase Type", "Tender ID", "Organization", "Tender / Work Name", "Purchase Date", "Document Price (BDT)", "Bank Charge (BDT)", "Payment From"],
       ...items.map((row) => [
         row.purchaseType === "EGP" ? "e-GP" : "Manual",
         row.tenderId ?? "",
@@ -182,6 +182,7 @@ export default function DocumentPurchaseListPage() {
         row.tenderWorkName,
         formatDate(row.purchaseDate),
         String(row.documentPrice),
+        String(row.bankCharge ?? 0),
         row.paymentFromAccount.accountName,
       ]),
     ];
@@ -429,7 +430,7 @@ export default function DocumentPurchaseListPage() {
             { key: "org", header: "Organization", className: "w-[16%]", render: (row) => <span className="block break-words leading-4" title={row.organizationMaster.shortName}>{row.organizationMaster.shortName}</span> },
             { key: "work", header: "Tender / Work Name", className: "w-[22%]", render: (row) => <p className="line-clamp-2 font-medium leading-4 text-biz-text" title={row.tenderWorkName}>{row.tenderWorkName}</p> },
             { key: "date", header: "Purchase Date", className: "w-[11%]", render: (row) => formatDate(row.purchaseDate) },
-            { key: "price", header: "Document Price", className: "w-[12%]", render: (row) => formatBDT(row.documentPrice) },
+            { key: "price", header: "Document Price", className: "w-[12%]", render: (row) => <div>{formatBDT(row.documentPrice)}{Number(row.bankCharge) > 0 && <span className="mt-1 block text-[10px] text-biz-muted">Bank charge: {formatBDT(row.bankCharge)}</span>}</div> },
             { key: "payment", header: "Payment From", className: "w-[11%]", render: (row) => <span className="block break-words leading-4" title={row.paymentFromAccount.accountName}>{row.paymentFromAccount.accountName}</span> },
             {
               key: "action",
@@ -451,6 +452,7 @@ export default function DocumentPurchaseListPage() {
             <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-[11px] font-semibold text-biz-muted">#{index + 1 + (meta.page - 1) * meta.limit} · Tender {row.tenderId ?? "N/A"}</p><p className="mt-1 text-sm font-semibold leading-5 text-biz-text" title={row.tenderWorkName}>{row.tenderWorkName}</p></div><span className="shrink-0 whitespace-nowrap"><StatusBadge label={row.purchaseType === "EGP" ? "e-GP" : "Manual"} tone={row.purchaseType === "EGP" ? "success" : "warning"} /></span></div>
             <p className="mt-1 text-xs text-biz-muted">{row.organizationMaster.shortName}</p>
             <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-biz-border pt-2.5 text-xs"><div><span className="block text-biz-muted">Purchase date</span><span className="inline-flex items-center gap-1 font-medium text-biz-text"><CalendarDays className="h-3.5 w-3.5 text-biz-muted" />{formatDate(row.purchaseDate)}</span></div><div><span className="block text-biz-muted">Document price</span><span className="font-semibold text-biz-text">{formatBDT(row.documentPrice)}</span></div><div className="col-span-2"><span className="block text-biz-muted">Payment from</span><span className="font-medium text-biz-text">{row.paymentFromAccount.accountName}</span></div></div>
+            {Number(row.bankCharge) > 0 && <p className="mt-2 text-xs text-biz-muted">Bank charge: <span className="font-medium text-biz-text">{formatBDT(row.bankCharge)}</span></p>}
             <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-biz-blue">View purchase <Eye className="h-3.5 w-3.5" /></span>
           </Link>)}
         </div>

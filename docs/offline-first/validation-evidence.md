@@ -1,0 +1,147 @@
+# Offline desktop: validation evidence
+
+Date: 2026-09-21. The current source extends Categories/UOM/Payment Terms with Organizations/Clients. Evidence is separated by source revision; this is not evidence of a completed offline ERP release.
+
+## Organizations extension verification
+
+The interrupted source work has been resumed. The latest combined local suite passed **116/116** cases (52 storage and 64 local-service), zero skips, in **19.223 seconds**; raw output is `.temp/organization-v4-recovery-local-tests.log`. Earlier 115-case and 97-case evidence remains at `.temp/organization-v4-local-tests.log` and `.temp/organization-local-tests.log`. Real loopback HTTP checks cover validation/conflict status codes, local capability requirements and the same outer pagination envelope as Nest.
+
+New checks cover populated schema 1/2/3 upgrades through schema 4, verified pre-upgrade backup and failure preservation, unchanged earlier command bytes/cursors, organization create/ACK/rejected revision, exact names and pinned Unicode length rules, accepted-only filtering before caps/counts, profile-bound draft recovery after restart, JWT-only organization access, separate paginated permissions, old-grant proxy compatibility, module bootstrap during grant renewal, lost acknowledgements and backup retention. Query-index tests cover authoritative order/case mappings, paging, atomic rollback after malformed metadata or a late SQL failure, ACK invalidation, profile isolation and restored backups. Lost-ACK→404/503 pause and lost-ACK→403 authorization loss preserve the original operation across restart; receipt replay applies it only once. Temporary offline fallback refuses fresh profiles, expired grants and observed permission withdrawals.
+
+The first combined attempt caught a stale mismatch fixture that changed a backup's declared schema to the then-correct version 3; it now deliberately selects the actual version plus one. Real PostgreSQL integration also caught the pagination-envelope and Windows collation/lowercase differences. These were corrected in the adapters/protocol rather than weakening the parity assertions. The working backup code and earlier migration bytes were unchanged.
+
+Final independent review found that an organization ACK followed by a failed pull also blocked saved draft recovery because the query index was missing. The new regression first reproduced HTTP 503, then passed after separating draft recovery from accepted-search readiness. It exercises a JWT-only profile, offline restart, reading accepted/rejected identities, refusal to edit an accepted record, same-ID rejected revision, verified backup, another offline restart and eventual sync with exactly two cloud effects. Accepted queries and new creates still wait for the authoritative query index. The client receives a separate capability/cursor-backed `organizationDraftRecoveryAvailable` status flag. Before/after evidence is `.temp/organization-draft-query-policy-before.log` and `.temp/organization-draft-query-policy-after.log`.
+
+The current cloud and shared-package checks are complete:
+
+| Check | Organizations extension result |
+|---|---|
+| Complete API unit suite | **401/401**, 61 suites, zero failures/skips, 20.135 seconds. Evidence: `.temp/api-unit-organizations-query-policy.json`. |
+| Real Nest and separate SQLite desktop integration | **34/34**, five suites, zero failures/skips, **21.874 seconds** after the draft-recovery correction. Uses newly created source-baseline-74 database `bizovix_test_bootstrap_1789996949083_da3936`. Final evidence: `.temp/bizovix_test_bootstrap_1789996949083_da3936-desktop-reviewed-1789998697934.json` and `.log`; the preceding 21.454-second run is retained separately. Strict comparisons cover the actual ordered IDs and pagination for 21 Unicode/wildcard searches, not just unordered membership. |
+| Existing online master business regression | **12/12**, 24.89 seconds, a separate process on the same isolated database. Evidence: `.temp/bizovix_test_bootstrap_1789996949083_da3936-masters-reviewed-1789997460026.json`. |
+| Source baseline and helper checks | Baseline **74** rebuilt from source with the same 178 tables, 2,658 columns, 530 indexes, 102 enums, 53 CHECKs and 462 foreign keys. All **15** no-database guard/helper tests pass. Migration 74 widens three CHECK constraints only. |
+| Populated legacy metadata upgrade | **Six checks passed**, 12.607 seconds, on new `bizovix_test_bootstrap_1789997399066_e86065`. Existing fixture rows, versions, feed JSON, clocks and receipts are preserved; partial/default-mismatched/deferred-key/wrong-target states are refused. Evidence: `.temp/bizovix_test_bootstrap_1789997399066_e86065-snapshot-upgrade-proof.json`. |
+| Cold organization query policy | First snapshot over HTTP took **527 ms**, including generation of 973 case mappings, with 107 ordered IDs. A new Nest service instance was used. This is one fixture measurement, not a production benchmark. Evidence: `.temp/bizovix_test_bootstrap_1789996949083_da3936-organization-query-policy-metric.json`. The real roundtrip retains its original eight-second cloud timeout. |
+| Shared client and validation | **39/39** tests, including explicit draft-recovery availability while accepted search is unavailable, and fallback for older services; types, validation and client builds pass in dependency order. |
+| Static validation | API and integration typechecks, targeted API lint, renderer typecheck and full renderer lint pass. |
+
+The cloud query policy supports PostgreSQL 18 with a libc UTF-8 database and default organization-name column collations. A different policy fails explicitly; it must be reviewed before production activation. Only newly created, exactly guarded fixture databases were modified. The tests did not migrate, reset, seed, export or overwrite the application/customer database.
+
+The final Organizations desktop artifact is complete. Its frozen copy, captured at `2026-09-21T13:52:56.330Z`, passes all **116** storage/local-service cases again under the bundled Electron/SQLite runtime (34.648 seconds), **39** shared client/validation cases, **11** Electron runtime cases and **43** compiled UI checks (the earlier 31 plus 12 Organizations cases). The standard unpacked smoke reached the real login-form DOM/secure bridge in 2.613 seconds and completed in 25.175 seconds, with zero development-login requests. UI transport is intercepted; these cases are not relabeled as real-cloud UI end-to-end tests. The separately rerun 34-case real Nest/SQLite suite above covers the corrected local-service revision.
+
+NSIS packaging from that exact tested tree completed in 90.733 seconds. The delivered `apps/desktop/electron/release/Bizovix-Desktop-Organizations-Pilot-Setup-1.0.0.exe` is 107,585,153 bytes, SHA-256 `89d47e48c44181caa4cab230b3f926ee9cdba23cf32d3713bfa6ea25380d083d`, `NotSigned`; the delivered copy was independently checked. All 510 production inputs match the recorded frozen source and current workspace. The final 3,834-file tree hash is unchanged across packaging; the only addition after UI smoke was the separately checked official NSIS elevation helper. The earlier installer was preserved. Exact source/build/tree hashes and paths are in [implementation status](implementation-status.md); raw final evidence is `apps/desktop/electron/release/frozen-20260921T135254Z-evidence/`, with summary `desktop-organizations-preview-verification.json`.
+
+Visual inspection is **inconclusive**: normal hidden captures failed with `UnknownVizError`, and all three auxiliary software-rendered PNGs were blank white when viewed. Those PNGs/logs are retained as failed visual evidence. DOM assertions, viewport bounds and successful file capture are not counted as a visual pass. The auxiliary capture harness postdates the immutable source copy and changes only test behavior; packaged application bytes remain unchanged. No customer installation, Windows upgrade/uninstall, native visible-window performance, production cloud activation or full-ERP offline acceptance is claimed.
+
+The installer and counts in the following section belong to the earlier three-master revision and do not include Organizations.
+
+## Earlier three-master pilot validation
+
+| Check | Result |
+|---|---|
+| SQLite storage + local service | 78 tests passed in the final combined run: 34 storage and 44 local-service cases, zero failures/skips, 23.234 seconds. Adds populated v1→v2 preservation, verified pre-upgrade backup/failure, UOM/Payment Term commands and independent cursors, exact acknowledgement binding, old-grant compatibility, resnapshot/malformed-bootstrap preservation, legacy backup restore, declared schema mismatch rejection and partial-pull revision tracking. Original category, backup, auth, recovery, amount and upload cases still pass. |
+| Shared client session/transport regressions | All 24 current-source tests passed: the previous 18 session/transport cases and six new master-hook cases for accepted-only selectors, accepted values during pending updates, local management views, explicit optional-text clearing and mutation/status invalidation. |
+| Cloud sync unit tests | Original category eight and new master DTO/projection three passed; they are also included in the complete API unit run below. |
+| Isolated real PostgreSQL + HTTP roundtrip | 22 passed across three suites in 36.865 seconds: seven original category cases, 11 master-sync cases and four real Nest/separate-SQLite HTTP flows. New cases include independent UOM/Payment Term streams, ordinary web edits, permission/tenant/device checks, immutable request receipts, exact rollback after a late receipt failure, two-PC conflicts, lost acknowledgements, verified backup and offline restart. The previous actual password-reset/rekey flow still passes. |
+| Existing master regression | All 12 cases passed in 34.063 seconds in a separate Jest process on the same newly created database. These exercise the existing online master business flows after the transaction-aware service extraction. |
+| Existing ERP and new banking integration regression | Consolidated evidence covers 22 suites: 144 passed, zero unresolved failures, one optional browser test skipped. The initial 20-suite run on baseline 71 produced 124 passed / 17 failed / one skipped in 868.741 seconds. After correcting stale fixtures, all eight affected suites passed 38/38; two independently added bank-charge/EMI suites passed 3/3. These ten separate reruns used baseline 72 and passed 41/41 in 236.611 seconds of summed suite execution. This is a combined regression result, not a claim that a single latest-source 22-suite invocation ran. |
+| Fresh cloud baseline and preservation checks | Passed on newly created PostgreSQL 18 databases. Current baseline: 178 tables, 2,658 columns, 102 enums, 53 CHECK constraints, 530 indexes (including six partial/expression indexes), 462 foreign keys and 73 source migration files. New migration 73 adds only three master-sync metadata tables. Existing/source targets and nonempty direct SQL replay are refused. Complete catalog/Prisma shape, migration checksums, financial amount/active-reference/exact-decimal checks and subsequent Prisma deploy passed during the fresh bootstrap. |
+| Legacy snapshot sync-schema compatibility | All 14 no-database checks passed: five bootstrap guards and nine snapshot-helper cases. A separate six-check real PostgreSQL helper proof passed in 17.531 seconds on new `bizovix_test_bootstrap_1789990251876_fa9939`: absent families apply, matching families skip, partial/default-mismatched schemas, a real deferrable primary key and wrong live target are refused before helper DDL. All 11 fixture tables remain empty. This is helper acceptance, not a full rerun of the optional `--schema-snapshot` dump/import/integration command. |
+| Electron supervisor/security tests | 11 passed, including document popup isolation, a healthy renderer taking 10.4 seconds within the original startup budget, bounded timeout, server-error rejection and child-exit failure. The renderer health check now uses the remaining overall startup budget instead of an unrelated fixed ten-second cap. |
+| Bundled-runtime storage/local-service checks | All 78 cases passed again in 42.49 seconds under the frozen unpacked executable's bundled Node/SQLite runtime. It imports fixtures/runtime sources from the frozen workspace, whose runtime bytes match staged resources; the independent app/UI smoke loads actual staged resources. Profiles are isolated. Runtime repetitions do not count as additional unique business cases. |
+| Actual Electron SQLite probe | Electron 43.4.0 / bundled Node 24.18.1 / SQLite 3.53.1 / Windows x64: disk reopen, exact text, rollback and integrity passed. |
+| Actual Electron local-service probe | Startup, capability rejection, exact origin approval and graceful owned-process shutdown passed. |
+| Actual Electron Next wrapper | Standalone server served HTTP 200 on an OS-assigned loopback port. Windows cwd compatibility and install-directory cache writes handled. |
+| Windows NSIS preview | Frozen master-data installer built with `--prepackaged`, exit 0: 107,490,295 bytes, Authenticode `NotSigned`. Final unpacked resources: 401,515,525 bytes / 3,828 files, with a byte-identical full tree before/after NSIS. Application resources remained unchanged after UI smoke; only the separately verified official elevation helper was added before packaging. The delivered installer hash was independently checked. Hashes, captured revision and retained unpacked path are in [implementation status](implementation-status.md). This does not establish clean-Windows installation acceptance or a working production cloud configuration. |
+| Unpacked login-screen smoke | Passed on the frozen build: actual packaged main/preload/renderer/local service, password form, secure bridge, zero dev-login requests and clean shutdown with an isolated empty user-data directory. Login-screen readiness took 16.253 seconds; complete smoke took 74.243 seconds. This smoke does not authenticate against Nest; the later authenticated UI fixtures use intercepted transport. The separate 22-case real Nest/SQLite integration run proves activation/sync. Earlier readiness samples ranged from about 3 to 68 seconds; this is not cold-start performance acceptance or a populated-database benchmark. |
+| Compiled UI fixtures | All 31 checks passed on the frozen build: six category checks, 17 master-data checks and eight other regressions. Coverage includes rejected-create correction, accepted-code immutability, clearing optional text and refreshing partial pulls while lastSyncedAt remains null. UI transport is explicitly intercepted. The hidden expense fixture emulates a visible animation frame, and the partial-sync test emulates visible document state while using the real 15-second polling interval. These are functional DOM/control-flow checks, not native visible-window focus/poll acceptance or real-cloud UI end-to-end validation. Earlier login/review screenshots were visually inspected. |
+| Shared types, validation and API client | Current builds passed in dependency order, including the new optional sync metadata and accepted-only hooks. |
+| API and renderer | API/integration checks passed for the master-extension source. The frozen renderer typecheck, full lint and production build passed, generating 121 pages. Its resulting repoRoot, outputFileTracingRoot and turbopack.root all point to the isolated source copy. Packaging checks are recorded separately. |
+| Complete existing API unit suite | After concurrent accounting/report/tender changes, the latest run passed 59 suites / 392 tests, zero failures/skips, in 38.313 seconds. All 793 unit-relevant source/generated/configuration inputs were byte-identical before and after the run. One integration-only test changed outside the unit scope. No source edits were needed to obtain this pass. Earlier LC/PA fixture corrections remain and financial formulas/security gates were not relaxed. |
+| Complete renderer lint | Passed with zero warnings/errors. Expense save continuation and report selection reset moved to their triggering events; existing memo/image warnings were corrected. Renderer and integration TypeScript checks pass. |
+
+The latest extension uses only the newly created `bizovix_test_bootstrap_1789988298691_be05eb` database on baseline 73. Its desktop and existing-master results are retained in `.temp/bizovix_test_bootstrap_1789988298691_be05eb-master-extension-summary.json` and the referenced JSON/live logs. The 78-case local result is `.temp/desktop-master-extension.log`. The preceding 389-case API result remains in `.temp/api-unit-master-extension.json` and `.log`.
+
+The latest 392-case API evidence is `.temp/api-unit-latest-user-changes.json` and `.log`, with source manifests/comparison in `.temp/api-unit-latest-source-before.json`, `api-unit-latest-source-after.json`, `api-unit-latest-source-comparison.log` and `api-unit-latest-scope-verification.json`. Inputs were checked at 11:22:20.546–11:23:09.691 UTC on 2026-09-21. The stable unit-input scope hash is `7813cd27805bc7308b1956872635f806842c9651ef0548f6532969ffd44b83b8`. The broader 820-file capture also included integration files; the newly edited `tender-security-margin.integration-spec.ts` was outside the actual unit run. This proof is tied to the recorded inputs rather than future edits in the shared worktree.
+
+The earlier broader ERP regression database is `bizovix_test_bootstrap_1789983527368_293c82`. It began as a new source-baseline 71 database; after an independent bank-charge change, only that reviewed additive migration was applied to this owned fixture database. Its catalog, Prisma shape and all 72 migration checksums then matched that baseline. Original and per-file test logs/JSON remain in `.temp`, with the combined report at `.temp/bizovix_test_bootstrap_1789983527368_293c82-consolidated-regression-evidence.json`. This earlier 144-case result is not relabeled as a full baseline-73 run. Existing test teardown clears its own synthetic rows inside the exact owned database; schema/history and evidence remain. The previous 373-case API unit evidence remains at `.temp/api-unit-final.json` and `.log`.
+
+The final desktop summary is `apps/desktop/electron/release/desktop-preview-verification.json`; it is a transcribed record, not raw command output. Retained logs, 506 production-input hashes, the broader 542-file copied-source manifest, environment/root/link verification and pre/post package results are in `release/frozen-20260921T112222Z-evidence/`. That copy was captured at 11:22:29.992 UTC. It was installed offline from the existing cache with internal links resolved only within the frozen directory. `NEXT_PRIVATE_OUTPUT_TRACE_ROOT` kept Next tracing inside the nested copy; emitted configuration was checked. Direct tool entrypoints avoided pnpm auto-install-on-run rewriting the captured lockfile. The final frozen files remained unchanged. Lint produced no output, so no raw lint log was created; `validation-status.json` records its exit-zero tool result and zero diagnostics rather than inventing a log. The installer hash was independently checked after delivery. The original workspace's `.next`, `dist` and `release/win-unpacked` remain earlier outputs; use the retained frozen unpacked path recorded in the summary. The prior category summary is archived as `category-preview-verification.before-master-extension.json` and does not describe the current installer pathname.
+
+The integration fixture corrections supply required tender business IDs, real Tender Security/Credit Commitment decisions, validated expense-head posting ledgers, matching receipt gross/net amounts, parent accounts, and valid quotation dates/customer PO numbers. Existing assertions remain active. Three original five-second transaction expirations passed in separate quieter runs without changing production timeouts or those affected test assertions.
+
+The preceding dedicated 10-test desktop run used `bizovix_test_bootstrap_1789981535771_bba8a7` and passed in 62.366 seconds; the same ten cases also passed in the initial full regression run. This default path never connects to the configured application database. Earlier tests used read-only schema-only snapshots (including the preceding nine-test database `bizovix_test_desktop_1789975000657_d09315`); no source rows were copied or changed. No customer backup/restore or production migration was performed.
+
+A direct replay of the legacy migration history is still blocked by captured Prisma CLI warning prefixes in two original files. Those applied historical files remain unchanged. The new [cloud bootstrap](cloud-database-bootstrap.md) replays a narrowly cleaned copy only in a new scratch database, produces a reviewed schema-only baseline, preserves SQL-only constraints/indexes, and records the original migration checksums using Prisma's supported baseline operation. The current default integration run verifies this fresh-source route; the explicit legacy path remains available to reproduce the original blocker. Five no-database tests cover manifest newline portability, target rejection, endpoint routing and locale-independent catalog comparison. Nine additional snapshot-helper checks and the separately retained `.temp/bizovix_test_bootstrap_1789990251876_fa9939-snapshot-helper-proof.json` cover both sync table families and unsafe index/constraint states. The helper uses the original reviewed migration bytes and never repairs a partially matching schema.
+
+Prisma client code generation succeeded, but replacement of an existing same-version Windows query-engine DLL encountered `EPERM` while another application held the file. The current 6.19.3 engine was retained; its new generated client executed all isolated sync integration tests. The existing application was not killed and no engine-free client was substituted.
+
+The initial UI harness used Electron CDP Fetch interception and encountered a Windows native error during its injected PATCH response. Independent login-screen/startup/shutdown passed; replacing only the test transport with a protocol handler made the category fixture pass. Product code was not changed to mask this harness failure. Hidden-window screenshot capture can intermittently report `UnknownVizError`; it is now optional (`BIZOVIX_SMOKE_CAPTURE=1`) and reported separately from the stable DOM/runtime smoke. Successfully captured screenshots were reviewed, but capture reliability is not claimed.
+
+One completed smoke left a Windows lock on its uniquely created temporary profile during cleanup. A process check found no remaining Electron/main/owned runtime processes. The harness retains and reports its isolated test directory on a cleanup lock rather than killing unrelated processes; the repeated final smoke exited 0 and cleaned normally. This does not test customer uninstall retention or whole-machine process lifecycle under every failure condition.
+
+During the subsequent reliability pass, one packaged smoke stopped at the startup error dialog before diagnostic logs were retained, so its exact cause was not established. A later run logged both owned services as ready but took 68.1 seconds to reach login, then hit the old 90-second whole-fixture deadline after the category/backup, recovery and report-selection checks. Separately, a controlled delayed-server test reproduced the supervisor's inconsistent ten-second renderer health cap; that cap now uses the remaining original 45-second startup budget, with timeout/server-error/child-exit rejection still tested. This does not prove the first unattributed failure had the same cause or establish acceptable cold-start performance. The completed final functional checks and artifact figures are reported separately above and in implementation status.
+
+## Original pre-implementation audit
+
+The following inventory/proof results describe the initial audit baseline, before desktop source was added. Counts refer to that baseline (170 models / 69 migrations). The current source adds category sync metadata, independent EMI-date/bank-charge changes, UOM/Payment Term sync metadata and the Organization entity-type CHECK upgrade: 178 tables and 74 migrations in the current cloud baseline.
+
+## Source inventory
+
+Command: `node scripts/audit-offline-readiness.mjs` (exit 0).
+
+| Item | Verified result |
+|---|---|
+| Current Prisma provider | PostgreSQL |
+| Prisma models / enums | 170 / 102 |
+| Decimal fields / native-type annotated fields | 347 / 384 |
+| JSON fields / non-relational lists | 17 / four: three built-in scalar arrays plus `Party.roles` enum array; the original script reported only the first three |
+| SQL migration files | 69 |
+| API module source files inspected by inventory | 426 |
+| Installed development Prisma client | 6.19.3 |
+| Installed Electron package metadata | 43.4.0; this does not establish availability of its executable |
+| Development Node runtime | v24.13.0 |
+
+The inventory script counts source lines and field declarations. Matching SQL/WHERE lines are review candidates, not an exhaustive SQL parser or evidence that all paths executed. Manual domain audits supplement it. A subsequent party-service review found the original script's built-in-only array filter omitted `Party.roles: PartyRole[]`, present since migration `20260818140000`. The script now reports declared enum arrays and excludes model relationships. The saved original inventory remains unchanged; its array omission is explicitly corrected here and in the compatibility document, rather than relabeling a new 178-model report as the original audit.
+
+## Disposable SQLite proof
+
+Command: `node scripts/probe-offline-sqlite.mjs` (final run exit 0).
+
+| Proof | Result and precise interpretation |
+|---|---|
+| Decimal affinity | Reproduced loss of a valid `Decimal(24,6)` value when stored through SQLite DECIMAL/NUMERIC affinity; canonical TEXT preserved the value. This is an expected blocker reproduction, not permission to use imprecise storage. |
+| Exact arithmetic and range | BigInt arithmetic preserved scaled decimal digits. Demonstrated that the full declared value exceeds SQLite int64, and excess scale was rejected instead of silently rounded. |
+| Transaction atomicity | Foreign-key failure on the outbox write rolled back the accompanying record insert. |
+| Queue identity / tenant linkage | Composite unique operation key rejected duplicate insertion; composite foreign key rejected a cross-organization entity reference. This is not a full authorization test. |
+| Process exit and reopen | Child process exited without closing its connection. After reopening, committed record/outbox remained and the uncommitted pair was absent. This is not a hardware power-loss test. |
+| SQLite backup | Backup API snapshot reopened read-only; records/outbox and exact decimal text matched; integrity and foreign-key checks passed. This did not restore a customer database or attachments. |
+
+All six proofs passed. The script creates an OS temporary directory with a unique `bizovix-sqlite-proof-` prefix, uses only explicit filenames inside it, closes connections and removes its own files. It never reads `.env` or connects to PostgreSQL.
+
+The first sandboxed run completed the first four proofs but failed to spawn the child process with Windows `EPERM`. The approved outside-sandbox rerun completed all six; no source/database permission workaround was added to the application. Node emitted its built-in `node:sqlite` experimental-feature warning. Driver availability/stability must be evaluated on the actual packaged Electron runtime before selecting it for release.
+
+## What the original storage proof did not test
+
+- Full SQLite schema, constraints, migrations or all 170 ERP models.
+- Real business-service parity for accounting, bills, payroll, inventory or project closing.
+- Authentication, offline entitlement, encryption/key recovery, permissions or device registration.
+- Cloud push/pull, exact-retry handling on the server, lost acknowledgements or multi-device conflicts.
+- Existing PostgreSQL live records, database backup/restore or migration correctness.
+- Document attachment backup, concurrent file edits or object storage.
+- Packaged Electron runtime, fresh Windows installation, auto-update, code signing, AV interaction or performance.
+- Mobile UI acceptance or VPS deployment.
+
+During that initial audit-only stage, source/schema/environment settings were not changed and ERP builds were not rerun. The subsequent pilot implementation and its separate checks are recorded at the top of this document. Remaining unimplemented release requirements are in [implementation status](implementation-status.md).
+
+## Reproduction
+
+From the repository root on a runtime with `node:sqlite` support:
+
+```powershell
+node scripts/audit-offline-readiness.mjs
+node scripts/audit-offline-readiness.mjs --json
+node scripts/probe-offline-sqlite.mjs
+```
+
+Use `source-inventory.json` as the audit-date snapshot and rerun the script after implementation changes. Do not interpret a new inventory or successful isolated probe as a release approval.

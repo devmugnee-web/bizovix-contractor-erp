@@ -5,12 +5,15 @@ import type { PaginationMeta } from "@bizovix/types";
 import { buildPaginationMeta } from "@bizovix/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditLogService } from "../audit-logs/audit-log.service";
+import { AccountingService } from "../accounting/accounting.service";
+import { CashBankService } from "../cash-bank/cash-bank.service";
 import { TenderBankSettingsService } from "../settings-tender-bank/tender-bank-settings.service";
 import { CreateTenderSecurityDto } from "./dto/create-tender-security.dto";
 import { QueryPendingTenderSecurityDto } from "./dto/query-pending-tender-security.dto";
 
 const includePendingRelations = {
   organizationMaster: { select: { id: true, shortName: true, fullName: true } },
+  cmsWork: { select: { id: true } },
 } satisfies Prisma.DocumentPurchaseInclude;
 
 const includeRunningTenderRelations = {
@@ -112,6 +115,8 @@ export class TenderSecuritiesService {
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
     private readonly tenderBankSettings: TenderBankSettingsService,
+    private readonly accounting: AccountingService,
+    private readonly cashBank: CashBankService,
   ) {}
 
   async pending(
@@ -177,6 +182,11 @@ export class TenderSecuritiesService {
   }
 
   async create(organizationId: string, userId: string, dto: CreateTenderSecurityDto) {
+    if (!dto.items.length) throw new BadRequestException("Select at least one tender");
+    if (dto.items.some((item) => typeof item.referenceNo !== "string" || !item.referenceNo.trim())) {
+      throw new BadRequestException("Reference No. (PO/BG No.) is required for each tender");
+    }
+
     const documentPurchaseIds = dto.items.map((item) => item.documentPurchaseId);
     const uniqueIds = new Set(documentPurchaseIds);
     if (uniqueIds.size !== documentPurchaseIds.length) {
@@ -219,9 +229,15 @@ export class TenderSecuritiesService {
       if (!purchase) throw new BadRequestException("Invalid selected tender");
       const securityAmount = new PrismaNamespace.Decimal(item.securityAmount);
       const marginPercentage = new PrismaNamespace.Decimal(item.marginPercentage);
-      const marginAmount = securityAmount.mul(marginPercentage).div(100);
+      if (!securityAmount.isFinite() || securityAmount.lte(0) || securityAmount.decimalPlaces() > 2) {
+        throw new BadRequestException("Security amount must be positive with at most two decimal places");
+      }
+      if (!marginPercentage.isFinite() || marginPercentage.lt(0) || marginPercentage.gt(100) || marginPercentage.decimalPlaces() > 2) {
+        throw new BadRequestException("Margin percentage must be between 0 and 100 with at most two decimal places");
+      }
+      const marginAmount = securityAmount.mul(marginPercentage).div(100).toDecimalPlaces(2);
       const bankFinanceAmount = dto.fundingType === "LOAN"
-        ? securityAmount.minus(marginAmount)
+        ? securityAmount
         : new PrismaNamespace.Decimal(0);
       totalSecurity = totalSecurity.plus(securityAmount);
       totalMargin = totalMargin.plus(marginAmount);
@@ -232,12 +248,20 @@ export class TenderSecuritiesService {
         marginPercentage,
         marginAmount,
         bankFinanceAmount,
-        referenceNo: item.referenceNo,
+        referenceNo: item.referenceNo.trim(),
       };
     });
 
     const firstPurchase = purchases[0]!;
     const record = await this.prisma.$transaction(async (tx) => {
+      // Claim pending purchases before posting so concurrent saves cannot deduct twice.
+      const claimed = await tx.documentPurchase.updateMany({
+        where: { id: { in: documentPurchaseIds }, organizationId, tenderSecurityStatus: "PENDING" },
+        data: { tenderSecurityStatus: "CREATED" },
+      });
+      if (claimed.count !== documentPurchaseIds.length) {
+        throw new BadRequestException("One or more selected tenders are no longer eligible");
+      }
       const created = await tx.tenderSecurity.create({
         data: {
           organizationId,
@@ -260,21 +284,30 @@ export class TenderSecuritiesService {
         },
         include: includeTenderSecurityRelations,
       });
-      await tx.documentPurchase.updateMany({
-        where: { id: { in: documentPurchaseIds }, organizationId },
-        data: { tenderSecurityStatus: "CREATED" },
-      });
+      for (const item of created.items) {
+        if (item.marginAmount.isZero()) continue;
+        const purchase = purchaseById.get(item.documentPurchaseId)!;
+        const description = `Tender security margin - ${purchase.egpTenderId ?? purchase.tenderWorkName}`;
+        await this.cashBank.post(tx, {
+          organizationId, accountId: dto.chargeFromAccountId, direction: "OUT", amount: item.marginAmount,
+          sourceModule: "TENDER_SECURITY", sourceType: "MARGIN", sourceId: item.id,
+          referenceNo: item.referenceNo, description, transactionDate: created.issueDate, createdById: userId,
+        });
+        await this.accounting.post(tx, {
+          organizationId, userId, journalDate: created.issueDate, referenceNo: item.referenceNo, description,
+          sourceModule: "TENDER_SECURITY", sourceType: "MARGIN", sourceId: item.id,
+          lines: [
+            { systemKey: "BANK_MARGIN", projectId: purchase.cmsWork?.id, debit: item.marginAmount, credit: 0 },
+            { bankAccountId: dto.chargeFromAccountId, projectId: purchase.cmsWork?.id, debit: 0, credit: item.marginAmount },
+          ],
+        });
+      }
+      await this.auditLogService.record({
+        organizationId, userId, action: "create", entityType: "TenderSecurity",
+        entityId: created.id, newValue: tenderSecurityToDto(created),
+      }, tx);
       return created;
-    });
-
-    await this.auditLogService.record({
-      organizationId,
-      userId,
-      action: "create",
-      entityType: "TenderSecurity",
-      entityId: record.id,
-      newValue: tenderSecurityToDto(record),
-    });
+    }, { timeout: 30_000 });
 
     return tenderSecurityToDto(record);
   }

@@ -72,7 +72,7 @@ export const REPORT_CATEGORIES: ReportCategoryDef[] = [
         "General Profit/Loss Statement",
         "Income and expense from posted accounting data.",
       ),
-      r("trial-balance", "Balance Check", "Check that all posted account movements are balanced."),
+      r("trial-balance", "Trial Balance", "Opening, period and closing debit and credit balances."),
       r("ledger", "Ledger Breakdown", "Posted journal detail and running balances."),
       r("balance-sheet", "Balance Sheet", "Assets, liabilities and equity from posted entries."),
     ],
@@ -82,7 +82,11 @@ export const REPORT_CATEGORIES: ReportCategoryDef[] = [
     title: "Cash & Bank Reports",
     shortTitle: "Cash & Bank Reports",
     icon: Landmark,
-    reports: [r("cash-flow", "Cash Flow", "Opening, inflow, outflow and closing balance.")],
+    reports: [
+      r("cash-flow", "Cash Flow", "Opening, inflow, outflow and closing balance."),
+      r("bank-margin-amount", "Bank Margin Amount", "Margin deducted by bank, with tender and PO/BG details."),
+      r("bank-charges", "Bank Charge", "Bank charges, reversals and net expense by account."),
+    ],
   },
   {
     slug: "expiry-due",

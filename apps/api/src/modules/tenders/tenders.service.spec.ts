@@ -55,6 +55,10 @@ function costingFixture(overrides: Record<string, unknown> = {}) {
 function setup() {
   const update = jest.fn();
   const tx = {
+    // This suite retains the legacy, not-yet-migrated database contract. Capture
+    // on installed metadata and rollback are covered by real desktop integration.
+    $executeRaw: jest.fn().mockResolvedValue(1),
+    $queryRaw: jest.fn().mockResolvedValue([]),
     organizationMaster: { findMany: jest.fn().mockResolvedValue([]), upsert: jest.fn().mockResolvedValue({ id: "new-master" }) },
     tender: {
       update,
@@ -84,6 +88,9 @@ function setup() {
 }
 
 describe("TendersService costing intake workflow", () => {
+  const priorSyncFlag = process.env.DESKTOP_SYNC_ENABLED;
+  beforeAll(() => { process.env.DESKTOP_SYNC_ENABLED = "false"; });
+  afterAll(() => { if (priorSyncFlag === undefined) delete process.env.DESKTOP_SYNC_ENABLED; else process.env.DESKTOP_SYNC_ENABLED = priorSyncFlag; });
   it("saves imported PA details, fees and meeting time with the tender in the same transaction", async () => {
     const { service, prisma, tx } = setup();
     prisma.tender.findFirst.mockResolvedValue(null);
@@ -97,6 +104,9 @@ describe("TendersService costing intake workflow", () => {
     expect(tx.organizationMaster.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ organizationId: "org-1" }),
     }));
+    expect(tx.$executeRaw.mock.calls[0]![0].join("")).toContain("pg_advisory_xact_lock");
+    expect(tx.$queryRaw.mock.calls[0]![0].join("")).toContain("FROM pg_class");
+    expect(tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(tx.organizationMaster.findMany.mock.invocationCallOrder[0]!);
     expect(tx.tender.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
       organizationId: "org-1", organizationMasterId: "new-master", documentFee: 2000,
       estimatedTenderSecurityAmount: 50000, preBidEndDate: new Date("2026-09-10T09:30:00Z"),

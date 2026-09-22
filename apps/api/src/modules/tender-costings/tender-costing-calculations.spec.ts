@@ -247,7 +247,7 @@ describe("calculateTenderCostingTotals", () => {
   );
 
   it.each(["LC_SEA", "LC_AIR"] as const)(
-    "uses the simplified LC fees and optional other cost for %s",
+    "includes origin and project transport with simplified LC fees and other cost for %s",
     (foreignShippingMethod) => {
       const result = calculateTenderCostingTotals({
         items: [
@@ -268,10 +268,10 @@ describe("calculateTenderCostingTotals", () => {
             marginPercent: 10,
             foreignVatPercent: 5,
             foreignTaxPercent: 2,
-            foreignTransportCharge: 90000,
+            foreignTransportCharge: 3,
             foreignInsuranceCost: 90000,
             foreignOtherCost: 600,
-            domesticTransportCost: 90000,
+            domesticTransportCost: 700,
             customsDutyPercent: 50,
             regulatoryDutyPercent: 50,
             supplementaryDutyPercent: 50,
@@ -285,10 +285,13 @@ describe("calculateTenderCostingTotals", () => {
 
       const item = result.calculatedItems[0]!;
       expect(item.foreignProductValueBdt.toFixed(2)).toBe("10000.00");
-      expect(item.foreignLandedCost.toFixed(2)).toBe("12100.00");
-      expect(item.ourCost.toFixed(2)).toBe("12100.00");
-      expect(item.profitAmount.toFixed(2)).toBe("1210.00");
-      expect(result.estimatedCost.toFixed(2)).toBe("14241.70");
+      // Product 10,000 + origin transport (3 x 100 FX) + fixed LC fees 1,500
+      // + project transport 700 + other cost 600 = 13,100 BDT. Legacy-only
+      // insurance and duty percentages above must not enter the FLAT model.
+      expect(item.foreignLandedCost.toFixed(2)).toBe("13100.00");
+      expect(item.ourCost.toFixed(2)).toBe("13100.00");
+      expect(item.profitAmount.toFixed(2)).toBe("1310.00");
+      expect(result.estimatedCost.toFixed(2)).toBe("15418.70");
     },
   );
 

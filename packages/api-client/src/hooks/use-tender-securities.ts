@@ -26,6 +26,9 @@ function useInvalidateTenderSecurities() {
     queryClient.invalidateQueries({ queryKey: ["tender-securities"] });
     queryClient.invalidateQueries({ queryKey: ["document-purchases"] });
     queryClient.invalidateQueries({ queryKey: ["credit-commitments"] });
+    for (const key of ["cash-bank", "bank-accounts", "accounts", "reports", "dashboard"]) {
+      queryClient.invalidateQueries({ queryKey: [key] });
+    }
   };
 }
 

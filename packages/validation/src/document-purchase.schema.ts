@@ -12,6 +12,11 @@ export const createDocumentPurchaseSchema = z
     documentPrice: z.coerce
       .number({ invalid_type_error: "Enter a valid amount" })
       .positive("Document price must be greater than 0"),
+    bankCharge: z.coerce
+      .number({ invalid_type_error: "Enter a valid bank charge" })
+      .nonnegative("Bank charge cannot be negative")
+      .multipleOf(0.01, "Use at most 2 decimal places")
+      .optional(),
     paymentFromAccountId: z.string().min(1, "Payment account is required"),
     category: z.string().trim().min(1, "Work category is required"),
     estimatedTenderAmount: z.coerce
@@ -28,9 +33,16 @@ export const createDocumentPurchaseSchema = z
 
 export type CreateDocumentPurchaseFormValues = z.infer<typeof createDocumentPurchaseSchema>;
 
+// Match the API's pinned validator.js @MaxLength behavior, including Unicode
+// surrogate pairs and presentation selectors. Preserve the entered names.
+function organizationNameLength(value: string) {
+  return value.length - (value.match(/[^\uFE0F\uFE0E][\uFE0F\uFE0E]/g)?.length ?? 0)
+    - (value.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)?.length ?? 0);
+}
+
 export const createOrganizationMasterSchema = z.object({
-  shortName: z.string().min(1, "Short name is required").max(50),
-  fullName: z.string().min(1, "Full name is required").max(200),
+  shortName: z.string().min(1, "Short name is required").refine((value) => organizationNameLength(value) <= 50, "Short name must contain at most 50 characters"),
+  fullName: z.string().min(1, "Full name is required").refine((value) => organizationNameLength(value) <= 200, "Full name must contain at most 200 characters"),
 });
 
 export type CreateOrganizationMasterFormValues = z.infer<typeof createOrganizationMasterSchema>;

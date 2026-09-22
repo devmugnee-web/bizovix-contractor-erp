@@ -4,7 +4,7 @@ import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { validationExceptionFactory } from "../src/common/utils/validation-exception-factory";
 import { PrismaService } from "../src/modules/prisma/prisma.service";
-import { createOrganizationFixture, resetTestDatabase } from "./fixtures";
+import { createOrganizationFixture, mapExpenseHeadToPostingLedger, resetTestDatabase } from "./fixtures";
 
 /** Reproduces the exact Project Expense edit/delete flow the UI performs, over real HTTP, and
  * asserts the resulting database state — active row count, amended/cancelled rows, GL net and
@@ -29,10 +29,12 @@ describe("Project Expense edit + delete over HTTP", () => {
 
   it("amends on PATCH and cancels on DELETE, leaving exactly one active row then none, with GL and bank netting to zero", async () => {
     const f = await createOrganizationFixture(prisma, "PEXP");
+    await mapExpenseHeadToPostingLedger(app, f.organization.id, f.user.id, f.expenseHead.id);
     const login = await request(app.getHttpServer()).post("/api/v1/auth/login").send({ email: f.user.email, password: f.password }).expect(201);
     const auth = { Authorization: `Bearer ${login.body.data.accessToken as string}` };
 
     const secondHead = await prisma.expenseHead.create({ data: { organizationId: f.organization.id, name: "Accommodation" } });
+    await mapExpenseHeadToPostingLedger(app, f.organization.id, f.user.id, secondHead.id);
 
     const activeCount = () => prisma.expense.count({ where: { organizationId: f.organization.id, workId: f.work.id, status: { notIn: ["CANCELLED", "AMENDED"] } } });
     const glNet = async () => {
@@ -124,6 +126,7 @@ describe("Project Expense edit + delete over HTTP", () => {
 
   it("creates every batch row with separate financial postings and audit logs", async () => {
     const f = await createOrganizationFixture(prisma, "PEXB");
+    await mapExpenseHeadToPostingLedger(app, f.organization.id, f.user.id, f.expenseHead.id);
     const login = await request(app.getHttpServer()).post("/api/v1/auth/login").send({ email: f.user.email, password: f.password }).expect(201);
     const auth = { Authorization: `Bearer ${login.body.data.accessToken as string}` };
 
@@ -164,6 +167,7 @@ describe("Project Expense edit + delete over HTTP", () => {
 
   it("rolls back the whole batch when any row has an invalid tenant-scoped reference", async () => {
     const f = await createOrganizationFixture(prisma, "PEXR");
+    await mapExpenseHeadToPostingLedger(app, f.organization.id, f.user.id, f.expenseHead.id);
     const login = await request(app.getHttpServer()).post("/api/v1/auth/login").send({ email: f.user.email, password: f.password }).expect(201);
     const auth = { Authorization: `Bearer ${login.body.data.accessToken as string}` };
 

@@ -2,6 +2,10 @@ const raw = process.env.TEST_DATABASE_URL;
 if (!raw) throw new Error("TEST_DATABASE_URL is required; refusing to use DATABASE_URL");
 const url = new URL(raw);
 if (!url.pathname.toLowerCase().includes("test")) throw new Error("TEST_DATABASE_URL database name must contain test");
+const expectedDatabase = process.env.BIZOVIX_ISOLATED_DATABASE_NAME;
+if (expectedDatabase && (!/^bizovix_test_bootstrap_\d+_[a-f0-9]{6}$/.test(expectedDatabase) || decodeURIComponent(url.pathname.slice(1)) !== expectedDatabase)) {
+  throw new Error("Integration URL does not match the exact newly created isolated database");
+}
 if (process.env.DATABASE_URL && raw === process.env.DATABASE_URL && process.env.INTEGRATION_DB_VALIDATED !== "1") {
   throw new Error("TEST_DATABASE_URL must differ from DATABASE_URL unless the fail-closed runner validated it");
 }

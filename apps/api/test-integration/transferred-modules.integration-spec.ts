@@ -8,7 +8,7 @@ import { GeneralExpensesService } from "../src/modules/general-expenses/general-
 import { HrService } from "../src/modules/hr/hr.service";
 import { LcService } from "../src/modules/lc/lc.service";
 import { PrismaService } from "../src/modules/prisma/prisma.service";
-import { createIdentityFixture, resetTestDatabase } from "./fixtures";
+import { createIdentityFixture, mapExpenseHeadToPostingLedger, resetTestDatabase } from "./fixtures";
 
 const D = (value: Prisma.Decimal | number | string) => new Prisma.Decimal(value);
 
@@ -43,6 +43,7 @@ describe("transferred production modules", () => {
     const fixture = await createIdentityFixture(prisma, "PORT");
     const vendor = await prisma.party.create({ data: { organizationId: fixture.organization.id, code: "VEN-PORT", name: "Port Vendor", roles: ["VENDOR", "SUPPLIER"] } });
     const expenseHead = await prisma.expenseHead.create({ data: { organizationId: fixture.organization.id, name: "Office Services" } });
+    await mapExpenseHeadToPostingLedger(app, fixture.organization.id, fixture.user.id, expenseHead.id, "GENERAL_EXPENSE");
 
     const payableExpense = await expenses.create(fixture.organization.id, fixture.user.id, { expenseDate: "2026-09-01", expenseHeadId: expenseHead.id, amount: 2500, expenseById: fixture.user.id, paymentMode: "PAYABLE", payablePartyId: vendor.id, expenseNature: "INDIRECT", description: "Office service" });
     expect(payableExpense.payable?.status).toBe("UNPAID");

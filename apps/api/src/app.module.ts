@@ -74,6 +74,7 @@ import { FixedAssetsModule } from "./modules/fixed-assets/fixed-assets.module";
 import { HrModule } from "./modules/hr/hr.module";
 import { LcModule } from "./modules/lc/lc.module";
 import { SupportTicketsModule } from "./modules/support-tickets/support-tickets.module";
+import { DesktopSyncModule } from "./modules/desktop-sync/desktop-sync.module";
 
 @Module({
   imports: [
@@ -146,6 +147,7 @@ import { SupportTicketsModule } from "./modules/support-tickets/support-tickets.
     HrModule,
     LcModule,
     SupportTicketsModule,
+    DesktopSyncModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

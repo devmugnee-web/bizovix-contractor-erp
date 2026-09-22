@@ -574,6 +574,7 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
           branch: form.branch,
           routingNumber: form.routingNumber,
           bankAccountType: form.bankAccountType,
+          emiDate: form.bankAccountType === "OD" ? form.emiDate || null : null,
           openingBalance: amount,
           openingBalanceDate: form.date,
           currency: "BDT",
@@ -590,6 +591,7 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
             branch: form.branch,
             routingNumber: form.routingNumber,
             bankAccountType: form.bankAccountType,
+            emiDate: form.bankAccountType === "OD" ? form.emiDate || null : null,
             currency: "BDT",
             remarks: form.remarks,
             status: form.status,
@@ -700,6 +702,7 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
       branch: account.branch ?? "",
       routingNumber: account.routingNumber ?? "",
       bankAccountType: account.bankAccountType ?? "",
+      emiDate: account.emiDate?.slice(0, 10) ?? "",
       amount: String(account.openingBalance ?? 0),
       currentBalance: String(account.currentBalance ?? 0),
       date: account.openingBalanceDate?.slice(0, 10) ?? today(),
@@ -1271,6 +1274,7 @@ export function CashBankWorkspace({ view }: { view: CashBankView }) {
                 "Account Type",
                 ["Current", "Savings", "SND", "OD", "Loan", "Other"].map((v) => [v, v]),
               )}
+              {form.bankAccountType === "OD" && val("emiDate", "EMI Date", "date", false)}
               {notes("remarks", "Notes")}
             </>
           )}

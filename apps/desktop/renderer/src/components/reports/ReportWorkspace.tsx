@@ -8,7 +8,8 @@ import {
   RotateCcw,
   Search,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useExportReport, useReport, useReportOptions } from "@bizovix/api-client";
 import type { ReportQuery } from "@bizovix/types";
 import { PrimaryButton, SecondaryButton, SelectInput, TextInput, cn } from "@bizovix/ui";
@@ -28,9 +29,18 @@ function download(name: string, content: string) {
 }
 export function ReportWorkspace({ category, report }: { category: string; report: string }) {
   if (category === "transactions" && report === "all") return <ReportNavigation><AllTransactionsReport /></ReportNavigation>;
-  return <ReportNavigation><StandardReportWorkspace category={category} report={report} /></ReportNavigation>;
+  return <ReportNavigation><React.Suspense fallback={null}><RoutedReportWorkspace category={category} report={report} /></React.Suspense></ReportNavigation>;
 }
-function StandardReportWorkspace({ category, report }: { category: string; report: string }) {
+function RoutedReportWorkspace({ category, report }: { category: string; report: string }) {
+  const params = useSearchParams();
+  const initialFilters: ReportQuery = {};
+  for (const key of ["accountId", "tenderSecurityItemId", "dateFrom", "dateTo", "search"] as const) {
+    const value = params.get(key);
+    if (value) initialFilters[key] = value;
+  }
+  return <StandardReportWorkspace key={`${category}/${report}?${params}`} category={category} report={report} initialFilters={initialFilters} />;
+}
+function StandardReportWorkspace({ category, report, initialFilters }: { category: string; report: string; initialFilters: ReportQuery }) {
   const router = useRouter(),
     def = findReport(category, report),
     group = REPORT_CATEGORIES.find((c) => c.slug === category),
@@ -40,6 +50,9 @@ function StandardReportWorkspace({ category, report }: { category: string; repor
   const isPgBg = category === "tenders" && report === "pg-bg";
   const isSecurityDeposit = category === "tenders" && report === "security-deposit";
   const isCashFlow = category === "cash-bank" && report === "cash-flow";
+  const isBankCharges = category === "cash-bank" && report === "bank-charges";
+  const isBankMargin = category === "cash-bank" && report === "bank-margin-amount";
+  const usesBankFilters = isCashFlow || isBankCharges || isBankMargin;
   const isBillMaturity = category === "expiry-due" && report === "bill-maturity";
   const isExpenseCategory = category === "expenses" && report === "category";
   const isBalanceSheet = category === "financial" && report === "balance-sheet";
@@ -63,6 +76,7 @@ function StandardReportWorkspace({ category, report }: { category: string; repor
     category: "",
     status: "",
     accountId: "",
+    ...initialFilters,
   });
   const [filters, setFilters] = React.useState<ReportQuery>(draft);
   React.useEffect(() => {
@@ -172,7 +186,7 @@ function StandardReportWorkspace({ category, report }: { category: string; repor
             "grid items-end gap-2 sm:grid-cols-2",
             isBalanceSheet
               ? "xl:grid-cols-[180px_220px_minmax(220px,1fr)_88px]"
-              : isCashFlow
+              : usesBankFilters
               ? "xl:grid-cols-[140px_140px_180px_minmax(180px,1fr)_88px]"
               : isBillMaturity
                 ? "xl:grid-cols-[120px_120px_155px_175px_155px_minmax(150px,1fr)_88px]"
@@ -207,7 +221,7 @@ function StandardReportWorkspace({ category, report }: { category: string; repor
               onChange={(e) => setDraft((v) => ({ ...v, dateTo: e.target.value }))}
             />
           </label>
-          {!isCashFlow && !isBalanceSheet && <label className="text-[10px] font-semibold">
+          {!usesBankFilters && !isBalanceSheet && <label className="text-[10px] font-semibold">
             Organization
             <SelectInput
               className="mt-1"
@@ -220,7 +234,7 @@ function StandardReportWorkspace({ category, report }: { category: string; repor
               }))}
             />
           </label>}
-          {!isCashFlow && !isBalanceSheet && (
+          {!usesBankFilters && !isBalanceSheet && (
             category !== "expenses" || report !== "general" ? (
               <label className="text-[10px] font-semibold">
                 Project
@@ -240,12 +254,12 @@ function StandardReportWorkspace({ category, report }: { category: string; repor
             )
           )}
           {!isSecurityDeposit && !isBillMaturity && <label className="text-[10px] font-semibold">
-            {usesLedgerAccounts ? "Ledger Account" : "Account"}
+            {usesLedgerAccounts ? "Ledger Account" : isBankCharges ? "Bank / Cash Account" : "Account"}
             <SelectInput
               className="mt-1"
               placeholder={usesLedgerAccounts ? "All Ledger Accounts" : "All Accounts"}
               value={draft.accountId}
-              onChange={(e) => setDraft((v) => ({ ...v, accountId: e.target.value }))}
+              onChange={(e) => setDraft((v) => ({ ...v, accountId: e.target.value, tenderSecurityItemId: undefined }))}
               options={((usesLedgerAccounts ? options.data?.ledgerAccounts : options.data?.accounts) ?? []).map((x) => ({
                 value: x.id,
                 label: x.accountName,
@@ -550,6 +564,18 @@ function StandardReportWorkspace({ category, report }: { category: string; repor
                           <span className="block truncate font-medium text-biz-navy" title={String(row[c.key] ?? "-")}>
                             {String(row[c.key] ?? "-")}
                           </span>
+                        ) : isTenderSecurity && c.key === "margin" ? (
+                          <Link className="whitespace-nowrap text-biz-blue underline underline-offset-2" href={`/reports/cash-bank/bank-margin-amount?${new URLSearchParams({ tenderSecurityItemId: String(row.tenderSecurityItemId) })}`} title="View bank margin deductions for this tender">
+                            {money(row[c.key])}
+                          </Link>
+                        ) : isBankMargin && !filters.accountId && !filters.tenderSecurityItemId && ["margin", "released", "netMargin"].includes(c.key) && row.accountId ? (
+                          <Link className="whitespace-nowrap text-biz-blue underline underline-offset-2" href={`/reports/cash-bank/bank-margin-amount?${new URLSearchParams({ accountId: String(row.accountId), dateFrom: filters.dateFrom ?? "", dateTo: filters.dateTo ?? "", search: filters.search ?? "" })}`} title="View this bank's margin transactions">
+                            {money(row[c.key])}
+                          </Link>
+                        ) : category === "financial" && [row.name, row.account].includes("Margin Amount") && ["name", "account", "balance", "closingBalance"].includes(c.key) ? (
+                          <Link className="text-biz-blue underline underline-offset-2" href={`/reports/cash-bank/bank-margin-amount?${new URLSearchParams({ dateTo: filters.dateTo ?? "" })}`}>
+                            {c.type === "money" ? money(row[c.key]) : String(row[c.key])}
+                          </Link>
                         ) : c.type === "money" ? (
                           <span className="whitespace-nowrap">{money(row[c.key])}</span>
                         ) : c.type === "date" ? (

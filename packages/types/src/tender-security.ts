@@ -34,7 +34,7 @@ export interface CreateTenderSecurityItemInput {
   documentPurchaseId: string;
   securityAmount: number;
   marginPercentage: number;
-  referenceNo?: string;
+  referenceNo: string;
 }
 
 export interface CreateTenderSecurityInput {

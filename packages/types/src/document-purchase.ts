@@ -11,6 +11,7 @@ export interface DocumentPurchase {
   tenderWorkName: string;
   purchaseDate: string;
   documentPrice: string;
+  bankCharge: string;
   estimatedTenderAmount: string;
   category: string | null;
   submissionDate: string | null;
@@ -39,6 +40,7 @@ export interface CreateDocumentPurchaseInput {
   tenderWorkName: string;
   purchaseDate: string;
   documentPrice: number;
+  bankCharge?: number;
   paymentFromAccountId: string;
   category: string;
   estimatedTenderAmount?: number;

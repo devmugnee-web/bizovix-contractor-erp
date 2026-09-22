@@ -9,15 +9,20 @@ import { useLogin } from "@bizovix/api-client";
 import { loginSchema, type LoginFormValues } from "@bizovix/validation";
 import { PrimaryButton, TextInput } from "@bizovix/ui";
 import { ApiError } from "@bizovix/api-client";
+import { useDesktopMode } from "@/hooks/use-desktop-mode";
 
 export default function LoginPage() {
   const router = useRouter();
   const login = useLogin();
   const [showPassword, setShowPassword] = useState(false);
+  const [previousPassword, setPreviousPassword] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState<string | null>(null);
+  const desktopMode = useDesktopMode();
+  const devAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true" && desktopMode === "web";
 
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true") router.replace("/dashboard");
-  }, [router]);
+    if (devAuthBypass) router.replace("/dashboard");
+  }, [devAuthBypass, router]);
 
   const {
     register,
@@ -25,13 +30,16 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
 
-  if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true") {
+  if (!desktopMode || devAuthBypass) {
     return null;
   }
 
   const onSubmit = (values: LoginFormValues) => {
-    login.mutate(values, {
-      onSuccess: () => router.push("/dashboard"),
+    login.mutate({ ...values, ...(desktopMode === "desktop" && recoveryEmail === values.email.trim().toLowerCase() && previousPassword ? { previousPassword } : {}) }, {
+      onSuccess: () => { setPreviousPassword(""); router.push("/dashboard"); },
+      onError: (error) => {
+        if (desktopMode === "desktop" && error instanceof ApiError && error.code === "PROFILE_RECOVERY_REQUIRED") setRecoveryEmail(values.email.trim().toLowerCase());
+      },
     });
   };
 
@@ -84,6 +92,14 @@ export default function LoginPage() {
             <p className="text-[13px] text-biz-danger">
               {login.error instanceof ApiError ? login.error.message : "Login failed"}
             </p>
+          )}
+
+          {desktopMode === "desktop" && recoveryEmail && (
+            <div className="flex flex-col gap-1.5 rounded-md border border-biz-border p-3">
+              <label htmlFor="previous-password" className="text-[14px] font-semibold text-biz-text">Previous password on this PC</label>
+              <p className="text-[12px] text-biz-muted">For {recoveryEmail}, enter your previous password to preserve saved offline work and unlock it with your current password. Internet is required. A verified backup is created first.</p>
+              <TextInput id="previous-password" type="password" autoComplete="off" value={previousPassword} onChange={(event) => setPreviousPassword(event.target.value)} placeholder="Previous password" maxLength={1024} />
+            </div>
           )}
 
           <PrimaryButton type="submit" disabled={login.isPending} className="mt-2 w-full">

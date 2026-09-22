@@ -18,6 +18,8 @@
     "test": "turbo run test",
     "test:integration": "pnpm --filter @bizovix/api test:integration",
     "test:e2e": "pnpm --filter @bizovix/api test:e2e",
+    "test:desktop": "node --test --test-isolation=none packages/desktop-storage/test/desktop-store.test.mjs packages/desktop-storage/test/masters.test.mjs packages/desktop-storage/test/organizations.test.mjs apps/desktop/local-service/test/local-service.test.mjs",
+    "test:desktop:cloud": "node scripts/test-desktop-cloud.mjs",
     "clean": "turbo run clean",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "db:generate": "pnpm --filter @bizovix/database generate",

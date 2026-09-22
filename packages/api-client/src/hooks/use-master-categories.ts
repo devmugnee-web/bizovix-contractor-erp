@@ -3,16 +3,26 @@ import type { MasterCategoryRecord, MasterCategoryType, SaveMasterCategoryInput 
 import { apiRequest } from "../http-client";
 import { queryKeys } from "./query-keys";
 
-export function useMasterCategories(type?: MasterCategoryType) {
+export function useMasterCategories(type?: MasterCategoryType, options: { includeLocalDrafts?: boolean } = {}) {
+  const includeLocalDrafts = options.includeLocalDrafts === true;
   return useQuery({
-    queryKey: queryKeys.masterCategories(type),
-    queryFn: () => apiRequest<MasterCategoryRecord[]>("/master-categories", { params: type ? { type } : undefined }),
+    queryKey: [...queryKeys.masterCategories(type), includeLocalDrafts ? "with-local-drafts" : "accepted"],
+    queryFn: async () => {
+      const categories = await apiRequest<MasterCategoryRecord[]>("/master-categories", { params: type ? { type } : undefined });
+      // Cloud-only workflows must not submit a category ID that exists only on this PC.
+      return includeLocalDrafts ? categories : categories.flatMap((category) =>
+        !category.syncStatus || category.syncStatus === "SYNCED" ? [category] : category.cloudCategory ? [category.cloudCategory] : [],
+      );
+    },
   });
 }
 
 function useInvalidateMasterCategories() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ["master-categories"] });
+  return () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["master-categories"] }),
+    queryClient.invalidateQueries({ queryKey: ["desktop-sync-status"] }),
+  ]);
 }
 
 export function useCreateMasterCategory() {

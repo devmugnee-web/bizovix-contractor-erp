@@ -1,4 +1,4 @@
-export interface ReportQuery{page?:number;limit?:number;dateFrom?:string;dateTo?:string;search?:string;organizationMasterId?:string;workId?:string;category?:string;status?:string;accountId?:string}
+export interface ReportQuery{page?:number;limit?:number;dateFrom?:string;dateTo?:string;search?:string;organizationMasterId?:string;workId?:string;category?:string;status?:string;accountId?:string;tenderSecurityItemId?:string}
 export interface ReportColumn{key:string;label:string;type?:"money"|"date"|string}
 export interface ReportKpi{label:string;value:string;kind?:string}
 export interface ReportResult{title:string;subtitle:string;kpis:ReportKpi[];columns:ReportColumn[];rows:Array<Record<string,string|number|null>>;meta:{page:number;limit:number;total:number;totalPages:number}}

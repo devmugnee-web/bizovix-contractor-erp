@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import Image from "next/image";
 import { Upload } from "lucide-react";
 import { TextInput } from "@bizovix/ui";
 import {
@@ -33,7 +34,7 @@ function AssetUpload({ kind, label, hasAsset }: { kind: CompanyAssetKind; label:
     <div className="flex items-center gap-3 rounded border border-biz-border p-3">
       <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded border border-dashed border-biz-border bg-biz-bg">
         {url ? (
-          <img src={url} alt={label} className="h-full w-full object-contain" />
+          <Image src={url} alt={label} width={64} height={64} unoptimized className="h-full w-full object-contain" />
         ) : (
           <Upload className="h-5 w-5 text-biz-muted" />
         )}

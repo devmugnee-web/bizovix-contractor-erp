@@ -6,6 +6,7 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "scripts": {
+    "test": "node --test test/*.test.cjs",
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "typecheck": "tsc --noEmit"

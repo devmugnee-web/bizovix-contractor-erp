@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Min,
   ValidateIf,
 } from "class-validator";
 
@@ -46,6 +47,12 @@ export class CreateDocumentPurchaseDto {
   @IsNumber()
   @IsPositive()
   documentPrice!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  bankCharge?: number;
 
   @IsString()
   @IsNotEmpty()

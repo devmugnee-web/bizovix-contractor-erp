@@ -15,7 +15,11 @@ function setup(snapshot: typeof savedContact | null = null) {
     })) },
   };
   const prisma = {
-    documentPurchase: { findFirst: jest.fn().mockResolvedValue({ id: "purchase-1", purchaseType: "EGP", category: "Supply", organizationMasterId: "master-1", linkedTender: tender, cmsWork: null }) },
+    documentPurchase: { findFirst: jest.fn().mockResolvedValue({
+      id: "purchase-1", purchaseType: "EGP", category: "Supply", organizationMasterId: "master-1", linkedTender: tender, cmsWork: null,
+      // Contact propagation starts after the bank-instrument prerequisites are complete.
+      tenderSecurityStatus: "NOT_REQUIRED", creditCommitmentItems: [{ id: "commitment-1" }],
+    }) },
     pgBgWorkflow: { findFirst: jest.fn().mockResolvedValue(snapshot ? { status: "DRAFT", contactSnapshot: snapshot, contact: savedContact } : null) },
     $transaction: jest.fn(async (fn) => fn(tx)),
   };

@@ -12,11 +12,14 @@ import {
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { BreadcrumbProvider } from "@/components/providers/BreadcrumbContext";
+import { DesktopSyncStatus } from "@/components/layout/DesktopSyncStatus";
+import { useDesktopMode } from "@/hooks/use-desktop-mode";
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const devAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+  const desktopMode = useDesktopMode();
+  const devAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true" && desktopMode === "web";
   const devLogin = useDevLogin();
   const me = useMe();
   const reminderStats = useReminderStats();
@@ -58,10 +61,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [devAuthAttempt, devAuthBypass, devLoginMutateAsync, me.isError]);
 
   React.useEffect(() => {
-    if (!devAuthBypass && !tokenStorage.getAccessToken()) {
+    if (desktopMode && !devAuthBypass && !tokenStorage.getAccessToken()) {
       router.replace("/login");
     }
-  }, [devAuthBypass, router]);
+  }, [desktopMode, devAuthBypass, router]);
 
   React.useEffect(() => {
     if (!devAuthBypass && me.isError) {
@@ -108,6 +111,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="erp-shell flex h-screen flex-col print:block print:h-auto">
+      <DesktopSyncStatus />
       <Topbar
         user={me.data}
         onToggleSidebar={() => {

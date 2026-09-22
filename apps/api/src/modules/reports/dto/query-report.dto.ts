@@ -11,4 +11,5 @@ export class QueryReportDto {
   @IsOptional() @IsString() category?:string;
   @IsOptional() @IsString() status?:string;
   @IsOptional() @IsString() accountId?:string;
+  @IsOptional() @IsString() tenderSecurityItemId?:string;
 }

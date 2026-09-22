@@ -4,6 +4,8 @@ import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/modules/prisma/prisma.service";
 import { TendersService } from "../src/modules/tenders/tenders.service";
 import { DocumentPurchasesService } from "../src/modules/document-purchases/document-purchases.service";
+import { TenderSecuritiesService } from "../src/modules/tender-securities/tender-securities.service";
+import { CreditCommitmentsService } from "../src/modules/credit-commitments/credit-commitments.service";
 import { PgBgService } from "../src/modules/pg-bg/pg-bg.service";
 import { ContractsService } from "../src/modules/contracts/contracts.service";
 import { ProjectBudgetsService } from "../src/modules/project-budgets/project-budgets.service";
@@ -40,11 +42,27 @@ describe("Full service-driven Tender to Project Close lifecycle", () => {
   beforeEach(async () => resetTestDatabase(prisma));
   afterAll(async () => { await resetTestDatabase(prisma); await app.close(); });
 
+  async function completeTenderBankPrerequisites(
+    fixture: Awaited<ReturnType<typeof createIdentityFixture>>,
+    documentPurchaseId: string,
+    paymentDate: string,
+  ) {
+    // Follow the current bank-instrument workflow through its real services.
+    const decision = await app.get(TenderSecuritiesService).markNotRequired(fixture.organization.id, fixture.user.id, [documentPurchaseId]);
+    expect(decision.count).toBe(1);
+    await app.get(CreditCommitmentsService).create(fixture.organization.id, fixture.user.id, {
+      paymentFromAccountId: fixture.bank.id,
+      paymentDate,
+      items: [{ documentPurchaseId, bankAccountId: fixture.bank.id, chargeAmount: 1 }],
+    });
+  }
+
   it("closes a financially reconciled Tender to Project lifecycle using authoritative business services", async () => {
     const f = await createIdentityFixture(prisma, "E2E");
     const tender = await tenders.create(f.organization.id, f.user.id, { organizationMasterId: f.master.id, egpTenderId: "E2E-001", workName: "Service-driven closeout", category: "Civil Works", contractValue: 1_000_000, status: "DRAFT", submissionDeadline: "2026-01-10" });
     await tenders.submit(f.organization.id, f.user.id, tender.id, { submissionDate: "2026-01-09", submissionMethod: "e-GP", quotedAmount: 1_000_000, submittedByName: f.user.name, submissionReference: "SUB-E2E" });
     const purchase = await purchases.create(f.organization.id, f.user.id, { purchaseType: "EGP", tenderId: "E2E-001", linkedTenderId: tender.id, organizationMasterId: f.master.id, tenderWorkName: tender.workName, purchaseDate: "2026-01-02", documentPrice: 1, paymentFromAccountId: f.bank.id, category: "Civil Works" });
+    await completeTenderBankPrerequisites(f, purchase.id, "2026-01-03");
     const workflow = await pgBg.saveDraft(f.organization.id, f.user.id, { documentPurchaseId: purchase.id, noaDate: "2026-01-15", noaAmount: 1_000_000, pgBgRequired: true, contact: { name: "Project Director", designation: "PD", mobile: "01700000000", address: "Dhaka" } });
     expect(workflow.workCategory).toBe("Civil Works");
     const accepted = await pgBg.acceptNoa(f.organization.id, f.user.id, workflow.id, { acceptNoa: true, pgBgRequired: true });
@@ -161,6 +179,7 @@ describe("Full service-driven Tender to Project Close lifecycle", () => {
         paymentFromAccountId: f.bank.id,
         category: "Electrical Works",
       });
+      await completeTenderBankPrerequisites(f, purchase.id, "2026-03-02");
       const workflow = await pgBg.saveDraft(f.organization.id, f.user.id, {
         documentPurchaseId: purchase.id,
         noaDate: "2026-03-12",

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Boxes, Building2, ClipboardList, HardHat, Layers, ReceiptText, Ruler, Truck } from "lucide-react";
-import { useItemStats, usePartyStats, usePaymentTerms, useUoms } from "@bizovix/api-client";
+import { useItemStats, useOrganizationMasters, usePartyStats, usePaymentTerms, useUoms } from "@bizovix/api-client";
 import { PageHeader } from "@bizovix/ui";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 
@@ -12,8 +12,9 @@ export default function MastersPage() {
   const vendorStats = usePartyStats("VENDOR,SUPPLIER,SERVICE_PROVIDER,OTHER");
   const subcontractorStats = usePartyStats("SUBCONTRACTOR");
   const itemStats = useItemStats();
-  const uoms = useUoms();
-  const paymentTerms = usePaymentTerms();
+  const uoms = useUoms({ includeLocal: true });
+  const paymentTerms = usePaymentTerms({ includeLocal: true });
+  const organizations = useOrganizationMasters({ page: 1, limit: 1 }, { includeLocal: true });
 
   const cards = [
     {
@@ -28,7 +29,7 @@ export default function MastersPage() {
       icon: Building2,
       title: "Organizations / Clients",
       description: "Client / issuing-authority master used across Tenders, Contracts and Projects.",
-      count: undefined,
+      count: organizations.data?.meta.total,
     },
     {
       href: "/masters/vendors",

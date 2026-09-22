@@ -20,6 +20,7 @@ export class CreateBankAccountDto {
   @IsString() @MaxLength(120) branch!: string;
   @IsOptional() @IsString() routingNumber?: string;
   @IsIn(["Current", "Savings", "SND", "OD", "Loan", "Other"]) bankAccountType!: string;
+  @IsOptional() @IsDateString({ strict: true }) emiDate?: string | null;
   @Type(() => Number) @IsNumber() openingBalance!: number;
   @IsDateString() openingBalanceDate!: string;
   @IsOptional() @IsString() currency?: string;

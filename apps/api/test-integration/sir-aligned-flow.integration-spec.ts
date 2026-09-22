@@ -85,6 +85,7 @@ describe("Sir-aligned ERP flow: Bank Instruments -> Award -> CMS handoff Postgre
       linkedTenderId: f.tender.id,
       organizationMasterId: f.master.id,
       tenderWorkName: f.tender.workName,
+      category: "Civil Works",
       purchaseDate: "2026-03-01",
       documentPrice: 3000,
       paymentFromAccountId: f.bank.id,
@@ -101,6 +102,8 @@ describe("Sir-aligned ERP flow: Bank Instruments -> Award -> CMS handoff Postgre
       data: {
         organizationId: f.organization.id,
         organizationMasterId: f.master.id,
+        egpTenderId: "TEST-SIRC-AWARDED",
+        tenderIdNormalized: "TEST-SIRC-AWARDED",
         workName: "Fresh Awarded Tender",
         category: "Civil",
         contractValue: 5_000_000,
@@ -156,6 +159,8 @@ describe("Sir-aligned ERP flow: Bank Instruments -> Award -> CMS handoff Postgre
       data: {
         organizationId: f.organization.id,
         organizationMasterId: f.master.id,
+        egpTenderId: "TEST-SIRD-LOST",
+        tenderIdNormalized: "TEST-SIRD-LOST",
         workName: "Lost Tender",
         category: "Civil",
         contractValue: 1_000_000,

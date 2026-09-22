@@ -52,8 +52,6 @@ export function AllTransactionsReport() {
   const pageIds = result?.rows.map((row) => String(row.journalId)) ?? [];
   const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.includes(id));
 
-  React.useEffect(() => { setSelected([]); }, [dateFrom, dateTo, search, pageSize]);
-
   async function loadAllMatchingRows() {
     const rows: ReportResult["rows"] = [];
     for (let nextPage = 1; ; nextPage += 1) {
@@ -92,13 +90,18 @@ export function AllTransactionsReport() {
     setQuickFilter(value);
     setPage(1);
     const now = new Date();
-    if (value === "all") { setDateFrom(""); setDateTo(""); return; }
-    if (value === "today") { setDateFrom(today()); setDateTo(today()); return; }
-    if (value === "this-month") { setDateFrom(monthStart()); setDateTo(today()); return; }
+    let nextDateFrom = dateFrom;
+    let nextDateTo = dateTo;
+    if (value === "all") { nextDateFrom = ""; nextDateTo = ""; }
+    if (value === "today") { nextDateFrom = today(); nextDateTo = today(); }
+    if (value === "this-month") { nextDateFrom = monthStart(); nextDateTo = today(); }
     if (value === "last-month") {
-      setDateFrom(localDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
-      setDateTo(localDate(new Date(now.getFullYear(), now.getMonth(), 0)));
+      nextDateFrom = localDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+      nextDateTo = localDate(new Date(now.getFullYear(), now.getMonth(), 0));
     }
+    if (nextDateFrom !== dateFrom || nextDateTo !== dateTo) setSelected([]);
+    setDateFrom(nextDateFrom);
+    setDateTo(nextDateTo);
   }
   async function exportCsv() {
     const file = await exporter.mutateAsync({ dateFrom, dateTo, search, page: 1, limit: 100 });
@@ -134,9 +137,9 @@ export function AllTransactionsReport() {
           <option value="this-month">This Month</option><option value="last-month">Last Month</option><option value="today">Today</option><option value="all">All Dates</option><option value="custom">Custom</option>
         </select>
       </label>
-      <label className="flex items-center gap-1">From <input aria-label="From date" type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setQuickFilter("custom"); setPage(1); }} className="h-8 rounded-full border border-blue-200 bg-white px-2" /></label>
-      <label className="flex items-center gap-1">To <input aria-label="To date" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setQuickFilter("custom"); setPage(1); }} className="h-8 rounded-full border border-blue-200 bg-white px-2" /></label>
-      <label className="ml-auto flex h-8 min-w-44 items-center gap-2 rounded-full border border-slate-200 bg-white px-2"><Search className="h-3.5 w-3.5 text-slate-400" /><input aria-label="Search this report" placeholder="Search this report..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} className="w-full bg-transparent outline-none" /></label>
+      <label className="flex items-center gap-1">From <input aria-label="From date" type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setQuickFilter("custom"); setPage(1); setSelected([]); }} className="h-8 rounded-full border border-blue-200 bg-white px-2" /></label>
+      <label className="flex items-center gap-1">To <input aria-label="To date" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setQuickFilter("custom"); setPage(1); setSelected([]); }} className="h-8 rounded-full border border-blue-200 bg-white px-2" /></label>
+      <label className="ml-auto flex h-8 min-w-44 items-center gap-2 rounded-full border border-slate-200 bg-white px-2"><Search className="h-3.5 w-3.5 text-slate-400" /><input aria-label="Search this report" placeholder="Search this report..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); setSelected([]); }} className="w-full bg-transparent outline-none" /></label>
       <div className="relative">
         <button type="button" aria-label="Transaction options" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)} className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-white hover:bg-blue-50"><MoreVertical className="h-4 w-4" /></button>
         {menuOpen && <div className="absolute right-0 top-10 z-20 w-48 rounded-lg border border-blue-100 bg-white p-2 shadow-lg">
@@ -174,7 +177,7 @@ export function AllTransactionsReport() {
       </div>
       {!!result?.meta.total && <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-xs print:hidden">
         <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, result.meta.total)} of {result.meta.total}</span>
-        <div className="flex items-center gap-2"><select aria-label="Rows per page" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} className="rounded border px-2 py-1"><option>20</option><option>50</option><option>100</option></select>
+        <div className="flex items-center gap-2"><select aria-label="Rows per page" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); setSelected([]); }} className="rounded border px-2 py-1"><option>20</option><option>50</option><option>100</option></select>
           <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded border px-2 py-1 disabled:opacity-40">Previous</button><span>{page} / {result.meta.totalPages}</span><button disabled={page >= result.meta.totalPages} onClick={() => setPage(page + 1)} className="rounded border px-2 py-1 disabled:opacity-40">Next</button>
         </div>
       </div>}

@@ -5,7 +5,7 @@ import { PrismaService } from "../src/modules/prisma/prisma.service";
 import { CashBankService } from "../src/modules/cash-bank/cash-bank.service";
 import { AccountingService } from "../src/modules/accounting/accounting.service";
 import { LegacyFinancialBackfillService } from "../src/modules/accounting/legacy-financial-backfill.service";
-import { createOrganizationFixture, resetTestDatabase } from "./fixtures";
+import { createOrganizationFixture, mapExpenseHeadToPostingLedger, resetTestDatabase } from "./fixtures";
 
 describe("legacy financial backfill", () => {
   let app: INestApplication;
@@ -27,6 +27,7 @@ describe("legacy financial backfill", () => {
   it("replays provable legacy events once, preserves snapshots/allocations, skips ambiguity, and isolates tenants", async () => {
     const f = await createOrganizationFixture(prisma, "LEGACY");
     const other = await createOrganizationFixture(prisma, "OTHER");
+    await mapExpenseHeadToPostingLedger(app, f.organization.id, f.user.id, f.expenseHead.id);
     await prisma.projectContract.update({ where: { id: f.contract.id }, data: { retentionPct: 25 } });
     await prisma.bankAccount.update({ where: { id: f.bank.id }, data: { currentBalance: 500 } });
     await prisma.financialTransaction.create({ data: { organizationId: f.organization.id, transactionNo: "FT-LEGACY-OPEN", accountId: f.bank.id, direction: "IN", amount: 500, balanceAfter: 500, sourceModule: "MAIN_CASH", sourceType: "Opening Float", sourceId: "legacy-opening", description: "Provable opening float", transactionDate: new Date("2024-01-01"), createdById: f.user.id } });

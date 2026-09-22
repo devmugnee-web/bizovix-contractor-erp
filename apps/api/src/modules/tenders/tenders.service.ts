@@ -20,6 +20,8 @@ import { QueryTenderDto } from "./dto/query-tender.dto";
 import { SubmitTenderDto } from "./dto/submit-tender.dto";
 import { RecordTenderOpeningDto } from "./dto/record-tender-opening.dto";
 import { RejectTenderCostingDto, TenderCostingVersionDto } from "./dto/tender-costing-action.dto";
+import { desktopCaptureAvailable, lockDesktopCaptureBoundary } from "../desktop-sync/desktop-sync-capture";
+import { lockDesktopMasterClock, recordDesktopMasterChange } from "../desktop-sync/desktop-master-sync-state";
 
 const includeRelations = {
   organizationMaster: { select: { id: true, shortName: true, fullName: true } },
@@ -351,6 +353,11 @@ export class TendersService {
   private async resolveNoticeOrganization(tx: Prisma.TransactionClient, organizationId: string, name?: string) {
     const normalized = name?.trim();
     if (!normalized) return null;
+    // Lock before the lookup so REST/desktop creates cannot race this implicit
+    // writer. The caller's tender transaction also owns the organization event.
+    await lockDesktopCaptureBoundary(tx, organizationId);
+    const capture = await desktopCaptureAvailable(tx, "organizationMaster");
+    if (capture) await lockDesktopMasterClock(tx, organizationId, "organizationMaster");
     const matches = await tx.organizationMaster.findMany({
       where: { organizationId, OR: [
         { fullName: { equals: normalized, mode: "insensitive" } },
@@ -365,6 +372,7 @@ export class TendersService {
       update: {},
       create: { organizationId, shortName: normalized, fullName: normalized },
     });
+    if (capture) await recordDesktopMasterChange(tx, organizationId, "organizationMaster", master, 1);
     return master.id;
   }
 

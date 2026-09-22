@@ -3,14 +3,20 @@ import type { AuthUser, LoginPayload, LoginResult } from "@bizovix/types";
 import { apiRequest } from "../http-client";
 import { tokenStorage } from "../token-storage";
 import { queryKeys } from "./query-keys";
+import { isLocalDesktop } from "../desktop-runtime";
+
+let authenticationAttempt = 0;
 
 export function useLogin() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: LoginPayload) =>
-      apiRequest<LoginResult>("/auth/login", { method: "POST", body: payload, skipAuth: true }),
-    onSuccess: (result) => {
+    onMutate: () => ({ attempt: ++authenticationAttempt, session: tokenStorage.snapshot() }),
+    mutationFn: (payload: LoginPayload & { previousPassword?: string }) =>
+      apiRequest<LoginResult>("/auth/login", { method: "POST", body: isLocalDesktop() ? payload : { email: payload.email, password: payload.password }, skipAuth: true }),
+    onSuccess: (result, _variables, context) => {
+      if (!context || context.attempt !== authenticationAttempt || !tokenStorage.isSameSession(context.session)) return;
+      queryClient.clear();
       tokenStorage.setTokens(result.accessToken, result.refreshToken);
       queryClient.setQueryData(queryKeys.me, result.user);
     },
@@ -20,8 +26,11 @@ export function useLogin() {
 export function useDevLogin() {
   const queryClient = useQueryClient();
   return useMutation({
+    onMutate: () => ({ attempt: ++authenticationAttempt, session: tokenStorage.snapshot() }),
     mutationFn: () => apiRequest<LoginResult>("/auth/dev-login", { method: "POST", skipAuth: true }),
-    onSuccess: (result) => {
+    onSuccess: (result, _variables, context) => {
+      if (!context || context.attempt !== authenticationAttempt || !tokenStorage.isSameSession(context.session)) return;
+      queryClient.clear();
       tokenStorage.setTokens(result.accessToken, result.refreshToken);
       queryClient.setQueryData(queryKeys.me, result.user);
     },
@@ -32,6 +41,7 @@ export function useLogout() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    onMutate: () => ({ attempt: ++authenticationAttempt, session: tokenStorage.snapshot() }),
     mutationFn: () => {
       const refreshToken = tokenStorage.getRefreshToken();
       return apiRequest<null>("/auth/logout", {
@@ -39,7 +49,12 @@ export function useLogout() {
         body: { refreshToken: refreshToken ?? "" },
       });
     },
-    onSettled: () => {
+    onSettled: (_data, _error, _variables, context) => {
+      if (!context || context.attempt !== authenticationAttempt) return;
+      const current = tokenStorage.snapshot();
+      // A failed authenticated logout may already have cleared its own tokens.
+      // Its cached data still needs clearing, while a newer account must survive.
+      if (!tokenStorage.isSameSession(context.session) && (current.accessToken || current.refreshToken)) return;
       tokenStorage.clear();
       queryClient.clear();
     },

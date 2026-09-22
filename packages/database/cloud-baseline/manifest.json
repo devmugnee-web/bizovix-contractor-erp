@@ -1,0 +1,327 @@
+{
+  "formatVersion": 1,
+  "hashNormalization": "LF",
+  "postgresqlMajor": 18,
+  "prismaVersion": "6.19.3",
+  "schemaSha256": "c9ef84eec1fa6e5cbfff7fc8b63565fdbb5a8a73df9f936c311fb1e8b644a93a",
+  "permissionsSha256": "2e8631a191186228ca0e19d3e09020a8903433d22f5909b12e0a208028a2bb7c",
+  "files": {
+    "schema.sql": "e9dc5e3d90c162b9d15c910e3d57911daa5d19c9e256ea75baadf67bca47e287",
+    "reference-data.sql": "d73e2cb283c0beff8431010badb48cad91940517f886db9988f6f664936da382",
+    "catalog.json": "f8ac98770d5f2ff1554002c7485014681cb689386e48af9c65155c81f71cdfe4",
+    "reviewed-prisma-reconciliation.sql": "46b3ed79b412f57e10a9dc83703a6c5db8e286243027113c1caa3b3a9089caf4"
+  },
+  "migrations": [
+    {
+      "name": "20260813083705_init_core_schema",
+      "sha256": "98668892f38358a323b1c18f78f58445d2837b7647454552c0279811c963a4dd"
+    },
+    {
+      "name": "20260813122000_tender_security_batch",
+      "sha256": "ca50e17f6c04feb3714572c207c0f41a5fbad3c70e0b8537e48e94b0525ae65d"
+    },
+    {
+      "name": "20260814194500_credit_commitment_batch",
+      "sha256": "b3ef5ec644393a20c99860ab313f82df1f83d9c69743055ba54bde46a646785d"
+    },
+    {
+      "name": "20260814201500_credit_commitment_permissions",
+      "sha256": "a47cca1c98340bd349b35f9cb71c5ddf1b558ac88fa99dace6b5d1b4ea9fea4d"
+    },
+    {
+      "name": "20260814210000_pg_bg_workflow",
+      "sha256": "607cc436cc9bc8e4d629c6cbc04727ec3f3dfc5841c5d46a5e3b99005814de55"
+    },
+    {
+      "name": "20260814213000_pg_bg_reference_seed",
+      "sha256": "2ede229d251fa0c06d5babede42bb7dc3325beb37bf961890ab4fdc97ba0dcfb"
+    },
+    {
+      "name": "20260814220000_cms_ongoing_works",
+      "sha256": "b979410add46924da7105e8ab3c3f62af1080213f3fc3e3d1f9f49671f14ea1d"
+    },
+    {
+      "name": "20260814230000_cms_archived_works",
+      "sha256": "ad3bd2e8ff0d142a0fb81d22171c01408452a41e5d6aa37aa6ac3ac544812aaf"
+    },
+    {
+      "name": "20260814233000_project_expenses",
+      "sha256": "73aad3528035d36a159f072a29fed1dc46e610be31fd16dde887b6bb1d33f772"
+    },
+    {
+      "name": "20260815143000_general_expense_attachments",
+      "sha256": "6e661c2309951a2af2c410c09478f85de324ad01d4cc98fd0400d55d1666cd17"
+    },
+    {
+      "name": "20260815180000_receipts_module",
+      "sha256": "0fa42bf939e133f418819b7c73acbf6b04ad218885e033b39a4914aaf892a420"
+    },
+    {
+      "name": "20260815200000_activity_log_details",
+      "sha256": "3c2feb5bea82a7b2e37979cef757db4607e9794dbd0d1f769b17350a439dc604"
+    },
+    {
+      "name": "20260815213000_cash_bank_ledger",
+      "sha256": "84b15051fdf59db363cf4efe898e3b5acdd629d4862995e3eb5dbef2012c0aed"
+    },
+    {
+      "name": "20260815223000_double_entry_accounts",
+      "sha256": "2ebd08be61bf84c34fdb1e2d44a8595f59e449e33f938c709f74b38d1b0a47cc"
+    },
+    {
+      "name": "20260816135153_stabilization_tenders_documents_accounting_integrity",
+      "sha256": "dc3ec94ccd91b164c01f18b1f75985b1f0ebfedc73589742e4100428f12fb26f"
+    },
+    {
+      "name": "20260816135154_stabilization_schema_changes",
+      "sha256": "f66f82c9aea245dd7d266bbc4c3358e3f973c77a8e9a4f08b7b55de08004192d"
+    },
+    {
+      "name": "20260816183000_complete_reminders_module",
+      "sha256": "34a32806fc7e5897b86aec3b10bb396e0ca02292cab6c588416bf1ec6d8e8a12"
+    },
+    {
+      "name": "20260817120000_add_notifications",
+      "sha256": "4e07b2fd948c8bf41626dd62722348aa662cdef5bc2ae64d69bbd859c98e9830"
+    },
+    {
+      "name": "20260817180000_add_settings_module",
+      "sha256": "e1c14219e0150ea434361139f42d04acfa0ea895b2c5e812b886d64c818a2f04"
+    },
+    {
+      "name": "20260817183000_add_user_phone",
+      "sha256": "0d90097faa70ee1f3f73e34a6b9fa0b78acad92f464c17ab8c6683e286ecb0de"
+    },
+    {
+      "name": "20260817190000_add_plan_billing",
+      "sha256": "0570e64d646748be21a2527158fa1ca6cbc25ac634ca9c282809c4225f35c262"
+    },
+    {
+      "name": "20260817200000_add_contracts_budget_boq",
+      "sha256": "fc01c45fcb0023dd7cc35280e026b37acfe90e2a72d95a4c95564bc5595dd414"
+    },
+    {
+      "name": "20260817210000_add_document_contract_fk",
+      "sha256": "5eb9560b5de795c9fe1bcf495d52448fe97d3721ea6d92b5e1798d3d52fa84d5"
+    },
+    {
+      "name": "20260817220000_add_bills_retention_variation_eot",
+      "sha256": "39d3cc6c0a55406cd94391b50afa1fa5bd16479e04e6d9dca470d375f17d0c8f"
+    },
+    {
+      "name": "20260817230000_project_closing_contract_completion",
+      "sha256": "0c55a9806285af6ffabb892c76690f9d149acdf7ef05b814b7bead6fb7dcd9dc"
+    },
+    {
+      "name": "20260818010000_financial_reversal_audit_fields",
+      "sha256": "7c9c2e93305bc291e3cdf0b0e5d08956be952ab38b350be937fadd44bdc1bb59"
+    },
+    {
+      "name": "20260818030000_project_closeout_completion",
+      "sha256": "841b5c4ae49c611a1f7f8e09f823d9ead9d3ac5fd6d0c9397c48374270eae759"
+    },
+    {
+      "name": "20260818090000_project_closeout_hardening",
+      "sha256": "022b804c921a65c22d839c3f262a039bfd7c25a314482247cd9163002e9e0f39"
+    },
+    {
+      "name": "20260818140000_add_masters_vendor_foundation",
+      "sha256": "6c3650ced56910e6a34c2b9f9663d5ecf8e79a229741ec1a4e999353ba11f23e"
+    },
+    {
+      "name": "20260819100000_add_procurement_core",
+      "sha256": "ca419e4595e5a7601c1f414c947b49b93c61849419ddd8d2ab98b0421a8caa0b"
+    },
+    {
+      "name": "20260819110000_add_supplier_bill_ap",
+      "sha256": "78c85bfbc4a00a306b92cd57e05939ac6ab5781071dd177f37bffe5304d80a59"
+    },
+    {
+      "name": "20260819120000_add_document_purchase_tender_fields",
+      "sha256": "d2723a83ad819b4918457c476d97224d9484cfe396ce7e8eea07940ff443610e"
+    },
+    {
+      "name": "20260820120000_add_vendor_license_portal",
+      "sha256": "57d09abc9c42536b563a990a01397c611256a837e4ea20f97fef6ddeb5e20b6d"
+    },
+    {
+      "name": "20260820120100_vendor_customer_email_unique",
+      "sha256": "c182600539d6553edf03b0b04884cd90e808145780ab972f4a599b3f222a9a20"
+    },
+    {
+      "name": "20260820150000_vendor_subscriptions_and_trial_conversion",
+      "sha256": "d28367d9ee5e15c74002a3fbab8c24c2dad6f4c9bc0fa7cfbf659dc5d67473b5"
+    },
+    {
+      "name": "20260820160000_rename_device_osinfo_to_platform",
+      "sha256": "b5c9b636f43d0085a594e46cc6e515d620e10eba060c5ee8ca8bc51d6ab9b853"
+    },
+    {
+      "name": "20260820163000_add_trial_device_id",
+      "sha256": "803e5e5c226dc709d1202105f4043d9cce1f7c2717f1cf0ef04d34f1e7cf25f8"
+    },
+    {
+      "name": "20260820173000_add_contract_financial_details",
+      "sha256": "db4bb10148549771e8f3f6b7e6750d91a61cf6667c5b3d07cb5886446bbb1a8a"
+    },
+    {
+      "name": "20260824193000_add_sd_release_due_date",
+      "sha256": "2757ac1c97544ec58a1b13a84c644fc4cb2f764aa5a6c9e1076bd3f299e38889"
+    },
+    {
+      "name": "20260827160000_add_document_purchase_category_type",
+      "sha256": "14b8945f593a343700bb6d79ca31f67e8e6a3079b993500d0588738cd8463d30"
+    },
+    {
+      "name": "20260829120000_add_challan_submissions",
+      "sha256": "e0c6da35f71428006efc77a5cfcdcd56691fc5eb6a8c34537f6a2f6a36f9231e"
+    },
+    {
+      "name": "20260829170000_harden_challan_document_integrity",
+      "sha256": "f46f2115f957ed54d9978d64d9e5102ea8103efde6f17fc3114d7d9899a0fa2b"
+    },
+    {
+      "name": "20260829200000_add_vat_tax_certificates",
+      "sha256": "b80db99af9b55afe26bac4ca0eeedbd57a768d70656fe427c3e466d308771d76"
+    },
+    {
+      "name": "20260829220000_add_work_completion_tracking",
+      "sha256": "21994a1131c7d616e1924ea07715b5a347844e4aaa3ab458e9dff1d1a6829069"
+    },
+    {
+      "name": "20260829221000_one_active_final_wcc_per_work",
+      "sha256": "5a4ec25b8078678ed580e0519775f54de0991f8bbd8b45fad54a12b62330435b"
+    },
+    {
+      "name": "20260830120000_add_sales_quotation_workflow",
+      "sha256": "9be967d379cf142839a1ad9a606f4d6a55f33b2caa61f619e9c8db0938c74908"
+    },
+    {
+      "name": "20260830180000_add_work_ious",
+      "sha256": "59066d40f5a39a43e47aabdce70f3dad57763eca430dc82ed3684e4100ef9e12"
+    },
+    {
+      "name": "20260830183000_harden_work_iou_tenant_relations",
+      "sha256": "a508d4b1b119e47c49064edc4d281d13b2ea2d11213d9fb1bb50947b41f9f3b1"
+    },
+    {
+      "name": "20260830200000_add_tender_intake_costing_workflow",
+      "sha256": "caf1c3a07abb194ff6f2296825716e8ebdc462bdb04fda83e0ffc2a58d8b2cc9"
+    },
+    {
+      "name": "20260831130000_make_tender_category_optional",
+      "sha256": "ff21724de30f6c9f50342e7b3341804aed5b58e34d752b4ea5b7f8b67244d252"
+    },
+    {
+      "name": "20260831143000_optional_tender_organization_and_custom_found_by",
+      "sha256": "0b784e9d27f36dfa1743d80960a19cc921e3f2352f096e8d5d3fd5fc646d2fec"
+    },
+    {
+      "name": "20260831180000_add_tender_costing_budget",
+      "sha256": "ff94eba834df2fccec2f2b63b3fb458caa50dc3ab37eb3a43e1e6c319da353c5"
+    },
+    {
+      "name": "20260831190000_add_tender_costing_item_sourcing",
+      "sha256": "bce59e8b86309a504835c691e15002604359114eb56f5d2fd8638562f0dc8ba1"
+    },
+    {
+      "name": "20260831200000_add_tender_costing_item_preparation",
+      "sha256": "068b08161b003e59688e1447210ffea8ae8fdd909bb552dcad841dd723a820c8"
+    },
+    {
+      "name": "20260901190000_add_tender_costing_shipping_method",
+      "sha256": "40d60ce30f3cf625aa48ea6c9746dbe6b144ab81a63752c1f8c82056bf32549b"
+    },
+    {
+      "name": "20260901200000_add_detailed_door_shipping_costs",
+      "sha256": "53edf29ffab01b6534b25698d521f34ad315917bc7e62fab833ef7aecec016c2"
+    },
+    {
+      "name": "20260902180000_add_lc_assets_hr_general_expense",
+      "sha256": "aea394d643401353973e40aa2f258cee5f7d9973ba86ea439cba0bc12bb9782c"
+    },
+    {
+      "name": "20260903150000_add_tender_costing_lc_container_settings",
+      "sha256": "ce4661c30c89f0520a520216d39bfd065efcb0347746407631930c688d9d02a8"
+    },
+    {
+      "name": "20260905160000_tender_notice_pa",
+      "sha256": "bd3127e5b56d7fd51d08e8eb7881b73d08a1efa149dd359397b053ea748ba731"
+    },
+    {
+      "name": "20260906010000_tender_vat_tax_register",
+      "sha256": "c985381aa805d2ee41d769c0ca2a46f992271a28f5b9058e276f9aa7e5be84c4"
+    },
+    {
+      "name": "20260906150000_document_purchase_approval_workflow",
+      "sha256": "c48758778b3f97ad9fbe83d56c0080bb48c8bd3674f3551c52b3352854e7b9a6"
+    },
+    {
+      "name": "20260909210000_project_receipt_settlement_details",
+      "sha256": "fc146a85a0578fc4998dcfb655cb3d5a82a79eef3e55aac0e3a6b2020e414a69"
+    },
+    {
+      "name": "20260912150000_add_tender_security_valid_up_to",
+      "sha256": "4b5225290d944def04cbee480117c3ee3e33a20a62fa6327bc8ab083dec22ce0"
+    },
+    {
+      "name": "20260912153000_update_tender_security_reminder_offsets",
+      "sha256": "81538e3cfdaecfb83d258d27476577886ea4dccb5270d193e0af2ac38d780e42"
+    },
+    {
+      "name": "20260916120000_add_support_tickets",
+      "sha256": "785a5d362bc36ad4d10fa17dbc892764e38385255ed032eae9bbb2c8e3dfaa9a"
+    },
+    {
+      "name": "20260917170000_hidden_report_transactions",
+      "sha256": "79afee91ad706014e9b5f1533c164012897ef5ed9f2d1c4757048e8b7ef1a5ea"
+    },
+    {
+      "name": "20260920120000_receipt_head_account_id",
+      "sha256": "984d8eff7280c636675ddf70263df3a5a9207d96bf12d63ee93cb37c30ec6ec9"
+    },
+    {
+      "name": "20260920123000_backfill_reversed_receipt_head_ids",
+      "sha256": "b31dd00b624943f8753bfe3ddb71a429375add7ed2c38ce18503a8090e5dae64"
+    },
+    {
+      "name": "20260921120000_add_desktop_category_sync_pilot",
+      "sha256": "e9ad05d384f3f1fc74421602efe0d33fe004c624c9be716050277b476f8fa0ec"
+    },
+    {
+      "name": "20260921130000_add_bank_account_emi_date",
+      "sha256": "fc4f73aef86f86a6e028eb5afdfec17fec58af46f3ee0d47ebc3d4d911a2834d"
+    },
+    {
+      "name": "20260921140000_add_document_purchase_bank_charge",
+      "sha256": "99ad7fc022924c9c0d720037148e5979ee61feba03bfa25635f9603a29a937b8"
+    },
+    {
+      "name": "20260921150000_add_desktop_master_sync",
+      "sha256": "cf10a99e029d73b2cd68b02ce15971f7fa17f79b7789421674402b6b89e7ef98"
+    },
+    {
+      "name": "20260921160000_add_desktop_organization_master_sync",
+      "sha256": "690e1af4c689a8b1d83867690ef7f4076ab606f016787027afcbfcff98249b3d"
+    },
+    {
+      "name": "add_budget_category_to_expense_head",
+      "sha256": "07beba07f3b1b8b5ab18a7efec99e8bfbdc1b3bf5e0dca18d124f2ed59c2bf3d"
+    }
+  ],
+  "copiedWarningHeadersRemoved": [
+    "20260820160000_rename_device_osinfo_to_platform",
+    "20260820163000_add_trial_device_id"
+  ],
+  "counts": {
+    "tables": 178,
+    "columns": 2658,
+    "indexes": 530,
+    "enums": 102,
+    "checks": 53,
+    "specialIndexes": 6,
+    "foreignKeys": 462,
+    "permissions": 257,
+    "plans": 3
+  }
+}

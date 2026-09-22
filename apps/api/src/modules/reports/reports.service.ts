@@ -75,7 +75,7 @@ export class ReportsService {
       new Prisma.Decimal(0),
     );
     return {
-      totalReports: 16,
+      totalReports: 18,
       thisMonthExpenses: s(expenses._sum.amount),
       thisMonthReceipts: s(receipts._sum.amount),
       outstandingReceivables: s(outstanding),
@@ -478,6 +478,7 @@ export class ReportsService {
             { key: "organization", label: "Organization" },
             { key: "work", label: "Tender / Work Name" },
             moneyCol("price", "Document Price"),
+            moneyCol("bankCharge", "Bank Charge"),
             { key: "account", label: "Payment From" },
             { key: "status", label: "Tender Security Status" },
           ],
@@ -488,6 +489,7 @@ export class ReportsService {
             organization: x.organizationMaster.shortName,
             work: x.tenderWorkName,
             price: s(x.documentPrice),
+            bankCharge: s(x.bankCharge),
             account: x.paymentFromAccount.accountName,
             status: x.tenderSecurityStatus,
           })),
@@ -565,6 +567,9 @@ export class ReportsService {
               bank: security.bankAccount?.accountName ?? "-",
               amount: s(item.securityAmount),
               margin: s(item.marginAmount),
+              bankFinance: s(item.bankFinanceAmount),
+              tenderSecurityItemId: item.id,
+              reference: item.referenceNo ?? "-",
               issueDate: security.issueDate.toISOString(),
               expiryDate: security.expiryDate.toISOString(),
               timeRemaining:
@@ -630,6 +635,8 @@ export class ReportsService {
             { key: "bank", label: "Bank" },
             moneyCol("amount", "Security Amount"),
             moneyCol("margin", "Margin Amount"),
+            moneyCol("bankFinance", "Bank Finance Amount"),
+            { key: "reference", label: "PO / BG No." },
             { key: "issueDate", label: "Issue Date", type: "date" },
             { key: "expiryDate", label: "Release Due / Expiry", type: "date" },
             { key: "timeRemaining", label: "Time Remaining" },
@@ -2450,7 +2457,182 @@ export class ReportsService {
       q,
     );
   }
+  private async bankMargin(org: string, q: QueryReportDto) {
+    const lines = await this.prisma.journalLine.findMany({
+      where: {
+        account: { organizationId: org, systemKey: "BANK_MARGIN" },
+        journalEntry: { organizationId: org, status: "POSTED", journalDate: this.dates(q) },
+      },
+      include: { journalEntry: { include: {
+        reversalOf: { select: { sourceModule: true, sourceId: true } },
+        lines: { include: { account: { include: { bankAccount: true } } } },
+      } } },
+      orderBy: [{ journalEntry: { journalDate: "desc" } }, { createdAt: "desc" }, { id: "asc" }],
+    });
+    const sourceItemId = (journal: (typeof lines)[number]["journalEntry"]) =>
+      journal.sourceModule === "TENDER_SECURITY" ? journal.sourceId
+        : journal.reversalOf?.sourceModule === "TENDER_SECURITY" ? journal.reversalOf.sourceId : null;
+    const ids = [...new Set(lines.map((line) => sourceItemId(line.journalEntry)).filter((id): id is string => !!id))];
+    const items = await this.prisma.tenderSecurityItem.findMany({
+      where: { id: { in: ids }, tenderSecurity: { organizationId: org }, documentPurchase: { organizationId: org } },
+      include: { documentPurchase: { include: { organizationMaster: true, cmsWork: { select: { id: true } } } } },
+    });
+    const itemById = new Map(items.map((item) => [item.id, item]));
+    const search = q.search?.trim().toLowerCase();
+    const details = lines.flatMap((line) => {
+      const journal = line.journalEntry;
+      const itemId = sourceItemId(journal);
+      const item = itemId ? itemById.get(itemId) : undefined;
+      const purchase = item?.documentPurchase;
+      if (q.tenderSecurityItemId && item?.id !== q.tenderSecurityItemId) return [];
+      if (q.organizationMasterId && purchase?.organizationMasterId !== q.organizationMasterId) return [];
+      if (q.workId && purchase?.cmsWork?.id !== q.workId) return [];
+      const bankLines = journal.lines.filter((other) => other.account.bankAccount &&
+        (line.debit.gt(0) ? other.credit.gt(0) : other.debit.gt(0)));
+      if (q.accountId && !bankLines.some((other) => other.account.linkedBankAccountId === q.accountId)) return [];
+      const bank = bankLines.length === 1 ? bankLines[0]!.account.bankAccount : null;
+      const row = {
+        accountId: bank?.id ?? "",
+        bank: bank?.bankName ?? "Unassigned",
+        account: bank?.accountName ?? "Unassigned",
+        accountNumber: bank?.accountNumber ?? "-",
+        date: journal.journalDate.toISOString(),
+        journal: journal.journalNo,
+        tender: purchase?.egpTenderId ?? "-",
+        work: purchase?.tenderWorkName ?? journal.description,
+        organization: purchase?.organizationMaster.shortName ?? "-",
+        reference: journal.referenceNo ?? item?.referenceNo ?? "-",
+        margin: line.debit.toFixed(2),
+        released: line.credit.toFixed(2),
+        netMargin: line.debit.sub(line.credit).toFixed(2),
+      };
+      return search && ![row.bank, row.account, row.accountNumber, row.tender, row.work, row.organization, row.reference, row.journal]
+        .some((value) => value.toLowerCase().includes(search)) ? [] : [row];
+    });
+    const groups = new Map<string, { accountId: string; bank: string; account: string; accountNumber: string; margin: Prisma.Decimal; released: Prisma.Decimal; entries: number }>();
+    for (const row of details) {
+      const group = groups.get(row.accountId) ?? {
+        accountId: row.accountId, bank: row.bank, account: row.account, accountNumber: row.accountNumber,
+        margin: new Prisma.Decimal(0), released: new Prisma.Decimal(0), entries: 0,
+      };
+      group.margin = group.margin.add(row.margin);
+      group.released = group.released.add(row.released);
+      group.entries += 1;
+      groups.set(row.accountId, group);
+    }
+    const margin = details.reduce((sum, row) => sum.add(row.margin), new Prisma.Decimal(0));
+    const released = details.reduce((sum, row) => sum.add(row.released), new Prisma.Decimal(0));
+    const isDetail = !!(q.accountId || q.tenderSecurityItemId);
+    return this.finish({
+      title: "Bank Margin Amount",
+      subtitle: isDetail ? "Margin deducted from the bank for each tender and PO/BG reference."
+        : "Bank-wise margin deductions. Click an amount to view tender and PO/BG details.",
+      kpis: [
+        { label: "Margin Deducted", value: margin.toFixed(2), kind: "money" },
+        { label: "Released / Reversed", value: released.toFixed(2), kind: "money" },
+        { label: "Net Margin Amount", value: margin.sub(released).toFixed(2), kind: "money" },
+        { label: "Bank Accounts", value: String(groups.size) },
+      ],
+      columns: [
+        { key: "bank", label: "Bank" }, { key: "account", label: "Account" }, { key: "accountNumber", label: "Account No." },
+        ...(isDetail ? [
+          { key: "date", label: "Date", type: "date" }, { key: "tender", label: "Tender ID" },
+          { key: "work", label: "Work / Tender" }, { key: "organization", label: "Organization" },
+          { key: "reference", label: "PO / BG No." }, { key: "journal", label: "Voucher / Journal No." },
+        ] : [{ key: "entries", label: "Entries" }]),
+        moneyCol("margin", "Margin Deducted"), moneyCol("released", "Released / Reversed"), moneyCol("netMargin", "Net Margin Amount"),
+      ],
+      rows: isDetail ? details : [...groups.values()].sort((a, b) => a.bank.localeCompare(b.bank) || a.account.localeCompare(b.account)).map((group) => ({
+        ...group, margin: group.margin.toFixed(2), released: group.released.toFixed(2), netMargin: group.margin.sub(group.released).toFixed(2),
+      })),
+    }, q);
+  }
+
+  private async bankCharges(org: string, q: QueryReportDto) {
+    const bankLineSelect = {
+      debit: true, credit: true,
+      account: { select: { linkedBankAccountId: true, name: true } },
+    } satisfies Prisma.JournalLineSelect;
+    const lines = await this.prisma.journalLine.findMany({
+      where: {
+        account: { organizationId: org, systemKey: "BANK_CHARGES" },
+        journalEntry: { organizationId: org, status: "POSTED", journalDate: this.dates(q) },
+      },
+      include: { journalEntry: { include: { lines: { select: bankLineSelect } } } },
+      orderBy: [{ journalEntry: { journalDate: "desc" } }, { createdAt: "desc" }, { id: "asc" }],
+    });
+    // A price/charge reclassification can have no bank movement. Resolve its bank
+    // from that purchase's most recent preceding posting, even after deletion or
+    // a bank change, rather than using the purchase's current payment account.
+    const missingBankPurchaseIds = [...new Set(lines.filter((line) =>
+      line.journalEntry.sourceModule === "DOCUMENT_PURCHASE" &&
+      !line.journalEntry.lines.some((other) => other.account.linkedBankAccountId),
+    ).map((line) => line.journalEntry.sourceId.split(":")[0]!))];
+    const purchaseHistory = missingBankPurchaseIds.length
+      ? await this.prisma.journalEntry.findMany({
+          where: {
+            organizationId: org, status: "POSTED", sourceModule: "DOCUMENT_PURCHASE",
+            OR: missingBankPurchaseIds.flatMap((id) => [{ sourceId: id }, { sourceId: { startsWith: `${id}:` } }]),
+            lines: { some: { account: { linkedBankAccountId: { not: null } } } },
+          },
+          select: { sourceId: true, createdAt: true, lines: { select: bankLineSelect } },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        })
+      : [];
+    const search = q.search?.trim().toLowerCase();
+    const rows = lines.flatMap((line) => {
+      const journal = line.journalEntry;
+      const linked = journal.lines.filter((other) => other.account.linkedBankAccountId);
+      const contra = linked.filter((other) => line.debit.gt(0) ? other.credit.gt(0) : other.debit.gt(0));
+      const preceding = !linked.length && journal.sourceModule === "DOCUMENT_PURCHASE"
+        ? purchaseHistory.find((entry) => entry.sourceId.split(":")[0] === journal.sourceId.split(":")[0] && entry.createdAt <= journal.createdAt)
+        : undefined;
+      const bankLines = contra.length ? contra : linked.length ? linked
+        : (preceding?.lines.filter((other) => other.account.linkedBankAccountId) ?? []);
+      if (q.accountId && !bankLines.some((other) => other.account.linkedBankAccountId === q.accountId)) return [];
+      const row = {
+        date: journal.journalDate.toISOString(),
+        journal: journal.journalNo,
+        reference: journal.referenceNo ?? "-",
+        account: [...new Set(bankLines.map((other) => other.account.name))].join(", ") || "-",
+        source: journal.sourceModule.replaceAll("_", " "),
+        description: line.description || journal.description,
+        charge: line.debit.toFixed(2),
+        reversal: line.credit.toFixed(2),
+        netCharge: line.debit.sub(line.credit).toFixed(2),
+      };
+      return !search || [row.journal, row.reference, row.account, row.source, row.description]
+        .some((value) => value.toLowerCase().includes(search)) ? [row] : [];
+    });
+    const charges = rows.reduce((sum, row) => sum.add(row.charge), new Prisma.Decimal(0));
+    const reversals = rows.reduce((sum, row) => sum.add(row.reversal), new Prisma.Decimal(0));
+    return this.finish({
+      title: "Bank Charge",
+      subtitle: "Posted bank charges and reversals from the Bank Charges ledger.",
+      kpis: [
+        { label: "Total Charges", value: charges.toFixed(2), kind: "money" },
+        { label: "Reversals / Adjustments", value: reversals.toFixed(2), kind: "money" },
+        { label: "Net Bank Charges", value: charges.sub(reversals).toFixed(2), kind: "money" },
+        { label: "Entries", value: String(rows.length) },
+      ],
+      columns: [
+        { key: "date", label: "Date", type: "date" },
+        { key: "journal", label: "Voucher / Journal No" },
+        { key: "reference", label: "Reference" },
+        { key: "account", label: "Bank / Cash Account" },
+        { key: "source", label: "Source" },
+        { key: "description", label: "Description" },
+        moneyCol("charge", "Charge (Dr)"),
+        moneyCol("reversal", "Reversal / Adjustment (Cr)"),
+        moneyCol("netCharge", "Net Charge"),
+      ],
+      rows,
+    }, q);
+  }
+
   private async cashBank(org: string, report: string, q: QueryReportDto) {
+    if (report === "bank-margin-amount") return this.bankMargin(org, q);
+    if (report === "bank-charges") return this.bankCharges(org, q);
     if (report === "transfers") {
       const rows = await this.prisma.fundTransfer.findMany({
         where: { organizationId: org, transferDate: this.dates(q) },
@@ -2990,6 +3172,10 @@ export class ReportsService {
             name: group.name,
             type: group.type,
             openingBalance: s(openingBalance),
+            openingDebit: s(Prisma.Decimal.max(group.openingNet, 0)),
+            openingCredit: s(Prisma.Decimal.max(group.openingNet.negated(), 0)),
+            periodDebit: s(group.periodDebit),
+            periodCredit: s(group.periodCredit),
             periodIncrease: s(creditNormal ? group.periodCredit : group.periodDebit),
             periodDecrease: s(creditNormal ? group.periodDebit : group.periodCredit),
             closingBalance: s(closingBalance),
@@ -3001,9 +3187,32 @@ export class ReportsService {
         rows.reduce((total, row) => total.add(row[key]), new Prisma.Decimal(0));
       const closingDebit = sumColumn("closingDebit");
       const closingCredit = sumColumn("closingCredit");
+      if (report === "trial-balance") {
+        return this.finish({
+          title: "Trial Balance",
+          subtitle: "Opening, period and closing debit and credit balances from posted transactions. Totals cover all filtered accounts.",
+          kpis: [
+            { label: "Total Debit", value: closingDebit.toFixed(2), kind: "money" },
+            { label: "Total Credit", value: closingCredit.toFixed(2), kind: "money" },
+            { label: "Difference", value: closingDebit.sub(closingCredit).abs().toFixed(2), kind: "money" },
+          ],
+          columns: [
+            { key: "code", label: "Account Code" },
+            { key: "name", label: "Account Name" },
+            { key: "type", label: "Account Type" },
+            moneyCol("openingDebit", "Opening Dr"),
+            moneyCol("openingCredit", "Opening Cr"),
+            moneyCol("periodDebit", "Period Dr"),
+            moneyCol("periodCredit", "Period Cr"),
+            moneyCol("closingDebit", "Closing Dr"),
+            moneyCol("closingCredit", "Closing Cr"),
+          ],
+          rows,
+        }, q);
+      }
       return this.finish(
         {
-          title: report === "trial-balance" ? "Balance Check" : "Account Balance Summary",
+          title: "Account Balance Summary",
           subtitle:
             "Opening balance, account movement and closing balance from posted transactions.",
           kpis: [

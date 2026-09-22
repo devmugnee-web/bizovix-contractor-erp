@@ -10,16 +10,13 @@ import {
   useBankAccounts,
   useCreateMasterCategory,
   useCreateDocumentPurchase,
-  useCreateOrganizationMaster,
   useMasterCategories,
   useOrganizations,
   useTender,
 } from "@bizovix/api-client";
 import {
   createDocumentPurchaseSchema,
-  createOrganizationMasterSchema,
   type CreateDocumentPurchaseFormValues,
-  type CreateOrganizationMasterFormValues,
 } from "@bizovix/validation";
 import {
   CurrencyInput,
@@ -36,6 +33,7 @@ import {
 import { MasterCategoryType, PurchaseType } from "@bizovix/types";
 import { useSetBreadcrumb } from "@/components/providers/BreadcrumbContext";
 import { Modal } from "@/components/layout/Modal";
+import { AddOrganizationModal } from "@/components/masters/AddOrganizationModal";
 
 export default function AddDocumentPurchasePage() {
   return (
@@ -58,7 +56,8 @@ function AddDocumentPurchaseForm() {
   const requestId = searchParams.get("requestId") ?? undefined;
   const linkedTender = useTender(tenderId);
   const bankAccounts = useBankAccounts();
-  const categories = useMasterCategories(MasterCategoryType.DOCUMENT_PURCHASE);
+  // This field stores a name, not a category foreign key; keep newly added local names selectable.
+  const categories = useMasterCategories(MasterCategoryType.DOCUMENT_PURCHASE, { includeLocalDrafts: true });
   const createMutation = useCreateDocumentPurchase();
 
   const {
@@ -77,6 +76,7 @@ function AddDocumentPurchaseForm() {
       tenderWorkName: "",
       purchaseDate: new Date().toISOString().slice(0, 10),
       documentPrice: undefined,
+      bankCharge: 0,
       paymentFromAccountId: "",
       category: "",
       estimatedTenderAmount: undefined,
@@ -143,6 +143,7 @@ function AddDocumentPurchaseForm() {
         tenderWorkName: values.tenderWorkName,
         purchaseDate: values.purchaseDate,
         documentPrice: Number(values.documentPrice),
+        bankCharge: Number(values.bankCharge ?? 0),
         paymentFromAccountId: values.paymentFromAccountId,
         category: values.category,
         estimatedTenderAmount:
@@ -279,10 +280,14 @@ function AddDocumentPurchaseForm() {
             <CurrencyInput placeholder="Enter document price" {...register("documentPrice")} />
           </FormField>
 
+          <FormField label="7. Bank Charge" error={errors.bankCharge?.message} helper="Posted to Bank Charges in Chart of Accounts.">
+            <CurrencyInput min={0} step="0.01" placeholder="0.00" {...register("bankCharge")} />
+          </FormField>
+
           <FormField
-            label="7. Payment From"
+            label="8. Payment From"
             required
-            helper="Amount will be posted from the selected account."
+            helper="Bank charge will be deducted from the selected account."
             error={errors.paymentFromAccountId?.message}
           >
             <SelectInput
@@ -296,7 +301,7 @@ function AddDocumentPurchaseForm() {
             />
           </FormField>
 
-          <FormField label="8. Work Category" required error={errors.category?.message}>
+          <FormField label="9. Work Category" required error={errors.category?.message}>
             <div className="flex items-start gap-3">
               <Controller
                 control={control}
@@ -322,7 +327,7 @@ function AddDocumentPurchaseForm() {
           </FormField>
 
           <FormField
-            label="9. Estimated Tender Amount (BDT)"
+            label="10. Estimated Tender Amount (BDT)"
             required
             helper="This estimate is used until the final NOA amount is recorded."
             error={errors.estimatedTenderAmount?.message}
@@ -333,7 +338,7 @@ function AddDocumentPurchaseForm() {
             />
           </FormField>
 
-          <FormField label="10. Submission Date" error={errors.submissionDate?.message}>
+          <FormField label="11. Submission Date" error={errors.submissionDate?.message}>
             <Controller
               control={control}
               name="submissionDate"
@@ -342,7 +347,7 @@ function AddDocumentPurchaseForm() {
           </FormField>
 
           <div className="md:col-span-2">
-            <FormField label="11. Remarks" error={errors.remarks?.message}>
+            <FormField label="12. Remarks" error={errors.remarks?.message}>
               <TextInput placeholder="Optional remarks" {...register("remarks")} />
             </FormField>
           </div>
@@ -453,55 +458,3 @@ function AddCategoryModal({
   );
 }
 
-function AddOrganizationModal({
-  open,
-  onClose,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: (org: { id: string; shortName: string }) => void;
-}) {
-  const createOrg = useCreateOrganizationMaster();
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<CreateOrganizationMasterFormValues>({
-    resolver: zodResolver(createOrganizationMasterSchema),
-  });
-
-  function onSubmit(values: CreateOrganizationMasterFormValues) {
-    createOrg.mutate(values, {
-      onSuccess: (org) => {
-        reset();
-        onCreated(org);
-      },
-    });
-  }
-
-  return (
-    <Modal open={open} onClose={onClose} title="Add New Organization">
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-        <FormField label="Short Name" required error={errors.shortName?.message}>
-          <TextInput placeholder="e.g. DPHE" {...register("shortName")} />
-        </FormField>
-        <FormField label="Full Name" required error={errors.fullName?.message}>
-          <TextInput
-            placeholder="e.g. Department of Public Health Engineering"
-            {...register("fullName")}
-          />
-        </FormField>
-        <div className="mt-2 flex justify-end gap-3">
-          <SecondaryButton type="button" onClick={onClose}>
-            Cancel
-          </SecondaryButton>
-          <PrimaryButton type="submit" disabled={createOrg.isPending}>
-            {createOrg.isPending ? "Saving..." : "Save"}
-          </PrimaryButton>
-        </div>
-      </form>
-    </Modal>
-  );
-}

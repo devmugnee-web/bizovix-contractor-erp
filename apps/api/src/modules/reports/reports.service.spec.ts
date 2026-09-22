@@ -260,6 +260,87 @@ describe("ReportsService expense category report", () => {
   });
 });
 
+describe("ReportsService trial balance report", () => {
+  const journalLineFindMany = jest.fn();
+  const audit = { record: jest.fn() };
+  const service = new ReportsService(
+    { journalLine: { findMany: journalLineFindMany } } as never,
+    audit as never,
+    {} as never,
+  );
+  const line = (accountId: string, code: string, name: string, accountType: string, debit: number, credit: number) => ({
+    accountId, debit: new Prisma.Decimal(debit), credit: new Prisma.Decimal(credit),
+    account: { code, name, accountType },
+  });
+  const opening = [
+    line("bank", "12120001", "NRBC", "ASSET", 1000, 0),
+    line("capital", "31100001", "Capital", "EQUITY", 0, 1000),
+  ];
+  const period = [
+    line("bank", "12120001", "NRBC", "ASSET", 0, 1517.25),
+    line("schedule", "41100002", "Tender Schedule Purchase", "EXPENSE", 1500, 0),
+    line("charge", "44100001", "Bank Charges", "EXPENSE", 17.25, 0),
+  ];
+  const query = { dateFrom: "2026-05-01", dateTo: "2026-05-31", page: 1, limit: 2 };
+
+  beforeEach(() => {
+    journalLineFindMany.mockReset();
+    audit.record.mockReset();
+    journalLineFindMany.mockImplementation(({ where }) => Promise.resolve(where.journalEntry.journalDate?.lt ? opening : period));
+  });
+
+  it("shows actual debit/credit sides, including an overdrawn bank, with totals across all pages", async () => {
+    const result = await service.run("org-1", "financial", "trial-balance", query);
+    expect(result.title).toBe("Trial Balance");
+    expect(result.meta).toMatchObject({ total: 4, totalPages: 2 });
+    expect(result.columns.map((column) => column.key)).toEqual([
+      "code", "name", "type", "openingDebit", "openingCredit", "periodDebit", "periodCredit", "closingDebit", "closingCredit",
+    ]);
+    expect(Object.fromEntries(result.kpis.map((kpi) => [kpi.label, kpi.value]))).toEqual({
+      "Total Debit": "1517.25", "Total Credit": "1517.25", Difference: "0.00",
+    });
+    expect(result.rows).toEqual([
+      expect.objectContaining({ name: "NRBC", openingDebit: "1000", openingCredit: "0", periodDebit: "0", periodCredit: "1517.25", closingDebit: "0", closingCredit: "517.25" }),
+      expect.objectContaining({ name: "Capital", openingDebit: "0", openingCredit: "1000", periodDebit: "0", periodCredit: "0", closingDebit: "0", closingCredit: "1000" }),
+    ]);
+    const second = await service.run("org-1", "financial", "trial-balance", { ...query, page: 2 });
+    expect(second.kpis).toEqual(result.kpis);
+    expect(second.rows).toEqual([
+      expect.objectContaining({ name: "Tender Schedule Purchase", closingDebit: "1500", closingCredit: "0" }),
+      expect.objectContaining({ name: "Bank Charges", closingDebit: "17.25", closingCredit: "0" }),
+    ]);
+    expect(journalLineFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ journalEntry: {
+        organizationId: "org-1", status: "POSTED", journalDate: { lt: new Date("2026-05-01") },
+      } }),
+    }));
+    expect(journalLineFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ journalEntry: {
+        organizationId: "org-1", status: "POSTED", journalDate: { gte: new Date("2026-05-01"), lte: new Date("2026-05-31T23:59:59.999Z") },
+      } }),
+    }));
+  });
+
+  it("exports every account with Dr/Cr columns and preserves the separate account balance summary", async () => {
+    const csv = await service.export("org-1", "user-1", "financial", "trial-balance", query);
+    expect(csv.filename).toContain("financial-trial-balance-");
+    expect(csv.content).toContain('"Opening Dr","Opening Cr","Period Dr","Period Cr","Closing Dr","Closing Cr"');
+    expect(csv.content).toContain('"Tender Schedule Purchase"');
+    expect(csv.content).toContain('"Bank Charges"');
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ description: "Exported Trial Balance", newValue: expect.objectContaining({ rowCount: 4 }) }));
+    const summary = await service.run("org-1", "financial", "account-balance", query);
+    expect(summary.title).toBe("Account Balance Summary");
+    expect(summary.columns.map((column) => column.key)).toContain("periodIncrease");
+  });
+
+  it("shows zero totals when no posted accounts match", async () => {
+    journalLineFindMany.mockResolvedValue([]);
+    const result = await service.run("org-1", "financial", "trial-balance", query);
+    expect(result.rows).toEqual([]);
+    expect(result.kpis.every((kpi) => kpi.value === "0.00")).toBe(true);
+  });
+});
+
 describe("ReportsService balance sheet report", () => {
   const journalLineFindMany = jest.fn();
   const service = new ReportsService(

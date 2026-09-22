@@ -8,6 +8,12 @@ export interface MasterCategoryRecord {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Present only for the desktop's supported offline category workflow. */
+  syncStatus?: "SYNCED" | "PENDING" | "REJECTED";
+  version?: number;
+  operationId?: string;
+  syncError?: { kind: string; message: string };
+  cloudCategory?: MasterCategoryRecord;
 }
 
 export interface SaveMasterCategoryInput {

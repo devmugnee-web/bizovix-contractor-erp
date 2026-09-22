@@ -1,0 +1,1878 @@
+{
+  "purpose": "Source inventory only; not an offline readiness certification or database validation",
+  "generatedAt": "2026-09-21T06:26:21.105Z",
+  "databaseProvider": "postgresql",
+  "models": 170,
+  "enums": 102,
+  "decimalFields": 347,
+  "decimalTypes": {
+    "18,2": 170,
+    "5,2": 18,
+    "18,3": 32,
+    "7,4": 12,
+    "18,6": 5,
+    "18,4": 81,
+    "8,2": 7,
+    "8,4": 7,
+    "12,2": 9,
+    "3,2": 1,
+    "24,6": 4,
+    "9,6": 1
+  },
+  "largePrecisionDecimalFields": [
+    {
+      "model": "StockMovement",
+      "field": "unitCost",
+      "type": "Decimal",
+      "modifier": "",
+      "native": "Decimal",
+      "nativeArguments": "24,6",
+      "line": 5472
+    },
+    {
+      "model": "StockMovement",
+      "field": "totalCost",
+      "type": "Decimal",
+      "modifier": "",
+      "native": "Decimal",
+      "nativeArguments": "24,6",
+      "line": 5473
+    },
+    {
+      "model": "LcInventoryPosting",
+      "field": "unitCost",
+      "type": "Decimal",
+      "modifier": "",
+      "native": "Decimal",
+      "nativeArguments": "24,6",
+      "line": 5614
+    },
+    {
+      "model": "LcInventoryPosting",
+      "field": "totalCost",
+      "type": "Decimal",
+      "modifier": "",
+      "native": "Decimal",
+      "nativeArguments": "24,6",
+      "line": 5615
+    }
+  ],
+  "nativeTypeFields": 384,
+  "jsonFields": 17,
+  "scalarArrays": [
+    {
+      "model": "Document",
+      "field": "tags",
+      "type": "String",
+      "modifier": "[]",
+      "native": null,
+      "nativeArguments": null,
+      "line": 3217
+    },
+    {
+      "model": "ReminderRuleSetting",
+      "field": "offsetDays",
+      "type": "Int",
+      "modifier": "[]",
+      "native": null,
+      "nativeArguments": null,
+      "line": 3496
+    },
+    {
+      "model": "DocumentSetting",
+      "field": "allowedFileTypes",
+      "type": "String",
+      "modifier": "[]",
+      "native": null,
+      "nativeArguments": null,
+      "line": 3512
+    }
+  ],
+  "sqlMigrationFiles": 69,
+  "apiSourceFilesInspected": 426,
+  "installed": {
+    "node": "v24.13.0",
+    "prismaClient": "6.19.3",
+    "electron": "43.4.0"
+  },
+  "featureLocationCounts": {
+    "rowLocks": 9,
+    "rawSql": 13,
+    "insensitiveSearch": 218,
+    "skipDuplicates": 2,
+    "isolationLevels": 13,
+    "databaseAggregations": 84,
+    "migrationCheckConstraints": 43,
+    "migrationWhereCandidates": 54,
+    "migrationTriggers": 0
+  },
+  "featureLocations": {
+    "rowLocks": [
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 372
+      },
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 458
+      },
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 473
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-bills.service.ts",
+        "line": 129
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 952
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/tender-vat-tax.service.ts",
+        "line": 78
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 504
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-license-client.service.ts",
+        "line": 64
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-license-client.service.ts",
+        "line": 72
+      }
+    ],
+    "rawSql": [
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 361
+      },
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 434
+      },
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 469
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-bills.service.ts",
+        "line": 129
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 952
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 146
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 161
+      },
+      {
+        "file": "apps/api/src/modules/settings-numbering/numbering.service.ts",
+        "line": 190
+      },
+      {
+        "file": "apps/api/src/modules/settings-system/system-settings.service.ts",
+        "line": 15
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/tender-vat-tax.service.ts",
+        "line": 78
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 500
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-dashboard.service.ts",
+        "line": 151
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-license-client.service.ts",
+        "line": 72
+      }
+    ],
+    "insensitiveSearch": [
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 479
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 480
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 481
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 631
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 632
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 633
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 681
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 682
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 683
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 697
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 698
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 807
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 810
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 811
+      },
+      {
+        "file": "apps/api/src/modules/audit-logs/activity-logs.service.ts",
+        "line": 14
+      },
+      {
+        "file": "apps/api/src/modules/cash-bank/cash-bank.service.ts",
+        "line": 353
+      },
+      {
+        "file": "apps/api/src/modules/cash-bank/cash-bank.service.ts",
+        "line": 363
+      },
+      {
+        "file": "apps/api/src/modules/challan-submissions/challan-submissions.service.ts",
+        "line": 132
+      },
+      {
+        "file": "apps/api/src/modules/challan-submissions/challan-submissions.service.ts",
+        "line": 133
+      },
+      {
+        "file": "apps/api/src/modules/challan-submissions/challan-submissions.service.ts",
+        "line": 134
+      },
+      {
+        "file": "apps/api/src/modules/challan-submissions/challan-submissions.service.ts",
+        "line": 135
+      },
+      {
+        "file": "apps/api/src/modules/challan-submissions/challan-submissions.service.ts",
+        "line": 138
+      },
+      {
+        "file": "apps/api/src/modules/challan-submissions/tender-challan.service.ts",
+        "line": 36
+      },
+      {
+        "file": "apps/api/src/modules/cms-works/cms-works.service.ts",
+        "line": 46
+      },
+      {
+        "file": "apps/api/src/modules/cms-works/cms-works.service.ts",
+        "line": 47
+      },
+      {
+        "file": "apps/api/src/modules/cms-works/cms-works.service.ts",
+        "line": 48
+      },
+      {
+        "file": "apps/api/src/modules/cms-works/cms-works.service.ts",
+        "line": 49
+      },
+      {
+        "file": "apps/api/src/modules/contracts/contracts.service.ts",
+        "line": 84
+      },
+      {
+        "file": "apps/api/src/modules/contracts/contracts.service.ts",
+        "line": 85
+      },
+      {
+        "file": "apps/api/src/modules/contracts/contracts.service.ts",
+        "line": 87
+      },
+      {
+        "file": "apps/api/src/modules/credit-commitments/credit-commitments.service.ts",
+        "line": 61
+      },
+      {
+        "file": "apps/api/src/modules/credit-commitments/credit-commitments.service.ts",
+        "line": 62
+      },
+      {
+        "file": "apps/api/src/modules/credit-commitments/credit-commitments.service.ts",
+        "line": 63
+      },
+      {
+        "file": "apps/api/src/modules/document-purchases/document-purchases.service.ts",
+        "line": 147
+      },
+      {
+        "file": "apps/api/src/modules/document-purchases/document-purchases.service.ts",
+        "line": 148
+      },
+      {
+        "file": "apps/api/src/modules/document-purchases/document-purchases.service.ts",
+        "line": 316
+      },
+      {
+        "file": "apps/api/src/modules/document-purchases/document-purchases.service.ts",
+        "line": 317
+      },
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 149
+      },
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 150
+      },
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 151
+      },
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 152
+      },
+      {
+        "file": "apps/api/src/modules/fixed-assets/fixed-assets.service.ts",
+        "line": 93
+      },
+      {
+        "file": "apps/api/src/modules/fixed-assets/fixed-assets.service.ts",
+        "line": 94
+      },
+      {
+        "file": "apps/api/src/modules/fixed-assets/fixed-assets.service.ts",
+        "line": 95
+      },
+      {
+        "file": "apps/api/src/modules/fixed-assets/fixed-assets.service.ts",
+        "line": 96
+      },
+      {
+        "file": "apps/api/src/modules/general-expenses/general-expenses.service.ts",
+        "line": 64
+      },
+      {
+        "file": "apps/api/src/modules/general-expenses/general-expenses.service.ts",
+        "line": 65
+      },
+      {
+        "file": "apps/api/src/modules/general-expenses/general-expenses.service.ts",
+        "line": 66
+      },
+      {
+        "file": "apps/api/src/modules/general-expenses/general-expenses.service.ts",
+        "line": 67
+      },
+      {
+        "file": "apps/api/src/modules/grn/grn.service.ts",
+        "line": 54
+      },
+      {
+        "file": "apps/api/src/modules/hr/hr.service.ts",
+        "line": 107
+      },
+      {
+        "file": "apps/api/src/modules/hr/hr.service.ts",
+        "line": 120
+      },
+      {
+        "file": "apps/api/src/modules/hr/hr.service.ts",
+        "line": 366
+      },
+      {
+        "file": "apps/api/src/modules/hr/hr.service.ts",
+        "line": 380
+      },
+      {
+        "file": "apps/api/src/modules/items/items.service.ts",
+        "line": 41
+      },
+      {
+        "file": "apps/api/src/modules/items/items.service.ts",
+        "line": 42
+      },
+      {
+        "file": "apps/api/src/modules/items/items.service.ts",
+        "line": 43
+      },
+      {
+        "file": "apps/api/src/modules/items/items.service.ts",
+        "line": 44
+      },
+      {
+        "file": "apps/api/src/modules/master-categories/master-categories.service.ts",
+        "line": 22
+      },
+      {
+        "file": "apps/api/src/modules/master-categories/master-categories.service.ts",
+        "line": 38
+      },
+      {
+        "file": "apps/api/src/modules/organizations/organizations.service.ts",
+        "line": 21
+      },
+      {
+        "file": "apps/api/src/modules/organizations/organizations.service.ts",
+        "line": 46
+      },
+      {
+        "file": "apps/api/src/modules/organizations/organizations.service.ts",
+        "line": 47
+      },
+      {
+        "file": "apps/api/src/modules/parties/parties.service.ts",
+        "line": 64
+      },
+      {
+        "file": "apps/api/src/modules/parties/parties.service.ts",
+        "line": 68
+      },
+      {
+        "file": "apps/api/src/modules/parties/parties.service.ts",
+        "line": 69
+      },
+      {
+        "file": "apps/api/src/modules/parties/parties.service.ts",
+        "line": 70
+      },
+      {
+        "file": "apps/api/src/modules/parties/parties.service.ts",
+        "line": 71
+      },
+      {
+        "file": "apps/api/src/modules/parties/parties.service.ts",
+        "line": 72
+      },
+      {
+        "file": "apps/api/src/modules/parties/parties.service.ts",
+        "line": 73
+      },
+      {
+        "file": "apps/api/src/modules/parties/parties.service.ts",
+        "line": 175
+      },
+      {
+        "file": "apps/api/src/modules/payment-terms/payment-terms.service.ts",
+        "line": 18
+      },
+      {
+        "file": "apps/api/src/modules/payment-terms/payment-terms.service.ts",
+        "line": 34
+      },
+      {
+        "file": "apps/api/src/modules/pg-bg/pg-bg.service.ts",
+        "line": 50
+      },
+      {
+        "file": "apps/api/src/modules/pg-bg/pg-bg.service.ts",
+        "line": 51
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/bill-workspace.service.ts",
+        "line": 27
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/bill-workspace.service.ts",
+        "line": 28
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/bill-workspace.service.ts",
+        "line": 45
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-bills.service.ts",
+        "line": 157
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-bills.service.ts",
+        "line": 158
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-bills.service.ts",
+        "line": 161
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-costing-report.service.ts",
+        "line": 51
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-costing-report.service.ts",
+        "line": 52
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-costing-report.service.ts",
+        "line": 53
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 172
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/work-completion-certificates.service.ts",
+        "line": 27
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/work-completion-certificates.service.ts",
+        "line": 128
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/work-completion-certificates.service.ts",
+        "line": 129
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/work-completion-certificates.service.ts",
+        "line": 130
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/work-completion-certificates.service.ts",
+        "line": 135
+      },
+      {
+        "file": "apps/api/src/modules/project-expenses/project-expenses.service.ts",
+        "line": 61
+      },
+      {
+        "file": "apps/api/src/modules/project-expenses/project-expenses.service.ts",
+        "line": 62
+      },
+      {
+        "file": "apps/api/src/modules/project-expenses/project-expenses.service.ts",
+        "line": 63
+      },
+      {
+        "file": "apps/api/src/modules/project-expenses/project-expenses.service.ts",
+        "line": 64
+      },
+      {
+        "file": "apps/api/src/modules/purchase-orders/purchase-orders.service.ts",
+        "line": 70
+      },
+      {
+        "file": "apps/api/src/modules/purchase-requisitions/purchase-requisitions.service.ts",
+        "line": 54
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 133
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 134
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 135
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 136
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 137
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 138
+      },
+      {
+        "file": "apps/api/src/modules/reminders/reminders.service.ts",
+        "line": 786
+      },
+      {
+        "file": "apps/api/src/modules/reminders/reminders.service.ts",
+        "line": 787
+      },
+      {
+        "file": "apps/api/src/modules/reminders/reminders.service.ts",
+        "line": 788
+      },
+      {
+        "file": "apps/api/src/modules/reminders/reminders.service.ts",
+        "line": 789
+      },
+      {
+        "file": "apps/api/src/modules/reminders/reminders.service.ts",
+        "line": 790
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 177
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 178
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 179
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 180
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 181
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 449
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 450
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 860
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 861
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 944
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 1392
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 1393
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 1854
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 1855
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2106
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2107
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2108
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2109
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2110
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2111
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2112
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2116
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2336
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2337
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2580
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2581
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2582
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2703
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2704
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2795
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2796
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2797
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2798
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2799
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2800
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2801
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2802
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2803
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2922
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2923
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2924
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2925
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2926
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 2927
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3188
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3189
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3454
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3455
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3456
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3457
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3460
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3476
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3477
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3478
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3479
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 3482
+      },
+      {
+        "file": "apps/api/src/modules/rfqs/rfqs.service.ts",
+        "line": 49
+      },
+      {
+        "file": "apps/api/src/modules/sales-quotations/sales-quotations.service.ts",
+        "line": 152
+      },
+      {
+        "file": "apps/api/src/modules/sales-quotations/sales-quotations.service.ts",
+        "line": 153
+      },
+      {
+        "file": "apps/api/src/modules/sales-quotations/sales-quotations.service.ts",
+        "line": 157
+      },
+      {
+        "file": "apps/api/src/modules/sales-quotations/sales-quotations.service.ts",
+        "line": 158
+      },
+      {
+        "file": "apps/api/src/modules/supplier-bills/supplier-bills.service.ts",
+        "line": 84
+      },
+      {
+        "file": "apps/api/src/modules/supplier-payments/supplier-payments.service.ts",
+        "line": 75
+      },
+      {
+        "file": "apps/api/src/modules/support-tickets/support-tickets.service.ts",
+        "line": 103
+      },
+      {
+        "file": "apps/api/src/modules/support-tickets/support-tickets.service.ts",
+        "line": 127
+      },
+      {
+        "file": "apps/api/src/modules/support-tickets/support-tickets.service.ts",
+        "line": 128
+      },
+      {
+        "file": "apps/api/src/modules/tender-costings/tender-costings.service.ts",
+        "line": 281
+      },
+      {
+        "file": "apps/api/src/modules/tender-costings/tender-costings.service.ts",
+        "line": 282
+      },
+      {
+        "file": "apps/api/src/modules/tender-costings/tender-costings.service.ts",
+        "line": 286
+      },
+      {
+        "file": "apps/api/src/modules/tender-costings/tender-costings.service.ts",
+        "line": 290
+      },
+      {
+        "file": "apps/api/src/modules/tender-costings/tender-costings.service.ts",
+        "line": 291
+      },
+      {
+        "file": "apps/api/src/modules/tender-securities/tender-securities.service.ts",
+        "line": 146
+      },
+      {
+        "file": "apps/api/src/modules/tender-securities/tender-securities.service.ts",
+        "line": 147
+      },
+      {
+        "file": "apps/api/src/modules/tender-securities/tender-securities.service.ts",
+        "line": 148
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 102
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 107
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 108
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 110
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 356
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 357
+      },
+      {
+        "file": "apps/api/src/modules/users/users.service.ts",
+        "line": 72
+      },
+      {
+        "file": "apps/api/src/modules/users/users.service.ts",
+        "line": 73
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/tender-vat-tax.service.ts",
+        "line": 31
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 187
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 188
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 189
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 190
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 191
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 420
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-customers.service.ts",
+        "line": 19
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-customers.service.ts",
+        "line": 20
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-customers.service.ts",
+        "line": 21
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-devices.service.ts",
+        "line": 49
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-devices.service.ts",
+        "line": 50
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-devices.service.ts",
+        "line": 51
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-devices.service.ts",
+        "line": 52
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-devices.service.ts",
+        "line": 53
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-devices.service.ts",
+        "line": 54
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-licenses.service.ts",
+        "line": 60
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-licenses.service.ts",
+        "line": 61
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-licenses.service.ts",
+        "line": 62
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-subscriptions.service.ts",
+        "line": 35
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-subscriptions.service.ts",
+        "line": 36
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-subscriptions.service.ts",
+        "line": 37
+      },
+      {
+        "file": "apps/api/src/modules/work-ious/work-ious.service.ts",
+        "line": 222
+      },
+      {
+        "file": "apps/api/src/modules/work-ious/work-ious.service.ts",
+        "line": 223
+      },
+      {
+        "file": "apps/api/src/modules/work-ious/work-ious.service.ts",
+        "line": 224
+      },
+      {
+        "file": "apps/api/src/modules/work-ious/work-ious.service.ts",
+        "line": 225
+      },
+      {
+        "file": "apps/api/src/modules/work-ious/work-ious.service.ts",
+        "line": 226
+      },
+      {
+        "file": "apps/api/src/modules/work-ious/work-ious.service.ts",
+        "line": 227
+      },
+      {
+        "file": "apps/api/src/modules/work-ious/work-ious.service.ts",
+        "line": 228
+      }
+    ],
+    "skipDuplicates": [
+      {
+        "file": "apps/api/src/modules/lc/lc.service.ts",
+        "line": 268
+      },
+      {
+        "file": "apps/api/src/modules/roles/roles.service.ts",
+        "line": 70
+      }
+    ],
+    "isolationLevels": [
+      {
+        "file": "apps/api/src/modules/accounting/demo-bank-cleanup.service.ts",
+        "line": 112
+      },
+      {
+        "file": "apps/api/src/modules/accounting/legacy-financial-backfill.service.ts",
+        "line": 213
+      },
+      {
+        "file": "apps/api/src/modules/grn/grn.service.ts",
+        "line": 166
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-bills.service.ts",
+        "line": 884
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 672
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 1016
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 314
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 473
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 503
+      },
+      {
+        "file": "apps/api/src/modules/supplier-bills/supplier-bills.service.ts",
+        "line": 516
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/tender-vat-tax.service.ts",
+        "line": 51
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/tender-vat-tax.service.ts",
+        "line": 65
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/tender-vat-tax.service.ts",
+        "line": 146
+      }
+    ],
+    "databaseAggregations": [
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 398
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 783
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 784
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 824
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 1004
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 1008
+      },
+      {
+        "file": "apps/api/src/modules/accounting/accounting.service.ts",
+        "line": 1012
+      },
+      {
+        "file": "apps/api/src/modules/billing/billing.service.ts",
+        "line": 126
+      },
+      {
+        "file": "apps/api/src/modules/cash-bank/cash-bank.service.ts",
+        "line": 77
+      },
+      {
+        "file": "apps/api/src/modules/cash-bank/cash-bank.service.ts",
+        "line": 188
+      },
+      {
+        "file": "apps/api/src/modules/cash-bank/cash-bank.service.ts",
+        "line": 363
+      },
+      {
+        "file": "apps/api/src/modules/challan-submissions/challan-submissions.service.ts",
+        "line": 213
+      },
+      {
+        "file": "apps/api/src/modules/challan-submissions/challan-submissions.service.ts",
+        "line": 214
+      },
+      {
+        "file": "apps/api/src/modules/challan-submissions/challan-submissions.service.ts",
+        "line": 218
+      },
+      {
+        "file": "apps/api/src/modules/cms-works/cms-works.service.ts",
+        "line": 77
+      },
+      {
+        "file": "apps/api/src/modules/contracts/contracts.service.ts",
+        "line": 122
+      },
+      {
+        "file": "apps/api/src/modules/dashboard/dashboard.service.ts",
+        "line": 179
+      },
+      {
+        "file": "apps/api/src/modules/dashboard/dashboard.service.ts",
+        "line": 184
+      },
+      {
+        "file": "apps/api/src/modules/dashboard/dashboard.service.ts",
+        "line": 189
+      },
+      {
+        "file": "apps/api/src/modules/dashboard/dashboard.service.ts",
+        "line": 347
+      },
+      {
+        "file": "apps/api/src/modules/dashboard/dashboard.service.ts",
+        "line": 357
+      },
+      {
+        "file": "apps/api/src/modules/dashboard/dashboard.service.ts",
+        "line": 410
+      },
+      {
+        "file": "apps/api/src/modules/document-purchases/document-purchases.service.ts",
+        "line": 113
+      },
+      {
+        "file": "apps/api/src/modules/document-purchases/document-purchases.service.ts",
+        "line": 205
+      },
+      {
+        "file": "apps/api/src/modules/document-purchases/document-purchases.service.ts",
+        "line": 265
+      },
+      {
+        "file": "apps/api/src/modules/document-purchases/document-purchases.service.ts",
+        "line": 361
+      },
+      {
+        "file": "apps/api/src/modules/document-purchases/document-purchases.service.ts",
+        "line": 554
+      },
+      {
+        "file": "apps/api/src/modules/documents/documents.service.ts",
+        "line": 1487
+      },
+      {
+        "file": "apps/api/src/modules/hr/hr.service.ts",
+        "line": 370
+      },
+      {
+        "file": "apps/api/src/modules/lc/lc.service.ts",
+        "line": 227
+      },
+      {
+        "file": "apps/api/src/modules/lc/lc.service.ts",
+        "line": 378
+      },
+      {
+        "file": "apps/api/src/modules/lc/lc.service.ts",
+        "line": 395
+      },
+      {
+        "file": "apps/api/src/modules/parties/parties.service.ts",
+        "line": 100
+      },
+      {
+        "file": "apps/api/src/modules/parties/parties.service.ts",
+        "line": 127
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-bills.service.ts",
+        "line": 188
+      },
+      {
+        "file": "apps/api/src/modules/project-bills/project-bills.service.ts",
+        "line": 192
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 407
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 528
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 536
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 602
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 657
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 777
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 809
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 1097
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 1105
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 1109
+      },
+      {
+        "file": "apps/api/src/modules/project-closing/project-closing.service.ts",
+        "line": 1117
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 161
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 162
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 163
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 164
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 227
+      },
+      {
+        "file": "apps/api/src/modules/receipts/receipts.service.ts",
+        "line": 402
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 49
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 53
+      },
+      {
+        "file": "apps/api/src/modules/reports/reports.service.ts",
+        "line": 1511
+      },
+      {
+        "file": "apps/api/src/modules/sales-quotations/sales-quotations.service.ts",
+        "line": 208
+      },
+      {
+        "file": "apps/api/src/modules/sales-quotations/sales-quotations.service.ts",
+        "line": 306
+      },
+      {
+        "file": "apps/api/src/modules/sales-quotations/sales-quotations.service.ts",
+        "line": 313
+      },
+      {
+        "file": "apps/api/src/modules/supplier-bills/supplier-bills.service.ts",
+        "line": 106
+      },
+      {
+        "file": "apps/api/src/modules/supplier-bills/supplier-bills.service.ts",
+        "line": 131
+      },
+      {
+        "file": "apps/api/src/modules/supplier-bills/supplier-bills.service.ts",
+        "line": 185
+      },
+      {
+        "file": "apps/api/src/modules/supplier-bills/supplier-bills.service.ts",
+        "line": 394
+      },
+      {
+        "file": "apps/api/src/modules/supplier-bills/supplier-bills.service.ts",
+        "line": 449
+      },
+      {
+        "file": "apps/api/src/modules/supplier-bills/supplier-bills.service.ts",
+        "line": 475
+      },
+      {
+        "file": "apps/api/src/modules/supplier-payments/supplier-payments.service.ts",
+        "line": 100
+      },
+      {
+        "file": "apps/api/src/modules/tender-costings/tender-costings.service.ts",
+        "line": 326
+      },
+      {
+        "file": "apps/api/src/modules/tender-costings/tender-costings.service.ts",
+        "line": 384
+      },
+      {
+        "file": "apps/api/src/modules/tender-costings/tender-costings.service.ts",
+        "line": 517
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 573
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 713
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 781
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 879
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 935
+      },
+      {
+        "file": "apps/api/src/modules/tenders/tenders.service.ts",
+        "line": 971
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/tender-vat-tax.service.ts",
+        "line": 40
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/tender-vat-tax.service.ts",
+        "line": 112
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/tender-vat-tax.service.ts",
+        "line": 124
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 228
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 233
+      },
+      {
+        "file": "apps/api/src/modules/vat-tax-certificates/vat-tax-certificates.service.ts",
+        "line": 239
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-dashboard.service.ts",
+        "line": 149
+      },
+      {
+        "file": "apps/api/src/modules/vendor-licensing/vendor-dashboard.service.ts",
+        "line": 150
+      },
+      {
+        "file": "apps/api/src/modules/work-ious/work-ious.service.ts",
+        "line": 355
+      }
+    ],
+    "migrationCheckConstraints": [
+      {
+        "file": "packages/database/prisma/migrations/20260829200000_add_vat_tax_certificates/migration.sql",
+        "line": 35
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829200000_add_vat_tax_certificates/migration.sql",
+        "line": 37
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829200000_add_vat_tax_certificates/migration.sql",
+        "line": 39
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829200000_add_vat_tax_certificates/migration.sql",
+        "line": 41
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829220000_add_work_completion_tracking/migration.sql",
+        "line": 27
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829220000_add_work_completion_tracking/migration.sql",
+        "line": 35
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830120000_add_sales_quotation_workflow/migration.sql",
+        "line": 82
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830120000_add_sales_quotation_workflow/migration.sql",
+        "line": 83
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830120000_add_sales_quotation_workflow/migration.sql",
+        "line": 87
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830120000_add_sales_quotation_workflow/migration.sql",
+        "line": 88
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830120000_add_sales_quotation_workflow/migration.sql",
+        "line": 95
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830120000_add_sales_quotation_workflow/migration.sql",
+        "line": 100
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830180000_add_work_ious/migration.sql",
+        "line": 50
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830180000_add_work_ious/migration.sql",
+        "line": 55
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830180000_add_work_ious/migration.sql",
+        "line": 62
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830180000_add_work_ious/migration.sql",
+        "line": 67
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830180000_add_work_ious/migration.sql",
+        "line": 72
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830180000_add_work_ious/migration.sql",
+        "line": 90
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830180000_add_work_ious/migration.sql",
+        "line": 91
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830180000_add_work_ious/migration.sql",
+        "line": 105
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 83
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 96
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 100
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 101
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 254
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 271
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260831180000_add_tender_costing_budget/migration.sql",
+        "line": 14
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260831190000_add_tender_costing_item_sourcing/migration.sql",
+        "line": 44
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260831190000_add_tender_costing_item_sourcing/migration.sql",
+        "line": 51
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260901190000_add_tender_costing_shipping_method/migration.sql",
+        "line": 11
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260901190000_add_tender_costing_shipping_method/migration.sql",
+        "line": 22
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260901190000_add_tender_costing_shipping_method/migration.sql",
+        "line": 26
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260901200000_add_detailed_door_shipping_costs/migration.sql",
+        "line": 12
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260901200000_add_detailed_door_shipping_costs/migration.sql",
+        "line": 14
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260901200000_add_detailed_door_shipping_costs/migration.sql",
+        "line": 16
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260901200000_add_detailed_door_shipping_costs/migration.sql",
+        "line": 18
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260901200000_add_detailed_door_shipping_costs/migration.sql",
+        "line": 20
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260901200000_add_detailed_door_shipping_costs/migration.sql",
+        "line": 22
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260901200000_add_detailed_door_shipping_costs/migration.sql",
+        "line": 24
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260903150000_add_tender_costing_lc_container_settings/migration.sql",
+        "line": 7
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260906010000_tender_vat_tax_register/migration.sql",
+        "line": 25
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260906010000_tender_vat_tax_register/migration.sql",
+        "line": 26
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260906010000_tender_vat_tax_register/migration.sql",
+        "line": 27
+      }
+    ],
+    "migrationWhereCandidates": [
+      {
+        "file": "packages/database/prisma/migrations/20260814194500_credit_commitment_batch/migration.sql",
+        "line": 43
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814194500_credit_commitment_batch/migration.sql",
+        "line": 44
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814194500_credit_commitment_batch/migration.sql",
+        "line": 45
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814194500_credit_commitment_batch/migration.sql",
+        "line": 46
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814194500_credit_commitment_batch/migration.sql",
+        "line": 47
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814194500_credit_commitment_batch/migration.sql",
+        "line": 60
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814194500_credit_commitment_batch/migration.sql",
+        "line": 71
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814201500_credit_commitment_permissions/migration.sql",
+        "line": 15
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814210000_pg_bg_workflow/migration.sql",
+        "line": 67
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814213000_pg_bg_reference_seed/migration.sql",
+        "line": 9
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814213000_pg_bg_reference_seed/migration.sql",
+        "line": 21
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814213000_pg_bg_reference_seed/migration.sql",
+        "line": 30
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814220000_cms_ongoing_works/migration.sql",
+        "line": 43
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814220000_cms_ongoing_works/migration.sql",
+        "line": 68
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814220000_cms_ongoing_works/migration.sql",
+        "line": 82
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814230000_cms_archived_works/migration.sql",
+        "line": 46
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814230000_cms_archived_works/migration.sql",
+        "line": 58
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814233000_project_expenses/migration.sql",
+        "line": 49
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260814233000_project_expenses/migration.sql",
+        "line": 105
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260815223000_double_entry_accounts/migration.sql",
+        "line": 69
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260816183000_complete_reminders_module/migration.sql",
+        "line": 49
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260817190000_add_plan_billing/migration.sql",
+        "line": 52
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260817190000_add_plan_billing/migration.sql",
+        "line": 53
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260817220000_add_bills_retention_variation_eot/migration.sql",
+        "line": 29
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260817230000_project_closing_contract_completion/migration.sql",
+        "line": 103
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260818010000_financial_reversal_audit_fields/migration.sql",
+        "line": 39
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260818010000_financial_reversal_audit_fields/migration.sql",
+        "line": 45
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260818030000_project_closeout_completion/migration.sql",
+        "line": 17
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260818030000_project_closeout_completion/migration.sql",
+        "line": 46
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829120000_add_challan_submissions/migration.sql",
+        "line": 133
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829170000_harden_challan_document_integrity/migration.sql",
+        "line": 5
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829200000_add_vat_tax_certificates/migration.sql",
+        "line": 74
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829200000_add_vat_tax_certificates/migration.sql",
+        "line": 82
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829200000_add_vat_tax_certificates/migration.sql",
+        "line": 108
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260829221000_one_active_final_wcc_per_work/migration.sql",
+        "line": 3
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830120000_add_sales_quotation_workflow/migration.sql",
+        "line": 115
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830180000_add_work_ious/migration.sql",
+        "line": 171
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 45
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 52
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 58
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 67
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260830200000_add_tender_intake_costing_workflow/migration.sql",
+        "line": 292
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260831180000_add_tender_costing_budget/migration.sql",
+        "line": 9
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260831200000_add_tender_costing_item_preparation/migration.sql",
+        "line": 13
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260902180000_add_lc_assets_hr_general_expense/migration.sql",
+        "line": 1555
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260906010000_tender_vat_tax_register/migration.sql",
+        "line": 30
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260906150000_document_purchase_approval_workflow/migration.sql",
+        "line": 59
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260906150000_document_purchase_approval_workflow/migration.sql",
+        "line": 73
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260909210000_project_receipt_settlement_details/migration.sql",
+        "line": 13
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260912153000_update_tender_security_reminder_offsets/migration.sql",
+        "line": 4
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260920120000_receipt_head_account_id/migration.sql",
+        "line": 9
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260920120000_receipt_head_account_id/migration.sql",
+        "line": 18
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260920123000_backfill_reversed_receipt_head_ids/migration.sql",
+        "line": 7
+      },
+      {
+        "file": "packages/database/prisma/migrations/20260920123000_backfill_reversed_receipt_head_ids/migration.sql",
+        "line": 16
+      }
+    ],
+    "migrationTriggers": []
+  },
+  "notes": [
+    "Location counts count matching lines, not executed queries or distinct business workflows.",
+    "migrationWhereCandidates is a WHERE candidate list, not an index count; review complete SQL to classify it.",
+    "No environment files, application records, database credentials or external services were read.",
+    "Current PostgreSQL provider and application behavior remain unchanged."
+  ]
+}

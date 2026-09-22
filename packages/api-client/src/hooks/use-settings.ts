@@ -1,7 +1,5 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getApiClientConfig } from "../config";
-import { tokenStorage } from "../token-storage";
 import type {
   AccountingPeriodRecord,
   CompanyProfileRecord,
@@ -26,7 +24,7 @@ import type {
   SystemSettingRecord,
   TenderBankSettingRecord,
 } from "@bizovix/types";
-import { apiRequest } from "../http-client";
+import { apiRequest, apiRequestBlob } from "../http-client";
 
 const root = ["settings"] as const;
 
@@ -60,17 +58,14 @@ export function useCompanyAssetUrl(kind: "logo" | "signature" | "seal", enabled:
     }
     let objectUrl: string | null = null;
     let cancelled = false;
-    (async () => {
-      const token = tokenStorage.getAccessToken();
-      const { baseUrl } = getApiClientConfig();
-      const res = await fetch(`${baseUrl.replace(/\/$/, "")}/settings/company/${kind}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (!res.ok || cancelled) return;
-      const blob = await res.blob();
+    void apiRequestBlob(`/settings/company/${kind}`).then(({ blob }) => {
+      if (cancelled) return;
       objectUrl = URL.createObjectURL(blob);
-      if (!cancelled) setUrl(objectUrl);
-    })();
+      setUrl(objectUrl);
+    }).catch(() => {
+      // Missing/unavailable branding should retain the upload placeholder.
+      if (!cancelled) setUrl(null);
+    });
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);

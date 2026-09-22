@@ -1,5 +1,5 @@
 import { FundingType, SecurityType } from "@bizovix/database";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   ArrayMinSize,
   IsArray,
@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from "class-validator";
@@ -27,11 +28,13 @@ export class CreateTenderSecurityItemDto {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(100)
   marginPercentage!: number;
 
-  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value)
   @IsString()
-  referenceNo?: string;
+  @IsNotEmpty({ message: "Reference No. (PO/BG No.) is required for each tender" })
+  referenceNo!: string;
 }
 
 export class CreateTenderSecurityDto {

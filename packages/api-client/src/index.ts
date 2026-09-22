@@ -2,6 +2,7 @@ export * from "./config";
 export * from "./token-storage";
 export * from "./errors";
 export * from "./http-client";
+export * from "./desktop-runtime";
 export * from "./hooks/query-keys";
 export * from "./hooks/use-auth";
 export * from "./hooks/use-dashboard";
