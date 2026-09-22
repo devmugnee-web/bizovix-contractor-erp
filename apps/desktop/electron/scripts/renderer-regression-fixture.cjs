@@ -93,6 +93,8 @@ module.exports = async function rendererRegressionFixture(window, trace = () => 
     await window.loadURL(`${origin}/reports/transactions/all`);
     const selected = "document.querySelector('input[aria-label=\"Select V001\"]')";
     await waitFor(`!!${selected}`, "transaction rows");
+    await waitFor("[...document.querySelectorAll('button')].some(button=>button.innerText.trim()==='Export backup')", "desktop backup export action");
+    checks.push("desktop-backup-export-action-visible");
     await evaluate(`${selected}.click()`);
     await clickText("Next");
     await waitFor("!!document.querySelector('input[aria-label=\"Select V003\"]')", "second transaction page");

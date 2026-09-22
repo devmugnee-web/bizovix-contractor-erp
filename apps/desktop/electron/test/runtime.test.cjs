@@ -4,6 +4,7 @@ const { randomUUID, generateKeyPairSync } = require("node:crypto");
 const { isTrustedRendererUrl, isAllowedDocumentPopup, validateReadyMessage } = require("../dist/runtime/contracts.js");
 const { validateVendorConfig, childEnvironment } = require("../dist/runtime/paths.js");
 const { startOwnedRuntime } = require("../dist/runtime/supervisor.js");
+const { chooseAndExportBackup } = require("../dist/runtime/backup-export.js");
 
 test("runtime bridge accepts only the exact local origin and no credential URLs", () => {
   const origin = "http://127.0.0.1:48123";
@@ -52,6 +53,44 @@ test("child environment excludes database credentials and injection options", ()
   } finally {
     for (const [key, value] of Object.entries(original)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
+});
+
+test("native backup export validates the session, uses a chooser path and sends both private capabilities", async () => {
+  const calls = [], destination = "D:\\User Backups";
+  let assertions = 0;
+  const result = await chooseAndExportBackup({
+    accessToken: "a".repeat(43), origin: "http://127.0.0.1:48123",
+    capability: "renderer-capability", controlCapability: "native-control-capability",
+    assertCurrent() { assertions += 1; },
+    async chooseDirectory() { return destination; },
+    async fetchImpl(url, options) {
+      calls.push({ url, options });
+      if (calls.length === 1) return new Response(JSON.stringify({ success: true, data: {} }), { status: 200 });
+      return Response.json({ success: true, data: { directory: `${destination}\\backup-1`, pendingCount: 2, rejectedCount: 1 } });
+    },
+  });
+  assert.equal(result.directory, `${destination}\\backup-1`);
+  assert.equal(assertions, 2);
+  assert.equal(calls[0].url, "http://127.0.0.1:48123/api/v1/desktop/status");
+  assert.equal(calls[0].options.headers.Authorization, `Bearer ${"a".repeat(43)}`);
+  assert.equal(calls[1].url, "http://127.0.0.1:48123/__desktop/backup-export");
+  assert.equal(calls[1].options.headers["X-Bizovix-Local-Capability"], "renderer-capability");
+  assert.equal(calls[1].options.headers["X-Bizovix-Control-Capability"], "native-control-capability");
+  assert.deepEqual(JSON.parse(calls[1].options.body), { destinationDirectory: destination });
+});
+
+test("native backup export does not open the chooser for invalid or unauthorized sessions and cancellation writes nothing", async () => {
+  let requests = 0, choices = 0;
+  const common = {
+    origin: "http://127.0.0.1:48123", capability: "renderer", controlCapability: "native", assertCurrent() {},
+    async chooseDirectory() { choices += 1; return null; },
+  };
+  assert.deepEqual(await chooseAndExportBackup({ ...common, accessToken: "short", async fetchImpl() { requests += 1; return new Response(null, { status: 200 }); } }), { error: "Sign in before exporting a backup." });
+  assert.equal(requests, 0); assert.equal(choices, 0);
+  assert.deepEqual(await chooseAndExportBackup({ ...common, accessToken: "a".repeat(43), async fetchImpl() { requests += 1; return new Response(null, { status: 401 }); } }), { error: "Sign in again before exporting a backup." });
+  assert.equal(requests, 1); assert.equal(choices, 0);
+  assert.deepEqual(await chooseAndExportBackup({ ...common, accessToken: "a".repeat(43), async fetchImpl() { requests += 1; return new Response(null, { status: 200 }); } }), { cancelled: true });
+  assert.equal(requests, 2); assert.equal(choices, 1);
 });
 
 const serviceScript = `

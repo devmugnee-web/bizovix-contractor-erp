@@ -969,6 +969,41 @@ test("loopback service checks capability and exact renderer origin before servin
   } finally { await server?.close(); f.cleanup(); }
 });
 
+test("native backup export requires both private capabilities and publishes a verified external bundle", async () => {
+  const f = fixture(); let server;
+  const destinationDirectory = path.join(os.tmpdir(), `bizovix-native-export-${randomUUID()}`);
+  try {
+    fs.mkdirSync(destinationDirectory);
+    const config = { ...f.config, controlCapability: "native-control-" + "x".repeat(48) };
+    server = await startLocalServer(config, { fetchImpl: f.fetchImpl, now: () => f.cloud.time });
+    const url = `http://127.0.0.1:${server.port}`;
+    const login = await server.application.login(credentials);
+    await server.application.handle("POST", "/master-categories", login.accessToken, category("Export pending work"));
+    const headers = { "X-Bizovix-Local-Capability": config.capability, Authorization: `Bearer ${login.accessToken}`, "Content-Type": "application/json" };
+    const body = JSON.stringify({ destinationDirectory });
+    assert.equal((await fetch(`${url}/__desktop/backup-export`, { method: "POST", headers, body })).status, 403);
+    assert.equal((await fetch(`${url}/__desktop/backup-export`, { method: "POST", headers: { ...headers, "X-Bizovix-Control-Capability": "wrong" }, body })).status, 403);
+    server.allowOrigin("http://127.0.0.1:3010");
+    assert.equal((await fetch(`${url}/__desktop/backup-export`, { method: "POST", headers: { ...headers, Origin: "http://127.0.0.1:3010", "X-Bizovix-Control-Capability": config.controlCapability }, body })).status, 403);
+    const response = await fetch(`${url}/__desktop/backup-export`, { method: "POST", headers: { ...headers, "X-Bizovix-Control-Capability": config.controlCapability }, body });
+    assert.equal(response.status, 200);
+    const exported = (await response.json()).data;
+    assert.equal(path.dirname(exported.directory), destinationDirectory);
+    assert.equal(exported.pendingCount, 1);
+    assert.deepEqual(fs.readdirSync(exported.directory).sort(), ["credentials.vault", "desktop.sqlite", "manifest.json"]);
+    const verified = await verifyProfileBackup(exported.directory);
+    assert.equal(verified.storage.pendingCount, 1);
+    await assert.rejects(server.application.exportBackup(login.accessToken, f.config.rootDirectory), { code: "BACKUP_EXPORT_DESTINATION" });
+  } finally {
+    await server?.close(); f.cleanup();
+    if (fs.existsSync(destinationDirectory)) {
+      assert.equal(path.dirname(path.resolve(destinationDirectory)), path.resolve(os.tmpdir()));
+      assert.ok(path.basename(destinationDirectory).startsWith("bizovix-native-export-"));
+      fs.rmSync(destinationDirectory, { recursive: true, force: true });
+    }
+  }
+});
+
 test("organization draft HTTP routes return recoverable validation and conflict errors without changing accepted records", async () => {
   const f = fixture({ organizations: true }); let server;
   try {

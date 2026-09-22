@@ -1,3 +1,5 @@
+import { tokenStorage } from "./token-storage";
+
 export interface DesktopRuntimeInfo {
   localApiUrl?: string;
   localCapability?: string;
@@ -46,7 +48,6 @@ export async function getDesktopRuntime(): Promise<DesktopRuntimeInfo | null> {
   });
   return runtimePromise;
 }
-import { tokenStorage } from "./token-storage";
 
 export interface DesktopBackupExportResult {
   cancelled?: boolean;

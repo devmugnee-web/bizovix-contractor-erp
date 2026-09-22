@@ -22,6 +22,19 @@ function durableWrite(file, data) {
   const descriptor = fs.openSync(file, "wx", 0o600);
   try { fs.writeFileSync(descriptor, data); fs.fsyncSync(descriptor); } finally { fs.closeSync(descriptor); }
 }
+function removeInspectionSqliteSidecars(directory) {
+  for (const suffix of ["-wal", "-shm", "-journal"]) {
+    const file = path.join(directory, `desktop.sqlite${suffix}`);
+    safePath(file);
+    if (!fs.existsSync(file)) continue;
+    const status = fs.lstatSync(file);
+    if (!status.isFile()) throw failure();
+    // This directory was empty and exclusively reserved by this export, and
+    // none of these paths existed before our read-only inspection. SQLite can
+    // create a nonempty shared-memory index even though it writes no DB data.
+    fs.unlinkSync(file);
+  }
+}
 async function checksum(file) {
   const hash = createHash("sha256");
   for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
@@ -155,6 +168,12 @@ export async function exportProfileBackup({ backupDirectory, destinationDirector
     }
     const copiedStorage = inspectDesktopBackup(path.join(directory, "desktop.sqlite"), manifest.profile);
     if (JSON.stringify(copiedStorage) !== JSON.stringify(storage)) throw failure();
+    // Node's read-only SQLite inspection can leave empty WAL/SHM files on some
+    // runtimes. They contain no data and are not part of a standalone bundle.
+    removeInspectionSqliteSidecars(directory);
+    if (fs.statSync(path.join(directory, "desktop.sqlite")).size !== manifest.database.size ||
+        await checksum(path.join(directory, "desktop.sqlite")) !== manifest.database.sha256) throw failure();
+    assertAuthorized();
     // A source modified during copying cannot be reported as a successful export.
     const sourceAfter = await verifyProfileBackup(source);
     assertAuthorized();

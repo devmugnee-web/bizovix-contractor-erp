@@ -1,6 +1,6 @@
 # Local backups and account recovery
 
-Implemented for the desktop master-data scope: Categories, Units of Measurement and Payment Terms. These backups contain their local projections, immutable pending/rejected/accepted command history, and encrypted credential vault. They do not contain cloud-only ERP records or uploaded documents.
+Implemented for the desktop master-data scope: Categories, Units of Measurement, Payment Terms and Organizations/Clients. These backups contain their local projections, immutable pending/rejected/accepted command history, query metadata, and encrypted credential vault. They do not contain cloud-only ERP records or uploaded documents.
 
 ## Automatic backup and customer controls
 
@@ -10,7 +10,9 @@ Files are in `<Electron userData>/local-data/<profile hash>/backups/backup-<time
 
 The implementation uses SQLite's online backup operation, then verifies SQLite integrity, foreign keys, schema checksums, profile binding, byte counts, and SHA-256 hashes. The manifest is written last. New bundles declare `scope: master-data` and their SQLite schema version. Legacy `master-categories` bundles containing schema 1 remain verifiable and restorable; opening a recovered v1 store creates a verified pre-upgrade snapshot before applying schema 2. Login only lets a verified backup of the current schema defer the next automatic backup, so a category-only backup cannot suppress the first master-data backup. A declared schema mismatch or nonempty WAL/journal sidecar invalidates the bundle. See [SQLite's backup documentation](https://www.sqlite.org/backup.html).
 
-Database records remain ordinary local SQLite files. Only the credential vault is encrypted. A backup on the same disk helps recover from file/application problems; protection against losing that disk still requires an external copy. There is no automatic external/cloud backup of these bundles yet.
+Database records remain ordinary local SQLite files. Only the credential vault is encrypted. A backup on the same disk helps recover from file/application problems. A signed-in desktop user can select **Export backup** and choose a parent directory through the native Windows folder picker. The app first creates and verifies a fresh backup, then publishes a new, exclusively reserved child folder containing exactly `desktop.sqlite`, `credentials.vault`, and `manifest.json`. It verifies the exported bytes and restored pending/rejected work before publishing the completion manifest. It refuses the active application-data tree, links, existing destinations, insufficient free space, stale sessions and renderer/direct-HTTP requests without both private capabilities. It never moves or overwrites the active profile.
+
+Keep the three exported files together. The export is manual; automatic cloud backup is not implemented. Cloud-only ERP records and uploaded attachments remain outside this bundle.
 
 ## Password changes
 

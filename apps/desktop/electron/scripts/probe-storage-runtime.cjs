@@ -14,6 +14,7 @@ const fixtures = [
   "packages/desktop-storage/test/masters.test.mjs",
   "packages/desktop-storage/test/organizations.test.mjs",
   "apps/desktop/local-service/test/local-service.test.mjs",
+  "apps/desktop/local-service/test/backup-export.test.mjs",
 ].map((filename) => path.join(workspace, filename));
 const result = spawnSync(executable, ["--test", "--test-isolation=none", "--test-reporter=spec", ...fixtures], {
   env: childEnvironment({}), cwd: workspace, encoding: "utf8", windowsHide: true, timeout: 180_000,

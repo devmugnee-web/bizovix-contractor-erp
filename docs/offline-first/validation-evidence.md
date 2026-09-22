@@ -1,6 +1,18 @@
 # Offline desktop: validation evidence
 
-Date: 2026-09-21. The current source extends Categories/UOM/Payment Terms with Organizations/Clients. Evidence is separated by source revision; this is not evidence of a completed offline ERP release.
+Date: 2026-09-22. The current source extends Categories/UOM/Payment Terms with Organizations/Clients and verified external backup export. Evidence is separated by source revision; this is not evidence of a completed offline ERP release.
+
+## Backup export and numbering transaction verification
+
+The desktop now exports a freshly created verified backup through a native directory chooser. Tests prove that both private capabilities and the active authenticated session are required, renderer-origin or direct HTTP attempts fail, destination folders are exclusively reserved, the active data root and links are refused, completed bundles contain exactly the database, vault and final manifest, and copy/hash/session failures cannot publish a completed export. Inspection-created SQLite sidecars are removed before the main database is rehashed; the active database, local backups and pending/rejected operations remain unchanged.
+
+The final local storage/local-service suite passes **124/124** cases under both the development runtime and the packaged Electron runtime. Electron runtime tests pass **13/13**, including chooser cancellation, exact headers/capabilities and status validation. API-client tests pass **39/39**, including access-token binding, stale-session refusal and no native bridge in web mode. The complete API unit run passes **403/403 across 62 suites**. Shared types and API client builds, API and renderer typechecks, targeted API lint, Electron lint, full renderer lint and the 121-page renderer production build pass.
+
+Number initialization now stays inside the supplied Prisma transaction. A first real PostgreSQL concurrency run reproduced the old unique-constraint race. Replacing per-row default upserts with one `createMany(..., skipDuplicates: true)` retained existing configuration and fixed that race. A new exact-name guarded source-baseline-74 database, `bizovix_test_bootstrap_1790059295576_5fcbce`, then passed **17/17** cases across the numbering transaction suite and existing master regression: new-tenant rollback without orphan defaults/counter movement, existing-counter rollback, multiple allocations in one transaction, concurrent first allocation, tenant isolation and year rollover. The isolated database is retained; no application/customer database was migrated, reset, seeded or deleted.
+
+The unpacked backup-export artifact passes resource-layout checks and byte parity with 13 local-service/storage source files, eight compiled Electron files and 3,741 renderer files. Its application-tree digest is `f39c29ba146933619f4939f6231f468aaa30a81220f00090780d022a212b42ae` before and after NSIS. NSIS adds only its known elevation helper, producing complete-tree digest `6c731fa2b72804824c9ce0dfb3a9a8db2dee7b69ac475cd8d5d99aa2b628195b`. Hidden isolated smoke passes **44** compiled UI checks and reaches completion in 30.259 seconds with zero development-login requests; one new check verifies that the packaged desktop exposes **Export backup**. Transport remains intercepted for UI fixtures, and no visual acceptance is claimed.
+
+The delivered preview is `apps/desktop/electron/release/Bizovix-Desktop-Backup-Export-Pilot-Setup-1.0.0.exe`: **107,508,646 bytes**, SHA-256 `7B7F2140C7B463F9AFF6BBBA0F528FCE80D493A5E7AC591F6E8C8E7EDC3D264E`, Authenticode `NotSigned`. The delivered hash matches its source artifact. Earlier installers were preserved. The preview remains unconfigured for a production cloud and was not installed over an existing application or database.
 
 ## Organizations extension verification
 

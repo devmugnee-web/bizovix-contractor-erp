@@ -108,18 +108,19 @@ export class NumberingService {
   ) {}
 
   async ensureDefaults(org: string, tx: Prisma.TransactionClient | PrismaService = this.prisma) {
-    for (const moduleKey of NUMBERING_MODULE_KEYS) {
-      await tx.numberSequence.upsert({
-        where: { organizationId_moduleKey: { organizationId: org, moduleKey } },
-        update: {},
-        create: {
-          organizationId: org,
-          moduleKey,
-          prefix: DEFAULT_PREFIX[moduleKey],
-          sequenceLength: DEFAULT_SEQUENCE_LENGTH[moduleKey] ?? 4,
-        },
-      });
-    }
+    // One native INSERT ... ON CONFLICT DO NOTHING statement avoids the
+    // read-then-insert race Prisma's emulated upsert can hit when several first
+    // allocations initialize the same tenant concurrently. Existing custom
+    // configuration is never updated.
+    await tx.numberSequence.createMany({
+      data: NUMBERING_MODULE_KEYS.map((moduleKey) => ({
+        organizationId: org,
+        moduleKey,
+        prefix: DEFAULT_PREFIX[moduleKey],
+        sequenceLength: DEFAULT_SEQUENCE_LENGTH[moduleKey] ?? 4,
+      })),
+      skipDuplicates: true,
+    });
   }
 
   async list(org: string) {

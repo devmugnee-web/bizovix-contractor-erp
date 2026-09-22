@@ -320,6 +320,11 @@ export class LocalApplication {
     const session = this.requireSession(bearer);
     if (session.exportPromise) throw new LocalError(409, "A backup export is already running.", "BACKUP_EXPORT_BUSY");
     if (typeof destinationDirectory !== "string" || !path.isAbsolute(destinationDirectory)) throw new LocalError(400, "Choose an existing backup folder.", "BACKUP_EXPORT_DESTINATION");
+    const dataRoot = path.resolve(this.config.rootDirectory), destination = path.resolve(destinationDirectory);
+    const relativeToData = path.relative(dataRoot, destination);
+    if (!relativeToData || (!relativeToData.startsWith(`..${path.sep}`) && relativeToData !== ".." && !path.isAbsolute(relativeToData))) {
+      throw new LocalError(409, "Choose a folder outside the application's local data directory.", "BACKUP_EXPORT_DESTINATION");
+    }
     const assertAuthorized = () => {
       if (this.requireSession(bearer) !== session) throw new LocalError(401, "The active account changed. Export a backup again after signing in.");
     };
